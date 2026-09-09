@@ -41,6 +41,19 @@
 //      variance cell outranks the row-scoped border-bottom - this
 //      probe catches it by measuring every cell of tbody's
 //      last-row (which IS the GM row).
+//   6. 3100 parent Target % is hatched AND Adjusted renders a
+//      dollar figure. Kevin CC prompt 2026-09-09: salary is a $
+//      target not a %; the parent 3100 contains a fixed cost so
+//      its Target % is N/A (hatched), while its Adjusted is the
+//      composed `salary_$ + hourly_pct × actual_revenue` dollar
+//      figure. Fixture is TBJ - FL Current year + salary, a payload
+//      where the server flags 3100 parent with `not_applicable_
+//      target_pct`. Fails if the target cell is NOT hatched (server
+//      flag not honoured OR client-side rule reverted), if the
+//      Adjusted cell IS hatched (client-side rule wrongly extended
+//      to Adjusted), or if the Adjusted cell renders empty / dash
+//      (server compute failed). The two are a paired treatment now
+//      and can only disagree if hatching semantics drift.
 //
 // Fixture: TBJ - FL Current year, Full view (all 13 sub rows visible).
 // Prereqs: `TEST_MODE=true npm run dev` running on :3000, Chromium
@@ -218,7 +231,35 @@ async function measure(viewportWidth) {
         }
       }
     }
-    return { tblWidth: Math.round(tblWidth), samples, subCount, numericSamples, gmPaintSamples, gmBorderSamples, gmBorderMode };
+    // Invariant 6: 3100 parent Target % cell is hatched AND the
+    // Adjusted cell renders a dollar figure. Kevin CC prompt
+    // 2026-09-09: "salary is a $ target, not a %." The parent 3100
+    // includes a fixed cost (salary) on +salary payloads, so its
+    // Target % is N/A (hatched) but its Adjusted is the composed
+    // dollar `salary_$ + hourly_pct × actual_revenue`. Fixture is
+    // TBJ - FL Current year include_salary=1 - a +salary payload
+    // where the flag `not_applicable_target_pct` fires on the 3100
+    // parent row. Report every 3100 parent whose Target % is NOT
+    // hatched OR whose Adjusted IS hatched - the two are a paired
+    // treatment now, and they can only disagree with each other if
+    // client-side hatching logic drifts from the server flag.
+    const parent3100Samples = [];
+    const parent3100Row = tbl.querySelector('tr[data-kpi-ov-line-code="3100"][data-kpi-ov-variant="line"]');
+    let parent3100Info = null;
+    if (parent3100Row) {
+      const tds = parent3100Row.querySelectorAll('td');
+      // Columns: 0=label, 1=budget, 2=target%, 3=adjusted, 4=actual, 5=%rev, 6=variance
+      const targetTd = tds[2];
+      const adjTd = tds[3];
+      const targetHatched = targetTd?.classList?.contains('kpi-ov-pnl-na-cell');
+      const adjHatched = adjTd?.classList?.contains('kpi-ov-pnl-na-cell');
+      const adjText = (adjTd?.innerText || "").trim();
+      parent3100Info = { targetHatched, adjHatched, adjText };
+      if (!targetHatched) parent3100Samples.push({ issue: "target_not_hatched", ...parent3100Info });
+      if (adjHatched)     parent3100Samples.push({ issue: "adjusted_hatched",   ...parent3100Info });
+      if (!adjText || adjText === "" || adjText === "—") parent3100Samples.push({ issue: "adjusted_empty", ...parent3100Info });
+    }
+    return { tblWidth: Math.round(tblWidth), samples, subCount, numericSamples, gmPaintSamples, gmBorderSamples, gmBorderMode, parent3100Samples, parent3100Info };
   });
   await browser.close();
   return info;
@@ -233,6 +274,7 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
   if ((info.numericSamples || []).length) failures += 1;
   if ((info.gmPaintSamples || []).length) failures += 1;
   if ((info.gmBorderSamples || []).length) failures += 1;
+  if ((info.parent3100Samples || []).length) failures += 1;
   console.log(`  table width: ${info.tblWidth}px · sub rows: ${info.subCount}`);
   const clippers = info.samples.filter(s => s.clipped);
   const wrappers = info.samples.filter(s => s.wraps);
@@ -277,6 +319,16 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
     }
   } else {
     console.log(`  GM row: closes as one line (border-bottom ${info.gmBorderMode || "n/a"})`);
+  }
+  if (info.parent3100Samples?.length) {
+    console.log(`  3100 PARENT HATCH MISMATCH (${info.parent3100Samples.length}):`);
+    for (const s of info.parent3100Samples) {
+      console.log(`    ${s.issue}  targetHatched=${s.targetHatched} adjHatched=${s.adjHatched} adjText="${s.adjText}"`);
+    }
+  } else if (info.parent3100Info) {
+    console.log(`  3100 parent: target hatched · adjusted renders "${info.parent3100Info.adjText}"`);
+  } else {
+    console.log(`  3100 parent: (row not found)`);
   }
 }
 

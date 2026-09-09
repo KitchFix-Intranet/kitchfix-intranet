@@ -138,8 +138,15 @@ function LineRow({
     ? row.actual_pct
     : (row.reported && totalRevenue ? (Number(row.actual) / totalRevenue) * 100 : null);
   const refValue = refField === "adjusted" ? effectiveAdjusted : row.budget_to_date;
+  // Kevin CC prompt 2026-09-09. The flag name says what it means:
+  // Target % is N/A. It no longer hatches the Adjusted cell. Salary's
+  // Adjusted now renders its budget (a fixed cost's adjusted IS its
+  // budget) and the parent 3100 on +salary renders the composed
+  // salary $ + hourly_pct × actual_revenue figure. Hatching is
+  // reserved for the Target % column: "there is no percentage target
+  // on this line."
   const hatchTargetFinal = hatchTarget || notApplicable;
-  const hatchAdjustedFinal = hatchAdjusted || notApplicable;
+  const hatchAdjustedFinal = hatchAdjusted;
   // On running, the last column is "Left to spend" = adjusted - landed
   // (cost lines; positive = money still available). Revenue rows on
   // running also render adjusted - landed (positive = fee not yet
@@ -491,6 +498,14 @@ export default function PnlStatement({ payload, open, onToggle }) {
                       />
                       {showSubs && subs.map(sub => {
                         const isSalary = Array.isArray(sub.flags) && sub.flags.includes("not_applicable_target_pct");
+                        // Kevin CC prompt 2026-09-09: salary sub-row's
+                        // Adjusted renders the salary budget (fixed
+                        // cost = its budget), so no more hatchAdjusted
+                        // on isSalary. hatchTarget stays - salary's
+                        // percent is an output, not a goal - and the
+                        // server flag drives Target-only hatching via
+                        // LineRow's `hatchTargetFinal = hatchTarget ||
+                        // notApplicable` rule.
                         const subRunningAdj = (isRunning && !isSalary) ? costAdjustedFor(sub.target_pct) : null;
                         return (
                           <LineRow
@@ -498,7 +513,6 @@ export default function PnlStatement({ payload, open, onToggle }) {
                             row={sub}
                             variant="sub"
                             hatchTarget={isSalary}
-                            hatchAdjusted={isSalary}
                             axis="cost"
                             refField={isSalary ? "budget" : "adjusted"}
                             totalRevenue={totalRevenue}

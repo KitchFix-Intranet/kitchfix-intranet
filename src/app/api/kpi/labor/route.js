@@ -1494,17 +1494,35 @@ export async function GET(request) {
     // path attached. Recompute line_target_pct against the merged
     // (salary-inclusive) labor budget per period - R-68: Overview 3100
     // is always salary-inclusive; per-week rate must match.
+    //
+    // Kevin ruling 2026-09-09: pass the salary map so the helpers
+    // treat salary as a fixed dollar target rather than folding it
+    // into a percent-of-revenue. Per-week batr becomes
+    //   week_revenue × hourly_pct + salary_period / 4
+    // Sum of per-week batr across the range then matches the
+    // Overview 3100 batr's `salary_$ + hourly_pct × actual_rev`
+    // formula by construction (Guard 1: Labor panel == Overview
+    // 3100 batr, every range every account).
+    const salaryBudgetByPeriodMerged = new Map();
+    const salaryByAcct = budQ?.byAccount instanceof Map ? budQ.byAccount.get(account) : null;
+    if (salaryByAcct) {
+      for (const [pn, amt] of salaryByAcct) {
+        salaryBudgetByPeriodMerged.set(Number(pn), Number(amt || 0));
+      }
+    }
     const lineTargetPctMerged = computeLineTargetPctByPeriod({
       budgetPeriods: bodySingle.budget_periods,
       overviewBudgets: overviewBudgetsSingle?.data || new Map(),
       members: [account],
       periods: rangePeriodsSingle,
+      salaryBudgetByPeriod: salaryBudgetByPeriodMerged,
     });
     attachWeeklyBasisToBoard(bodySingle.board, weeklyBasisSingle, {
       lineTargetPctByPeriod: lineTargetPctMerged,
       todayISO: today,
       contractualAccrualByPeriod: contractualAccrualSingle,
       verifiedPeriodTotals: verifiedPeriodTotalsSingle,
+      salaryBudgetByPeriod: salaryBudgetByPeriodMerged,
     });
     // Post-1057 sweep item 2: R-86 per-period pct on the panel.
     recomputePanelBatrFromPerWeek(bodySingle.board);
