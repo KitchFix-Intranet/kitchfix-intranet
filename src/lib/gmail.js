@@ -411,6 +411,68 @@ function encodeSubjectSA(subject) {
 }
 
 /**
+ * Compose the base64url-encoded raw MIME message that sendEmailSA
+ * dispatches. Extracted so unit tests can decode + assert every
+ * header without touching the Gmail API. Pure function; no I/O.
+ *
+ * The `cc` parameter was added 2026-09-09 (PR sc/sendEmailSA-cc-plumbing).
+ * Prior to that fix, the signature omitted cc entirely - callers
+ * that passed it (chaseNotifications.js) had their cc list silently
+ * dropped because JS accepts unknown destructured properties. That
+ * bug persisted for weeks because no test asserted a CC recipient
+ * and every production caller happened to pass an empty cc list.
+ * The tests in gmail.test.mjs now cover cc plumbing explicitly.
+ *
+ * @param {Object} args
+ * @param {string} args.sender
+ * @param {string} args.displayName
+ * @param {string|string[]} args.to
+ * @param {string|string[]} [args.cc]
+ * @param {string} args.subject
+ * @param {string} args.html
+ * @param {string} [args.replyTo]
+ * @param {string} [args.boundary] - injectable for deterministic tests
+ * @returns {{ raw: string, headers: { to: string[], cc: string[], bcc: string[] } }}
+ */
+export function buildSAMime({ sender, displayName, to, cc, subject, html, replyTo, boundary }) {
+  const toArr = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
+  const ccArr = Array.isArray(cc) ? cc.filter(Boolean) : (cc ? [cc] : []);
+  const _boundary = boundary || `boundary_${Date.now()}`;
+  const htmlBody = Buffer.from(html).toString("base64");
+
+  // Audit BCC. Dedup against BOTH To and Cc - the audit address does
+  // not need a Bcc copy if it is already receiving via To or Cc. Do
+  // NOT suppress when sender == audit: Kevin's directive is that if
+  // Gmail drops that case we swap audit addresses, not workaround.
+  const auditLower = AUDIT_BCC_EMAIL.toLowerCase();
+  const toLower = toArr.map((r) => String(r || "").toLowerCase());
+  const ccLower = ccArr.map((r) => String(r || "").toLowerCase());
+  const bccArr = (toLower.includes(auditLower) || ccLower.includes(auditLower))
+    ? []
+    : [AUDIT_BCC_EMAIL];
+
+  const mimeLines = [
+    `From: ${displayName} <${sender}>`,
+    `To: ${toArr.join(", ")}`,
+    ...(ccArr.length > 0 ? [`Cc: ${ccArr.join(", ")}`] : []),
+    ...(bccArr.length > 0 ? [`Bcc: ${bccArr.join(", ")}`] : []),
+    `Subject: ${encodeSubjectSA(subject)}`,
+    ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${_boundary}"`,
+    "",
+    `--${_boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    htmlBody,
+    `--${_boundary}--`,
+  ];
+  const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+  return { raw, headers: { to: toArr, cc: ccArr, bcc: bccArr } };
+}
+
+/**
  * Send a system email via service-account-impersonated Gmail.
  *
  * Faithful port of the MIME logic that previously lived in
@@ -420,21 +482,17 @@ function encodeSubjectSA(subject) {
  * contract that incidentActions.js relies on via the sendEmail-by-reference
  * pattern.
  *
- * Added in PR A2b (Bundle 3) - canonicalizes the SA-impersonated Gmail
- * pattern that previously had two separate implementations in
- * people/route.js (hand-rolled crypto.subtle JWT + raw fetch) and
- * cron/incident-reminders (google.auth.JWT + googleapis client).
- *
  * @param {Object} args
  * @param {string} args.sender - impersonated mailbox (e.g. "kitchfix.admin@kitchfix.com"). Must be on the SA's domain-wide-delegation list AND be an ACTIVE Workspace user. A deactivated mailbox returns `invalid_grant: Invalid email or User ID` from Google's OAuth endpoint - see docs/GOTCHAS.md "invalid_grant from a deactivated impersonation target".
  * @param {string} args.displayName - From header display name (e.g. "KitchFix People Ops")
  * @param {string|string[]} args.to - recipient(s)
+ * @param {string|string[]} [args.cc] - cc recipient(s). Added 2026-09-09 (was silently dropped before).
  * @param {string} args.subject - subject (auto-RFC-2047-encoded for non-ASCII via encodeSubjectSA)
  * @param {string} args.html - HTML body (base64-encoded inside multipart/alternative)
  * @param {string} [args.replyTo] - optional Reply-To header
  * @returns {Promise<"sent"|"failed">}
  */
-export async function sendEmailSA({ sender, displayName, to, subject, html, replyTo }) {
+export async function sendEmailSA({ sender, displayName, to, cc, subject, html, replyTo }) {
   try {
     const auth = new google.auth.JWT({
       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -444,39 +502,12 @@ export async function sendEmailSA({ sender, displayName, to, subject, html, repl
     });
     const gmail = google.gmail({ version: "v1", auth });
 
-    const recipients = Array.isArray(to) ? to : [to];
-    const boundary = "boundary_" + Date.now();
-    const htmlBody = Buffer.from(html).toString("base64");
-
-    // Audit BCC. Dedup only against the To list - a recipient who is
-    // already in To does not need a Bcc copy. Do NOT suppress when
-    // sender==bcc: Kevin's directive is that if Gmail drops that
-    // case we swap audit addresses, not workaround here.
-    const auditLower = AUDIT_BCC_EMAIL.toLowerCase();
-    const toLower = recipients.map((r) => String(r || "").toLowerCase());
-    const bccList = toLower.includes(auditLower) ? [] : [AUDIT_BCC_EMAIL];
-
-    const mimeLines = [
-      `From: ${displayName} <${sender}>`,
-      `To: ${recipients.join(", ")}`,
-      ...(bccList.length > 0 ? [`Bcc: ${bccList.join(", ")}`] : []),
-      `Subject: ${encodeSubjectSA(subject)}`,
-      ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
-      "MIME-Version: 1.0",
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      "",
-      `--${boundary}`,
-      "Content-Type: text/html; charset=UTF-8",
-      "Content-Transfer-Encoding: base64",
-      "",
-      htmlBody,
-      `--${boundary}--`,
-    ];
-    const rawMessage = mimeLines.join("\r\n");
-    const raw = Buffer.from(rawMessage).toString("base64url");
+    const { raw, headers } = buildSAMime({ sender, displayName, to, cc, subject, html, replyTo });
 
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-    console.log(`[Gmail SA] Email sent to ${recipients.join(", ")} bcc=${bccList.join(", ") || "none"}: ${subject}`);
+    console.log(
+      `[Gmail SA] Email sent to=${headers.to.join(", ")} cc=${headers.cc.join(", ") || "none"} bcc=${headers.bcc.join(", ") || "none"}: ${subject}`
+    );
     return "sent";
   } catch (e) {
     console.error("[Gmail SA] Send failed:", e.message);
