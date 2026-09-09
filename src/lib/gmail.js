@@ -371,6 +371,25 @@ export async function sendRejectionEmail(accessToken, senderEmail, recipientEmai
 // admin's domain-wide-delegation list for the `gmail.send` scope.
 // ─────────────────────────────────────────────
 
+// Audit trail BCC (Kevin ask 2026-09-09). Every SA-sent email is
+// BCC'd to this mailbox so Kevin has a single inbox to confirm the
+// system is actually delivering mail. Applied at this shared layer
+// so N1/N2/N3.reminder/N3.urgent/N4, PAF, incident reminders, AP
+// cron, SousAI digests, and every future notification are covered
+// without per-call-site plumbing.
+//
+// Placed inside the raw MIME as `Bcc:` - Gmail API delivers to Bcc
+// recipients AND strips the header from the message that goes to
+// To/Cc, so site leaders never see this address.
+//
+// One warning worth carrying forward: most SA-sent paths use
+// kitchfix.admin@ as the sender, so `From == Bcc`. Some servers
+// dedupe that into "Sent" only and no separate Inbox copy lands.
+// If that turns out to be Gmail's behavior here, the fix is a
+// different audit address (e.g. kitchfix.audit@ or k.fietek@),
+// NOT a workaround at this layer.
+export const AUDIT_BCC_EMAIL = "kitchfix.admin@kitchfix.com";
+
 // Byte-exact port of the subject encoder that lived in people/route.js's
 // sendEmail (PR A2b). Intentionally distinct from gmail.js's existing
 // `encodeSubject` above: that one uses a stricter "printable ASCII only"
@@ -429,9 +448,18 @@ export async function sendEmailSA({ sender, displayName, to, subject, html, repl
     const boundary = "boundary_" + Date.now();
     const htmlBody = Buffer.from(html).toString("base64");
 
+    // Audit BCC. Dedup only against the To list - a recipient who is
+    // already in To does not need a Bcc copy. Do NOT suppress when
+    // sender==bcc: Kevin's directive is that if Gmail drops that
+    // case we swap audit addresses, not workaround here.
+    const auditLower = AUDIT_BCC_EMAIL.toLowerCase();
+    const toLower = recipients.map((r) => String(r || "").toLowerCase());
+    const bccList = toLower.includes(auditLower) ? [] : [AUDIT_BCC_EMAIL];
+
     const mimeLines = [
       `From: ${displayName} <${sender}>`,
       `To: ${recipients.join(", ")}`,
+      ...(bccList.length > 0 ? [`Bcc: ${bccList.join(", ")}`] : []),
       `Subject: ${encodeSubjectSA(subject)}`,
       ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
       "MIME-Version: 1.0",
@@ -448,7 +476,7 @@ export async function sendEmailSA({ sender, displayName, to, subject, html, repl
     const raw = Buffer.from(rawMessage).toString("base64url");
 
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-    console.log(`[Gmail SA] Email sent to ${recipients.join(", ")}: ${subject}`);
+    console.log(`[Gmail SA] Email sent to ${recipients.join(", ")} bcc=${bccList.join(", ") || "none"}: ${subject}`);
     return "sent";
   } catch (e) {
     console.error("[Gmail SA] Send failed:", e.message);
