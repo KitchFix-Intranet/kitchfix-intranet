@@ -222,8 +222,21 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
           );
         }
         const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
+        // Kevin CC prompt 2026-09-09 item 1. A closed week whose
+        // invoices are still arriving hatches, whatever its variance
+        // vs budget. The bar treatment must not disagree with the
+        // WeekRail card's "Invoices still arriving" caveat under the
+        // same week - the two answer the same question. Rule (in
+        // resolver.js): closed week && (today's fiscal-week Monday -
+        // week Monday) >= 14 days. On Current period + Next period
+        // this reduces to `running_week_no - week_no >= 2` by
+        // construction; on Last period + Current year it correctly
+        // hatches the just-closed week whose invoices are still
+        // landing (P9 week 4 on 2026-09-09).
+        const invoicesStillArriving = s.state === "closed" && s.invoices_landed === false;
         const classSuffix =
           s.state === "in_progress" ? "kpi-ov-bar-hatch"
+          : invoicesStillArriving ? "kpi-ov-bar-hatch"
           : val <= wkB ? "kpi-ov-bar-good"
           : "kpi-ov-bar-over";
         return (
@@ -232,6 +245,7 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
             className={`kpi-ov-bar ${classSuffix}`}
             style={{ height: `${hgt}%` }}
             data-kpi-ov-bar-state={s.state}
+            data-kpi-ov-bar-invoices-landed={s.invoices_landed ? "1" : "0"}
             data-kpi-ov-week-start={s.week_start}
           />
         );

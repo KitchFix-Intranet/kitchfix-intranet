@@ -322,16 +322,46 @@
   flex-direction: column;
   gap: 4px;
 }
-/* Running: navy stripe + navy-tinted background */
+/* Running: thickest navy stripe + navy tint + "this week" marker in
+   the header. Kevin CC prompt 2026-09-09 item 2: running must be
+   visually dominant over confirmed. Border widens from 4px to 5px,
+   background tint stays navy-50 so the tile does not shout, and the
+   "▸ this week" chip (rendered by WeekRail on run variant only)
+   makes the position explicit rather than inferred. */
 .kpi-app .kpi-ov-rail-tile-run {
-  border-left-color: var(--navy-700);
+  border-left: 5px solid var(--navy-700);
   background: var(--navy-50, #F4F7FC);
 }
-/* Confirmed: green stripe, standard white background */
-.kpi-app .kpi-ov-rail-tile-conf {
-  border-left-color: var(--green-600);
+.kpi-app .kpi-ov-rail-tile-run .kpi-ov-rail-st {
+  color: var(--navy-700);
+  font-weight: 800;
 }
-/* Forecast: dashed grey stripe on a muted background - "not yet" */
+.kpi-app .kpi-ov-rail-here {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(9.5px * var(--kf-scale, 1));
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--navy-700);
+  background: rgba(21, 57, 104, 0.08);
+  padding: 2px 6px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+  align-self: flex-start;
+}
+/* Confirmed: neutral grey stripe. Kevin CC prompt 2026-09-09 item 2:
+   the prior green-600 stripe on a white background was the brightest
+   element in the row and read louder than the running tile beside it.
+   Grey stripe sits BELOW the running tile in the visual hierarchy
+   and ABOVE the dashed forecast tile - present but not competing for
+   the eye. */
+.kpi-app .kpi-ov-rail-tile-conf {
+  border-left-color: var(--n-300);
+}
+/* Forecast: dashed grey stripe on a muted background - "not yet".
+   Unchanged 2026-09-09 - already the quietest of the three. */
 .kpi-app .kpi-ov-rail-tile-fc {
   border-style: dashed;
   border-left-style: solid;
