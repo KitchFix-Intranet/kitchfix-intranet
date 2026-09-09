@@ -117,6 +117,16 @@ export default function WeekRail({ weekRail }) {
                 data-kpi-ov-state={w.state}
                 data-kpi-ov-basis={w.revenue_basis || ""}
               >
+                {/* Kevin CC prompt 2026-09-09 item 2. Running tile
+                    carries an explicit "you are here" marker so the
+                    operator's eye lands on the week they are in
+                    rather than on the previously loud confirmed
+                    tile. Rendered on the run variant only. */}
+                {variant === "run" && (
+                  <span className="kpi-ov-rail-here" data-kpi-ov="rail-here">
+                    ▸ this week
+                  </span>
+                )}
                 <div className="kpi-ov-rail-head">
                   <div className="kpi-ov-rail-title">
                     <span className="kpi-ov-rail-n">Wk {w.week_no}</span>

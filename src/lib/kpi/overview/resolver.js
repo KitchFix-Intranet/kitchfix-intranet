@@ -1769,16 +1769,35 @@ export async function resolveOverview({
       : (laborBoard?.applies && laborBoard.range_budget != null
           ? r2((laborBoard.range_budget + (purchBoard.totals.buckets_budget || 0)) / weekStarts.length)
           : null);
+    // Kevin CC prompt 2026-09-09 item 1. A week's invoices are still
+    // arriving until the current fiscal week is 2+ weeks past it -
+    // the exact rule the WeekRail card uses as
+    //   invoices_landed = (running_week_no - week_no) >= 2.
+    // WeekRail only renders on Current period, so the running_week_no
+    // integer form is period-scoped. The chart runs on every range,
+    // so express the same rule in absolute terms: today's fiscal-week
+    // Monday must be >= 14 days after the target week's Monday. The
+    // two forms agree on the current period by construction (weeks
+    // are exactly 7 days, Mondays align). Attaching `invoices_landed`
+    // to each series item lets the client hatch closed-but-still-
+    // arriving weeks without inventing a second definition.
+    const todayDate = new Date(today + "T00:00:00Z");
+    const todayDow = todayDate.getUTCDay(); // 0=Sun ... 6=Sat
+    const todayMondayOffset = todayDow === 0 ? 6 : todayDow - 1;
+    const todayMondayMs = todayDate.getTime() - todayMondayOffset * 86400000;
     const series = weekStarts.map(ws => {
       const laborS = laborWeeks.get(ws) || 0;
       const purchS = purchWeekMap.get(ws) || 0;
       const total = r2(laborS + purchS);
       const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * 86400000).toISOString().slice(0, 10);
       const state = wEnd < today ? "closed" : (ws <= today && today <= wEnd) ? "in_progress" : "not_started";
+      const wStartMs = new Date(ws + "T00:00:00Z").getTime();
+      const invoices_landed = state === "closed" && (todayMondayMs - wStartMs) >= 14 * 86400000;
       return {
         week_start: ws,
         week_end: wEnd,
         state,
+        invoices_landed,
         spent: state === "not_started" ? null : total,
         budget: wkBudget,
       };
