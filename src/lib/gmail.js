@@ -25,6 +25,19 @@ function getGmailClient(accessToken) {
   return google.gmail({ version: "v1", auth });
 }
 
+// Compute the audit-BCC list. Returns [AUDIT_BCC_EMAIL] unless the
+// audit address is already delivering via To/Cc, in which case an
+// extra Bcc copy would just duplicate. Case-insensitive per RFC 5321.
+// Do NOT suppress when from == audit (see AUDIT_BCC_EMAIL note below);
+// exported for shared use by SA + OAuth send paths.
+export function auditBccFor({ to, cc } = {}) {
+  const toArr = Array.isArray(to) ? to : (to ? [to] : []);
+  const ccArr = Array.isArray(cc) ? cc : (cc ? [cc] : []);
+  const auditLower = AUDIT_BCC_EMAIL.toLowerCase();
+  const has = (list) => list.some((e) => String(e || "").toLowerCase() === auditLower);
+  return has(toArr) || has(ccArr) ? [] : [AUDIT_BCC_EMAIL];
+}
+
 /**
  * Send invoice submission email to AP
  *
@@ -59,7 +72,12 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
     const htmlBody = buildEmailHtml(data, typeLabel, senderEmail);
     const toList = [AP_TO_EMAIL];
     const ccList = AP_CC.filter((e) => e !== AP_TO_EMAIL && e !== senderEmail);
-        
+    // Financial-workflow audit BCC (Kevin ruling 2026-09-09). This
+    // is a user-OAuth send path (sends as the submitter's mailbox);
+    // the audit trail rule extends here because the invoice flow is
+    // financial. sendOpsEmail intentionally does not carry this.
+    const bccList = auditBccFor({ to: toList, cc: ccList });
+
     // Build MIME message
     let rawMessage;
 
@@ -69,6 +87,7 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
         from: senderEmail,
         to: toList,
         cc: ccList,
+        bcc: bccList,
         subject,
         html: htmlBody,
         attachmentBase64: data.pdfBase64,
@@ -87,6 +106,7 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
         from: senderEmail,
         to: toList,
         cc: ccList,
+        bcc: bccList,
         subject,
         html: htmlBody,
         attachmentBase64: raw,
@@ -99,6 +119,7 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
         from: senderEmail,
         to: toList,
         cc: ccList,
+        bcc: bccList,
         subject,
         html: htmlBody,
       });
@@ -213,7 +234,7 @@ function encodeSubject(subject) {
   return `=?UTF-8?B?${encoded}?=`;
 }
 
-function buildMimeSimple({ from, to, cc, subject, html }) {
+function buildMimeSimple({ from, to, cc, bcc, subject, html }) {
   const toStr = Array.isArray(to) ? to.join(", ") : to;
 
   const headers = [
@@ -222,6 +243,9 @@ function buildMimeSimple({ from, to, cc, subject, html }) {
   ];
   if (cc && cc.length > 0) {
     headers.push(`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`);
+  }
+  if (bcc && bcc.length > 0) {
+    headers.push(`Bcc: ${Array.isArray(bcc) ? bcc.join(", ") : bcc}`);
   }
   headers.push(
     `Subject: ${encodeSubject(subject)}`,
@@ -234,7 +258,7 @@ function buildMimeSimple({ from, to, cc, subject, html }) {
   return Buffer.from(message).toString("base64url");
 }
 
-function buildMimeWithAttachment({ from, to, cc, subject, html, attachmentBase64, attachmentFilename, attachmentMimeType }) {
+function buildMimeWithAttachment({ from, to, cc, bcc, subject, html, attachmentBase64, attachmentFilename, attachmentMimeType }) {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const toStr = Array.isArray(to) ? to.join(", ") : to;
 
@@ -244,6 +268,9 @@ function buildMimeWithAttachment({ from, to, cc, subject, html, attachmentBase64
   ];
   if (cc && cc.length > 0) {
     headers.push(`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`);
+  }
+  if (bcc && bcc.length > 0) {
+    headers.push(`Bcc: ${Array.isArray(bcc) ? bcc.join(", ") : bcc}`);
   }
   headers.push(
     `Subject: ${encodeSubject(subject)}`,
@@ -339,11 +366,16 @@ export async function sendRejectionEmail(accessToken, senderEmail, recipientEmai
 </div>`;
 
     const ccList = AP_CC.filter((e) => e !== recipientEmail && e !== senderEmail);
+    // Financial-workflow audit BCC (Kevin ruling 2026-09-09). Same
+    // shape as sendInvoiceEmail; invoice rejection is part of the
+    // same financial audit trail.
+    const bccList = auditBccFor({ to: [recipientEmail], cc: ccList });
 
     const rawMessage = buildMimeSimple({
       from: senderEmail,
       to: [recipientEmail],
       cc: ccList,
+      bcc: bccList,
       subject,
       html,
     });
@@ -440,16 +472,12 @@ export function buildSAMime({ sender, displayName, to, cc, subject, html, replyT
   const _boundary = boundary || `boundary_${Date.now()}`;
   const htmlBody = Buffer.from(html).toString("base64");
 
-  // Audit BCC. Dedup against BOTH To and Cc - the audit address does
-  // not need a Bcc copy if it is already receiving via To or Cc. Do
-  // NOT suppress when sender == audit: Kevin's directive is that if
-  // Gmail drops that case we swap audit addresses, not workaround.
-  const auditLower = AUDIT_BCC_EMAIL.toLowerCase();
-  const toLower = toArr.map((r) => String(r || "").toLowerCase());
-  const ccLower = ccArr.map((r) => String(r || "").toLowerCase());
-  const bccArr = (toLower.includes(auditLower) || ccLower.includes(auditLower))
-    ? []
-    : [AUDIT_BCC_EMAIL];
+  // Audit BCC via the shared auditBccFor helper - dedups against
+  // To/Cc, does NOT suppress when sender==audit (Kevin's directive:
+  // if Gmail drops that case we swap audit addresses, not workaround).
+  // Extracted to one home so any change to the audit rule updates
+  // both SA and OAuth paths in lockstep.
+  const bccArr = auditBccFor({ to: toArr, cc: ccArr });
 
   const mimeLines = [
     `From: ${displayName} <${sender}>`,
