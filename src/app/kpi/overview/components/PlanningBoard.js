@@ -106,12 +106,21 @@ function PlanningCard({ eyebrow, tone, tipTitle, tipBody, budget, budgetSuffix, 
   );
 }
 
-function LossCallout({ periodLabel, revenueBudget, cogsBudget, laborBudget }) {
+function LossCallout({ periodLabel, revenueBudget, cogsBudget, laborBudget, includeSalary }) {
+  // R-98 (Kevin 2026-09-09). The "salaried labour continues" clause
+  // names salary explicitly, and the labor figure it cites comes
+  // from the 3100 row - which on NP + hourly carries hourly-only
+  // figures per the server-side R-98 gate. Rendering the clause
+  // there would both mis-cite the labor number ("$X of the $Y is
+  // kitchen labour" where $X is hourly-only) AND directly reveal
+  // that salary exists as a separate concept. Suppress the clause
+  // when the toggle is hourly; the leading + trailing sentences
+  // still name the loss + the plan without leaking salary presence.
   return (
     <div className="kpi-ov-pln-callout" data-kpi-ov="pln-loss-callout">
       <b>{periodLabel} is budgeted at a loss, and that is the plan.</b>{" "}
       {fmtMoney(revenueBudget)} of revenue against {fmtMoney(cogsBudget)} of cost.
-      {laborBudget != null && (
+      {includeSalary && laborBudget != null && (
         <> The facility winds down at the end of the season but salaried labour continues - {fmtMoney(laborBudget)} of the {fmtMoney(cogsBudget)} is kitchen labour, and the business carries that through the off season.</>
       )}{" "}
       <b>Landing on this number is the target.</b> The margin percentage is not shown because a ratio against {fmtMoney(revenueBudget)} of revenue conveys nothing.
@@ -267,6 +276,7 @@ export default function PlanningBoard({ payload }) {
     .filter(r => r.section === "cogs" && !r.parent_line_code && /^3(1|2|4|5)00$/.test(r.line_code))
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
   const laborBudget = costRows.find(r => r.line_code === "3100")?.period_budget ?? null;
+  const includeSalary = !!payload.filters?.include_salary;
 
   const account = payload.filters?.account || "";
 
@@ -287,6 +297,7 @@ export default function PlanningBoard({ payload }) {
           revenueBudget={revBud}
           cogsBudget={cogBud}
           laborBudget={laborBudget}
+          includeSalary={includeSalary}
         />
       )}
 

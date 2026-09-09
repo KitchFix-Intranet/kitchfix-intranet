@@ -207,16 +207,24 @@ function SectionRow({ label }) {
 // section - shared verbatim. The old isolated component + Guard-2
 // early-return removed with this PR.
 export default function PnlStatement({ payload, open, onToggle }) {
-  // Kevin R-68 item 1 (2026-09-04): the P&L Full view is LOCKED when
-  // the caller has no salary access. Salary-inclusive totals appear
-  // everywhere already (labor is always composed with salary); Full
-  // is the surface that reveals 3100.1 hourly vs 3100.2 salary, and
-  // that split is exactly what managers below site-leader must not
-  // see. When include_salary=false, the segment control is hidden
-  // and the dense state is forced to Summary.
+  // Kevin R-68 item 1 (2026-09-04): the P&L Full view was LOCKED
+  // when the caller had no salary access - Full reveals 3100.1
+  // hourly vs 3100.2 salary, the split managers below site-leader
+  // must not see. R-98 (Kevin 2026-09-09) narrows the lock: on
+  // Current period + Next period the lock incorrectly hid 3200.1 /
+  // 3200.2 (food + packaging sub-lines), which have nothing to do
+  // with salary. On those two ranges the server-side R-98 gate
+  // ensures the 3100 parent already carries hourly-only figures and
+  // the 3100.1 / 3100.2 sub-rows are not emitted at all - so
+  // opening Full on hourly reveals food + packaging subs but no
+  // salary. On closed ranges (CY / LP) keep the lock: those payloads
+  // still emit 3100.1 / 3100.2 when include_salary=true, so Full on
+  // hourly there is still capable of revealing the split.
   const includeSalary = !!payload?.filters?.include_salary;
   const [dense, setDense] = useState("sum"); // 'sum' | 'full'
-  const effectiveDense = includeSalary ? dense : "sum";
+  const isPeriodicSingle = payload?.range?.kind === "period"
+    && (payload?.period_state === "open" || payload?.period_state === "planned");
+  const effectiveDense = (includeSalary || isPeriodicSingle) ? dense : "sum";
 
   if (!payload?.statement_rows) return null;
 
@@ -316,7 +324,7 @@ export default function PnlStatement({ payload, open, onToggle }) {
         aria-expanded={open ? "true" : "false"}
       >
         <span className="kpi-ov-eb">Full profit and loss</span>
-        {open && includeSalary && (
+        {open && (includeSalary || isPeriodicSingle) && (
           <span className="kpi-ov-seg" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
@@ -455,42 +463,24 @@ export default function PnlStatement({ payload, open, onToggle }) {
                 <SectionRow label="Cost of goods sold" />
                 {cogsRowsAll.map(parent => {
                   const subs = cogsSubsByParent.get(parent.line_code) || [];
-                  // R-98 (Kevin CC prompt 2026-09-08). On Current
-                  // period + hourly view (include_salary=false), the
-                  // 3100 parent row shows 3100.1's hourly figures
-                  // rather than the composed 3100 total, and both
-                  // subs stay hidden. Kevin's correction to the
-                  // render: "on hourly, 3100 shows hourly figures
-                  // and neither sub-line renders. There is nothing
-                  // left to break out." Scoped to running period
-                  // per prompt; CY + LP keep R-68 semantics
-                  // untouched (dense forced to sum, no swap on
-                  // parent 3100).
-                  const hourlySub = (isRunning && !includeSalary && parent.line_code === "3100")
-                    ? subs.find(s => s.line_code === "3100.1") || null
-                    : null;
-                  const parentEffective = hourlySub
-                    ? { ...parent,
-                        budget_to_date: hourlySub.budget_to_date,
-                        target_pct: hourlySub.target_pct,
-                        actual: hourlySub.actual,
-                        actual_pct: hourlySub.actual_pct,
-                        budget_at_this_revenue: hourlySub.budget_at_this_revenue,
-                        reported: hourlySub.reported }
-                    : parent;
-                  const parentRunningAdj = isRunning
-                    ? (hourlySub
-                        ? costAdjustedFor(hourlySub.target_pct)
-                        : costAdjustedFor(parent.target_pct))
-                    : null;
-                  const parentRunningLanded = isRunning
-                    ? Number((hourlySub ? hourlySub.actual : parent.actual) ?? 0)
-                    : null;
+                  // R-98 (Kevin 2026-09-09). The 3100 parent already
+                  // carries hourly-only figures on CP+NP+hourly (see
+                  // resolver.js at the labor3100_hourly_swap_applies
+                  // gate) so we render `parent` verbatim - no client-
+                  // side field swap. Server-side gate is the access
+                  // decision: on hourly the salary numbers are never
+                  // in the payload; a devtools reader gets nothing to
+                  // subtract from. Sub-rows for 3100 also do not exist
+                  // on hourly (resolver emits them only when
+                  // includeSalary+role) so the map below naturally
+                  // renders zero subs under 3100 on hourly.
+                  const parentRunningAdj = isRunning ? costAdjustedFor(parent.target_pct) : null;
+                  const parentRunningLanded = isRunning ? Number(parent.actual ?? 0) : null;
                   return (
                     <>
                       <LineRow
                         key={parent.line_code}
-                        row={parentEffective}
+                        row={parent}
                         variant="line"
                         axis="cost"
                         refField="adjusted"
