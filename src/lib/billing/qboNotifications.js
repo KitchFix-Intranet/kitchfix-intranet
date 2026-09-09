@@ -40,6 +40,7 @@
 
 import { resolveRecipients, NOTIFICATION_TYPES, KEVIN_EMAIL } from "./recipients.js";
 import { sendEmailSA } from "@/lib/gmail";
+import { buildRecordCopyPdf, computeApproverPhrase } from "./recordCopyPdf.js";
 
 // ─── Copy constants ───────────────────────────────────────────────
 
@@ -130,63 +131,66 @@ function emailShell({ preheader, body }) {
 </html>`;
 }
 
-// N1 body table.
-function n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords, scWeekLink, isTest }) {
-  const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
-  const totalMeals = invoiceRecords.reduce((s, r) => s + (r.lineCount || 0), 0);
-  const kickText = isTest ? "TEST - READY FOR REVIEW" : "READY FOR REVIEW";
-  const kickBg   = isTest ? "#FDF6EC" : "#E8F5EC";
-  const kickFg   = isTest ? "#8A5A16" : "#2F7D4F";
-  // sc-38 (2026-09-02): TBJ produces 3-8 invoices per week. Enumerate
-  // each invoice's deep-link labeled by slot so AP can jump to any
-  // draft, not just the first one (prior code did
-  // `find((r) => r.qboLink)?.qboLink` and surfaced only one link).
-  const invoicesWithLink = invoiceRecords.filter((r) => r.qboLink);
-  const testLine = isTest
+// N1 body table (intranet-shell rebuild 2026-09-09).
+//
+// Design authority: docs/design/KF_CONFIRMATION_EMAIL_RENDER.html.
+// Same shell as the chase emails - navy KitchFix Ops Hub brand,
+// status flag, fact table, one button, instructions in the footer.
+// Copy names Sebastian (not "AP") because a chef who has never met
+// the AP function needs a specific person to associate with the
+// downstream step.
+//
+// approvedByLede is the pre-computed sentence from computeApproverPhrase -
+// handles the 1/2/3+/finalizer-vs-approver combinations. Never claims
+// one person did all of it when the data says otherwise (Kevin ruling
+// 2026-09-09).
+//
+// mealsCount comes from the sum of qty across every line item (not
+// invoiceRecords.length which is the invoice-slot count). "Meals" in
+// the fact table is per the render.
+function n1Body({ accountKey, weekStart, weekEnd, approvedByLede, mealsCount, daysServed, daysInWeek, pretaxCents, scWeekLink, isTest }) {
+  const flagBg    = isTest ? "#FDF3E6" : "#E8F5EC";
+  const flagFg    = isTest ? "#8A5A16" : "#2F7D4F";
+  const flagBd    = isTest ? "#F0D9B5" : "#A6D3B8";
+  const flagLabel = isTest ? "Test send" : "Sent to billing";
+  const testLine  = isTest
     ? `<tr><td style="padding-top:16px;font-size:12px;color:#8A5A16;font-weight:bold">*** TEST - not a real invoice; no client will be billed ***</td></tr>`
     : "";
 
   const rows = [
-    ["Account",         escapeHtml(accountKey)],
-    ["Service week",    escapeHtml(fmtWeekRange(weekStart, weekEnd))],
-    ["Invoices",        String(invoiceRecords.length)],
-    ["Pre-tax total",   `<b>${escapeHtml(formatCents(totalCents))}</b>`],
-    ["Finalized by",    escapeHtml(submitterEmail || "(unknown)")],
+    ["Week",         escapeHtml(fmtWeekRange(weekStart, weekEnd))],
+    ["Days served",  `${daysServed} of ${daysInWeek}`],
+    ["Meals",        (mealsCount || 0).toLocaleString("en-US")],
   ].map(([k, v]) => `<tr>
-    <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#64748B">${k}</td>
-    <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#0F172A;text-align:right;font-weight:600">${v}</td>
+    <td style="padding:8px 0;border-top:1px solid #F1F5F9;font-size:13px;color:#64748B">${k}</td>
+    <td style="padding:8px 0;border-top:1px solid #F1F5F9;font-size:13px;color:#0F172A;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">${v}</td>
   </tr>`).join("");
+
+  const totalRow = `<tr>
+    <td style="padding:10px 0;border-top:2px solid #E2E8F0;font-size:14px;color:#64748B">Pre-tax</td>
+    <td style="padding:10px 0;border-top:2px solid #E2E8F0;font-size:14px;color:#0F172A;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">${escapeHtml(formatCents(pretaxCents))}</td>
+  </tr>`;
 
   return `
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-  <tr><td style="padding-bottom:8px;font-size:10px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:${kickFg};background:${kickBg};padding:6px 10px;border-radius:4px;display:inline-block">${kickText}</td></tr>
-  <tr><td style="padding-top:12px;font-size:20px;line-height:1.2;font-weight:bold;color:#0F172A">Invoice draft ready for review</td></tr>
-  <tr><td style="padding-top:8px;font-size:14px;line-height:1.5;color:#475569">
-    <b>${escapeHtml(submitterEmail || "The site leader")}</b> finalized the week of <b>${escapeHtml(fmtWeekRange(weekStart, weekEnd))}</b> for
-    ${escapeHtml(accountKey)}. The intranet built the invoice from the Service Calendar and placed it in QuickBooks as a draft.
-    <b>AP reviews it and sends it to the client.</b>
+  <tr><td style="padding-bottom:8px;font-size:10px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:${flagFg};background:${flagBg};border-bottom:1px solid ${flagBd};padding:7px 20px;display:block">${flagLabel}</td></tr>
+  <tr><td style="padding-top:12px;padding-left:20px;padding-right:20px;font-size:17px;line-height:1.35;font-weight:bold;color:#0F172A">The week is finalized</td></tr>
+  <tr><td style="padding:8px 20px 14px 20px;font-size:13px;line-height:1.55;color:#475569">
+    ${approvedByLede} Sebastian reviews it in QuickBooks and sends it to the client.
   </td></tr>
-  <tr><td style="padding-top:16px">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #E2E8F0;border-radius:10px;overflow:hidden">
+  <tr><td style="padding:0 20px 15px 20px">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
       ${rows}
+      ${totalRow}
     </table>
   </td></tr>
-  <tr><td style="padding-top:20px">
-    <a href="${escapeHtml(scWeekLink || "#")}" style="display:inline-block;padding:10px 18px;background:#153968;color:#ffffff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold">Open the week in the Service Calendar</a>
+  <tr><td style="padding:0 20px 13px 20px">
+    <a href="${escapeHtml(scWeekLink || "#")}" style="display:block;text-align:center;padding:11px;background:#1A3050;color:#ffffff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700">Open the week</a>
   </td></tr>
-  ${invoicesWithLink.length === 1 ? `<tr><td style="padding-top:8px;font-size:12px;color:#64748B">
-    <a href="${escapeHtml(invoicesWithLink[0].qboLink)}" style="color:#153968">AP and leadership: open the draft in QuickBooks</a>
-  </td></tr>` : invoicesWithLink.length > 1 ? `<tr><td style="padding-top:8px;font-size:12px;color:#64748B">
-    AP and leadership: open each draft -
-    ${invoicesWithLink.map((r, i) =>
-      `<a href="${escapeHtml(r.qboLink)}" style="color:#153968">${escapeHtml(r.invoiceSlot || `#${i+1}`)}</a>`
-    ).join(" &middot; ")}
-  </td></tr>` : ""}
+  <tr><td style="padding:12px 20px 0 20px;font-size:11px;line-height:1.55;color:#94A3B8;border-top:1px solid #F1F5F9">
+    <b style="color:#64748B;font-weight:600">The attached copy is for your records.</b> It shows every line as billed. It is not the invoice &mdash; Sebastian sends that from QuickBooks. The week is locked; Kevin, Joe or Sebastian can unlock it if something needs correcting.
+  </td></tr>
   ${testLine}
-  <tr><td style="padding-top:16px;font-size:11px;color:#64748B;line-height:1.5;border-top:1px solid #E2E8F0;padding-top:12px;margin-top:12px">
-    Sales tax is calculated by QuickBooks at send. QuickBooks access is AP and leadership only.
-    This week is now locked - Kevin, Joe, or Sebastian can unlock it.
-  </td></tr>
 </table>`;
 }
 
@@ -345,8 +349,9 @@ async function sendSlack({ webhookUrl, text }) {
  */
 export async function fireN1(args) {
   const {
-    qboMode, accountKey, weekStart, weekEnd, submitterEmail,
-    invoiceRecords, scWeekLink, accountMap, send = true, deps,
+    qboMode, accountKey, accountLabel, weekStart, weekEnd, submitterEmail,
+    submitterName, invoiceRecords, scWeekLink, accountMap, finalizedDateISO,
+    reviewRows, send = true, deps,
   } = args;
   const isTest = qboMode === "test";
   const recipients = resolveRecipients({
@@ -354,13 +359,81 @@ export async function fireN1(args) {
     accountKey, mode: qboMode,
     submitterEmail, accountMap,
   });
-  const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
+
+  // Aggregate lines across every slot. Meals = sum of qty across
+  // "meal-like" services (breakfast/lunch/dinner/road-sandwich).
+  // For accounts where every line is a meal, sum of qty is fine;
+  // for those with extras (protein add-ons, labor fees), we need
+  // to filter. Simplest correct definition: sum qty for lines whose
+  // service name doesn't match {Labor Fee, Extra Protein, ...} which
+  // are per-day one-offs. Fall back to sum-of-qty if the filter
+  // matches nothing (defensive).
+  const allLines = [];
+  for (const r of invoiceRecords || []) for (const li of r.lineItems || []) allLines.push(li);
+  const isMealLine = (li) => {
+    const n = String(li?.serviceName || "").toLowerCase();
+    if (n.includes("labor")) return false;
+    if (n.includes("extra ")) return false;
+    if (n.includes("fee")) return false;
+    return true;
+  };
+  const mealLines = allLines.filter(isMealLine);
+  const mealsCount = (mealLines.length > 0 ? mealLines : allLines)
+    .reduce((s, li) => s + (Number(li.qty) || 0), 0);
+
+  // Days served = count of distinct service dates that carry at least
+  // one meal-like line. Days-in-week = the account's configured week
+  // length (fall back to 7 if we can't derive it from the input).
+  const uniqueDates = new Set(mealLines.map((li) => li.serviceDate).filter(Boolean));
+  const daysServed = uniqueDates.size;
+  const daysInWeek = Number(args?.daysInWeek) || 7;
+
+  // Resolve approver phrase. reviewRows is passed in by the caller
+  // when the review-gate ships the week's rows; the resolver produces
+  // both the email lede + the PDF's meta row from the same source.
+  // If no reviewRows are provided (early callers / tests), fall back
+  // to the submitter as the approver.
+  const finalizerName = submitterName || submitterEmail || "";
+  const approverPhrase = computeApproverPhrase({
+    reviewRows: reviewRows || (finalizerName
+      ? [{ reviewedBy: finalizerName, reviewedAt: finalizedDateISO || weekStart }]
+      : []),
+    finalizerName,
+    accountKey,
+  });
+
+  // Build the RECORD COPY PDF. Kevin fence: the email's fact-table $
+  // and the PDF's footer $ MUST match exactly, or throw. A mismatched
+  // pair is worse than no attachment.
+  const pdf = await buildRecordCopyPdf({
+    accountKey,
+    accountLabel,
+    weekStart,
+    weekEnd,
+    finalizedDateISO: finalizedDateISO || null,
+    approvedByLabel: approverPhrase.meta,
+    invoiceRecords,
+  });
+
+  const emailPretaxCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
+  if (pdf.pretaxCents !== emailPretaxCents) {
+    throw new Error(
+      `fireN1: pretax mismatch email=${emailPretaxCents} pdf=${pdf.pretaxCents} account=${accountKey} week=${weekStart}. Refusing to dispatch - a confirmation email whose fact-table disagrees with its attached record copy is a correctness failure.`
+    );
+  }
+
   const testPrefix = isTest ? "[TEST] " : "";
-  const subject = `${testPrefix}Invoice ready: ${accountKey}, week of ${fmtWeekTitle(weekStart)}`;
-  const preheader = `${invoiceRecords.length} invoice(s), ${formatCents(totalCents)} pre-tax. Ready for AP review.`;
+  const subject = `${testPrefix}Sent to billing: ${accountKey}, week of ${fmtWeekTitle(weekStart)}`;
+  const preheader = `${daysServed} of ${daysInWeek} days · ${mealsCount.toLocaleString("en-US")} meals · ${formatCents(pdf.pretaxCents)} pre-tax. Record copy attached.`;
   const html = emailShell({
     preheader,
-    body: n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords, scWeekLink, isTest }),
+    body: n1Body({
+      accountKey, weekStart, weekEnd,
+      approvedByLede: approverPhrase.lede,
+      mealsCount, daysServed, daysInWeek,
+      pretaxCents: pdf.pretaxCents,
+      scWeekLink, isTest,
+    }),
   });
   const slackText = n1SlackText({ accountKey, weekStart, invoiceRecords, isTest, scWeekLink });
 
@@ -373,6 +446,11 @@ export async function fireN1(args) {
     // unit tests don't need to stub env). A missing env yields
     // 'missing_env:<KEY>' so the operator log tier surfaces WHICH
     // key is absent, not just "failed".
+    const attachments = [{
+      filename: pdf.filename,
+      mimeType: "application/pdf",
+      base64: pdf.pdfBase64,
+    }];
     if (recipients.to.length > 0) {
       const injectedSender = deps?.emailSender;
       if (!injectedSender) {
@@ -386,6 +464,7 @@ export async function fireN1(args) {
             to: recipients.to,
             subject,
             html,
+            attachments,
           });
         }
       } else {
@@ -395,6 +474,7 @@ export async function fireN1(args) {
           to: recipients.to,
           subject,
           html,
+          attachments,
         });
       }
     }
@@ -413,6 +493,13 @@ export async function fireN1(args) {
     recipients, subject, preheader, html,
     email: { result: emailResult },
     slack: { text: slackText, result: slackResult },
+    pdf: {
+      filename: pdf.filename,
+      pretaxCents: pdf.pretaxCents,
+      lineCount: pdf.lineCount,
+      byteLength: pdf.pdfBuffer.length,
+    },
+    approvers: approverPhrase.approvers,
   };
 }
 
@@ -482,11 +569,28 @@ export function renderN1({ accountKey, weekStart, weekEnd, submitterEmail, invoi
   const inferredMode = invoiceRecords?.some((r) => r.isTest) ? "test" : "live";
   const isTest = inferredMode === "test";
   const testPrefix = isTest ? "TEST - " : "";
-  const subject = `${testPrefix}Invoice draft ready: ${accountKey} ${weekStart}..${weekEnd}`;
-  const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
+  const subject = `${testPrefix}Sent to billing: ${accountKey} ${weekStart}..${weekEnd}`;
+
+  // Derive n1Body inputs from invoiceRecords - legacy render path has
+  // no reviewRows / accountLabel / PDF, so approvedByLede falls back
+  // to a submitter-only sentence. Sufficient for the legacy dry-run
+  // callers that only need HTML rendering.
+  const allLines = [];
+  for (const r of invoiceRecords || []) for (const li of r.lineItems || []) allLines.push(li);
+  const pretaxCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
+  const mealsCount = allLines.reduce((s, li) => s + (Number(li.qty) || 0), 0);
+  const uniqueDates = new Set(allLines.map((li) => li.serviceDate).filter(Boolean));
+  const daysServed = uniqueDates.size;
+  const submitterName = submitterEmail || "The site leader";
+  const approvedByLede = `${submitterName} approved every day and sent ${accountKey} to billing.`;
+
   const html = emailShell({
-    preheader: `${invoiceRecords.length} invoice(s), ${formatCents(totalCents)} pre-tax.`,
-    body: n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords, scWeekLink, isTest }),
+    preheader: `${daysServed} of 7 days · ${mealsCount.toLocaleString("en-US")} meals · ${formatCents(pretaxCents)} pre-tax.`,
+    body: n1Body({
+      accountKey, weekStart, weekEnd,
+      approvedByLede, mealsCount, daysServed, daysInWeek: 7,
+      pretaxCents, scWeekLink, isTest,
+    }),
   });
   const to = isTest ? [KEVIN_EMAIL] : n1LegacyRecipients({ accountKey, submitterEmail });
   return { mode: "dryrun", to, subject, html };

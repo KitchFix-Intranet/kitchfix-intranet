@@ -117,12 +117,17 @@ export function resolveRecipients(args) {
   const rdo = args?.accountMap?.rdoEmail || null;
 
   switch (notification) {
-    // N1 Invoice ready: Sebastian, Kevin, Joe, Josh, salaried managers, submitter
+    // N1 Invoice ready: Sebastian, Kevin, Joe, Josh, salaried managers, submitter, RDO.
+    // RDO added 2026-09-09 per Kevin ruling in the confirmation-email
+    // rebuild - "all account managers and RDO"; managers are already
+    // covered by salaried_manager_emails, RDO was the missing piece.
+    // dedup() drops the null when rdoEmail is unset.
     case NOTIFICATION_TYPES.N1: {
       const to = dedup([
         SEBASTIAN_EMAIL, KEVIN_EMAIL, JOE_EMAIL, JOSH_EMAIL,
         ...salaried,
         submitter,
+        rdo,
       ]);
       return { to, cc: [] };
     }

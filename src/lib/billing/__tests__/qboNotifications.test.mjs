@@ -13,6 +13,9 @@ import {
 } from "../qboNotifications.js";
 import { KEVIN_EMAIL, SEBASTIAN_EMAIL } from "../recipients.js";
 
+// N1 rebuild 2026-09-09: invoiceRecords now MUST carry lineItems so
+// the RECORD COPY PDF can render + assert email $ == PDF $. Fixture
+// updated to a single-line slot with amountCents matching pretaxTotalCents.
 const N1_ARGS_BASE = {
   accountKey: "TXR - AZ",
   weekStart:  "2026-07-27",
@@ -23,10 +26,17 @@ const N1_ARGS_BASE = {
     qboInvoiceId: "INV-1",
     qboDocNumber: "K300168954",
     pretaxTotalCents: 1923895,
-    lineCount: 12,
+    lineCount: 1,
     isTest: false,
     qboLink: "https://app.qbo.intuit.com/app/invoice?txnId=INV-1",
     ledgerRowId: "led-1",
+    lineItems: [{
+      serviceName: "TXR AZ - Full Week",
+      serviceDate: "2026-07-27",
+      qty: 1,
+      rateCents: 1923895,
+      amountCents: 1923895,
+    }],
   }],
   scWeekLink: "https://intranet.example/service-calendar/season?a=TXR",
 };
@@ -58,7 +68,7 @@ test("fireN1 test mode: routes to Kevin only, subject prefixed [TEST]", async ()
   });
   assert.deepEqual(res.recipients.to, [KEVIN_EMAIL], "test mode: Kevin only");
   assert.deepEqual(res.recipients.cc, []);
-  assert.match(res.subject, /^\[TEST\] Invoice ready: TXR - AZ,/);
+  assert.match(res.subject, /^\[TEST\] Sent to billing: TXR - AZ,/);
   assert.equal(email.calls.length, 1, "one email dispatched");
   assert.deepEqual(email.calls[0].to, [KEVIN_EMAIL]);
   assert.equal(res.email.result, "sent");
@@ -79,7 +89,7 @@ test("fireN1 live mode: routes to §A6 matrix (static + salaried + submitter)", 
   assert.ok(to.includes("josh@kitchfix.com"));
   assert.ok(to.includes("l.ochoa@kitchfix.com"));
   assert.ok(to.includes("leader@kitchfix.com"));
-  assert.match(res.subject, /^Invoice ready: TXR - AZ,/);
+  assert.match(res.subject, /^Sent to billing: TXR - AZ,/);
   assert.doesNotMatch(res.subject, /\[TEST\]/);
 });
 
@@ -160,7 +170,7 @@ test("fireN2 test mode: missing SLACK_SC_BILLING_WEBHOOK_URL silently skips Slac
 
 // ─── Content invariants ──────────────────────────────────────────
 
-test("N1 HTML carries preheader + pre-tax total + CTA to Service Calendar", async () => {
+test("N1 HTML carries preheader + pre-tax total + Sent-to-billing flag + Open-the-week CTA", async () => {
   const email = makeFakeSender();
   const res = await fireN1({
     ...N1_ARGS_BASE,
@@ -169,10 +179,17 @@ test("N1 HTML carries preheader + pre-tax total + CTA to Service Calendar", asyn
     deps: { emailSender: email.impl },
   });
   assert.match(res.preheader, /\$19,238\.95/);
-  assert.match(res.html, /Pre-tax total/);
+  assert.match(res.html, /Pre-tax/);
   assert.match(res.html, /\$19,238\.95/);
-  assert.match(res.html, /Open the week in the Service Calendar/);
-  assert.match(res.html, /Ready for review|READY FOR REVIEW/);
+  assert.match(res.html, /Open the week/);
+  // 2026-09-09 rebuild: green "Sent to billing" flag replaces "READY
+  // FOR REVIEW"; H1 is "The week is finalized".
+  assert.match(res.html, /Sent to billing/);
+  assert.match(res.html, /The week is finalized/);
+  // Attached-copy footer callout
+  assert.match(res.html, /attached copy is for your records/);
+  // Sebastian named (not "AP")
+  assert.match(res.html, /Sebastian reviews it in QuickBooks/);
 });
 
 test("N1 email HTML uses table-based markup (survives Outlook)", async () => {
@@ -261,13 +278,19 @@ test("fireN1 missing SLACK_SC_BILLING_WEBHOOK_URL silently skips Slack; email st
 test("fireN1 test mode: Slack text enumerates per-slot QBO deep-links", async () => {
   const email = makeFakeSender();
   const slack = makeFakeSlack();
+  // 2026-09-09 rebuild: invoiceRecords now require lineItems that
+  // sum to pretaxTotalCents. Each slot carries a single line so the
+  // per-slot Slack enumeration assertion still holds.
   await fireN1({
     ...N1_ARGS_BASE,
     qboMode: "test",
     invoiceRecords: [
-      { invoiceSlot: "milb", qboLink: "https://qbo.example/inv/1", pretaxTotalCents: 10000, lineCount: 5, isTest: true },
-      { invoiceSlot: "mlb",  qboLink: "https://qbo.example/inv/2", pretaxTotalCents: 20000, lineCount: 8, isTest: true },
-      { invoiceSlot: "ssm",  qboLink: "https://qbo.example/inv/3", pretaxTotalCents: 5000,  lineCount: 3, isTest: true },
+      { invoiceSlot: "milb", qboLink: "https://qbo.example/inv/1", pretaxTotalCents: 10000, lineCount: 1, isTest: true,
+        lineItems: [{ serviceName: "MiLB", serviceDate: "2026-07-27", qty: 1, rateCents: 10000, amountCents: 10000 }] },
+      { invoiceSlot: "mlb",  qboLink: "https://qbo.example/inv/2", pretaxTotalCents: 20000, lineCount: 1, isTest: true,
+        lineItems: [{ serviceName: "MLB",  serviceDate: "2026-07-27", qty: 1, rateCents: 20000, amountCents: 20000 }] },
+      { invoiceSlot: "ssm",  qboLink: "https://qbo.example/inv/3", pretaxTotalCents: 5000,  lineCount: 1, isTest: true,
+        lineItems: [{ serviceName: "SSM",  serviceDate: "2026-07-27", qty: 1, rateCents: 5000,  amountCents: 5000  }] },
     ],
     accountMap: { salariedManagerEmails: [], rdoEmail: null },
     deps: { emailSender: email.impl, sendSlack: slack.impl, slackWebhookUrl: "https://hooks/x" },
@@ -276,6 +299,92 @@ test("fireN1 test mode: Slack text enumerates per-slot QBO deep-links", async ()
   assert.ok(posted.includes("milb: https://qbo.example/inv/1"), "milb link enumerated");
   assert.ok(posted.includes("mlb: https://qbo.example/inv/2"),  "mlb link enumerated");
   assert.ok(posted.includes("ssm: https://qbo.example/inv/3"),  "ssm link enumerated");
+});
+
+// ─── Pretax-mismatch fence (Kevin ruling 2026-09-09) ───────────
+//
+// The email's fact-table $ and the PDF's footer $ MUST match. A
+// mismatch is worse than no attachment. fireN1 throws before any
+// dispatch to force loud failure over silent divergence.
+
+test("fireN1 THROWS when pretaxTotalCents disagrees with sum of lineItems", async () => {
+  const email = makeFakeSender();
+  await assert.rejects(
+    () => fireN1({
+      ...N1_ARGS_BASE,
+      qboMode: "test",
+      invoiceRecords: [{
+        ...N1_ARGS_BASE.invoiceRecords[0],
+        isTest: true,
+        pretaxTotalCents: 1000000,     // claim $10,000
+        lineItems: [
+          { serviceName: "X", serviceDate: "2026-07-27",
+            qty: 1, rateCents: 500000, amountCents: 500000 }, // actual $5,000
+        ],
+      }],
+      accountMap: { salariedManagerEmails: [], rdoEmail: null },
+      deps: { emailSender: email.impl },
+    }),
+    /pretax mismatch/,
+  );
+  assert.equal(email.calls.length, 0, "must not dispatch on mismatch");
+});
+
+test("fireN1: approvedByLede names ALL approvers when the week had multiple (Kevin ruling)", async () => {
+  const email = makeFakeSender();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "live",
+    submitterEmail: "joe@kitchfix.com",
+    submitterName: "Joe Coppolino",
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    reviewRows: [
+      { reviewedBy: "Joe Coppolino",  reviewedAt: "2026-07-31T22:00:00Z" },
+      { reviewedBy: "Joe Coppolino",  reviewedAt: "2026-07-31T22:01:00Z" },
+      { reviewedBy: "Joe Coppolino",  reviewedAt: "2026-07-31T22:02:00Z" },
+      { reviewedBy: "Joe Coppolino",  reviewedAt: "2026-07-31T22:03:00Z" },
+      { reviewedBy: "Desiree Colone", reviewedAt: "2026-07-31T22:04:00Z" },
+      { reviewedBy: "Desiree Colone", reviewedAt: "2026-07-31T22:05:00Z" },
+    ],
+    deps: { emailSender: email.impl },
+  });
+  assert.match(res.html, /Joe Coppolino and Desiree Colone approved the week/,
+    "multi-approver week must NOT claim a single person approved every day");
+  assert.deepEqual(res.approvers, ["Joe Coppolino", "Desiree Colone"]);
+});
+
+test("fireN1: single approver == finalizer uses render's exact wording", async () => {
+  const email = makeFakeSender();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "live",
+    submitterEmail: "joe@kitchfix.com",
+    submitterName: "Joe Coppolino",
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    reviewRows: [
+      { reviewedBy: "Joe Coppolino", reviewedAt: "2026-07-31T22:00:00Z" },
+    ],
+    deps: { emailSender: email.impl },
+  });
+  assert.match(res.html, /Joe Coppolino approved every day and sent TXR - AZ to billing/);
+});
+
+test("fireN1: return includes pdf metadata (filename + byteLength + pretaxCents)", async () => {
+  const email = makeFakeSender();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    invoiceRecords: [{ ...N1_ARGS_BASE.invoiceRecords[0], isTest: true }],
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: { emailSender: email.impl },
+  });
+  assert.equal(res.pdf.filename, "TXR-AZ_week-of-Jul-27_record-copy.pdf");
+  assert.equal(res.pdf.pretaxCents, 1923895);
+  assert.ok(res.pdf.byteLength > 1000);
+  // Confirm the attachment reached the send layer.
+  assert.equal(email.calls[0].attachments?.length, 1);
+  assert.equal(email.calls[0].attachments[0].filename, "TXR-AZ_week-of-Jul-27_record-copy.pdf");
+  assert.equal(email.calls[0].attachments[0].mimeType, "application/pdf");
 });
 
 // ─── Legacy render entry points (PR-C tests preserve) ────────────
@@ -289,7 +398,7 @@ test("legacy renderN1: still works (dry-run, isTest triggers TEST subject)", () 
     scWeekLink: "https://x",
   });
   assert.equal(n1.mode, "dryrun");
-  assert.match(n1.subject, /^TEST - Invoice draft ready:/);
+  assert.match(n1.subject, /^TEST - Sent to billing:/);
 });
 
 test("legacy renderN2: still returns email + slack dry-run objects", () => {

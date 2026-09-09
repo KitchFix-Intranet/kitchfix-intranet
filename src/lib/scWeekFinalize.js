@@ -635,16 +635,48 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     };
   }
 
-  // 7. All succeeded -> N1 (live send).
+  // 7a. Gather N1 confirmation-email context (2026-09-09 rebuild).
+  // These lookups are soft: fireN1 has sensible fallbacks so a
+  // missed lookup does not block the send. Small parallel batch to
+  // keep the finalize latency budget stable.
+  const [
+    { data: accountMeta },
+    { data: reviewRows },
+    { data: submitterRow },
+  ] = await Promise.all([
+    supa.from("accounts").select("team_name").eq("team_key", accountKey).maybeSingle(),
+    supa.from("sc_day_metadata")
+      .select("reviewed_by, reviewed_at, service_date")
+      .eq("account_key", accountKey)
+      .gte("service_date", pairStart)
+      .lte("service_date", pairEnd)
+      .eq("review_status", "approved"),
+    submitterEmail
+      ? supa.from("contacts").select("name").ilike("email", submitterEmail).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const accountLabel     = accountMeta?.team_name || null;
+  const submitterName    = submitterRow?.name || null;
+  const finalizedDateISO = finalizedRow.finalized_at
+    ? String(finalizedRow.finalized_at).slice(0, 10)
+    : null;
+  const daysInWeek = isBiweekly ? 14 : 7;
+
+  // 7b. N1 (live send + record-copy PDF attachment).
   const n1 = await doN1({
     qboMode,
     accountKey,
+    accountLabel,
     weekStart: pairStart,
     weekEnd:   pairEnd,
     submitterEmail,
+    submitterName,
     invoiceRecords,
     scWeekLink: buildScWeekLink(accountKey, weekStart),
     accountMap: resolverAccountMap,
+    finalizedDateISO,
+    reviewRows: reviewRows || [],
+    daysInWeek,
   });
   // Ruling 2 (2026-09-03): warn on ANY delivery failure so a silent
   // Gmail SA break surfaces in operator logs. Both channels sent =>
