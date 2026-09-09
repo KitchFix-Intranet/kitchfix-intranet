@@ -1919,10 +1919,38 @@ export async function resolveOverview({
     // it should be green. Now uses computePeriodTargetPctForLines
     // from the shared module - the SAME derivation Last period's
     // single-period view uses, so the two agree by construction.
+    // Kevin ruling 2026-09-09 (post-#1094 follow-up). Same defect
+    // one grain up: a period whose invoices are still arriving must
+    // hatch on the FYTD chart, whatever its variance vs budget.
+    // Fires on 09/14 when R-93 pulls P9 into Current year - without
+    // this the P9 bar would render solid on 09/14 while invoices
+    // are still landing. Same treatment the week grain got in
+    // #1094: server emits invoices_landed per series entry, client
+    // hatches closed-but-not-landed.
+    //
+    // Rule (period-grain analog of the week-grain rule from #1094):
+    //   - verified periods are settled by definition (finance
+    //     signed off; no more invoices are coming).
+    //   - closed_awaiting periods are settled once today's fiscal
+    //     period is 2+ periods past them (the same integer distance
+    //     the week grain uses, one grain up). On 09/14 today is P10,
+    //     P9's diff is 1, so it hatches; once today lands in P11,
+    //     P9's diff is 2 and it goes solid.
+    //   - open / planned periods do not carry the flag - the chart's
+    //     existing in_progress / not_started branches handle them.
+    const todayPeriodForChart = periodOf(today);
     const series = periods.map(p => {
       const pStart = periodStartISO(p);
       const pEnd = periodEndISO(p);
       const state = pEnd < today ? "closed" : (pStart <= today && today <= pEnd) ? "in_progress" : "not_started";
+      const dState = derivePeriodState({
+        periodNo: p,
+        todayISO: today,
+        periodStatusRow: periodStatus.get(p) || null,
+      });
+      const invoices_landed = state === "closed"
+        ? (dState === "verified" || (todayPeriodForChart != null && (todayPeriodForChart - p) >= 2))
+        : false;
       // Period budget = sum of member budget + purchasing bucket
       // budget for this one period. Labor budget is the MERGED
       // (hourly + salary) figure per R-28 / §5.9 - the chart line
@@ -1984,6 +2012,7 @@ export async function resolveOverview({
       return {
         period_no: p,
         state,
+        invoices_landed,
         // Kevin walkthrough item 4 - subtract inventory-adjustment JE
         // so the chart's per-period bars sum to the card total.
         spent: state === "not_started" ? null : r2((laborByPeriod.get(p) || 0) + (purchByPeriod.get(p) || 0) - (invAdjByPeriod.get(p) || 0)),
