@@ -359,11 +359,22 @@ export async function GET(request) {
   // pool). With the merge always on, Labor matches Overview to the
   // cent in both toggle states.
   //
-  // The URL toggle (includeSalary above) still controls DISCLOSURE:
-  // salary_summary card visibility, salary worker rows in the
-  // WeekTable drill, header pill grammar. It no longer gates the
-  // aggregate math.
-  const mergeSalary = salary_available;
+  // Kevin CC prompt 2026-09-09 (labor toggle item 1) REVISES this:
+  // the whole board now switches between two questions, not just a
+  // disclosure change.
+  //   Hourly     - how are we doing on the cost the site controls?
+  //                actual = 3100.1 only; target = hourly_pct × rev.
+  //   + Salary   - how is the site leader managing the whole budget?
+  //                actual = 3100.1 + 3100.2; target = hourly_batr +
+  //                salary_$.
+  // On the hourly path (includeSalary=false), the salary merge no
+  // longer fires and the board contains hourly-only actuals +
+  // budgets. Salary is ABSENT from the payload - the same access
+  // decision R-98 makes on Overview 3100. The Overview stays
+  // salary-inclusive on CY + LP for its 3100 (Guard 3 of this PR),
+  // so the two boards agree on the +salary state only; on hourly
+  // they answer different questions by design.
+  const mergeSalary = salary_available && includeSalary;
 
   // PR-2 range routing - one source per answer, never both. See
   // src/lib/labor/rangeResolver.js for the three-way rule.
@@ -1400,11 +1411,26 @@ export async function GET(request) {
       }
     }
   }
+  // Kevin R-101 (2026-09-09): service fee per period for sc_measured.
+  // Only CP + NP weeks hit sc_measured; verified (CY) uses P&L-
+  // distributed totals that already include fee, closed_awaiting (LP)
+  // uses budget accrual that already includes fee. Passing fee here
+  // adds it to the running / planning weeks only.
+  const feeBudgetByPeriodSingle = (() => {
+    const perLine = (overviewBudgetsSingle?.data || new Map()).get("2300");
+    const out = new Map();
+    if (!perLine) return out;
+    const byAcct = perLine.get(account);
+    if (!byAcct) return out;
+    for (const [pn, amt] of byAcct) out.set(pn, Number(amt || 0));
+    return out;
+  })();
   attachWeeklyBasisToBoard(boardSingle, weeklyBasisSingle, {
     lineTargetPctByPeriod: lineTargetPctSingle,
     todayISO: today,
     contractualAccrualByPeriod: contractualAccrualSingle,
     verifiedPeriodTotals: verifiedPeriodTotalsSingle,
+    feeBudgetByPeriod: feeBudgetByPeriodSingle,
   });
   // Kevin post-1057 sweep item 2 (2026-09-08). R-86 · a period's
   // target percent is its own, never the annual one. Sum per-week
@@ -1523,6 +1549,7 @@ export async function GET(request) {
       contractualAccrualByPeriod: contractualAccrualSingle,
       verifiedPeriodTotals: verifiedPeriodTotalsSingle,
       salaryBudgetByPeriod: salaryBudgetByPeriodMerged,
+      feeBudgetByPeriod: feeBudgetByPeriodSingle,
     });
     // Post-1057 sweep item 2: R-86 per-period pct on the panel.
     recomputePanelBatrFromPerWeek(bodySingle.board);

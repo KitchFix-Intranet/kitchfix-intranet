@@ -814,7 +814,30 @@ export function buildBoard({
 
   // Budgeted hours - derive from budget and observed avg rate. Only
   // meaningful when we have both a budget and a rate observation.
-  const avg_rate = rangeTotals.hours > 0 ? spent_to_date / rangeTotals.hours : null;
+  //
+  // Kevin CC prompt 2026-09-09 item 2 REVISED (post-R-100). Prior
+  // formula `spent_to_date / rangeTotals.hours` was the defect Kevin
+  // named: on the salary-merged path, spent_to_date includes salary
+  // dollars but rangeTotals.hours excludes salary hours (salary rows
+  // ship with hours=0 per shapeSalaryRow). Result: TBJ CY +salary
+  // read $28.25 from (hourly_$ + salary_$) / hourly_hours - not a
+  // rate, and the same number a hostile reader could subtract back
+  // out to recover the salary pool.
+  //
+  // Correct formula per Kevin: sum(hours × rate) / sum(hours) across
+  // HOURLY employees only. Since per-row hours × rate = per-row
+  // dollars, this reduces to sum(hourly_dollars) / sum(hourly_hours).
+  // Salary rows (r.salaried === true, hours=0, dollars=salary_$)
+  // are excluded from BOTH the numerator and the denominator, so the
+  // figure is identical on the hourly view and the salary-merged
+  // view - "that average will not change since the rates are tied to
+  // hourly rates."
+  let _hourly_dollars = 0;
+  for (const r of actuals) {
+    if (r.salaried) continue;
+    _hourly_dollars += Number(r.amount || 0);
+  }
+  const avg_rate = rangeTotals.hours > 0 ? _hourly_dollars / rangeTotals.hours : null;
   const budgeted_hours = budget > 0 && avg_rate != null && avg_rate > 0 ? Math.round(budget / avg_rate) : null;
 
   const board = {

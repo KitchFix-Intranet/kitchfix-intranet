@@ -379,7 +379,7 @@ function daysLeftInRunningWeek(weekStartISO, todayISO) {
  * Weeks not present in weeklyBasisData (defensive - the loader is
  * called against the same range) get no attach.
  */
-export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null, verifiedPeriodTotals = null, salaryBudgetByPeriod = null }) {
+export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null, verifiedPeriodTotals = null, salaryBudgetByPeriod = null, feeBudgetByPeriod = null }) {
   if (!board || board.applies === false) return board;
   if (!Array.isArray(board.weeks)) return board;
   if (!weeklyBasisData || !Array.isArray(weeklyBasisData.data)) return board;
@@ -466,14 +466,32 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
       w.week_contractual_accrual = 0;
     } else {
       // Non-verified: current path. Per-week SC + budget-accrual/4
-      // for closed weeks.
+      // for closed weeks (fee is inside the 2300 contractual accrual,
+      // don't double-count). Kevin R-101 (2026-09-09): the
+      // sc_measured branch (running + planning weeks, no accrual)
+      // was missing the fee entirely, so the labor target on CP + NP
+      // read $21k / $48k low against the Overview's week rail on
+      // TBJ - FL. When the caller passes `feeBudgetByPeriod`, add
+      // fee_period / 4 to sc_measured weeks. Only sc_measured fires
+      // here because pnl_distributed_by_sc + sc_plus_budget_accrual
+      // already carry the fee upstream. On CY (verified) + LP
+      // (closed_awaiting) this branch is unreachable by
+      // construction; on CP + NP every week hits it.
       const periodAccrual = periodNo != null ? Number(accrualByPeriod.get(periodNo) || 0) : 0;
       const weekAccrual = (basis.temporal === "closed" && periodAccrual > 0)
         ? periodAccrual / 4
         : 0;
       w.week_contractual_accrual = weekAccrual;
-      revenueForWeek = Number(basis.revenue || 0) + weekAccrual;
-      derivation = weekAccrual > 0 ? "sc_plus_budget_accrual" : "sc_measured";
+      if (weekAccrual > 0) {
+        revenueForWeek = Number(basis.revenue || 0) + weekAccrual;
+        derivation = "sc_plus_budget_accrual";
+      } else {
+        // sc_measured: raw SC. Add fee/4 if the caller opted in.
+        const feePeriod = periodNo != null ? Number(feeBudgetByPeriod?.get?.(periodNo) || 0) : 0;
+        const feeThisWeek = feePeriod > 0 ? feePeriod / 4 : 0;
+        revenueForWeek = Number(basis.revenue || 0) + feeThisWeek;
+        derivation = "sc_measured";
+      }
     }
     w.week_revenue = revenueForWeek;
     // Tile / tooltip copy keys off this. "pnl_distributed_by_sc"
