@@ -346,7 +346,7 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel, showPeriodCols }) {
 // produces the same result today and the wrong one the moment a
 // line's target% changes. The envelope row's ▲/▼ keeps the same
 // direction - one signal repeated.
-function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullPeriod, cogsCard, gmCard, statementTotals, includeSalary }) {
+function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullPeriod, cogsCard, gmCard, statementTotals, includeSalary, filters, previewAccount, rangeEffectiveEnd }) {
   // R-98 (Kevin 2026-09-09). On CP running + hourly the 3100 row
   // carries hourly-only figures (server swap at resolver.js), so a
   // straight sum-of-visible-rows would show a total LOWER than the
@@ -459,11 +459,27 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
               const adj = adjustedFor(r.target_pct);
               const landed = Number(r.actual || 0);
               const left = adj != null ? adj - landed : null;
+              // Kevin CC prompt 2026-09-09. Restore the shared row
+              // markup - Link.kpi-ov-cl-linkarea wrapping span.kpi-ov-glc
+              // + span.kpi-ov-cl-lbl + span.kpi-ov-cl-go - the pattern
+              // every other range uses via CostRow above. Uses the same
+              // rowHref helper so drill destination is identical:
+              // 3100 -> /kpi/labor?include_salary=1 (parent stays
+              // salary-inclusive per R-68), other codes -> /kpi/purchasing.
+              const href = rowHref({ lineCode: r.line_code, filters, previewAccount, rangeEffectiveEnd });
               return (
-                <tr key={r.line_code} className="kpi-ov-cl-row">
+                <tr key={r.line_code} className="kpi-ov-cl-row" data-kpi-ov-line-code={r.line_code}>
                   <td className="l kpi-ov-cl-line">
-                    <span className="kpi-ov-cl-code">{r.line_code}</span>
-                    <span className="kpi-ov-cl-lbl">{r.label}</span>
+                    <Link
+                      href={href}
+                      className="kpi-ov-cl-linkarea"
+                      data-kpi-ov="cost-line-link"
+                      aria-label={`Open ${r.label} detail`}
+                    >
+                      <span className="kpi-ov-glc kpi-ov-num">{r.line_code}</span>
+                      <span className="kpi-ov-cl-lbl">{r.label}</span>
+                      <span className="kpi-ov-cl-go" aria-hidden="true">→</span>
+                    </Link>
                   </td>
                   <td className="kpi-ov-num kpi-ov-nb plan plan-first" data-kpi-ov="cost-line-period-budget">
                     {fmtMoney(r.period_budget) || "—"}
@@ -571,6 +587,9 @@ export default function CostLines({ payload, previewAccount = null }) {
         gmCard={payload.cards?.find(c => c.key === "gross_margin")}
         statementTotals={payload.statement_totals}
         includeSalary={!!payload.filters?.include_salary}
+        filters={filters}
+        previewAccount={previewAccount}
+        rangeEffectiveEnd={rangeEffectiveEnd}
       />
     );
   }
