@@ -2073,11 +2073,20 @@ export async function resolveOverview({
     // runningWkBasis fetched for R-92 above (hoisted so both consume
     // one query).
     if (railBoard?.applies !== false && runningWkBasis?.data?.length) {
+      // Kevin ruling 2026-09-09: salary is a fixed dollar target,
+      // not a percent. Pass the salary map so per-week batr on the
+      // rail's labor board follows the same rule the Overview 3100
+      // parent uses (hourly_pct × week_rev + salary_period / 4).
+      // The rail-emitted week fields don't include this batr today,
+      // but keeping the internal computation consistent with the
+      // labor-panel/Overview path avoids silent drift if a later
+      // consumer starts reading it.
       const railLineTargetPct = computeLineTargetPctByPeriod({
         budgetPeriods: laborBudgetPeriods,
         overviewBudgets,
         members,
         periods: [rng.period_no],
+        salaryBudgetByPeriod,
       });
       const railContractualAccrual = computeContractualAccrualByPeriod({
         overviewBudgets,
@@ -2089,6 +2098,7 @@ export async function resolveOverview({
         todayISO: today,
         contractualAccrualByPeriod: railContractualAccrual,
         verifiedPeriodTotals: null,
+        salaryBudgetByPeriod,
       });
     }
     // Purchasing per-week (3200 + 3400 + 3500), indexed by
@@ -2230,6 +2240,93 @@ export async function resolveOverview({
   const labor3100_inactive =
     (labor3100_actual == null || labor3100_actual === 0) &&
     (labor3100_budget == null || labor3100_budget === 0);
+  // Kevin CC prompt 2026-09-09. Salary is a FIXED dollar target, not a
+  // percent of revenue. The old formula
+  //   batr = actual_revenue × (hourly + salary) / revenue_budget
+  // silently inflates salary any period revenue beat budget (systematic
+  // by design: revenue beat budget six of eight periods on TBJ - FL,
+  // producing $13,182 of overstatement across P1-P8 alone). Corrected
+  // formula for the range:
+  //   batr = hourly_pct × actual_revenue + salary_budget
+  // where hourly_pct is (hourly-only budget / revenue budget) full-
+  // period, and salary_budget is the sum of the salary line's budgets
+  // over the periods in the range. Splits into two range totals used
+  // by both the 3100 parent row and the 3100.2 sub-row below - one
+  // source of truth per component so the sub-rows sum to the parent
+  // by construction.
+  const sumPeriodBudgetInRange = (arr) => arr.reduce((acc, bp) => {
+    if (periods.includes(bp.period_no)) return acc + Number(bp.amount || 0);
+    return acc;
+  }, 0);
+  const salaryBudgetPeriodsArrForBatr = [...salaryBudgetByPeriod.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([p, amt]) => ({ period_no: p, amount: r2(amt) }));
+  const labor3100_hourly_period_budget_range = r2(sumPeriodBudgetInRange(laborBudgetPeriodsHourly));
+  const labor3100_salary_period_budget_range = r2(sumPeriodBudgetInRange(salaryBudgetPeriodsArrForBatr));
+  // Kevin CC prompt 2026-09-09 Guard 1 (Labor panel == Overview
+  // 3100 batr every range, every account). Two-path computation:
+  //
+  //  - MULTI-PERIOD RANGES (fytd, explicit N periods): sum per-
+  //    period `hourly_bud_p / rev_bud_p × rev_actual_p` so per-
+  //    period pcts land accurately and match Labor's per-week ×
+  //    per-period pct approach by construction. Range-level
+  //    shortcut drifted $234 on TBJ CY, $6,690 on TBR CY.
+  //  - SINGLE-PERIOD RANGES (period preset - LP, CP, NP): use the
+  //    range-level totalRevenue × hourly_pct formula. On CP the SC
+  //    R-92 confirmed-weeks adjustment lives on totalRevenue but
+  //    NOT on perPeriodRevenue's `reported` records, so a per-
+  //    period sum would silently under-count. Single-period math
+  //    reduces to `totalRevenue × (hourly_bud_p / rev_bud_p)` for
+  //    the one period anyway, which is what budgetAtThisRevenue
+  //    already computes when given the hourly-only budget.
+  //
+  // Salary is fixed per period, so range = sum of salary_budget_p
+  // for both branches.
+  const labor3100_hourly_bud_by_period = new Map();
+  for (const bp of laborBudgetPeriodsHourly) {
+    if (bp?.period_no != null) labor3100_hourly_bud_by_period.set(Number(bp.period_no), Number(bp.amount || 0));
+  }
+  const labor3100_hourly_batr_range = (() => {
+    if (!has_target) return null;
+    // Single-period range: use range-level formula (Method A)
+    // against the range's totalRevenue - the same source R-98's
+    // 3100.1 sub-row batr uses, so parent + sub agree by
+    // construction on CP + LP + NP.
+    if (rng.kind === "period") {
+      return budgetAtThisRevenue(labor3100_hourly_period_budget_range);
+    }
+    // Multi-period range: sum per-period (Method B) to match
+    // Labor's per-week × per-period pct sum by construction.
+    let sum = 0;
+    let any = false;
+    for (const p of periods) {
+      const hBudP = labor3100_hourly_bud_by_period.get(p);
+      if (hBudP == null || hBudP <= 0) continue;
+      const pRev = perPeriodRevenue.get(p);
+      if (!pRev) continue;
+      let periodRevenueActual = 0;
+      for (const line of REVENUE_LINE_CODES) {
+        const rec = pRev[line];
+        if (rec?.reported && rec.amount != null) periodRevenueActual += Number(rec.amount);
+      }
+      if (periodRevenueActual <= 0) continue;
+      let periodRevBudget = 0;
+      for (const rline of REVENUE_LINE_CODES) {
+        const perR = overviewBudgets.get(rline);
+        if (!perR) continue;
+        for (const m of members) {
+          const byAcct = perR.get(m);
+          if (!byAcct) continue;
+          const v = byAcct.get(p);
+          if (v != null) periodRevBudget += Number(v);
+        }
+      }
+      if (periodRevBudget <= 0) continue;
+      sum += periodRevenueActual * (hBudP / periodRevBudget);
+      any = true;
+    }
+    return any ? r2(sum) : null;
+  })();
   // R-98 (Kevin 2026-09-09): on Current period + Next period with the
   // hourly toggle (include_salary=false), the 3100 parent row shows
   // hourly-only figures - not the salary-inclusive combined figure.
@@ -2297,9 +2394,26 @@ export async function resolveOverview({
     // the 3100 statement row so the P&L Target % column stops
     // rendering dashes. Same budget/budget rule the cards use.
     const _actPct = pctOf(row_actual, totalRevenue);
-    // PR-1 item 1: budget/budget on full-period sums (horizon-invariant).
-    const _tgtPct = has_target ? pctOf(row_budget, revenue_budget_full_period) : null;
-    const _batr = budgetAtThisRevenue(row_budget);
+    // Kevin CC prompt 2026-09-09. Adjusted (batr) split by branch:
+    //   use_hourly (CP + NP + hourly per R-98): batr = hourly-only
+    //     figure - salary must NOT be reintroduced here (Guard 4).
+    //   !use_hourly (+salary anywhere, or CY / LP either toggle):
+    //     batr = hourly_pct × actual_revenue + salary_budget_range.
+    // Target %:
+    //   use_hourly: pct on the hourly row is honest (no fixed cost
+    //     inside) - render it as before.
+    //   !use_hourly: parent contains a fixed cost, so no single %
+    //     target exists. target_pct = null, and the flag hatches the
+    //     cell client-side (Kevin: "Hatching now means one thing
+    //     everywhere: there is no percentage target on this line.").
+    const _tgtPct = has_target && use_hourly
+      ? pctOf(row_budget, revenue_budget_full_period)
+      : null;
+    const _batr = use_hourly
+      ? budgetAtThisRevenue(row_budget)
+      : (has_target && labor3100_hourly_batr_range != null)
+        ? r2(labor3100_hourly_batr_range + labor3100_salary_period_budget_range)
+        : null;
     statementRows.push({
       line_code: "3100",
       section: "cogs",
@@ -2320,7 +2434,17 @@ export async function resolveOverview({
       // R-58/R-59: MF accounts null out envelope (contractual revenue).
       envelope_delta: (row_inactive || isManagementFee) ? null : envelopeDelta(row_budget_to_date, _batr),
       sources: ["labor_actuals"],
-      flags: row_inactive ? ["inactive"] : [],
+      // Kevin CC prompt 2026-09-09. On the +salary path (or any
+      // range that carries salary in its row_budget) the parent's
+      // Target % column hatches - a line containing a fixed cost
+      // has no single target percent. The `not_applicable_target_pct`
+      // flag drives the client's na-cell hatch; the new client-side
+      // rule (PnlStatement.js) reads it as "target only," so
+      // Adjusted still renders the composed dollar figure.
+      flags: [
+        ...(row_inactive ? ["inactive"] : []),
+        ...(!use_hourly && !row_inactive ? ["not_applicable_target_pct"] : []),
+      ],
     });
   }
   // Salary reveal (R-28 / §5.9): emit 3100.1 (hourly) + 3100.2
@@ -2449,17 +2573,26 @@ export async function resolveOverview({
       budget_to_date: salaryBTD.amount,
       period_budget: salaryPB,
       // Salary is fixed - variance is dollar over/under the salary
-      // BUDGET, not against a % of revenue. Emit against budget_to_date
-      // so the P&L variance column still ties for the sub-row without
-      // needing an Adjusted figure that doesn't apply.
-      variance: (salary != null && salaryBTD.amount != null) ? r2(salary - salaryBTD.amount) : null,
+      // BUDGET, not against a % of revenue. Kevin CC prompt
+      // 2026-09-09: variance now ties to Adjusted (= period budget)
+      // rather than budget_to_date, matching cost sub-rows' rule -
+      // "the adjusted figure of a fixed cost is what it was
+      // budgeted at."
+      variance: (salary != null && salaryPB != null) ? r2(salary - salaryPB) : null,
       variance_pct: null,
       actual_pct: pctOf(salary, totalRevenue),
       target_pct: null,
-      budget_at_this_revenue: null,
+      // Kevin CC prompt 2026-09-09: Adjusted becomes the salary
+      // budget for the range. Was null (hatched); now renders the
+      // fixed-cost figure. The `not_applicable_target_pct` flag
+      // below still hatches Target % client-side but no longer
+      // hatches Adjusted after the PnlStatement.js update.
+      budget_at_this_revenue: salaryPB,
       sources: ["labor_salary_actuals"],
-      // Item 5: salary sub-rows are not measured on % of revenue;
-      // hatch the Target % and Adjusted cells in the P&L.
+      // Item 5 revised (Kevin 2026-09-09): the flag still hatches
+      // Target % (salary's percent is an output, not a goal) but
+      // Adjusted now renders the salary budget explicitly. Flag
+      // name kept - it literally means "target% is N/A."
       flags: ["not_applicable_target_pct"],
     });
   }

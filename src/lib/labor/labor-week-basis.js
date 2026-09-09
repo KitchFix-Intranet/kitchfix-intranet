@@ -286,21 +286,24 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
 /**
  * Compute line_target_pct per period for the requested account(s).
  *
- * line_target_pct[p] = labor_budget[p] / revenue_budget[p]
+ * line_target_pct[p] = hourly_budget[p] / revenue_budget[p]
  *
- * Labor budget comes from budget_periods (the salary-inclusive amount
- * when the caller has passed the merged board's budget_periods; the
- * hourly-only amount otherwise - matches whatever attachBatrToBoard
- * received). Revenue budget comes from the same overviewBudgets map
- * the range-level batr uses, so per-week and range-level agree by
- * construction under R-68 (salary inclusion) and R-77 (adjusted
- * budget as the KPI).
+ * Kevin ruling 2026-09-09 (salary is a dollar target, not a percent):
+ * when `salaryBudgetByPeriod` is provided, salary is subtracted from
+ * labor before dividing so pct represents ONLY the hourly component.
+ * The caller then adds the salary dollars back in downstream (per
+ * week share in attachWeeklyBasisToBoard, or range total on the
+ * Overview 3100 batr). Sub without salary preserved for hourly-only
+ * callers (labor route's hourly path, older test fixtures) - when
+ * salaryBudgetByPeriod is absent or empty for a period, pct is
+ * laborBud/revBud as before, so no caller sees behaviour changes
+ * unless it opts in by passing salary.
  *
  * Returns Map<period_no, pct>. Periods with either budget missing are
  * omitted - the caller renders a plain per-week bar with no adjusted
  * budget, same as the range-level batr returning null.
  */
-export function computeLineTargetPctByPeriod({ budgetPeriods, overviewBudgets, members, periods }) {
+export function computeLineTargetPctByPeriod({ budgetPeriods, overviewBudgets, members, periods, salaryBudgetByPeriod = null }) {
   const out = new Map();
   if (!Array.isArray(budgetPeriods)) return out;
   if (!overviewBudgets) return out;
@@ -329,7 +332,11 @@ export function computeLineTargetPctByPeriod({ budgetPeriods, overviewBudgets, m
       }
     }
     if (!anyRev || revBud === 0) continue;
-    out.set(p, laborBud / revBud);
+    // Salary opt-in: subtract salary from labor for the pct. Falls
+    // back to labor/rev when no salary map is passed.
+    const salaryBud = salaryBudgetByPeriod?.get?.(p) || 0;
+    const hourlyBud = laborBud - salaryBud;
+    out.set(p, hourlyBud / revBud);
   }
   return out;
 }
@@ -372,7 +379,7 @@ function daysLeftInRunningWeek(weekStartISO, todayISO) {
  * Weeks not present in weeklyBasisData (defensive - the loader is
  * called against the same range) get no attach.
  */
-export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null, verifiedPeriodTotals = null }) {
+export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null, verifiedPeriodTotals = null, salaryBudgetByPeriod = null }) {
   if (!board || board.applies === false) return board;
   if (!Array.isArray(board.weeks)) return board;
   if (!weeklyBasisData || !Array.isArray(weeklyBasisData.data)) return board;
@@ -476,7 +483,16 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
 
     const pct = periodNo != null ? lineTargetPctByPeriod?.get?.(periodNo) : null;
     if (pct != null) {
-      w.budget_at_this_week_revenue = revenueForWeek * Number(pct);
+      // Kevin ruling 2026-09-09 (salary as dollar target): when the
+      // caller passes salaryBudgetByPeriod, add per-week salary share
+      // (salary_period / 4) on top of the hourly-pct component. Sum
+      // of per-week batr across a period's 4 weeks then equals the
+      // Overview 3100 batr's `salary_$ + hourly_pct × actual_rev`
+      // formula by construction. Callers without salary opt-in keep
+      // the pre-fix pct-only behaviour.
+      const salaryPeriodBudget = salaryBudgetByPeriod?.get?.(periodNo);
+      const salaryShareThisWeek = salaryPeriodBudget != null ? Number(salaryPeriodBudget) / 4 : 0;
+      w.budget_at_this_week_revenue = revenueForWeek * Number(pct) + salaryShareThisWeek;
     } else {
       w.budget_at_this_week_revenue = null;
     }
