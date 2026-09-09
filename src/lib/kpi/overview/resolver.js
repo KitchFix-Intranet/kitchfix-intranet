@@ -554,6 +554,21 @@ export async function resolveOverview({
     railGatePStart && railGatePStart <= today &&
     railGatePEnd && today <= railGatePEnd
   );
+  // Kevin R-101 (2026-09-09). The labor target on Next period reads
+  // SC forecast + fee at the range level for its 3100 batr, so the
+  // resolver needs weekly-basis (has projected_revenue per date)
+  // even though the period has not started. Extends only the wk
+  // basis fetch to include NP; the rail's labor + salary fetches
+  // stay running-only (no board is built on NP).
+  const willFetchLaborRevBasis = !!(
+    rng.kind === "period" &&
+    rng.period_no != null &&
+    railGatePStart && railGatePEnd &&
+    (
+      (railGatePStart <= today && today <= railGatePEnd) ||   // CP
+      (today < railGatePStart)                                 // NP (planned)
+    )
+  );
 
   const layer1 = await timeIt("layer1_parallel", async () => Promise.all([
     loadPeriodStatus(supa, FISCAL_YEAR),
@@ -612,7 +627,7 @@ export async function resolveOverview({
     // Wk basis fetch covers the FULL range (not effectiveEndISO) -
     // the rail needs all four weeks including forecast, and the
     // R-92 branch (below) reads the same result.
-    willBeRunningSinglePeriod
+    willFetchLaborRevBasis
       ? loadWeeklyRevenueBasisForOverview(supa, { members, start: rng.start, end: rng.end, today })
       : Promise.resolve(null),
     // Rail labor + salary full-range fetches (versus the existing
@@ -1264,7 +1279,11 @@ export async function resolveOverview({
   // the calendar gate agreed with the real state we already have
   // the result; otherwise runningWkBasis stays null and the R-92
   // branch skips.
-  let runningWkBasis = willBeRunningSinglePeriod ? railWkBasisResp : null;
+  // Kevin R-101 (2026-09-09): widen the assignment gate to
+  // willFetchLaborRevBasis so NP gets the wk basis too. The R-92
+  // branch below still uses willBeRunningSinglePeriod for its
+  // running-week SC-confirmed logic, so NP naturally skips it.
+  let runningWkBasis = willFetchLaborRevBasis ? railWkBasisResp : null;
   if (isRunningSinglePeriod && effRevSource === "sc") {
     if (runningWkBasis?.data?.length) {
       const wkBasis = runningWkBasis;
@@ -2045,6 +2064,15 @@ export async function resolveOverview({
   //
   // Purchasing per-week comes from purchBoard.buckets (already in
   // scope). Only the labor+salary side needs the extra fetch.
+  // Kevin R-101 (2026-09-09). Hoisted from inside the rail block so
+  // the 3100 batr computation on NP (which doesn't build a rail)
+  // still has fee available. Also feeds the runningWkBasis binding
+  // for the labor3100_revenue_for_batr block downstream. On non-
+  // period ranges (CY / fytd) this Map is populated but unused -
+  // the labor3100RevenueForBatrApplies gate excludes them.
+  const feeBudgetByPeriod = sumBudgetByPeriodForLine({
+    overviewBudgets, lineCode: "2300", members,
+  });
   let week_rail = null;
   if (isRunningSinglePeriod && rng.period_no != null) {
     // Approach A (Kevin ruling 2026-09-08 item 3): rail's labor +
@@ -2072,6 +2100,14 @@ export async function resolveOverview({
     // + week_actual_revenue + week_projected_revenue. Uses the same
     // runningWkBasis fetched for R-92 above (hoisted so both consume
     // one query).
+    // Fee prorated by week. 2300 budget / 4 flat per week; the
+    // period-level accrual (confirmedWeeks × fee/4) lives on the
+    // revenue card hero; this per-week figure is contractual and
+    // the same on every week regardless of state.
+    //
+    // feeBudgetByPeriod is hoisted above this block (Kevin R-101,
+    // 2026-09-09) so the 3100 batr can consume it on NP too.
+    const feePerWeek = Number(feeBudgetByPeriod.get(rng.period_no) || 0) / 4;
     if (railBoard?.applies !== false && runningWkBasis?.data?.length) {
       // Kevin ruling 2026-09-09: salary is a fixed dollar target,
       // not a percent. Pass the salary map so per-week batr on the
@@ -2099,6 +2135,7 @@ export async function resolveOverview({
         contractualAccrualByPeriod: railContractualAccrual,
         verifiedPeriodTotals: null,
         salaryBudgetByPeriod,
+        feeBudgetByPeriod,
       });
     }
     // Purchasing per-week (3200 + 3400 + 3500), indexed by
@@ -2111,14 +2148,6 @@ export async function resolveOverview({
         railPurchByWeek.set(w.week_start, (railPurchByWeek.get(w.week_start) || 0) + Number(w.amount || 0));
       }
     }
-    // Fee prorated by week. 2300 budget / 4 flat per week; the
-    // period-level accrual (confirmedWeeks × fee/4) lives on the
-    // revenue card hero; this per-week figure is contractual and
-    // the same on every week regardless of state.
-    const feeBudgetByPeriod = sumBudgetByPeriodForLine({
-      overviewBudgets, lineCode: "2300", members,
-    });
-    const feePerWeek = Number(feeBudgetByPeriod.get(rng.period_no) || 0) / 4;
     // Period COGS target% - used for cost_target per week
     // (week_revenue × target%). Same figure the cost card displays.
     const cogsTargetPct = (cogsBudget != null && revenue_budget_full_period != null && revenue_budget_full_period > 0)
@@ -2286,12 +2315,69 @@ export async function resolveOverview({
   for (const bp of laborBudgetPeriodsHourly) {
     if (bp?.period_no != null) labor3100_hourly_bud_by_period.set(Number(bp.period_no), Number(bp.amount || 0));
   }
+  // Kevin R-101 (2026-09-09) item 4. On CP + NP the labor target
+  // reads a DIFFERENT revenue basis from totalRevenue: full 4-week
+  // SC (actual + projected) plus the contractual service fee. Called
+  // `labor3100_revenue_for_batr` because it drives ONLY the 3100
+  // parent row + the 3100.1 sub-row - no other approved surface
+  // moves. `totalRevenue` stays confirmed-only ($68,187 on TBJ CP);
+  // the envelope row directly beneath the card is the bridge
+  // ($108,585 planned -> $119,141 projected, R-96) so the operator
+  // sees why the target reads against the larger figure without
+  // the card having to move.
+  //
+  // Assertion (Kevin ruling 2026-09-09): the gate below MUST be
+  // false on every closed range. `rng.kind === "period"` excludes
+  // fytd (CY). `state === "open" || "planned"` excludes closed_
+  // awaiting (LP) and verified. So on CY + LP the branch never
+  // fires and totalRevenue-based Method A / Method B stands - the
+  // #1097 EQ result on CY + LP is preserved by construction.
+  const labor3100RevenueForBatrApplies =
+    rng.kind === "period" &&
+    (displayPeriodState === "open" || displayPeriodState === "planned");
+  const labor3100_revenue_for_batr = (() => {
+    if (!labor3100RevenueForBatrApplies) return null;
+    // 4-week SC (mealRev per week from confirmed actuals + forecast
+    // projections) - available on runningWkBasis, which the resolver
+    // fetches for both CP + NP via willFetchLaborRevBasis. Sum
+    // matches the rail's `weekRevTotal` computation on CP by
+    // construction (rail uses the same `week_actual_revenue` /
+    // `week_projected_revenue` fields per week).
+    let scAllWeeks = 0;
+    if (runningWkBasis?.data?.length) {
+      for (const w of runningWkBasis.data) {
+        // basis.revenue is the mealRev-equivalent: actual for
+        // confirmed weeks, projected for forecast, actual+projected
+        // mix for partial. Same rule the rail uses via
+        // basis.revenue -> weekRevTotal.
+        scAllWeeks += Number(w.revenue || 0);
+      }
+    }
+    const feePeriod = Number(feeBudgetByPeriod?.get(rng.period_no) || 0);
+    if (scAllWeeks <= 0 && feePeriod <= 0) return null;
+    return r2(scAllWeeks + feePeriod);
+  })();
   const labor3100_hourly_batr_range = (() => {
     if (!has_target) return null;
-    // Single-period range: use range-level formula (Method A)
-    // against the range's totalRevenue - the same source R-98's
-    // 3100.1 sub-row batr uses, so parent + sub agree by
-    // construction on CP + LP + NP.
+    // Kevin R-101 (2026-09-09): CP + NP use `labor3100_revenue_for_
+    // batr` instead of totalRevenue - see block above. Guard 1
+    // (Labor panel == Overview 3100 batr) holds because Labor's
+    // per-week sum after item 3 also uses SC + fee/4 per week,
+    // summing to the same total.
+    if (labor3100RevenueForBatrApplies && labor3100_revenue_for_batr != null) {
+      // Preserve budgetAtThisRevenue's hasTarget/null guards while
+      // swapping the actualRevenue argument.
+      return sharedBatr({
+        actualRevenue: labor3100_revenue_for_batr,
+        lineBudget: labor3100_hourly_period_budget_range,
+        revenueBudgetFullPeriod: revenue_budget_full_period,
+        hasTarget: has_target,
+      });
+    }
+    // Single-period range not covered by R-101 (LP): use range-
+    // level formula against totalRevenue. Same source R-98's 3100.1
+    // sub-row batr uses on LP, so parent + sub agree by
+    // construction.
     if (rng.kind === "period") {
       return budgetAtThisRevenue(labor3100_hourly_period_budget_range);
     }
@@ -2409,11 +2495,21 @@ export async function resolveOverview({
     const _tgtPct = has_target && use_hourly
       ? pctOf(row_budget, revenue_budget_full_period)
       : null;
-    const _batr = use_hourly
-      ? budgetAtThisRevenue(row_budget)
-      : (has_target && labor3100_hourly_batr_range != null)
-        ? r2(labor3100_hourly_batr_range + labor3100_salary_period_budget_range)
-        : null;
+    // Kevin R-101 (2026-09-09) item 4. Both branches route through
+    // labor3100_hourly_batr_range so CP + NP consume the R-101
+    // revenue basis (4-week SC + fee = $119,141 on TBJ CP) on
+    // whichever toggle state is asked. On hourly (Guard 4) salary
+    // does not reach the batr; on +salary the salary_$ is added.
+    // On CY + LP the labor3100RevenueForBatrApplies gate is false
+    // by construction (state !== "open" && state !== "planned"), so
+    // labor3100_hourly_batr_range falls through to the totalRevenue-
+    // based single/multi-period branches - Guard 1 EQ on those
+    // ranges from #1097 is preserved byte-identical.
+    const _batr = (has_target && labor3100_hourly_batr_range != null)
+      ? (use_hourly
+          ? labor3100_hourly_batr_range
+          : r2(labor3100_hourly_batr_range + labor3100_salary_period_budget_range))
+      : null;
     statementRows.push({
       line_code: "3100",
       section: "cogs",
@@ -2542,8 +2638,17 @@ export async function resolveOverview({
     // tracked lines hatch the Target % + Adjusted cells (not-
     // applicable, marked with flags:["not_applicable"]).
     const hourlyTargetPct = has_target ? pctOf(hourlyBTD.amount || hourlyPB, revenue_budget_full_period) : null;
-    const hourlyBatr = (has_target && totalRevenue != null && hourlyTargetPct != null)
-      ? r2((hourlyTargetPct / 100) * totalRevenue)
+    // Kevin R-101 (2026-09-09) item 4. On CP + NP the 3100.1 sub-
+    // row batr uses labor3100_revenue_for_batr (4-week SC + fee) -
+    // same source as the 3100 parent's hourly component - so parent
+    // and sub agree by construction. On CY + LP the gate is false
+    // and hourlyBatr falls back to totalRevenue as before, so the
+    // #1097 EQ result on those ranges is preserved byte-identical.
+    const hourlyBatrRevenue = (labor3100RevenueForBatrApplies && labor3100_revenue_for_batr != null)
+      ? labor3100_revenue_for_batr
+      : totalRevenue;
+    const hourlyBatr = (has_target && hourlyBatrRevenue != null && hourlyTargetPct != null)
+      ? r2((hourlyTargetPct / 100) * hourlyBatrRevenue)
       : null;
     statementRows.push({
       line_code: "3100.1",
