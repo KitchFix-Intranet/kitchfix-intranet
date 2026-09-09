@@ -16,6 +16,13 @@ function matches(row, filters) {
     else if (f.op === ">=") { if (String(row[f.col]) < String(f.val)) return false; }
     else if (f.op === "<=") { if (String(row[f.col]) > String(f.val)) return false; }
     else if (f.op === "in") { if (!f.val.includes(row[f.col])) return false; }
+    else if (f.op === "ilike") {
+      const cell = String(row[f.col] || "").toLowerCase();
+      // The mock does not implement % wildcards; every caller today
+      // passes a bare email address for a case-insensitive equality
+      // check. Add wildcard support when a caller needs it.
+      if (cell !== f.val.toLowerCase()) return false;
+    }
   }
   return true;
 }
@@ -92,6 +99,11 @@ export function makeSupaMock({ tables = {} } = {}) {
       gte(col, val) { state.filters.push({ col, op: ">=", val }); return api; },
       lte(col, val) { state.filters.push({ col, op: "<=", val }); return api; },
       in(col, arr)  { state.filters.push({ col, op: "in", val: arr }); return api; },
+      // ilike: case-insensitive equality with SQL-style wildcards
+      // stripped for the mock (no seed data uses %). Added 2026-09-09
+      // so scWeekFinalize's contacts lookup (submitterName) is
+      // exercised by the runFinalizeEffects tests.
+      ilike(col, val) { state.filters.push({ col, op: "ilike", val: String(val || "") }); return api; },
       order(col, opts) { state.orderCol = col; state.orderAsc = !!opts?.ascending; return api; },
       limit(n) { state.limit = n; return api; },
       single() { state.single = true; return exec(); },
