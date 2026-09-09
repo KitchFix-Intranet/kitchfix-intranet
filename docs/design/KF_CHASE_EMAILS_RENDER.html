@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix - Chase emails</title>
+<style>
+  :root{
+    --navy:#1A3050; --grn:#4FBF85;
+    --ink:#0F172A; --n700:#475569; --n500:#64748B; --n400:#94A3B8;
+    --n300:#CBD5E1; --n200:#E2E8F0; --n100:#F1F5F9; --n50:#F8FAFC;
+    --page:#EDF0F4; --panel:#EEF2F6;
+    --amber:#E5A054; --amber-bg:#FDF3E6; --amber-bd:#F0D9B5; --amber-fg:#8A5A16;
+    --red:#B3261E; --red-bg:#FCEEED; --red-bd:#F0C9C6;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);font-family:var(--ui);color:var(--ink);
+       -webkit-font-smoothing:antialiased;padding:28px 18px 70px}
+  .wrap{max-width:1120px;margin:0 auto}
+  .eyebrow{font-size:10px;font-weight:800;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500)}
+  h1{font-size:25px;line-height:32px;font-weight:800;letter-spacing:-.01em;margin-top:7px}
+  .sub{font-size:14px;line-height:21px;color:var(--n700);margin-top:8px;max-width:78ch}
+  .sub b{color:var(--ink);font-weight:600}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+  .lbl{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+       color:var(--n500);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%}
+  .dot.a{background:var(--n400)} .dot.b{background:var(--red)}
+
+  .mail{background:#fff;border:1px solid var(--n200);border-radius:12px;
+        overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .mhead{padding:12px 15px;border-bottom:1px solid var(--n100);background:var(--n50)}
+  .mrow{display:flex;gap:8px;font-size:12px;line-height:18px}
+  .mrow .k{color:var(--n400);min-width:32px;font-weight:600}
+  .mrow .v{color:var(--n700)}
+  .mrow .v b{color:var(--ink);font-weight:600}
+  .subj{font-size:13px;line-height:19px;font-weight:700;margin-top:7px;
+        padding-top:7px;border-top:1px solid var(--n100)}
+
+  .stage{background:var(--panel);padding:20px}
+  .card{max-width:520px;margin:0 auto;background:#fff;border-radius:10px;
+        overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.07)}
+  .brand{background:var(--navy);padding:13px 20px;font-size:13px;font-weight:800;
+         letter-spacing:-.01em;color:#fff}
+  .brand span{color:var(--grn)}
+  .flag{padding:7px 20px;font-size:10px;font-weight:800;letter-spacing:.06em;
+        text-transform:uppercase}
+  .flag.a{background:var(--amber-bg);color:var(--amber-fg);
+          border-bottom:1px solid var(--amber-bd)}
+  .flag.b{background:var(--red-bg);color:var(--red);
+          border-bottom:1px solid var(--red-bd)}
+  .inner{padding:18px 20px 20px}
+  .h{font-size:17px;line-height:23px;font-weight:800;letter-spacing:-.01em;
+     margin-bottom:8px}
+  .lede{font-size:13px;line-height:20px;color:var(--n700);margin-bottom:14px}
+  table.f{width:100%;border-collapse:collapse;margin-bottom:15px}
+  table.f td{padding:8px 0;border-top:1px solid var(--n100);font-size:13px;
+             line-height:18px}
+  table.f tr:first-child td{border-top:none}
+  table.f td.k{color:var(--n500)}
+  table.f td.v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  table.f td.v.w{color:var(--amber-fg)} table.f td.v.r{color:var(--red)}
+  .btn{display:block;text-align:center;background:var(--navy);color:#fff;
+       font-size:13px;font-weight:700;padding:11px;border-radius:8px;
+       text-decoration:none;margin-bottom:13px}
+  .foot{font-size:11px;line-height:17px;color:var(--n400);
+        border-top:1px solid var(--n100);padding-top:12px}
+  .foot b{color:var(--n500);font-weight:600}
+  .var{background:#FFF7E6;border-bottom:1px dashed var(--amber);padding:0 2px;
+       border-radius:2px}
+
+  .slack{background:#fff;border:1px solid var(--n200);border-radius:12px;
+         padding:15px 17px;margin-top:13px}
+  .sh{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+  .av{width:24px;height:24px;border-radius:6px;background:var(--navy);color:#fff;
+      font-size:9px;font-weight:800;display:flex;align-items:center;
+      justify-content:center}
+  .nm{font-size:12px;font-weight:800}
+  .tm{font-size:11px;color:var(--n400)}
+  .msg{font-size:13px;line-height:20px;color:var(--n700)}
+  .msg a{color:#1264A3;text-decoration:none}
+
+  .note{background:#fff;border:1px solid var(--n200);border-radius:12px;
+        padding:17px 19px;margin-top:20px}
+  .note h4{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+           color:var(--n500);margin-bottom:10px}
+  .note li{list-style:none;font-size:13px;line-height:20px;color:var(--n700);
+           padding-left:15px;position:relative;margin-bottom:7px}
+  .note li:last-child{margin-bottom:0}
+  .note li:before{content:"";position:absolute;left:2px;top:8px;width:5px;height:5px;
+                  border-radius:50%;background:var(--n300)}
+  .note li b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KitchFix Ops Hub &middot; Chase ladder</div>
+  <h1>Two chase emails, styled like the intranet</h1>
+  <p class="sub">Same shell as the invoice notifications &mdash; navy header, status
+     flag, fact table, one button. <b>Highlighted text</b> varies per account and
+     week.</p>
+
+  <div class="grid">
+
+    <div>
+      <div class="lbl"><span class="dot a"></span>Stage 1 &middot; Sunday 6:00 PM</div>
+      <div class="mail">
+        <div class="mhead">
+          <div class="mrow"><span class="k">To</span>
+            <span class="v"><b>Joe Coppolino</b>, Desiree Colone, Steve Groves</span></div>
+          <div class="subj">Reminder: <span class="var">TBR - FL</span> week of
+            <span class="var">Aug 25 - 31</span> needs entry</div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="brand">KitchFix <span>Ops Hub</span></div>
+            <div class="flag a">Needs entry</div>
+            <div class="inner">
+              <div class="h">Last week isn't entered yet</div>
+              <p class="lede">Sebastian can't invoice
+                <span class="var">TBR - FL</span> until every day is entered or
+                marked no-service. Until then the client is billed late.</p>
+              <table class="f">
+                <tr><td class="k">Week</td><td class="v">Aug 25 - 31</td></tr>
+                <tr><td class="k">Missing</td><td class="v w">3 of 7 days</td></tr>
+              </table>
+              <a class="btn" href="#">Enter the week</a>
+              <p class="foot"><b>No service that day?</b> Open the day and use
+                Mark day as no service &mdash; a blank day keeps the week open.
+                If it's still open tomorrow it goes to Sebastian and your RDO.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="slack">
+        <div class="sh"><div class="av">KF</div><div class="nm">Service Calendar</div>
+          <div class="tm">6:00 PM</div></div>
+        <div class="msg"><b>TBR - FL</b> &mdash; week of Aug 25 - 31,
+          <b>3 of 7 days</b> not entered. Reminder sent to Joe Coppolino.</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="lbl"><span class="dot b"></span>Stage 2 &middot; Monday 3:00 PM</div>
+      <div class="mail">
+        <div class="mhead">
+          <div class="mrow"><span class="k">To</span>
+            <span class="v"><b>Joe Coppolino</b>, Desiree Colone, Steve Groves, Sebastian, Kevin, Shane Lynch</span></div>
+          <div class="subj">Action needed today: <span class="var">TBR - FL</span>
+            week of <span class="var">Aug 25 - 31</span> past due</div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="brand">KitchFix <span>Ops Hub</span></div>
+            <div class="flag b">Past due</div>
+            <div class="inner">
+              <div class="h">Last week is still open</div>
+              <p class="lede">Sebastian can't invoice
+                <span class="var">TBR - FL</span> until it's complete. Every day
+                it stays open is another day the client's invoice is late.</p>
+              <table class="f">
+                <tr><td class="k">Week</td><td class="v">Aug 25 - 31</td></tr>
+                <tr><td class="k">Missing</td><td class="v r">3 of 7 days</td></tr>
+              </table>
+              <a class="btn" href="#">Enter the week</a>
+              <p class="foot"><b>Can't finish today?</b> Reply with the reason so
+                Sebastian and <span class="var">Shane</span> know. If a day had no
+                service, mark it no-service &mdash; a blank day keeps the week open.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slack">
+        <div class="sh"><div class="av">KF</div><div class="nm">Service Calendar</div>
+          <div class="tm">3:00 PM</div></div>
+        <div class="msg">&#9888;&#65039; <b>TBR - FL</b> &mdash; week of Aug 25 - 31,
+          <b>3 of 7 days</b> open. Chased Joe Coppolino.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="note">
+    <h4>What changed</h4>
+    <li><b>Intranet shell</b> &mdash; navy header, status flag, fact table, one
+      button. Same as the invoice notifications.</li>
+    <li><b>Roughly half the words.</b> The consequence is one sentence; the
+      instructions moved into the footer.</li>
+    <li><b>Slack is a monitoring line for Kevin only</b> &mdash; no @ mentions,
+      since the site leaders aren't in that channel. The person chased is named
+      as plain text. Both stages post.</li>
+  </div>
+
+  <div class="note">
+    <h4>Recipients &mdash; all derived from Postgres</h4>
+    <li><b>Sunday</b> goes to the account's salaried list &mdash; every salaried
+      manager on the site, in the <code>To</code> field. No RDO on Sunday, so an
+      email from the ladder means something needs the site's attention.</li>
+    <li><b>Monday</b> adds Sebastian, Kevin, and the RDO to the salaried list.
+      All primary &mdash; no <code>Cc</code> split.</li>
+    <li><b>The Slack line names one person</b> &mdash; whoever last entered counts,
+      or the site leader if nobody has, or the first name on the salaried list.
+      That name is the Slack scalar only; the email <code>To</code> field is
+      always the whole salaried list.</li>
+    <li><b>The RDO derives from the account's region</b> &mdash; nobody maintains
+      a list, and a new manager joins the chase when Rippling syncs them.</li>
+    <li><b>A departed employee can't be emailed</b> &mdash; the address is checked
+      against active staff first.</li>
+  </div>
+
+</div>
+</body>
+</html>
