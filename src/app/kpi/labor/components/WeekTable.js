@@ -28,6 +28,7 @@ import { flagForV42State } from "../lib/weekFlag.js";
 import { buildMemberByWeekAndAcct } from "../lib/weekTableModels.js";
 import HelpPop from "./HelpPop.js";
 import Arrow from "./Arrow.js";
+import { weekHatchedDollars } from "../lib/weekHatched";
 
 // PR-B (owner ruling 2026-08-24) - Comfortable | Dense toggle removed
 // entirely, dashboard-wide. Comfortable becomes the only mode; the
@@ -429,6 +430,9 @@ export function WeekTable({
   rolledUpMembers = [],           // V25-2 members in the aggregate roll-up
   aggregateExcludedMembers = [],  // V25-2 envelope members excluded from the roll-up
   salary,                          // V40 BUG 1 - { rate_basis, blended_rate_hourly } | null
+  avgRate = null,                  // Kevin 2026-09-10 - board.avg_rate for the hatched-dollars
+                                   //   compute (draft_hours + unpriced_hrs × rate). Present on
+                                   //   both toggle states; matches server board.avg_rate.
 }) {
   // V40 BUG 1 - table Rate column, when salary is on, must show the
   // SAME hourly rate the cards show. blendedRate(amount, hours) here
@@ -536,7 +540,7 @@ export function WeekTable({
   // Falls back to raw only when no week in the band has per-week batr
   // (older routes / boards without the shared-basis attachment).
   const periodTotals = useMemo(() => grouped.map(g => {
-    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0 };
+    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0, hatched: 0 };
     const states = [];
     let periodBudget = null;
     let weeksInBand = 0;
@@ -556,6 +560,14 @@ export function WeekTable({
       // subtracted per week; the hourly path has empty
       // salaryAmountsByWeek so hourly_amount == amount there.
       t.hourly_amount += (w.amount || 0) - (salaryAmountsByWeek.get(w.week_start) || 0);
+      // Kevin CC prompt 2026-09-10 (one definition of spent).
+      // Accumulate per-week hatched dollars (unpriced × rate +
+      // draft × rate) so band-total + grand-total Dollars cells
+      // read `spent = costed + unpriced + unapproved`, matching
+      // the panel + week card + bar caption. weekAggregates uses
+      // `hours_without_dollars` for the unpriced source; the
+      // helper accepts either that or `unpriced_hrs`.
+      t.hatched += weekHatchedDollars(w, avgRate).total;
       states.push(w.coverage_state);
       weeksInBand += 1;
       if (w.budget_at_this_week_revenue != null) {
@@ -578,7 +590,7 @@ export function WeekTable({
       periodBudget = any ? Math.round(sum * 100) / 100 : null;
     }
     return { g, totals: t, states, periodBudget, weeksInBand };
-  }), [grouped, budgetByPeriod, weekBudgetsByWeekStart, salaryAmountsByWeek]);
+  }), [grouped, budgetByPeriod, weekBudgetsByWeekStart, salaryAmountsByWeek, avgRate]);
 
   // Kevin post-1053 sweep item 3 (2026-09-08). Multi-period ranges
   // (This year, FYTD, N-period spans) drop the running-period row
@@ -885,6 +897,7 @@ export function WeekTable({
                     rateBasisHourlyOnly={rateBasisHourlyOnly}
                     hourlyRate={hourlyRate}
                     salaryAmountsByWeek={salaryAmountsByWeek}
+                    avgRate={avgRate}
                   />
                 );
               })}
@@ -925,7 +938,7 @@ export function WeekTable({
                     return r != null ? `$${r.toFixed(2)}` : "–";
                   })()}</td>
                 )}
-                <td className="num">{fmt$(grandTotal?.amount || 0)}</td>
+                <td className="num">{fmt$((grandTotal?.amount || 0) + (grandTotal?.hatched || 0))}</td>
               </tr>
             </tbody>
           </table>
@@ -952,6 +965,10 @@ function FragmentRows({
   salaryAmountsByWeek,   // Kevin 2026-09-09 - same threading pattern; used
                          //   by the per-week rate cell to exclude salary
                          //   dollars from the numerator.
+  avgRate,               // Kevin 2026-09-10 (one definition of spent).
+                         //   board.avg_rate. Multiplies unpriced_hrs +
+                         //   draft_hours per week to fold hatched
+                         //   dollars into the per-week Dollars cell.
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
@@ -992,7 +1009,7 @@ function FragmentRows({
         {showHoliday && <td className={`num ${band.totals.hol > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.hol > 0.004 ? fmtHrs(band.totals.hol) : "–"}</td>}
         {showUnpriced && <td className={`num ${band.totals.unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.unpriced > 0.004 ? fmtHrs(band.totals.unpriced) : "–"}</td>}
         {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
-        <td className="num">{fmt$(band.totals.amount)}</td>
+        <td className="num">{fmt$((band.totals.amount || 0) + (band.totals.hatched || 0))}</td>
       </tr>
       {periodOpen && weeks.map(w => {
         const sev = weekSeverity(w);
@@ -1082,7 +1099,7 @@ function FragmentRows({
                   0 when drafts are already priced. */}
               {showUnpriced && <td className={`num ${(w.draft_hours || 0) > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{(w.draft_hours || 0) > 0.004 ? fmtHrs(w.draft_hours) : "–"}</td>}
               {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
-              <td className="num">{fmt$(w.amount)}</td>
+              <td className="num">{fmt$((Number(w.amount) || 0) + weekHatchedDollars(w, avgRate).total)}</td>
             </tr>
             {weekOpen && mode === "single" && workerChildrenForWeek(w, workers).map(c => (
               <ChildRow

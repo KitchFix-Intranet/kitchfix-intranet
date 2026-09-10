@@ -666,7 +666,14 @@ export default function KpiLaborPage() {
     // the panel's own "36 of 37 weeks closed · running not counted".
     // Single-period ranges that ARE the running period still
     // contribute (the whole point of viewing them).
-    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0 };
+    //
+    // Kevin CC prompt 2026-09-10 (one definition of spent). Track
+    // `hatched` (unpriced × rate + draft × rate) alongside amount
+    // so the table's grand total Dollars column reads
+    // spent = costed + unpriced + unapproved. Follows the same
+    // running-period exclusion the amount + hours totals do.
+    const rate = data?.board?.avg_rate ?? null;
+    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0, hatched: 0 };
     const currentP = periodOfDate(today);
     for (const period of grouped) {
       const isRunning = period.groupHint?.kind === "period"
@@ -679,9 +686,18 @@ export default function KpiLaborPage() {
       g.amount              += period.subtotal.amount;
       g.hours_without_dollars += period.subtotal.hours_without_dollars;
       g.draft_hours           += period.subtotal.draft_hours || 0;
+      for (const w of period.weeks || []) {
+        const uphrs = Number(w.hours_without_dollars || 0);
+        const draftHrs = Number(w.draft_hours || 0);
+        const amt = Number(w.amount || 0);
+        if (rate) {
+          if (uphrs > 0.004) g.hatched += uphrs * Number(rate);
+          if (draftHrs > 0.004 && amt > 0.5) g.hatched += draftHrs * Number(rate);
+        }
+      }
     }
     return g;
-  }, [grouped, today]);
+  }, [grouped, today, data?.board?.avg_rate]);
 
   const periodsIsAllHoursOnly = useMemo(() => {
     const set = new Set();
@@ -1433,6 +1449,7 @@ export default function KpiLaborPage() {
             rate_basis: data.rate_basis,
             blended_rate_hourly: data.blended_rate_hourly,
           } : null}
+          avgRate={data?.board?.avg_rate ?? null}
           onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "", homestand: "" }) : null}
           rangeSelection={rangeSelectionEarly}
           resolvedPreset={resolvedPreset}
