@@ -63,6 +63,38 @@ function isoMinusDay(iso) {
   return d.toISOString().slice(0, 10);
 }
 
+// Kevin CC prompt 2026-09-10 items 1 + 2. Per-week hatched dollars.
+// One helper feeds the bar's merged hatched region, the per-week
+// card's `% used` cell, the panel note's `X% of budget used`, and
+// the TierAWeekBar caption's bar-total figure - so every reading
+// of "what's on this bar" comes from the same arithmetic.
+//
+// Two sources: `unpriced_hrs × rate` (hours with no pay segment yet
+// - was `kpi-wb-cap-est`) + `draft_hours × rate` (priced but
+// awaiting site-lead approval - was `kpi-wb-slice-unapp`). Kevin's
+// ruling: "The distinction between 'estimated, not costed' and
+// 'awaiting approval' is a payroll-processing detail. To a chef
+// both mean the same thing - that money is spent, it just has not
+// finished arriving." One hatched region carries both.
+//
+// Gates preserve the prior per-layer render conditions:
+//   - `unappDollars` fires only on non-empty running/closed weeks
+//     with draft_hours > 0 AND rate available (matches the old
+//     kpi-wb-slice-unapp gate at StoryBlock.js:654 pre-fix).
+//   - `capDollars` fires on any week with unpriced_hrs > 0 AND rate
+//     available (via estimateUnpricedDollars null check).
+function weekHatchedDollars(w, rate) {
+  const isNotStarted = w?.state === "not_started";
+  const spent = Number(w?.spent || 0);
+  const isZero = !isNotStarted && (!spent || spent <= 0.5);
+  const capDollars = estimateUnpricedDollars(w?.unpriced_hrs, rate) || 0;
+  const draftHrs = Number(w?.draft_hours || 0);
+  const unappDollars = (!isZero && !isNotStarted && draftHrs > 0.004 && rate)
+    ? draftHrs * Number(rate)
+    : 0;
+  return { capDollars, unappDollars, draftHrs, total: capDollars + unappDollars };
+}
+
 // Verdict pill in the SpendCard header. One source of truth.
 // Kevin post-1057 sweep item 1 (2026-09-08): pill copy names the
 // TARGET, not the budget. "Over target" / "On target" reads with
@@ -503,8 +535,22 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
           );
         }
         // No revenue yet (TP day 1) OR future range. Dollars + copy.
+        //
+        // Kevin CC prompt 2026-09-10 item 2. Include hatched dollars
+        // (worked, not yet final) in the numerator so the panel note
+        // reads what the bars visually show. On any range whose
+        // weeks have no draft / unpriced hours the sum is 0 and the
+        // pct is byte-identical to the prior formula - CY + LP today.
+        // Kevin logged: on a closed range that ever carries lingering
+        // drafts the corrected figure fires and the note reads the
+        // honest total; expected behaviour.
+        const rate = salary?.blended_rate_hourly ?? board?.avg_rate ?? null;
+        const weekHatchedSum = (board?.weeks || []).reduce(
+          (s, w) => s + weekHatchedDollars(w, rate).total,
+          0,
+        );
         const spentUsedPct = (budget != null && budget > 0 && spent != null)
-          ? (Number(spent) / Number(budget)) * 100 : null;
+          ? ((Number(spent) + weekHatchedSum) / Number(budget)) * 100 : null;
         return (
           <>
             <div className="kpi-spend-pf-row">
@@ -599,7 +645,26 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
     : (w.spent || 0);
   const isZero = !isNotStarted && (!value || value <= 0.5);
-  const barPct = isNotStarted ? 0 : Math.max(0, Math.min(100, (value / scale) * 90));
+  // Kevin CC prompt 2026-09-10 item 1. Merged hatched region.
+  // Compute once via the shared weekHatchedDollars helper so the
+  // bar's hatched layer, the caption's bar-total, and the per-week
+  // card's % all consume the same numbers.
+  const { capDollars: hatchedCap, unappDollars: hatchedUnapp, draftHrs: hatchedDraftHrs, total: hatchedTotal } = weekHatchedDollars(w, rate);
+  // Solid bar now shows APPROVED + COSTED only. `w.spent` today
+  // includes the unapproved-priced portion (it was rendered as a
+  // grey overlay INSIDE the solid amber). Subtract it out - that
+  // portion moves into the merged hatched layer above the solid.
+  const solidDollars = Math.max(0, value - hatchedUnapp);
+  const solidPct = isNotStarted ? 0 : Math.max(0, Math.min(90, (solidDollars / scale) * 90));
+  const solidHeadroom = Math.max(0, 90 - solidPct);
+  const hatchedPctRaw = (hatchedTotal / scale) * 90;
+  const hatchedPct = hatchedTotal > 0.005
+    ? Math.max(0.5, Math.min(solidHeadroom, hatchedPctRaw))
+    : 0;
+  // Retained for downstream code paths that still name `barPct` -
+  // now the total visual height (solid + hatched), matching the
+  // previous meaning (was value's height plus the extension cap).
+  const barPct = solidPct + hatchedPct;
   // Kevin post-1055 sweep item 4 (2026-09-08). Closed-week bar fill
   // colour is derived from the ADJUSTED variance (spent - per-week
   // batr) so the fill matches the sign of its own caption. #1055
@@ -616,62 +681,11 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     : isClosed
       ? `kpi-wb-bar ${closedAdjSign === "over" ? "kpi-wb-bar-over" : "kpi-wb-bar-under"}`
       : "";
-  // V42 REVISED (C2) - hatched cap. Estimated dollars for hours with
-  // no covering pay-segment yet - "this bar will grow when payroll
-  // processes those hours." Signal is unpriced_hrs (aggregate of
-  // hours_without_dollars), NOT draft_hours: priced drafts are
-  // already in the solid bar, so capping by draft_hours would
-  // double-count. Owner correction 2026-08-20 after TXR - AZ 08/10
-  // measurement (173.93 draft hrs, 0.00 unpriced, $3,430.45 priced).
-  //
-  // Cap renders on any week where unpriced_hrs > 0, closed or in
-  // progress. Reuses existing kpi-wb-bar-prog (45deg amber gradient) -
-  // no new pattern, no new colour token. Clamp: total (bar + cap)
-  // cannot exceed plot; cap gets at least 0.5% so it never scales
-  // to zero when it is real.
-  const capDollars = estimateUnpricedDollars(w.unpriced_hrs, rate);
-  const capPctRaw = capDollars != null ? (capDollars / scale) * 90 : 0;
-  const capHeadroom = Math.max(0, 90 - barPct);
-  const capPct = capDollars != null
-    ? Math.max(0.5, Math.min(capHeadroom, capPctRaw))
-    : 0;
-  // Labor unapproved-hours fix (Kevin 2026-09-07). Grey hatched slice
-  // sitting WITHIN the solid bar to name the priced-but-not-approved
-  // portion of this week's spend. Kevin: "86.88 hours at $21.58 is
-  // roughly $1,875 - nearly double the $986 the period is under by. A
-  // chef who reads ON TRACK on Monday, approves the weekend, and comes
-  // back to a different verdict will stop believing the board."
-  //
-  // Dollar math: draft_hours * rate. Slice height = barPct * (unapp $
-  // / spent $). Bar's total height unchanged - the slice OVERLAYS the
-  // top portion of the solid bar within the same height envelope,
-  // rather than adding to it (that's what the amber cap does for
-  // unpriced hours).
-  //
-  // Only fires on closed/in-progress weeks with real spend AND real
-  // draft_hours. Zero-spend and future weeks skip.
-  const draftHrs = Number(w.draft_hours || 0);
-  const unappDollars = (!isZero && !isNotStarted && draftHrs > 0.004 && rate)
-    ? draftHrs * Number(rate)
-    : 0;
-  const unappRatio = (unappDollars > 0 && value > 0.5)
-    ? Math.min(1, unappDollars / value)
-    : 0;
-  const unappPct = unappRatio > 0 ? barPct * unappRatio : 0;
-  const approvedPct = unappRatio > 0 ? barPct - unappPct : 0;
-  // PR-C hatch gap fix (owner ruling 2026-08-24). When a cap is
-  // present, remove the bar's rounded top so bar + cap merge cleanly.
-  // Prior state: both elements carried `border-radius: 4px 4px 0 0`;
-  // the bar's rounded top curved down at the corners while the cap's
-  // flat bottom left a triangular gap. `.kpi-wb-bar-capped` overrides
-  // border-radius to 0 so the pair reads as one column.
-  //
-  // Extended for the unapproved slice: when a slice sits within the
-  // bar, the bar's top-rounded corners are hidden by the slice's flat
-  // bottom, so the corners visually disappear regardless. We still
-  // apply -capped so the slice's rounded top is what the reader sees
-  // (no double-round competing).
-  const hasOverlay = capPct > 0 || unappPct > 0;
+  // PR-C hatch gap fix (owner ruling 2026-08-24). When the hatched
+  // region sits on top of the solid bar, remove the solid bar's
+  // rounded top so the two elements merge cleanly. The hatched
+  // element carries the rounded top.
+  const hasOverlay = hatchedPct > 0;
   const barClsFinal = (barCls && hasOverlay) ? `${barCls} kpi-wb-bar-capped` : barCls;
   // Labor PR-B item 4 - reference line reads this week's own budget
   // (budget_at_this_week_revenue = week_revenue × line_target_pct),
@@ -711,18 +725,24 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
       ? "kpi-wb-target"
       : (isNotStarted ? "kpi-wb-target kpi-wb-target-blue" : "kpi-wb-target");
 
-  // V42 REVISED - `≥` prefix on the caption fires when the bar will
-  // grow (unpriced money signal), not when there are drafts.
-  const hasUnpriced = (w.unpriced_hrs || 0) > 0.004;
-  // Labor PR-B item 4 - future forecast weeks display the WEEK's
-  // ADJUSTED BUDGET (grey dashed reference above the baseline stub),
-  // not the weekly_allowance carry-over. When rendered, the caption
-  // reads that budget - the reader's next question after "this week
-  // has no spend yet" is "what's it planning against?".
+  // Kevin CC prompt 2026-09-10 item 3 (Option B). Caption reads
+  // the bar total - solid + hatched - so caption + percentage
+  // agree. Prior code showed `≥ $costed` on any week with unpriced
+  // hours; the `≥` was doing the work of naming "the number below
+  // isn't the whole picture", which was the same defect the
+  // percentage fix (item 2) removes. Kevin ruling: "the caption's
+  // job is to match the percentage beside it." Bar total also
+  // captures the grey-slice dollars that were previously hidden
+  // inside the caption's `≥`-less form. hasUnpriced retired.
+  //
+  // `w.spent` already includes the priced-but-unapproved portion
+  // (hatchedUnapp); hatchedCap sits above w.spent as the extension.
+  // Bar total = value + hatchedCap.
+  const barTotalDollars = value + hatchedCap;
   const captionValueRaw = (isNotStarted && perWeekAdjusted != null)
     ? perWeekAdjusted
-    : value;
-  const captionValue = hasUnpriced ? `≥ ${fmt$(captionValueRaw)}` : fmt$(captionValueRaw);
+    : barTotalDollars;
+  const captionValue = fmt$(captionValueRaw);
   let statusLine;
   if (isRunning && perWeekAdjusted != null && value > 0.5) {
     // Labor PR-B item 6 (R-80) - running week reads as a fraction,
@@ -730,21 +750,25 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     // over/under against it is false. Kevin's example format:
     //   $3,933 of $4,217 · 93% used · 2 days left
     //
-    // Kevin walkthrough item 4a (2026-09-07): the fraction only fires
-    // when spend exists. Prior gate rendered "$0.00 of $5,431.54 · 0%
-    // used · 7 days left" on day one - noise on a week that reads like
-    // any other not-started week. The `value > 0.5` guard drops the
-    // fraction until real spend lands; the caption then falls through
-    // to the `isRunning && !fraction` branch below which shows the
-    // week's budget as its plan.
-    const spent = value;
+    // Kevin CC prompt 2026-09-10 item 2. Fraction numerator + pct
+    // now include the hatched dollars (worked, not yet final) - the
+    // full bar height, not the costed slice alone. Prior code read
+    // 45% on TBJ CP week 1 while the bar visibly reached 108%; the
+    // caption and the bar disagreed and the caption denied the bar.
+    // hatchedTotal is 0 on any week without draft or unpriced hours,
+    // so weeks with a clean settlement read exactly as they did
+    // before.
+    const spent = value + hatchedTotal;
     const bud = perWeekAdjusted;
     const pct = bud > 0 ? Math.round((spent / bud) * 100) : null;
     const daysLeft = w.days_left_in_week;
     const parts = [`${fmt$(spent)} of ${fmt$(bud)}`];
     if (pct != null) parts.push(`${pct}% used`);
     if (daysLeft != null) parts.push(`${daysLeft} day${daysLeft === 1 ? "" : "s"} left`);
-    statusLine = <span className={`kpi-wb-d kpi-wb-d-frac`}>{parts.join(" · ")}</span>;
+    // Over-100% treatment - amber/red tone matches the SpendCard
+    // pill logic. `kpi-wb-d-bad` is the existing red variant.
+    const fracCls = pct != null && pct > 100 ? "kpi-wb-d-bad" : "kpi-wb-d-frac";
+    statusLine = <span className={`kpi-wb-d ${fracCls}`}>{parts.join(" · ")}</span>;
   } else if (isRunning && perWeekAdjusted != null) {
     // Walkthrough item 4a fall-through - running week with zero spend
     // reads like a not-started week. The bar draws the baseline stub
@@ -812,41 +836,39 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
         {isNotStarted || isZero ? (
           <div className="kpi-wb-basel" />
         ) : (
-          <div className={barClsFinal} style={{ height: `${Math.max(barPct, 2)}%` }} />
+          <div className={barClsFinal} style={{ height: `${Math.max(solidPct, 2)}%` }} />
         )}
-        {/* V42 REVISED - hatched cap. Sits ON TOP of the solid bar,
-            visually stacked via `bottom` position. Hatch is unique
-            to this element after the PR-B render fix; the in-progress
-            bar itself is now solid amber, so the legend reads true:
-            hatched means exactly one thing (not costed yet).
-            v43-1 language sweep: "pending" replaced with "not costed
-            yet" - owner ruling 2026-08-26, "pending" was doing double
-            duty for both approval-state and cost-state and that
-            ambiguity produced the entire Approvals-card investigation. */}
-        {capPct > 0 && (
-          <div
-            className="kpi-wb-bar kpi-wb-cap-est"
-            style={{ height: `${capPct}%`, bottom: `${barPct}%` }}
-            title={capDollars != null ? `Estimated ~${fmt$(capDollars)} not costed yet` : undefined}
-            aria-label="not costed yet, estimated"
-          />
-        )}
-        {/* Labor unapproved-hours fix (Kevin 2026-09-07). Grey hatched
-            slice within the solid bar, positioned at the top of the
-            bar's height envelope. Kevin acceptance: "the hatched portion
-            of a week bar equals that week's unapproved share of its own
-            spend" - unappPct is barPct * (unappDollars / spent), so the
-            visual ratio exactly matches the dollar ratio.
-            Title carries the number so a hover on any bar surfaces the
-            dollars-at-stake without a second click. */}
-        {unappPct > 0 && (
-          <div
-            className="kpi-wb-bar kpi-wb-slice-unapp"
-            style={{ height: `${unappPct}%`, bottom: `${approvedPct}%` }}
-            title={`${draftHrs.toFixed(1)} hrs awaiting approval · ~${fmt$(unappDollars)}`}
-            aria-label={`${draftHrs.toFixed(1)} hours awaiting approval, roughly ${fmt$(unappDollars)}`}
-          />
-        )}
+        {/* Kevin CC prompt 2026-09-10 item 1. One hatched region
+            replaces the prior amber-cap + grey-slice pair. Both
+            were "worked, not yet final" per Kevin - one is priced
+            but unapproved, the other is unpriced awaiting payroll.
+            To a chef the distinction is a payroll-processing
+            detail; the bar carries two states now (solid = final,
+            hatched = still moving). Tooltip retains the breakdown
+            for a site leader who hovers.
+            Positioned on top of the solid bar (bottom = solidPct);
+            solidPct was reduced by hatchedUnapp so the total
+            height (solid + hatched) equals the prior (value +
+            hatchedCap) - same visual, one class. */}
+        {hatchedPct > 0 && (() => {
+          const lines = [];
+          if (hatchedDraftHrs > 0.004 && hatchedUnapp > 0) {
+            lines.push(`${hatchedDraftHrs.toFixed(1)} hrs awaiting approval · ~${fmt$(hatchedUnapp)}`);
+          }
+          if (hatchedCap > 0) {
+            lines.push(`Estimated ~${fmt$(hatchedCap)} not costed yet`);
+          }
+          if (lines.length > 1) lines.push(`Total not yet final · ${fmt$(hatchedTotal)}`);
+          const tooltip = lines.join("\n");
+          return (
+            <div
+              className="kpi-wb-bar kpi-wb-hatched"
+              style={{ height: `${hatchedPct}%`, bottom: `${solidPct}%` }}
+              title={tooltip || undefined}
+              aria-label={`${fmt$(hatchedTotal)} worked, not yet final`}
+            />
+          );
+        })()}
       </div>
       <div className={`kpi-wb-cap${(isForecast || isPartial) ? " kpi-wb-cap-forecast" : ""}`}>
         <b className={captionCls}>
@@ -967,6 +989,12 @@ function TierAStrip({ board, salary }) {
 function WeekRail({ board }) {
   const weeks = board?.weeks || [];
   if (weeks.length === 0) return null;
+  // Kevin CC prompt 2026-09-10 item 2. Per-week `% used` and its
+  // over/under classification now read the FULL bar height, not
+  // just the costed slice. Rate feeds weekHatchedDollars per week
+  // (unpriced_hrs × rate + draft_hours × rate). On weeks with no
+  // pending / no drafts hatchedTotal is 0 - reading is unchanged.
+  const rate = board?.avg_rate ?? null;
 
   return (
     <div className="kpi-wrail" role="list" aria-label="Week detail tiles">
@@ -974,7 +1002,12 @@ function WeekRail({ board }) {
         const basis = w.revenue_basis || "forecast";
         const temporal = w.revenue_basis_temporal
           || (w.state === "closed" ? "closed" : w.state === "in_progress" ? "running" : "future");
-        const spent = w.spent != null ? Number(w.spent) : null;
+        const rawSpent = w.spent != null ? Number(w.spent) : null;
+        const { total: hatchedTotal } = weekHatchedDollars(w, rate);
+        // spent used for pct + over-under classification includes
+        // the hatched dollars (item 2). rawSpent is retained for
+        // dollar displays that name the costed portion specifically.
+        const spent = rawSpent != null ? rawSpent + hatchedTotal : null;
         const budget = w.budget_at_this_week_revenue != null ? Number(w.budget_at_this_week_revenue) : null;
         const revenue = w.week_revenue != null ? Number(w.week_revenue) : null;
 
@@ -1390,15 +1423,13 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
               distinction - resolve or remove. Removed. Replaced with a
               descriptor naming the treatment, not a value.
 
-              R-84 (Kevin walkthrough item 4b, 2026-09-07): a legend may
-              not promise a treatment nothing uses. `amber hatched = not
-              costed yet` fires nowhere in current data (verified across
-              4 accounts x 2 ranges, all `unpriced_hrs = 0`). The
-              `.kpi-wb-cap-est` render code stays (defensive; may fire
-              during payroll windows) but the legend entry goes until
-              the treatment fires. If the amber cap ever renders and no
-              legend explains it, that gap is easy to notice and add
-              back. */}
+              Kevin CC prompt 2026-09-10 item 1. Prior state carried
+              two hatch classes with two colours + two tooltips
+              (kpi-wb-cap-est amber "not costed yet",
+              kpi-wb-slice-unapp grey "awaiting approval"). Merged
+              into one .kpi-wb-hatched region + one legend entry
+              "hatched = worked, not yet final". Tooltip preserves
+              the breakdown for a site-leader who hovers. */}
           {tier === "A" && (
             <>
               <span className="kpi-wh-tgt kpi-wh-tgt-cap">
@@ -1407,7 +1438,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
               </span>
               <span className="kpi-wh-tgt kpi-wh-tgt-cap">
                 <span className="kpi-wh-unapp-swatch" aria-hidden="true" />
-                grey hatched = awaiting approval
+                hatched = worked, not yet final
               </span>
             </>
           )}

@@ -2494,34 +2494,23 @@
   pointer-events: none;
 }
 .kpi-wb-target-blue { border-top-color: var(--kpi-blue-500); }
-/* V42 REVISED (C2) - hatched cap. Stacks on top of the solid bar
-   via absolute position + `bottom` in inline style. Carries the
-   ONLY hatch pattern on the bar (after PR-B revision: the
-   in-progress bar itself is now solid amber). Same 45deg amber
-   gradient the strip has always used - no new colour token; only
-   the meaning is new: "pay data pending, estimated". Rounded top,
-   flat bottom so it visually merges with the solid segment beneath. */
-.kpi-wb-cap-est {
-  position: absolute; left: 0; right: 0;
-  border-radius: 4px 4px 0 0;
-  background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
-  pointer-events: auto;   /* keep the title tooltip reachable */
-}
-/* Labor unapproved-hours fix (Kevin 2026-09-07). Grey hatched SLICE
-   that sits WITHIN a solid bar (not on top of it) to name the portion
-   of a week's spend that is priced but not yet site-lead approved.
-   The bar's total height is unchanged; the slice overlays the top
-   `unapprovedPct` of the bar's height envelope. Distinct from
-   .kpi-wb-cap-est - that one adds height above the bar for hours
-   not yet costed. This one splits existing height for hours awaiting
-   approval.
-   Kevin ruling: "Not a warning colour: nothing is wrong, the week
-   is simply not settled." Neutral grey. */
-.kpi-wb-slice-unapp {
+/* Kevin CC prompt 2026-09-10 item 1. Merged hatched region.
+   Retires the prior amber cap (.kpi-wb-cap-est, "estimated not
+   costed yet") + grey slice (.kpi-wb-slice-unapp, "awaiting
+   approval") into ONE hatched layer stacked on top of the solid
+   bar. Kevin ruling: "To a chef both mean the same thing - that
+   money is spent, it just has not finished arriving." Bar carries
+   two states now (solid = final, hatched = still moving); the
+   tooltip retains the breakdown for a site leader who hovers.
+   Neutral grey (Kevin's prior ruling on the grey-slice tone stands:
+   not a warning colour, the week is simply not settled). Rounded
+   top; the solid bar below drops its rounded top via
+   .kpi-wb-bar-capped so the two elements merge cleanly. */
+.kpi-wb-hatched {
   position: absolute; left: 0; right: 0;
   border-radius: 4px 4px 0 0;
   background: repeating-linear-gradient(45deg, var(--n-500, #64748B) 0 6px, var(--n-300, #CBD5E1) 6px 12px);
-  pointer-events: auto;
+  pointer-events: auto;   /* keep the title tooltip reachable */
 }
 .kpi-wb-cap {
   margin-top: var(--kpi-sp-3); text-align: center; line-height: 1.35;
