@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/extract-line-items",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sc-bg-monthly-report",
+      "schedule": "0 13 4 * *"
     }
   ]
 }
