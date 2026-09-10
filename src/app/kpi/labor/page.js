@@ -22,7 +22,7 @@ import { computeStaleness } from "@/lib/labor/staleness";
 import { deriveClientAccount, shouldRestoreLastAccount, shouldAutoEnableSalary, shouldRenderLandingBridgeLoading } from "@/lib/kpi/previewAccess";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
-import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection, r93FytdEndISO, r93ExcludedPeriodNo } from "./lib/periods";
+import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection, r93FytdEndISO, r93ExcludedPeriodNo, periodEndISO } from "./lib/periods";
 import { periodsInBoardWeeks } from "./lib/signalCardModels";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
@@ -988,10 +988,17 @@ export default function KpiLaborPage() {
     if (resolvedPreset === "fytd") {
       const fytdEnd = r93FytdEndISO(today);
       const lastP = fytdEnd ? periodOf(fytdEnd) : null;
-      const excludedP = r93ExcludedPeriodNo(today);
       if (lastP != null) {
-        const base = `closed periods · P1 – P${lastP}`;
-        return excludedP != null ? `${base} · P${excludedP} awaiting verification` : base;
+        // Kevin CC prompt 2026-09-10 item 1. The `P{excludedP}
+        // awaiting verification` suffix moved off this label and
+        // into its own amber pill in the SpendCard header, matching
+        // the Overview's status-line pattern. The chip carries the
+        // range, the status pill carries the verdict, the separate
+        // amber pill names the excluded period + its close date.
+        // r93ExcludedPeriodNo still drives the amber pill below - the
+        // rule stays in one helper so this label and the pill cannot
+        // disagree about which period is excluded.
+        return `closed periods · P1 – P${lastP}`;
       }
       return "fiscal year to date";
     }
@@ -1158,6 +1165,23 @@ export default function KpiLaborPage() {
                 } : null}
                 salaryAvailable={data?.salary_available === true}
                 isFutureRange={data?.is_future_range === true}
+                awaiting={(() => {
+                  // Kevin CC prompt 2026-09-10 item 1. Awaiting-
+                  // verification pill on Current year only, matching
+                  // Overview page.js:469-479 shape exactly. Same
+                  // helper (r93ExcludedPeriodNo) + same close-date
+                  // derivation (period_end + 8 days) so the two
+                  // boards cannot disagree about which period is
+                  // excluded or when it settles.
+                  if (resolvedPreset !== "fytd") return null;
+                  const p = r93ExcludedPeriodNo(today);
+                  if (p == null) return null;
+                  const pEnd = periodEndISO(p);
+                  if (!pEnd) return null;
+                  const t = new Date(pEnd + "T00:00:00Z").getTime();
+                  const settle = new Date(t + 8 * 86400000).toISOString().slice(0, 10);
+                  return { period_no: p, close_iso: pEnd, settle_iso: settle };
+                })()}
               />
               {/* Kevin Labor PR-A item 7 (2026-09-04): Spending pace,
                   Overtime, Approvals cards removed. Overtime + unapproved

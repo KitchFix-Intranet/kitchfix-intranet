@@ -27,10 +27,16 @@ function fmtMMDDYY(iso) {
 }
 
 // V29-17 - pill vocabulary is the same across the row.
+// Kevin CC prompt 2026-09-10 item 2. `under` fires on closed +
+// multi-period ranges when pacePctPoints <= 0 (definitive under-
+// budget answer). Green pill; same vocabulary the SpendCard's
+// verdictDisplay uses so the two surfaces read the same word
+// across the signal row.
 export function pillFor(verdict) {
   if (verdict === "on_track") return { state: "good", label: "ON TARGET" };
   if (verdict === "watch")    return { state: "warn", label: "WATCH" };
   if (verdict === "over")     return { state: "bad",  label: "OVER" };
+  if (verdict === "under")    return { state: "good", label: "UNDER" };
   return { state: "neutral", label: "—" };
 }
 

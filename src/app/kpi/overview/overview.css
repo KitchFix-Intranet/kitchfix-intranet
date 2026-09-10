@@ -613,26 +613,12 @@
   align-self: flex-end;
   border-radius: 0;
 }
-.kpi-app .kpi-ov-tgt {
-  position: absolute;
-  left: 0; right: 0;
-  border-top: 2px dashed var(--navy-700);
-  pointer-events: none;
-  z-index: 2;
-}
-.kpi-app .kpi-ov-tgt em {
-  position: absolute;
-  right: 0;
-  top: calc(-15px * var(--kf-scale));
-  font-style: normal;
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .06em;
-  color: var(--navy-700);
-  text-transform: uppercase;
-  background: var(--n-0);
-  padding: 0 var(--kpi-sp-1);
-}
+/* Kevin CC prompt 2026-09-10 item 3: .kpi-ov-tgt (weekly-budget
+   dashed line) retired with its render on ChartWeekGrain. Same
+   defect class the period-grain line hit in #1073 - bar height +
+   colour carry the verdict; a line on a different scale reads
+   misleading. .kpi-ov-tgt em (inline label anchor) also retired -
+   the "budget $X / wk" strip that used it is gone. */
 
 /* Bar hover tooltip retired 2026-09-02 (language pass item 13):
    BarTip component was deleted, .kpi-ov-bt* rules had no consumer. */
@@ -1616,28 +1602,15 @@
 }
 .kpi-app .kpi-ov-split-suffix { font-weight: 600; color: var(--n-600); }
 
-/* ── C12 chart budget label moves out of the bar area ────────────
- * Sits above the chart in the card body, right below the header.
- * The dashed target line inside .kpi-ov-bars keeps its position
- * (bottom % anchored to the weekly budget). Only the label moved.
- * .kpi-ov-bars-inset adds horizontal padding so the leftmost bar
- * cannot start under the label. */
-.kpi-app .kpi-ov-tgt-label {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .06em;
-  color: var(--navy-700);
-  text-transform: uppercase;
-  padding: var(--kpi-sp-1) 0;
-}
+/* Kevin CC prompt 2026-09-10 item 3: .kpi-ov-tgt-label ("budget
+   $X / wk" strip) retired with the dashed target line it named.
+   .kpi-ov-bars-inset retains its horizontal padding so bar
+   alignment doesn't shift. */
 .kpi-app .kpi-ov-bars-inset {
   padding-left: var(--kpi-sp-2);
   padding-right: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
 }
-/* C12 addendum: with the label out of the bar area, the em label on
- * .kpi-ov-tgt is no longer rendered - drop the padding it required
- * on the bars container so the top of the tallest bar reads clean. */
-.kpi-app .kpi-ov-bars-inset { padding-top: var(--kpi-sp-2); }
 
 
 /* ── D14 + D15 fold cards: one card, header trigger, rotating cv ──

@@ -210,16 +210,17 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
 
   // Kevin ruling 2026-09-03 (simplified-layout): `bare` mode drops
   // the outer card + header when the fold shell owns them.
-  const budgetLabelStrip = wkB > 0 ? (
-    <div className="kpi-ov-tgt-label" data-kpi-ov="chart-budget-label">
-      budget {fmtMoney(wkB)} / wk
-    </div>
-  ) : null;
+  //
+  // Kevin CC prompt 2026-09-10 item 3. Dashed target line + "budget
+  // $X / wk" legend removed - Kevin's ruling matches the period-
+  // grain removal from #1073: bar height and bar colour carry the
+  // verdict on their own axis, and the line has no shared scale
+  // with the bars so it reads as misleading. `wkB` (weekly budget)
+  // stays in scope - the per-bar good/bad classSuffix below still
+  // compares to it as the numeric target; only the visual line +
+  // its legend are gone.
   const bars = (
     <div className="kpi-ov-bars kpi-ov-bars-inset">
-      {wkB > 0 && (
-        <div className="kpi-ov-tgt" style={{ bottom: `${Math.round((wkB / mx) * 100)}%` }} aria-hidden="true" />
-      )}
       {series.map((s, i) => {
         const val = Number(s.spent || 0);
         if (s.state === "not_started") {
@@ -295,7 +296,6 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
     return (
       <div className="kpi-ov-cb" data-kpi-ov="chart" data-kpi-ov-grain="week">
         {runningNote}
-        {budgetLabelStrip}
         {bars}
         {axis}
       </div>
@@ -305,17 +305,18 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="week">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">Cost of goods sold, week by week</span>
-        {/* Kevin Prompt 1 item 1d (2026-09-04): subtitle names the
-            "live to date" behaviour explicitly. Same source data as
-            before; the label now says what the source is (labour +
-            purchases, read live to date rather than settled totals). */}
-        <span className="kpi-ov-gl">labour and purchases, live to date · line is the weekly budget</span>
+        {/* Kevin CC prompt 2026-09-10 item 3. Dashed weekly-budget
+            line + its "line is the weekly budget" caption removed
+            (matches the period-grain removal from #1073). Subtitle
+            names the source; the help body no longer references a
+            line that isn't drawn. */}
+        <span className="kpi-ov-gl">labour and purchases, live to date</span>
         <HelpPop
           id="overview-chart-week"
           title="Cost of goods sold by week"
           body={
             <p>
-              Below the line is under budget. Unstarted weeks show a dash, not a zero - a week that has not begun cannot be judged. Weeks in progress are hatched.
+              Green is under the weekly budget, red is over. Unstarted weeks show a dash, not a zero - a week that has not begun cannot be judged. Weeks in progress are hatched.
             </p>
           }
         />
@@ -329,7 +330,6 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
         )}
       </div>
       <div className="kpi-ov-cb">
-        {budgetLabelStrip}
         {bars}
         {axis}
       </div>

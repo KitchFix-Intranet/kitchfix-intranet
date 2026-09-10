@@ -2153,6 +2153,22 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* Kevin CC prompt 2026-09-10 item 1. Awaiting-verification pill on
+   Current year - amber filled, matches the Overview's
+   status-line pill for the same state (kpi-ov-status-wait). Named
+   distinct from .kpi-vpill-awaiting (the outline pill for unapproved
+   draft-hours) so the two "awaiting" states can't blur into one
+   look. Same amber palette the Overview settles on for R-94 /
+   R-93 amber pills. */
+.kpi-vpill-awaiting-period {
+  background: var(--amber-100);
+  color: #92580A;
+  border-color: #F3D9AE;
+  font-weight: 800;
+}
+.kpi-vpill-awaiting-period .kpi-vpill-dot {
+  background: #92580A;
+}
 .kpi-spend-h-title {
   font-size: var(--kpi-t-meta); font-weight: 800; letter-spacing: 0.08em;
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
@@ -2815,10 +2831,9 @@
 .kpi-pcol-bar-prog {
   background: repeating-linear-gradient(45deg, var(--navy-700) 0 6px, #3D6CB0 6px 12px);
 }
-.kpi-pcol-bud {
-  position: absolute; left: calc(-4px * var(--kf-scale)); right: calc(-4px * var(--kf-scale));
-  border-top: 2px dashed var(--amber-600);
-}
+/* Kevin CC prompt 2026-09-10 item 3: .kpi-pcol-bud (Tier C dashed
+   target line) retired with its render + legend. Bar colour +
+   variance label carry the verdict. */
 .kpi-axisC {
   display: flex; gap: var(--kpi-sp-3); margin-top: var(--kpi-sp-2);
 }
