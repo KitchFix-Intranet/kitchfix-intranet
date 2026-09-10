@@ -2156,12 +2156,31 @@ export async function resolveOverview({
     const runningWeekNoOut = (lastCompleteWk?.weekNo ?? 0) + 1;
     const rows = (railBoard?.weeks || []).map((w, i) => {
       const wkNo = i + 1;
-      // Meal revenue: confirmed weeks use SC actual; forecast weeks
-      // use projected. `week_actual_revenue` and `week_projected_
-      // revenue` are attached by attachWeeklyBasisToBoard.
-      const mealRev = w.revenue_basis === "confirmed"
-        ? Number(w.week_actual_revenue || 0)
-        : Number(w.week_projected_revenue || 0);
+      // Meal revenue: sum of Labor's per-week actual + projected.
+      // Kevin CC prompt 2026-09-10 (partial-week revenue). The prior
+      // ternary keyed off `revenue_basis === "confirmed"` and defaulted
+      // to projected on the else branch. `revenue_basis` has three
+      // emitted values, not two ("confirmed" | "forecast" | "partial",
+      // per src/lib/labor/labor-week-basis.js:243-249), so a partial
+      // week silently picked the projected branch and dropped every
+      // day of actuals it carried.
+      //
+      // Kevin's rule: on a partial week, each day with any actual
+      // uses only its actual; each day with no actuals uses its
+      // projection. Replacement at day level. Labor's
+      // `loadWeeklyRevenueBasis` already enforces that rule in
+      // `actual_revenue` (has_actuals days) + `projected_revenue`
+      // (denom days without actuals) - the two sets are disjoint by
+      // construction. Summing them is Labor's canonical meal figure
+      // on every basis, including partial - this is the same math
+      // `basis.revenue` uses internally at labor-week-basis.js:278-
+      // 280. Consuming what Labor publishes, not deriving a second
+      // implementation. On confirmed weeks projected_revenue = 0
+      // (byte-identical to prior behaviour); on forecast weeks
+      // actual_revenue = 0 (byte-identical). Only partial weeks
+      // move, which is the point of the fix.
+      const mealRev = Number(w.week_actual_revenue || 0)
+                    + Number(w.week_projected_revenue || 0);
       const weekRevTotal = mealRev + feePerWeek;
       const costTarget = cogsTargetPct != null ? weekRevTotal * (cogsTargetPct / 100) : null;
       const laborSpent = Number(w.spent || 0);
@@ -2171,7 +2190,7 @@ export async function resolveOverview({
         week_start: w.week_start,
         week_end: w.week_end,
         state: w.state,                           // "closed" | "in_progress" | "not_started"
-        revenue_basis: w.revenue_basis || null,   // "confirmed" | "forecast" | null
+        revenue_basis: w.revenue_basis || null,   // "confirmed" | "forecast" | "partial" | null
         meal_revenue: r2(mealRev),
         fee_prorate: r2(feePerWeek),
         week_revenue: r2(weekRevTotal),
