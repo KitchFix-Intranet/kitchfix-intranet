@@ -225,11 +225,23 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
     ? board.total_revenue_for_batr
     : null;
   const noRevenueYet = revenueEarnedForPanel == null;
+  // Kevin CC prompt 2026-09-10 CP cleanup item 1. Removed the
+  // "Nothing earned yet" neutral pill on Current period. Kevin:
+  // "Not needed - and it contradicts the week card below, which
+  // shows Confirmed revenue $31,667.80." The pill fired on day 1
+  // when no period has closed inside the range (total_revenue_for_
+  // batr == null), but the week cards below already carry SC-
+  // confirmed revenue for the running week. On CP the pill is
+  // null; other range kinds (multi_period, single_period_closed)
+  // fall through to the server verdict as before - noRevenueYet
+  // does not fire on those in practice.
   const vd = isFutureRange
     ? null
-    : noRevenueYet
-      ? { label: "Nothing earned yet", cls: "neu" }
-      : verdictDisplay(board?.verdict);
+    : (noRevenueYet && kind === "single_period_in_progress")
+      ? null
+      : noRevenueYet
+        ? { label: "Nothing earned yet", cls: "neu" }
+        : verdictDisplay(board?.verdict);
 
   // Left-cell (Spent so far) sub. Always the % of budget. On a
   // future range the sub reads "this range has not started" in muted
@@ -409,19 +421,22 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
               Muted outline pill - not a warning colour per Kevin
               ("nothing is wrong, the week is simply not settled"). */}
           {vd && (() => {
+            // Kevin CC prompt 2026-09-10 CP cleanup item 7. Copy shortened
+            // to `PENDING APPROVALS` - the wk / hrs counts moved off the
+            // pill (they still surface via the aria-label + the row-level
+            // draft-hours indicators). Pill still fires only when at
+            // least one week carries draft hours.
             const weeks = board?.weeks || [];
             const openWeeks = weeks.filter(w => Number(w.draft_hours || 0) > 0.004).length;
             const totalDraft = weeks.reduce((s, w) => s + Number(w.draft_hours || 0), 0);
             if (openWeeks === 0 || totalDraft < 0.004) return null;
-            const hrsLabel = totalDraft >= 100 ? totalDraft.toFixed(0) : totalDraft.toFixed(1);
-            const wkLabel = openWeeks === 1 ? "1 WK" : `${openWeeks} WKS`;
             return (
               <span
                 className="kpi-vpill kpi-vpill-awaiting"
                 aria-label={`${totalDraft.toFixed(1)} hours across ${openWeeks} week${openWeeks === 1 ? "" : "s"} awaiting site-lead approval`}
                 data-vpill-awaiting
               >
-                AWAITING · {wkLabel} · {hrsLabel} HRS
+                PENDING APPROVALS
               </span>
             );
           })()}
@@ -542,29 +557,46 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         // add would double-count.
         const spentUsedPct = (budget != null && budget > 0 && spent != null)
           ? (Number(spent) / Number(budget)) * 100 : null;
+        // Kevin CC prompt 2026-09-10 CP cleanup items 2 + 8. Panel
+        // note ("No percentage yet. Labour as a percent of revenue
+        // needs revenue...") removed on Current period - operators
+        // know the figure will move, and the copy told them nothing
+        // new. Percent-of-budget moved inline beside the Spent so
+        // far value using the same <small> pattern the Actual row
+        // uses. Budget label reads `Labor Budget` on CP so the
+        // reader sees which pool is compared. Other range kinds
+        // (multi_period Current year, single_period_closed Last
+        // period) keep their original copy - they're approved.
+        const isCP = kind === "single_period_in_progress" && !isFutureRange;
+        const budgetLabel = isCP ? "Labor Budget" : "Budget";
         return (
           <>
             <div className="kpi-spend-pf-row">
               <span className="k">Spent so far</span>
-              <span className="v num">{fmt$(spent)}</span>
+              <span className="v num">
+                {fmt$(spent)}
+                {isCP && spentUsedPct != null && <small>{spentUsedPct.toFixed(1)}%</small>}
+              </span>
             </div>
             <div className="kpi-spend-pf-rule" />
             <div className="kpi-spend-pf-row ref">
-              <span className="k">Budget</span>
+              <span className="k">{budgetLabel}</span>
               <span className="v num">
                 {fmt$(budget)}
                 {tgtPct != null && <small>{tgtPct.toFixed(1)}% target</small>}
               </span>
             </div>
-            <div className="kpi-spend-pf-nodata">
-              {isFutureRange
-                ? <><b>Range has not started.</b> No spend, no revenue, nothing to be a percent of.</>
-                : <>
-                    <b>No percentage yet.</b> Labour as a percent of revenue needs revenue, and no week of this period has closed.
-                    {spentUsedPct != null && <> <b>{spentUsedPct.toFixed(1)}% of the budget used.</b></>}
-                  </>
-              }
-            </div>
+            {!isCP && (
+              <div className="kpi-spend-pf-nodata">
+                {isFutureRange
+                  ? <><b>Range has not started.</b> No spend, no revenue, nothing to be a percent of.</>
+                  : <>
+                      <b>No percentage yet.</b> Labour as a percent of revenue needs revenue, and no week of this period has closed.
+                      {spentUsedPct != null && <> <b>{spentUsedPct.toFixed(1)}% of the budget used.</b></>}
+                    </>
+                }
+              </div>
+            )}
           </>
         );
       })()}
@@ -587,10 +619,19 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         const cls = actualSum > budgetSum ? "kpi-spend-salary-over"
                   : Math.abs(actualSum - budgetSum) < 0.5 ? "kpi-spend-salary-at"
                   : "kpi-spend-salary-under";
+        // Kevin CC prompt 2026-09-10 CP cleanup item 3. Salary
+        // line percentage removed on Current period. On CY / LP the
+        // range-level ratio is still meaningful (a closed range has
+        // final numbers on both sides of the fraction); on CP the
+        // running-period ratio moves with every accrual step and
+        // the actual vs budget dollars beside it already tell the
+        // story. Percent kept on the other kinds so approved
+        // surfaces are unchanged.
+        const isCPSalary = kind === "single_period_in_progress" && !isFutureRange;
         return (
           <div className={`kpi-spend-salary ${cls}`}>
             salary <b>{fmt$(actualSum)}</b> of <b>{fmt$(budgetSum)}</b>
-            {pct != null && <> · {pct}%</>}
+            {pct != null && !isCPSalary && <> · {pct}%</>}
           </div>
         );
       })()}
@@ -619,7 +660,7 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
 // source label. Grounded in TBJ - FL P9 W2 flip ($13,167 forecast to
 // $21,876 confirmed - a chef who scheduled to the forecast was 60%
 // short). The tile carries the warning; no separate banner.
-function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
+function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate, isCP = false }) {
   const isNotStarted = w.state === "not_started";
   const isInProgress = w.state === "in_progress";
   const isClosed = w.state === "closed";
@@ -730,30 +771,16 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   const captionValue = fmt$(captionValueRaw);
   let statusLine;
   if (isRunning && perWeekAdjusted != null && value > 0.5) {
-    // Labor PR-B item 6 (R-80) - running week reads as a fraction,
-    // never a variance. Its budget covers days not yet worked, so an
-    // over/under against it is false. Kevin's example format:
-    //   $3,933 of $4,217 · 93% used · 2 days left
-    //
-    // Kevin CC prompt 2026-09-10 item 2. Fraction numerator + pct
-    // now include the hatched dollars (worked, not yet final) - the
-    // full bar height, not the costed slice alone. Prior code read
-    // 45% on TBJ CP week 1 while the bar visibly reached 108%; the
-    // caption and the bar disagreed and the caption denied the bar.
-    // hatchedTotal is 0 on any week without draft or unpriced hours,
-    // so weeks with a clean settlement read exactly as they did
-    // before.
-    const spent = value + hatchedTotal;
-    const bud = perWeekAdjusted;
-    const pct = bud > 0 ? Math.round((spent / bud) * 100) : null;
-    const daysLeft = w.days_left_in_week;
-    const parts = [`${fmt$(spent)} of ${fmt$(bud)}`];
-    if (pct != null) parts.push(`${pct}% used`);
-    if (daysLeft != null) parts.push(`${daysLeft} day${daysLeft === 1 ? "" : "s"} left`);
-    // Over-100% treatment - amber/red tone matches the SpendCard
-    // pill logic. `kpi-wb-d-bad` is the existing red variant.
-    const fracCls = pct != null && pct > 100 ? "kpi-wb-d-bad" : "kpi-wb-d-frac";
-    statusLine = <span className={`kpi-wb-d ${fracCls}`}>{parts.join(" · ")}</span>;
+    // Kevin CC prompt 2026-09-10 CP cleanup item 5. Running-week
+    // status line removed on Current period. Prior copy was
+    // `$10,451.77 of $9,860.08 · 106% used · 4 days left`; Kevin:
+    // "every figure in it appears elsewhere on the page." The
+    // fraction lives on the panel above, the percent-of-revenue
+    // pair moved up to the week card verdict (item 9), and
+    // days-left is available in the week header. On other range
+    // kinds this branch is unreachable (isRunning requires
+    // basisTemporal === "running", a CP-only condition).
+    statusLine = null;
   } else if (isRunning && perWeekAdjusted != null) {
     // Walkthrough item 4a fall-through - running week with zero spend
     // reads like a not-started week. The bar draws the baseline stub
@@ -815,7 +842,15 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   return (
     <div className="kpi-wb">
       <div className="kpi-wb-plot">
-        {targetPct != null && (
+        {/* Kevin CC prompt 2026-09-10 CP cleanup item 4. Dashed per-
+            week budget lines removed on Current period bars - same
+            ruling as the Overview chart target lines removed in
+            #1102. The week card below each bar already carries
+            `Labor Budget $X`, so the dashed reference was one more
+            place to look for a number that already had a home.
+            Other range kinds (multi_period, single_period_closed)
+            keep the dashed lines - approved surfaces. */}
+        {targetPct != null && !isCP && (
           <span className={targetCls} style={{ bottom: `${targetPct}%` }} />
         )}
         {isNotStarted || isZero ? (
@@ -848,7 +883,15 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
           return (
             <div
               className="kpi-wb-bar kpi-wb-hatched"
-              style={{ height: `${hatchedPct}%`, bottom: `${solidPct}%` }}
+              // Kevin CC prompt 2026-09-10 CP cleanup item 10. Overlap
+              // the hatched region 1px into the solid bar so the two
+              // segments touch cleanly - the subpixel gap that
+              // appeared at some plot heights read as a break in the
+              // bar. bottom = solidPct% - 1px shifts hatched down by
+              // one pixel; the hatched still ends at solidPct +
+              // hatchedPct at the top (height unchanged), so the
+              // bar's total visual footprint is unchanged.
+              style={{ height: `${hatchedPct}%`, bottom: `calc(${solidPct}% - 1px)` }}
               title={tooltip || undefined}
               aria-label={`${fmt$(hatchedTotal)} worked, not yet final`}
             />
@@ -938,6 +981,7 @@ function TierAStrip({ board, salary }) {
           weeklyAllowance={weeklyAllowance}
           scale={scale}
           rate={rate}
+          isCP={board?.kind === "single_period_in_progress"}
         />
       ))}
     </div>
@@ -974,6 +1018,10 @@ function TierAStrip({ board, salary }) {
 function WeekRail({ board }) {
   const weeks = board?.weeks || [];
   if (weeks.length === 0) return null;
+  // Kevin CC prompt 2026-09-10 CP cleanup. items 8 + 9 apply on
+  // Current period only; single_period_closed (Last period) is an
+  // approved surface and keeps its prior labels + verdict text.
+  const isCP = board?.kind === "single_period_in_progress";
   // Kevin CC prompt 2026-09-10 item 2. Per-week `% used` and its
   // over/under classification now read the FULL bar height, not
   // just the costed slice. Rate feeds weekHatchedDollars per week
@@ -1043,14 +1091,33 @@ function WeekRail({ board }) {
             subText = daysLeft != null ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : null;
           }
         } else if (temporal === "running") {
-          // Running with real spend - R-80 fraction (no over/under).
-          vdCls += " kpi-wrail-vd-run";
-          const pct = budget != null && budget > 0 ? Math.round((spent / budget) * 100) : null;
-          vdText = pct != null ? `${pct}% used` : fmt$(spent);
+          // Running with real spend. Kevin CC prompt 2026-09-10 CP
+          // cleanup item 9. Verdict text switched from `X% used`
+          // (spent / budget) to `X% actual · Y% target` (spent /
+          // revenue vs budget / revenue). Kevin: "the percent-of-
+          // revenue comparison is the one that matches how the
+          // rest of the board reads." Coloured red when actual
+          // exceeds target, green when it does not. Only fires on
+          // CP - `temporal === "running"` is unreachable on LP
+          // (closed) and CY (multi-period uses TierCStrip). Prior
+          // pct-used fallback kept for the rare running-with-spend-
+          // but-no-revenue case (SC seeding lag), so the tile still
+          // renders something.
           const daysLeft = w.days_left_in_week;
           subText = daysLeft != null
             ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left · budget covers the whole week`
             : null;
+          if (isCP && revenue != null && revenue > 0 && budget != null && budget > 0) {
+            const actP = (Number(spent) / Number(revenue)) * 100;
+            const tgtP = (Number(budget) / Number(revenue)) * 100;
+            const overTgt = actP > tgtP + 0.005;
+            vdCls += overTgt ? " kpi-wrail-vd-bad" : " kpi-wrail-vd-good";
+            vdText = `${actP.toFixed(1)}% actual · ${tgtP.toFixed(1)}% target`;
+          } else {
+            vdCls += " kpi-wrail-vd-run";
+            const pct = budget != null && budget > 0 ? Math.round((spent / budget) * 100) : null;
+            vdText = pct != null ? `${pct}% used` : fmt$(spent);
+          }
         } else {
           // Closed week - over or under against its OWN budget.
           if (budget == null || !hasSpent) {
@@ -1086,8 +1153,14 @@ function WeekRail({ board }) {
         // running weeks with revenue carry an actual %/target %
         // sub-caption; the ▲/▼ dollar variance stays the primary
         // verdict line.
+        // Kevin CC prompt 2026-09-10 CP cleanup item 9. On CP running
+        // weeks the actual/target line was promoted to the verdict
+        // text above; suppress the sub-caption so it does not
+        // render twice. Closed-week cards (over/under $ variance)
+        // keep pctSub as a secondary read of the same story.
         let pctSub = null;
-        if (revenue != null && revenue > 0 && spent != null && budget != null && budget > 0) {
+        const promotedToVdText = isCP && temporal === "running";
+        if (revenue != null && revenue > 0 && spent != null && budget != null && budget > 0 && !promotedToVdText) {
           const actP = (Number(spent) / Number(revenue)) * 100;
           const tgtP = (Number(budget) / Number(revenue)) * 100;
           pctSub = `${actP.toFixed(1)}% actual · ${tgtP.toFixed(1)}% target`;
@@ -1115,7 +1188,12 @@ function WeekRail({ board }) {
               <span className="kpi-wrail-row-v">{revenue != null ? fmt$(revenue) : "—"}</span>
             </div>
             <div className="kpi-wrail-row">
-              <span className="kpi-wrail-row-k">Budget</span>
+              {/* Kevin CC prompt 2026-09-10 CP cleanup item 8. Row
+                  label reads `Labor Budget` on Current period so
+                  the reader sees which pool is being compared -
+                  matches the panel label above. Other range kinds
+                  keep `Budget` (Last period is approved). */}
+              <span className="kpi-wrail-row-k">{isCP ? "Labor Budget" : "Budget"}</span>
               <span className="kpi-wrail-row-v">
                 {budget != null ? fmt$(budget) : "—"}
                 {basis === "forecast" && budget != null && (
@@ -1417,10 +1495,18 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
               the breakdown for a site-leader who hovers. */}
           {tier === "A" && (
             <>
-              <span className="kpi-wh-tgt kpi-wh-tgt-cap">
-                <span className="kpi-wh-tgt-dash" aria-hidden="true" />
-                each week&rsquo;s own budget
-              </span>
+              {/* Kevin CC prompt 2026-09-10 CP cleanup item 4. Legend
+                  entry for the dashed per-week budget line is hidden
+                  on Current period - the line itself is hidden
+                  there, and a legend for a treatment that no longer
+                  renders reads as a lie. Last period keeps the
+                  entry (approved surface). */}
+              {board?.kind !== "single_period_in_progress" && (
+                <span className="kpi-wh-tgt kpi-wh-tgt-cap">
+                  <span className="kpi-wh-tgt-dash" aria-hidden="true" />
+                  each week&rsquo;s own budget
+                </span>
+              )}
               <span className="kpi-wh-tgt kpi-wh-tgt-cap">
                 <span className="kpi-wh-unapp-swatch" aria-hidden="true" />
                 hatched = worked, not yet final
