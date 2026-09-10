@@ -270,9 +270,20 @@ export function recomputeVerdictFromPanel(board) {
     if (spentForVerdict != null) {
       const pacePct = (Number(spentForVerdict) / panelBudget) * 100;
       const pacePoints = pacePct - 100;
-      board.verdict = pacePoints >= 3 ? "over"
-        : pacePoints >= 0.5 ? "watch"
-        : "on_track";
+      // Kevin CC prompt 2026-09-10 item 2. Same scope-to-running rule
+      // verdictBand uses: `watch` is invalid on closed / multi-period
+      // ranges. Running keeps the 3pp / 0.5pp threshold pair (a real
+      // mid-period caution); closed / multi collapses to binary
+      // over / under. Threshold reconciliation vs board.js's 5pp /
+      // 2pp thresholds is logged for Kevin's separate ruling.
+      const isRunning = board.kind === "single_period_in_progress";
+      if (isRunning) {
+        board.verdict = pacePoints >= 3 ? "over"
+          : pacePoints >= 0.5 ? "watch"
+          : "on_track";
+      } else {
+        board.verdict = pacePoints > 0 ? "over" : "under";
+      }
       board.variance = Math.round((Number(spentForVerdict) - panelBudget) * 100) / 100;
     }
   }

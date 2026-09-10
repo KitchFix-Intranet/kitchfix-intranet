@@ -76,6 +76,11 @@ function verdictDisplay(verdict) {
   if (verdict === "on_track") return { label: "On target", cls: "good" };
   if (verdict === "watch")    return { label: "Watch", cls: "warn" };
   if (verdict === "over")     return { label: "Over target", cls: "bad" };
+  // Kevin CC prompt 2026-09-10 item 2. `under` fires on closed +
+  // multi-period ranges when pacePctPoints <= 0 - the definitive
+  // "under target" answer that closed ranges now render instead of
+  // "on_track" / "Watch". Green pill (under-budget is favourable).
+  if (verdict === "under")    return { label: "Under target", cls: "good" };
   return null;
 }
 
@@ -84,7 +89,7 @@ function verdictDisplay(verdict) {
 // (Spent so far | Left to spend). Budget is the dominant figure; spent
 // and left are secondary. Closed periods keep the under/over treatment
 // on the right cell of the pair.
-function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, isFutureRange }) {
+function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, isFutureRange, awaiting = null }) {
   const kind = board?.kind;
   // Kevin Labor PR-A items 1 + 6 + 8 (2026-09-04):
   //
@@ -341,6 +346,28 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
               {vd.label}
             </span>
           )}
+          {/* Kevin CC prompt 2026-09-10 item 1. Awaiting-verification
+              amber pill beside the verdict pill on Current year -
+              matches the Overview's status-line pattern
+              (StatusLine.js). Renders only when the parent passes
+              awaiting != null (Current year, and R-93 says the just-
+              closed period has not yet settled). Same helper +
+              same close-date derivation (period_end + 8 days) so
+              the two boards cannot disagree. */}
+          {awaiting?.period_no != null && awaiting.settle_iso && (() => {
+            const [, mo, da] = awaiting.settle_iso.split("-");
+            const copy = `P${awaiting.period_no} AWAITING VERIFICATION · CLOSES ${Number(mo)}/${Number(da)}`;
+            return (
+              <span
+                className="kpi-vpill kpi-vpill-awaiting-period"
+                data-vpill-awaiting-period
+                aria-label={`Period ${awaiting.period_no} awaiting verification, closes ${Number(mo)}/${Number(da)}`}
+              >
+                <span className="kpi-vpill-dot" aria-hidden="true" />
+                {copy}
+              </span>
+            );
+          })()}
           {/* Labor unapproved-hours fix (Kevin 2026-09-07). Verdict
               qualification pill. Kevin acceptance: "a period with
               unapproved hours never renders an unqualified verdict".
@@ -1209,21 +1236,12 @@ function TierBTip({ tip }) {
 }
 
 // ── TIER C: > 13 weeks, one bar per fiscal period (untouched V21-10) ─
-// PR-C - target-line legend for Tier C. Owner ruling 2026-08-24: the
-// dashed target on Tier C has no key. Uses the same .kpi-wh-tgt shape
-// Tier A already renders so the visual treatment is consistent across
-// tiers.
-function TierCHeader() {
-  return (
-    <div className="kpi-wh kpi-wh-c">
-      <span className="kpi-wh-sp" aria-hidden="true" />
-      <span className="kpi-wh-tgt">
-        <span className="kpi-wh-tgt-dash" aria-hidden="true" />
-        Target
-      </span>
-    </div>
-  );
-}
+// Kevin CC prompt 2026-09-10 item 3. TierCHeader retired with the
+// dashed target line - the legend named a treatment that no longer
+// renders. Bars carry the verdict via colour; the variance printed
+// under each bar carries the magnitude. TierCStrip render below
+// skips this header entirely - the strip title above ("THE RANGE ·
+// PERIOD BY PERIOD") already names what the reader is looking at.
 
 function TierCStrip({ board, budgetPeriods }) {
   const weeks = board?.weeks || [];
@@ -1273,8 +1291,14 @@ function TierCStrip({ board, budgetPeriods }) {
     ? allPeriods.filter(pp => !pp.in_progress)
     : allPeriods;
 
+  // Kevin CC prompt 2026-09-10 item 3. Dashed per-period target
+  // line removed - it sat above bars on a different scale and read
+  // as misleading. Bar colour (green under, red over) carries the
+  // verdict; the variance printed under each bar carries the
+  // magnitude. maxScale now scales to bars alone; keep the ×1.1
+  // headroom.
   const maxScale = Math.max(
-    ...periods.map(p => Math.max(p.spent, p.budget || 0)),
+    ...periods.map(p => p.spent),
     1,
   ) * 1.1;
 
@@ -1290,11 +1314,9 @@ function TierCStrip({ board, budgetPeriods }) {
             : over
               ? "kpi-pcol-bar kpi-pcol-bar-over"
               : "kpi-pcol-bar kpi-pcol-bar-under";
-          const budPct = p.budget != null ? Math.min(100, (p.budget / maxScale) * 100) : null;
           return (
             <div key={p.period_no} className="kpi-pcol">
               <div className={cls} style={{ height: `${h}%` }} />
-              {budPct != null && <span className="kpi-pcol-bud" style={{ bottom: `${budPct}%` }} />}
             </div>
           );
         })}
@@ -1334,7 +1356,7 @@ function fmtCompact(v) {
 // classifyTier lifted to src/lib/kpi/classifyTier.js so purchasing can
 // import it too. PR 2 R3 Part B (2026-08-24).
 
-export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary, salaryAvailable, isFutureRange }) {
+export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary, salaryAvailable, isFutureRange, awaiting = null }) {
   const eyebrowLabel = board?.kind === "single_period_in_progress" || board?.kind === "single_period_closed"
     ? `PERIOD ${board.period_no}`
     : (rangeLabel || "").toUpperCase();
@@ -1349,7 +1371,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
   return (
     <div className="kpi-story">
       <div className="kpi-story-left">
-        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} salary={salary} salaryAvailable={salaryAvailable} isFutureRange={isFutureRange} />
+        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} salary={salary} salaryAvailable={salaryAvailable} isFutureRange={isFutureRange} awaiting={awaiting} />
       </div>
 
       <div className="kpi-story-right">
@@ -1395,10 +1417,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
         {tier === "A" && <WeekRail board={board} />}
         {tier === "B" && <TierBStrip board={board} />}
         {tier === "C" && (
-          <>
-            <TierCHeader />
-            <TierCStrip board={board} budgetPeriods={budgetPeriods} todayISO={todayISO} />
-          </>
+          <TierCStrip board={board} budgetPeriods={budgetPeriods} todayISO={todayISO} />
         )}
       </div>
     </div>

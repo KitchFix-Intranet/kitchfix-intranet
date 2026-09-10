@@ -231,12 +231,36 @@ export function computeBudgetToDateDays({ budget_periods, start, end, today, thr
 
 // Verdict bands (V8-7 canonical). One source of truth for every
 // colored element on the page.
-export function verdictBand(pacePctPoints) {
+//
+// Kevin CC prompt 2026-09-10 item 2. `watch` is not a valid verdict
+// on a closed range - a closed range gets a definitive answer, not
+// a caution. Scope `watch` to running periods (single_period_in_
+// progress). On closed single periods + multi-period ranges collapse
+// to a binary result:
+//   pacePctPoints > 0  -> "over"   (OVER TARGET)
+//   pacePctPoints <= 0 -> "under"  (UNDER TARGET)
+// The old `on_track` band still fires on running periods where the
+// 2pp / 5pp thresholds carry real information mid-period; on closed
+// ranges the range has already produced its answer and the reader
+// wants the answer named.
+//
+// NOTE (Kevin logged, not fixed in this PR): a second threshold pair
+// lives in src/lib/labor/labor-batr.js:273-275 (`>= 3pp over,
+// >= 0.5pp watch`). Two thresholds for the same verdict, and which
+// applies depends on the code path. Same scope-to-running rule
+// applied there so this PR does not compound the drift; the
+// threshold reconciliation is a separate ruling.
+export function verdictBand(pacePctPoints, kind = "single_period_in_progress") {
   // pacePctPoints = (spend% - elapsed%). Negative = ahead of pace / under.
   if (pacePctPoints == null || Number.isNaN(pacePctPoints)) return null;
-  if (pacePctPoints > 5)  return "over";
-  if (pacePctPoints > 2)  return "watch";
-  return "on_track";
+  const isRunning = kind === "single_period_in_progress";
+  if (isRunning) {
+    if (pacePctPoints > 5)  return "over";
+    if (pacePctPoints > 2)  return "watch";
+    return "on_track";
+  }
+  // Closed single-period or multi-period range: binary.
+  return pacePctPoints > 0 ? "over" : "under";
 }
 
 function r2(v) { return Math.round(Number(v || 0) * 100) / 100; }
@@ -681,7 +705,7 @@ export function buildBoard({
     pace_points = (pace_pct != null) ? r2(pace_pct - 100) : null;
     variance = r2(spent_to_date - budget);
   }
-  verdict = verdictBand(pace_points);
+  verdict = verdictBand(pace_points, kind);
 
   // Signals. V32-5 threshold rule: 0% = on target (state === "clear"),
   // above 0% up to watch bound = "watch" (amber), above alarm bound =
