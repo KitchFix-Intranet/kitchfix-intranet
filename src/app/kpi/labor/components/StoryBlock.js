@@ -11,6 +11,7 @@
 import { useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
+import { weekHatchedDollars } from "../lib/weekHatched";
 import HelpPop from "./HelpPop.js";
 import Arrow from "./Arrow.js";
 
@@ -63,37 +64,10 @@ function isoMinusDay(iso) {
   return d.toISOString().slice(0, 10);
 }
 
-// Kevin CC prompt 2026-09-10 items 1 + 2. Per-week hatched dollars.
-// One helper feeds the bar's merged hatched region, the per-week
-// card's `% used` cell, the panel note's `X% of budget used`, and
-// the TierAWeekBar caption's bar-total figure - so every reading
-// of "what's on this bar" comes from the same arithmetic.
-//
-// Two sources: `unpriced_hrs × rate` (hours with no pay segment yet
-// - was `kpi-wb-cap-est`) + `draft_hours × rate` (priced but
-// awaiting site-lead approval - was `kpi-wb-slice-unapp`). Kevin's
-// ruling: "The distinction between 'estimated, not costed' and
-// 'awaiting approval' is a payroll-processing detail. To a chef
-// both mean the same thing - that money is spent, it just has not
-// finished arriving." One hatched region carries both.
-//
-// Gates preserve the prior per-layer render conditions:
-//   - `unappDollars` fires only on non-empty running/closed weeks
-//     with draft_hours > 0 AND rate available (matches the old
-//     kpi-wb-slice-unapp gate at StoryBlock.js:654 pre-fix).
-//   - `capDollars` fires on any week with unpriced_hrs > 0 AND rate
-//     available (via estimateUnpricedDollars null check).
-function weekHatchedDollars(w, rate) {
-  const isNotStarted = w?.state === "not_started";
-  const spent = Number(w?.spent || 0);
-  const isZero = !isNotStarted && (!spent || spent <= 0.5);
-  const capDollars = estimateUnpricedDollars(w?.unpriced_hrs, rate) || 0;
-  const draftHrs = Number(w?.draft_hours || 0);
-  const unappDollars = (!isZero && !isNotStarted && draftHrs > 0.004 && rate)
-    ? draftHrs * Number(rate)
-    : 0;
-  return { capDollars, unappDollars, draftHrs, total: capDollars + unappDollars };
-}
+// Kevin CC prompt 2026-09-10 items 1 + 2. Per-week hatched dollars
+// helper moved to src/app/kpi/labor/lib/weekHatched.js so the
+// WeekTable + StoryBlock (this file) + any future consumer share
+// one arithmetic. See that module's header for the rule + gates.
 
 // Verdict pill in the SpendCard header. One source of truth.
 // Kevin post-1057 sweep item 1 (2026-09-08): pill copy names the
@@ -147,9 +121,32 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
   // Actual: closed-only for multi-with-running, otherwise the range
   // total. On a closed single period, spent_to_date IS the closed
   // period sum.
-  const spent = isMultiWithClosedSubset
+  //
+  // Kevin CC prompt 2026-09-10 (one definition of spent). Add per-
+  // week hatched dollars (unpriced_hrs × rate + draft_hours × rate)
+  // to the range total so the panel + everything derived from
+  // `spent` (variance, `X% of budget used`, `Left to spend`, the
+  // right-cell Under/Over) all read spent = costed + unpriced +
+  // unapproved. Kevin: "All three components are money already
+  // committed. The difference between them is where the paperwork
+  // sits, not whether the site owes it."
+  //
+  // Rate source matches the WeekRail per-week helper: board.avg_rate
+  // (already hourly-only per #1099). Salary contribution comes in
+  // through board.spent_to_date on the +salary path, not through
+  // rate. On closed ranges (CY / LP) all weeks carry zero draft +
+  // zero unpriced today, so `hatchedSum` is 0 and this reads
+  // byte-identical to origin/main - Guard 1 batr and this Spent
+  // figure both hold.
+  const rateForSpent = board?.avg_rate ?? null;
+  const hatchedSum = (board?.weeks || []).reduce(
+    (s, w) => s + weekHatchedDollars(w, rateForSpent).total,
+    0,
+  );
+  const baseSpent = isMultiWithClosedSubset
     ? board.closed_spent_to_date
     : (board?.spent_to_date ?? 0);
+  const spent = Number(baseSpent) + hatchedSum;
   // Kevin walkthrough sweep item 2 (2026-09-07). Precedence:
   //   1. Range-level batr (board.budget_at_this_revenue) - authoritative
   //      when defined. Uses P&L verified revenue across the whole range,
@@ -536,21 +533,15 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         }
         // No revenue yet (TP day 1) OR future range. Dollars + copy.
         //
-        // Kevin CC prompt 2026-09-10 item 2. Include hatched dollars
-        // (worked, not yet final) in the numerator so the panel note
-        // reads what the bars visually show. On any range whose
-        // weeks have no draft / unpriced hours the sum is 0 and the
-        // pct is byte-identical to the prior formula - CY + LP today.
-        // Kevin logged: on a closed range that ever carries lingering
-        // drafts the corrected figure fires and the note reads the
-        // honest total; expected behaviour.
-        const rate = salary?.blended_rate_hourly ?? board?.avg_rate ?? null;
-        const weekHatchedSum = (board?.weeks || []).reduce(
-          (s, w) => s + weekHatchedDollars(w, rate).total,
-          0,
-        );
+        // Kevin CC prompt 2026-09-10 (one definition of spent). Panel
+        // note pct reads spent / budget directly - `spent` already
+        // includes hatched dollars via the range-level compute at the
+        // top of SpendCard (see the `hatchedSum` block). Prior #1103
+        // fix added weekHatchedSum here on top of a costed-only spent;
+        // now that spent carries hatched by definition, the second
+        // add would double-count.
         const spentUsedPct = (budget != null && budget > 0 && spent != null)
-          ? ((Number(spent) + weekHatchedSum) / Number(budget)) * 100 : null;
+          ? (Number(spent) / Number(budget)) * 100 : null;
         return (
           <>
             <div className="kpi-spend-pf-row">
@@ -725,20 +716,14 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
       ? "kpi-wb-target"
       : (isNotStarted ? "kpi-wb-target kpi-wb-target-blue" : "kpi-wb-target");
 
-  // Kevin CC prompt 2026-09-10 item 3 (Option B). Caption reads
-  // the bar total - solid + hatched - so caption + percentage
-  // agree. Prior code showed `≥ $costed` on any week with unpriced
-  // hours; the `≥` was doing the work of naming "the number below
-  // isn't the whole picture", which was the same defect the
-  // percentage fix (item 2) removes. Kevin ruling: "the caption's
-  // job is to match the percentage beside it." Bar total also
-  // captures the grey-slice dollars that were previously hidden
-  // inside the caption's `≥`-less form. hasUnpriced retired.
-  //
-  // `w.spent` already includes the priced-but-unapproved portion
-  // (hatchedUnapp); hatchedCap sits above w.spent as the extension.
-  // Bar total = value + hatchedCap.
-  const barTotalDollars = value + hatchedCap;
+  // Kevin CC prompt 2026-09-10 (one definition of spent). Caption
+  // reads the FULL spent - costed + unpriced + unapproved - to
+  // match the panel, table total, and week card. #1103 landed the
+  // caption at `value + capDollars` (costed + unpriced) which
+  // added one hatched component but not the other; that's the split
+  // Kevin's rule now removes. Bar's solid + hatched layers still
+  // show the split visually; the tooltip carries the breakdown.
+  const barTotalDollars = value + hatchedTotal;
   const captionValueRaw = (isNotStarted && perWeekAdjusted != null)
     ? perWeekAdjusted
     : barTotalDollars;
