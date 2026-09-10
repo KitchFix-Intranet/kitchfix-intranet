@@ -441,8 +441,35 @@ export function WeekTable({
   // their own hours; no dilution because the row IS a worker).
   const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
   const hourlyRate = salary?.blended_rate_hourly;
-  const displayRate = (fallback) => rateBasisHourlyOnly ? hourlyRate : fallback;
   const rateHeaderLabel = rateBasisHourlyOnly ? "HOURLY RATE" : "RATE";
+  // Kevin CC prompt 2026-09-09 (post-#1099). #1099 fixed the total-
+  // row rate to exclude salary from both sides. Per-period + per-
+  // week rate cells still routed through `displayRate` which
+  // overrode every band with the single range-level hourlyRate -
+  // TBJ CY +salary read $21.11 eight times, and the row's own
+  // arithmetic (rate × hours) no longer matched its salary-inclusive
+  // dollars column. Fix: compute per-row rate as `hourly_dollars /
+  // hours` at each level, where hourly_dollars = row_amount minus
+  // salary sums for that row's weeks. Salary rows carry
+  // `salaried: true` per shapeSalaryRow, so a walk of `actuals`
+  // aggregates the per-week salary contribution once here.
+  // Identical result in both toggle states: the hourly path has
+  // zero salary rows so salaryAmountsByWeek is empty and the
+  // subtraction is a no-op.
+  const salaryAmountsByWeek = useMemo(() => {
+    const m = new Map();
+    for (const r of actuals || []) {
+      if (!r?.salaried) continue;
+      const key = r.week_start;
+      if (!key) continue;
+      m.set(key, (m.get(key) || 0) + Number(r.amount || 0));
+    }
+    return m;
+  }, [actuals]);
+  const hourlyDollarsForRow = (weekStart, amountMerged) => {
+    const salaryThisWeek = salaryAmountsByWeek.get(weekStart) || 0;
+    return Number(amountMerged || 0) - salaryThisWeek;
+  };
   const excludedSet = useMemo(() => new Set(aggregateExcludedMembers), [aggregateExcludedMembers]);
   const rolledUpCount = rolledUpMembers.length;
   const wrapRef = useRef(null);
@@ -509,7 +536,7 @@ export function WeekTable({
   // Falls back to raw only when no week in the band has per-week batr
   // (older routes / boards without the shared-basis attachment).
   const periodTotals = useMemo(() => grouped.map(g => {
-    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0 };
+    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0 };
     const states = [];
     let periodBudget = null;
     let weeksInBand = 0;
@@ -523,6 +550,12 @@ export function WeekTable({
       // draft_hours (approval-status) not hours_without_dollars.
       t.unpriced += w.draft_hours || 0;
       t.amount += w.amount || 0;
+      // Kevin CC prompt 2026-09-09 (post-#1099). Track hourly-only
+      // dollars per period so the band's rate cell reads that
+      // period's own `hourly_$ / hourly_hours`. Salary rows are
+      // subtracted per week; the hourly path has empty
+      // salaryAmountsByWeek so hourly_amount == amount there.
+      t.hourly_amount += (w.amount || 0) - (salaryAmountsByWeek.get(w.week_start) || 0);
       states.push(w.coverage_state);
       weeksInBand += 1;
       if (w.budget_at_this_week_revenue != null) {
@@ -545,7 +578,7 @@ export function WeekTable({
       periodBudget = any ? Math.round(sum * 100) / 100 : null;
     }
     return { g, totals: t, states, periodBudget, weeksInBand };
-  }), [grouped, budgetByPeriod, weekBudgetsByWeekStart]);
+  }), [grouped, budgetByPeriod, weekBudgetsByWeekStart, salaryAmountsByWeek]);
 
   // Kevin post-1053 sweep item 3 (2026-09-08). Multi-period ranges
   // (This year, FYTD, N-period spans) drop the running-period row
@@ -811,10 +844,18 @@ export function WeekTable({
                   : inProgress
                     ? { mode: "in_progress", spent: totals.amount, budget: periodBudget }
                     : { mode: "closed", spent: totals.amount, budget: periodBudget };
-                // V40 BUG 1 - portfolio-level rate on the salary path
-                // reads the hourly-only rate the route ships; anything
-                // else mixes salary dollars into hourly hours.
-                const rate = displayRate(blendedRate({ dollars: totals.amount, hours: totals.hours }));
+                // Kevin CC prompt 2026-09-09 (post-#1099). Per-period
+                // rate = this period's hourly $ / this period's
+                // hourly hours. `totals.hourly_amount` excludes
+                // salary rows by week (see periodTotals useMemo).
+                // Identical in both toggle states because salary
+                // rows contribute 0 to both sides. Replaces the
+                // prior `displayRate(...)` which flattened every
+                // band to the range-level hourlyRate on the +salary
+                // path.
+                const rate = totals.hours > 0
+                  ? Math.round((totals.hourly_amount / totals.hours) * 100) / 100
+                  : null;
                 const bandLabel = isMonth ? g.groupLabel : `FY2026 · PERIOD ${g.period_no}`;
                 return (
                   <FragmentRows
@@ -843,6 +884,7 @@ export function WeekTable({
                     redact={redact}
                     rateBasisHourlyOnly={rateBasisHourlyOnly}
                     hourlyRate={hourlyRate}
+                    salaryAmountsByWeek={salaryAmountsByWeek}
                   />
                 );
               })}
@@ -870,9 +912,16 @@ export function WeekTable({
                 {showRate && (
                   <td className="num">{(() => {
                     const hrs = (grandTotal?.hours_regular || 0) + (grandTotal?.hours_overtime || 0) + (grandTotal?.hours_double_time || 0);
-                    // V40 BUG 1 - grand-total rate on the salary path
-                    // reads the hourly-only rate directly.
-                    const r = displayRate(blendedRate({ dollars: grandTotal?.amount || 0, hours: hrs }));
+                    // Kevin CC prompt 2026-09-09 (post-#1099). Grand-
+                    // total rate = range's hourly $ / range's hourly
+                    // hours. On the +salary path the route ships
+                    // this as `salary.blended_rate_hourly` (=
+                    // board.avg_rate post-#1099); on the hourly
+                    // path there are no salary rows so blendedRate
+                    // on grandTotal.amount is already correct.
+                    const r = rateBasisHourlyOnly
+                      ? hourlyRate
+                      : blendedRate({ dollars: grandTotal?.amount || 0, hours: hrs });
                     return r != null ? `$${r.toFixed(2)}` : "–";
                   })()}</td>
                 )}
@@ -900,6 +949,9 @@ function FragmentRows({
   redact,
   rateBasisHourlyOnly,   // V40 hotfix - was closing over WeekTable scope
   hourlyRate,            //   (crashed on expand); now threaded as prop.
+  salaryAmountsByWeek,   // Kevin 2026-09-09 - same threading pattern; used
+                         //   by the per-week rate cell to exclude salary
+                         //   dollars from the numerator.
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
@@ -974,12 +1026,20 @@ function FragmentRows({
             ? { mode: "in_progress", spent: w.amount, budget: weekBudget }
             : { mode: "closed", spent: w.amount, budget: weekBudget };
         const hrs = (w.hours_regular || 0) + (w.hours_overtime || 0) + (w.hours_double_time || 0);
-        // V40 BUG 1 - week-row rate on the salary path reads the
-        // hourly-only rate; the week's `w.amount` includes salary
-        // but its hours are hourly only. displayRate lives in the
-        // WeekTable scope, so this callsite inlines the same rule
-        // from the props FragmentRows now receives.
-        const rate = rateBasisHourlyOnly ? hourlyRate : blendedRate({ dollars: w.amount, hours: hrs });
+        // Kevin CC prompt 2026-09-09 (post-#1099). Per-week rate =
+        // this week's hourly $ / this week's hourly hours. On the
+        // hourly path `salaryAmountsByWeek` is empty so `w.amount`
+        // is already hourly-only and the subtraction is a no-op.
+        // On +salary, subtract this week's salary $ from the
+        // merged amount. Identical result in both toggle states -
+        // the rate never contains salary, so the toggle cannot
+        // move it. Replaces the prior flat `hourlyRate` fallback
+        // that read the range figure on every week.
+        const wkSalary = salaryAmountsByWeek.get(w.week_start) || 0;
+        const wkHourlyAmount = Number(w.amount || 0) - wkSalary;
+        const rate = hrs > 0
+          ? Math.round((wkHourlyAmount / hrs) * 100) / 100
+          : null;
         const weekOpen = expandedWeeks.has(w.week_start);
         return (
           <>
