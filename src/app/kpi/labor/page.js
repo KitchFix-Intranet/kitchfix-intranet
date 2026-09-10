@@ -1372,6 +1372,7 @@ export default function KpiLaborPage() {
           account={account}
           grouped={grouped}
           grandTotal={grand}
+          boardKind={data?.board?.kind ?? null}
           workers={data.workers}
           /* PR-C - raw actuals thread so WeekTable's aggregate-child
              pre-aggregation can group by (week_start, account_key)

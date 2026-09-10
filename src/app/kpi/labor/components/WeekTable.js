@@ -433,6 +433,10 @@ export function WeekTable({
   avgRate = null,                  // Kevin 2026-09-10 - board.avg_rate for the hatched-dollars
                                    //   compute (draft_hours + unpriced_hrs × rate). Present on
                                    //   both toggle states; matches server board.avg_rate.
+  boardKind = null,                // Kevin 2026-09-10 CP cleanup item 6 - toolbar bulk-
+                                   //   controls hidden on `single_period_in_progress`. Other
+                                   //   kinds (multi_period Current year, single_period_closed
+                                   //   Last period) keep the toolbar - approved surfaces.
 }) {
   // V40 BUG 1 - table Rate column, when salary is on, must show the
   // SAME hourly rate the cards show. blendedRate(amount, hours) here
@@ -747,17 +751,27 @@ export function WeekTable({
             })}
           </div>
         )}
-        <div className="kpi-tbar-grp">
-          <button type="button" className="kpi-tbar-btn" onClick={onExpandAll}>Expand all</button>
-          <button type="button" className="kpi-tbar-btn" onClick={onCollapseAll}>Collapse all</button>
-        </div>
+        {/* Kevin CC prompt 2026-09-10 CP cleanup item 6. Bulk-toolbar
+            controls (Expand all / Collapse all / workers filter /
+            Names-Numbers switch) hidden on Current period.
+            Operators expand and collapse rows via the per-row
+            chevrons - unchanged - and the two filters were
+            "meaningless" (workers) / "not useful" (names vs
+            numbers) per Kevin. Other range kinds keep the full
+            toolbar (approved). */}
+        {boardKind !== "single_period_in_progress" && (
+          <div className="kpi-tbar-grp">
+            <button type="button" className="kpi-tbar-btn" onClick={onExpandAll}>Expand all</button>
+            <button type="button" className="kpi-tbar-btn" onClick={onCollapseAll}>Collapse all</button>
+          </div>
+        )}
         <span className="kpi-tbar-spacer" aria-hidden="true" />
-        {onWorkersChange && workerRoster && workerRoster.length > 0 && (
+        {boardKind !== "single_period_in_progress" && onWorkersChange && workerRoster && workerRoster.length > 0 && (
           <div className="kpi-tbar-grp">
             <WorkersFilter workerRoster={workerRoster} selectedWorkers={selectedWorkers} onWorkersChange={onWorkersChange} />
           </div>
         )}
-        {onToggleRedact && (
+        {boardKind !== "single_period_in_progress" && onToggleRedact && (
           <>
             <span className="kpi-tbar-rule" aria-hidden="true" />
             <div className="kpi-empdisp">
