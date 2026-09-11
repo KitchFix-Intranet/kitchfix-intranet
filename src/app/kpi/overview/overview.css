@@ -2065,24 +2065,6 @@
   font-weight: 700;
   margin-top: 1px;
 }
-/* Footnote below the cost-lines table: explains the * on Budget. */
-.kpi-app .kpi-ov-cl-fn-mark {
-  font-size: 0.65em;
-  font-weight: 800;
-  vertical-align: super;
-  margin-left: 1px;
-}
-.kpi-app .kpi-ov-cl-footnote {
-  margin-top: var(--kpi-sp-2);
-  font-size: var(--kpi-t-meta);
-  color: var(--n-600);
-  font-weight: 600;
-  line-height: 1.55;
-}
-.kpi-app .kpi-ov-cl-footnote sup {
-  font-weight: 800;
-  margin-right: 2px;
-}
 /* Kevin ruling 2026-09-03 (simplified-layout): .kpi-ov-cl-vs
    (.-pct, .-usd) retired - the vs-target column is dropped from
    both the per-row bodies and the total row. Grepped, no consumers. */
