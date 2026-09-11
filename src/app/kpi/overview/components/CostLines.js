@@ -387,11 +387,26 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
   const srcClause = totalWeeks > 0
     ? `${confirmedWeeks} wk${confirmedWeeks === 1 ? "" : "s"} confirmed + ${totalWeeks - confirmedWeeks} forecast, plus the full service fee`
     : null;
-  // Row's Adjusted = projRev × target_pct / 100.
-  const adjustedFor = (targetPct) => (targetPct != null && projRev > 0)
+  // Kevin CC prompt 2026-09-11 (item 2). Cost-lines table Adjusted
+  // sources from the same field the P&L uses. For a row carrying
+  // a fixed cost (`not_applicable_target_pct` flag, i.e. the 3100
+  // parent on +salary today), `target_pct × projRev` produces the
+  // salary-flexing defect Kevin explicitly forbade - the server
+  // ships the composed dollar in `budget_at_this_revenue`, use it
+  // verbatim. Non-fixed rows keep the running-period formula
+  // (target% × projected revenue) so their Adjusted still flexes
+  // with the SC-implied revenue - unchanged from origin/main.
+  const adjustedFromPct = (targetPct) => (targetPct != null && projRev > 0)
     ? projRev * (Number(targetPct) / 100)
     : null;
-  const totalAdjusted = adjustedFor(totalTargetPct);
+  const adjustedForRow = (r) => {
+    const hasFixed = Array.isArray(r?.flags) && r.flags.includes("not_applicable_target_pct");
+    if (hasFixed && r?.budget_at_this_revenue != null) {
+      return Number(r.budget_at_this_revenue);
+    }
+    return adjustedFromPct(r?.target_pct);
+  };
+  const totalAdjusted = adjustedFromPct(totalTargetPct);
   // GM at target row.
   const gmTargetPct = totalTargetPct != null ? 100 - Number(totalTargetPct) : null;
   const gmPlanBudget = (planRev > 0 && totalBudget != null) ? (planRev - totalBudget) : null;
@@ -456,7 +471,7 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
           </thead>
           <tbody>
             {cogsRows.map(r => {
-              const adj = adjustedFor(r.target_pct);
+              const adj = adjustedForRow(r);
               const landed = Number(r.actual || 0);
               const left = adj != null ? adj - landed : null;
               // Kevin CC prompt 2026-09-09. Restore the shared row

@@ -2504,14 +2504,21 @@ export async function resolveOverview({
     //     figure - salary must NOT be reintroduced here (Guard 4).
     //   !use_hourly (+salary anywhere, or CY / LP either toggle):
     //     batr = hourly_pct × actual_revenue + salary_budget_range.
-    // Target %:
-    //   use_hourly: pct on the hourly row is honest (no fixed cost
-    //     inside) - render it as before.
-    //   !use_hourly: parent contains a fixed cost, so no single %
-    //     target exists. target_pct = null, and the flag hatches the
-    //     cell client-side (Kevin: "Hatching now means one thing
-    //     everywhere: there is no percentage target on this line.").
-    const _tgtPct = has_target && use_hourly
+    //
+    // Kevin CC prompt 2026-09-11 (R-99 superseded). Target %:
+    //   `budget / budgeted revenue` on both branches. The P&L
+    //   publishes all three percents (hourly + salary + total),
+    //   team reads that sheet, the board mirrors it. Prior state
+    //   returned null on the +salary branch and let the client
+    //   hatch the cell; Kevin has reversed that.
+    //
+    //   The `not_applicable_target_pct` flag stays on the +salary
+    //   parent - it now means only "this parent contains a fixed
+    //   cost, so Adjusted must not flex via target% × revenue."
+    //   The client no longer reads the flag as a hatching signal
+    //   (see PnlStatement.js update in the same PR), only as a
+    //   gate on the client-side runningAdjusted override.
+    const _tgtPct = has_target
       ? pctOf(row_budget, revenue_budget_full_period)
       : null;
     // Kevin R-101 (2026-09-09) item 4. Both branches route through
@@ -2705,18 +2712,20 @@ export async function resolveOverview({
       variance: (salary != null && salaryPB != null) ? r2(salary - salaryPB) : null,
       variance_pct: null,
       actual_pct: pctOf(salary, totalRevenue),
-      target_pct: null,
-      // Kevin CC prompt 2026-09-09: Adjusted becomes the salary
-      // budget for the range. Was null (hatched); now renders the
-      // fixed-cost figure. The `not_applicable_target_pct` flag
-      // below still hatches Target % client-side but no longer
-      // hatches Adjusted after the PnlStatement.js update.
+      // Kevin CC prompt 2026-09-11 (R-99 superseded). Salary's
+      // target% renders as `salary budget / budgeted revenue` -
+      // Sebastian's P&L publishes it, team reads it, board
+      // mirrors it. Prior state was null (hatched via the flag).
+      target_pct: has_target ? pctOf(salaryPB, revenue_budget_full_period) : null,
+      // Kevin CC prompt 2026-09-09: Adjusted = salary budget for
+      // the range (a fixed cost's adjusted IS its budget).
+      // Preserved 2026-09-11.
       budget_at_this_revenue: salaryPB,
       sources: ["labor_salary_actuals"],
-      // Item 5 revised (Kevin 2026-09-09): the flag still hatches
-      // Target % (salary's percent is an output, not a goal) but
-      // Adjusted now renders the salary budget explicitly. Flag
-      // name kept - it literally means "target% is N/A."
+      // Flag kept on the row - it now signals only "salary row,
+      // gate the client-side running-adj override + variance
+      // basis." No longer drives a hatch on Target %; the
+      // PnlStatement.js update in the same PR removes that read.
       flags: ["not_applicable_target_pct"],
     });
   }
