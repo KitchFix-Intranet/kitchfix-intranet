@@ -138,57 +138,27 @@ const WEEK_TABLE_POP_BODY = (
 );
 
 // V9-5 vs budget lockup: 58px bar + 72px delta. Tick at 80%.
-function VsBudget({ spent, budget, mode, revenue = null }) {
+function VsBudget({ spent, budget, mode }) {
   // mode: "closed" | "in_progress" | "muted"
   if (mode === "muted" || budget == null) {
     return <span className="kpi-vb"><span className="kpi-vb-bar" /><span className="kpi-vb-d kpi-vb-d-mute">–</span></span>;
   }
-  if (mode === "in_progress") {
-    // Percent used at 80% tick basis: bar fill = spent/budget * 80%.
-    const fillPct = Math.max(0, Math.min(100, (spent / budget) * 80));
-    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
-    // Numeric verdict switched from `X% used` (spent / budget) to
-    // `X.X% actual · Y.Y% target` (spent / revenue vs budget /
-    // revenue) - same treatment item 9 landed on the week cards
-    // and the panel note reads. Coloured red when actual exceeds
-    // target, green otherwise. Only fires when the caller passes
-    // a positive revenue and both spent + budget are usable;
-    // legacy `X% used` fallback kept for the rare case where
-    // revenue is unavailable (older routes, salaried-only shape).
-    const hasRatio = revenue != null && Number(revenue) > 0 && budget > 0;
-    if (hasRatio) {
-      const actP = (Number(spent) / Number(revenue)) * 100;
-      const tgtP = (Number(budget) / Number(revenue)) * 100;
-      const overTgt = actP > tgtP + 0.005;
-      const dCls = overTgt ? "kpi-vb-d-bad" : "kpi-vb-d-good";
-      return (
-        <span className="kpi-vb">
-          <span className="kpi-vb-bar">
-            <i style={{ width: `${fillPct}%` }} />
-            <span className="kpi-vb-tick" />
-          </span>
-          <span className={`kpi-vb-d ${dCls}`}>{actP.toFixed(1)}% actual · {tgtP.toFixed(1)}% target</span>
-        </span>
-      );
-    }
-    const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
-    return (
-      <span className="kpi-vb">
-        <span className="kpi-vb-bar">
-          <i style={{ width: `${fillPct}%` }} />
-          <span className="kpi-vb-tick" />
-        </span>
-        <span className="kpi-vb-d kpi-vb-d-neut">{Math.round(pct)}% used</span>
-      </span>
-    );
-  }
-  // closed
+  // Kevin CC ruling 2026-09-10 (post-#1108). VS BUDGET reads
+  // dollars over / under on every row - closed AND in-progress.
+  // Prior in-progress render was a percentage (first `X% used`
+  // spent/budget, then `X.X% / Y.Y%` spent/revenue vs budget/
+  // revenue). The percentage approach divided period-to-date
+  // spend by the full-period revenue, which understates variance
+  // on a period whose only active week is over budget - reads
+  // green on a period whose only started week is over. Kevin's
+  // rule: no row displays a comparison against a budget for a
+  // week that has not begun. Enforced upstream by scoping the
+  // period-total budget to started weeks only (page.js); this
+  // render just shows the dollar delta the caller supplies.
   const budgetOr1 = budget > 0 ? budget : 1;
   const pct80 = Math.max(0, Math.min(80, (spent / budgetOr1) * 80));
   const over = spent > budget;
   const overageDollars = over ? spent - budget : 0;
-  // Over-segment width capped at 20% (the overflow zone). Delta text
-  // still shows the true dollar figure.
   const overPct = over ? Math.min(20, (overageDollars / budgetOr1) * 80) : 0;
   const delta = Math.round(spent - budget);
   const dir = delta < 0 ? "down" : delta > 0 ? "up" : "dash";
@@ -569,11 +539,7 @@ export function WeekTable({
   // Falls back to raw only when no week in the band has per-week batr
   // (older routes / boards without the shared-basis attachment).
   const periodTotals = useMemo(() => grouped.map(g => {
-    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
-    // `revenue` accumulates per-week week_revenue so the band's
-    // VS BUDGET column can render `X% actual · Y% target` on
-    // in-progress periods (item 9's treatment).
-    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0, hatched: 0, revenue: 0 };
+    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0, hatched: 0 };
     const states = [];
     let periodBudget = null;
     let weeksInBand = 0;
@@ -601,7 +567,6 @@ export function WeekTable({
       // `hours_without_dollars` for the unpriced source; the
       // helper accepts either that or `unpriced_hrs`.
       t.hatched += weekHatchedDollars(w, avgRate).total;
-      if (w.week_revenue != null) t.revenue += Number(w.week_revenue);
       states.push(w.coverage_state);
       weeksInBand += 1;
       if (w.budget_at_this_week_revenue != null) {
@@ -609,7 +574,19 @@ export function WeekTable({
         adjustedAny = true;
       }
     }
-    if (adjustedAny) {
+    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12
+    // (post-#1107). Prefer the period-level total attached by
+    // page.js (sum of batr across ALL board.weeks in the period,
+    // not just weekAggregates entries). CP on day 1 had only one
+    // week in weekAggregates but four weeks in board.weeks; the
+    // band's "period budget" was reading the single week instead
+    // of the true period total. Kevin's expectation was the
+    // period-total; period_budget_total delivers it. Falls back
+    // to the per-week sum only when the page-level attach is
+    // missing (older routes / month grouping).
+    if (g.period_budget_total != null) {
+      periodBudget = g.period_budget_total;
+    } else if (adjustedAny) {
       periodBudget = Math.round(adjustedSum * 100) / 100;
     } else if (g.groupHint?.kind === "period" && g.period_no != null) {
       periodBudget = budgetByPeriod.has(g.period_no) ? budgetByPeriod.get(g.period_no) : null;
@@ -948,17 +925,16 @@ export function WeekTable({
               <tr className="kpi-tbl-total">
                 <td>{totalDesc}</td>
                 <td>
-                  {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up
-                      item 12. spent = amount + hatched (R-103); the
-                      DOLLARS column in this row already reads
-                      `amount + hatched` so both columns tell the
-                      same story. `revenue` feeds the in-progress
-                      `X% actual · Y% target` render inside
-                      VsBudget; unused on closed ranges. */}
+                  {/* Kevin CC ruling 2026-09-10 (post-#1108). spent =
+                      amount + hatched (R-103) so this cell + the
+                      DOLLARS cell agree. On CP the range grand is
+                      the running-period aggregate; budget +
+                      spent are scoped to STARTED weeks only per
+                      Kevin's "no comparison against a budget for
+                      a week that has not begun" rule. */}
                   <VsBudget
                     spent={(grandTotal?.amount || 0) + (grandTotal?.hatched || 0)}
                     budget={grandBudget}
-                    revenue={grandTotal?.revenue ?? null}
                     mode={grandBudget == null ? "muted" : rangeAllInProgress ? "in_progress" : "closed"}
                   />
                 </td>
@@ -1053,16 +1029,14 @@ function FragmentRows({
           </button>
         </td>
         <td>
-          {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
-              spent = amount + hatched (R-103) so this cell and the
-              DOLLARS cell in the same row read the same figure.
-              revenue = band-total week_revenue accumulated in
-              periodTotals; feeds `X% actual · Y% target` on the
-              in-progress branch of VsBudget. */}
+          {/* Kevin CC ruling 2026-09-10 (post-#1108). spent = amount
+              + hatched (R-103) so this cell + the DOLLARS cell
+              agree. Budget on the band is the started-weeks-only
+              sum (upstream in page.js); the dollar variance
+              rendered by VsBudget compares like-for-like. */}
           <VsBudget
             spent={(band.vs.spent || 0) + (band.totals?.hatched || 0)}
             budget={band.vs.budget}
-            revenue={band.totals?.revenue ?? null}
             mode={band.vs.mode}
           />
         </td>
@@ -1151,17 +1125,13 @@ function FragmentRows({
                 </button>
               </td>
               <td>
-                {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up
-                    item 12. spent = amount + hatched (R-103); the
-                    week's DOLLARS cell renders the same figure so
-                    both cells agree. revenue = w.week_revenue
-                    (attached from board.weeks via page.js);
-                    feeds the in-progress `X% actual · Y% target`
-                    render inside VsBudget. */}
+                {/* Kevin CC ruling 2026-09-10 (post-#1108). spent =
+                    amount + hatched (R-103) so this cell + the
+                    week's DOLLARS cell agree. Dollar variance
+                    against the week's own batr. */}
                 <VsBudget
                   spent={(Number(vs.spent) || 0) + weekHatchedDollars(w, avgRate).total}
                   budget={vs.budget}
-                  revenue={w.week_revenue ?? null}
                   mode={vs.mode}
                 />
               </td>
