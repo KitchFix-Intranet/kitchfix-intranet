@@ -1080,28 +1080,35 @@ function WeekRail({ board }) {
             subText = daysLeft != null ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : null;
           }
         } else if (temporal === "running") {
-          // Running with real spend. Kevin CC prompt 2026-09-10 CP
-          // cleanup item 9. Verdict text switched from `X% used`
-          // (spent / budget) to `X% actual · Y% target` (spent /
-          // revenue vs budget / revenue). Kevin: "the percent-of-
-          // revenue comparison is the one that matches how the
-          // rest of the board reads." Coloured red when actual
-          // exceeds target, green when it does not. Only fires on
-          // CP - `temporal === "running"` is unreachable on LP
-          // (closed) and CY (multi-period uses TierCStrip). Prior
-          // pct-used fallback kept for the rare running-with-spend-
-          // but-no-revenue case (SC seeding lag), so the tile still
-          // renders something.
+          // Running with real spend. Kevin CC prompt 2026-09-11
+          // (post-#1108). Verdict text is a dollar variance -
+          // spent - budget, same shape as the table's VS BUDGET
+          // column and the closed-week card branch below. Prior
+          // render was `X.X% actual · Y.Y% target`; Kevin: same
+          // "no comparison against a budget for a week that has
+          // not begun" reasoning that dropped the percentage in
+          // the table applies to the card. The variance uses
+          // the card's own Spent (R-103, includes hatched) and
+          // its own Labor Budget (batr) - to the cent equals
+          // what the reader sees in the two rows above.
           const daysLeft = w.days_left_in_week;
           subText = daysLeft != null
             ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left · budget covers the whole week`
             : null;
-          if (isCP && revenue != null && revenue > 0 && budget != null && budget > 0) {
-            const actP = (Number(spent) / Number(revenue)) * 100;
-            const tgtP = (Number(budget) / Number(revenue)) * 100;
-            const overTgt = actP > tgtP + 0.005;
-            vdCls += overTgt ? " kpi-wrail-vd-bad" : " kpi-wrail-vd-good";
-            vdText = `${actP.toFixed(1)}% actual · ${tgtP.toFixed(1)}% target`;
+          if (isCP && spent != null && budget != null) {
+            const delta = Math.round((Number(spent) - Number(budget)) * 100) / 100;
+            const isOver = delta > 0.005;
+            const isUnder = delta < -0.005;
+            if (isOver) {
+              vdCls += " kpi-wrail-vd-bad";
+              vdText = `▲ ${fmt$(Math.abs(delta))} over`;
+            } else if (isUnder) {
+              vdCls += " kpi-wrail-vd-good";
+              vdText = `▼ ${fmt$(Math.abs(delta))} under`;
+            } else {
+              vdCls += " kpi-wrail-vd-run";
+              vdText = fmt$(0);
+            }
           } else {
             vdCls += " kpi-wrail-vd-run";
             const pct = budget != null && budget > 0 ? Math.round((spent / budget) * 100) : null;
@@ -1148,14 +1155,15 @@ function WeekRail({ board }) {
         // running weeks with revenue carry an actual %/target %
         // sub-caption; the ▲/▼ dollar variance stays the primary
         // verdict line.
-        // Kevin CC prompt 2026-09-10 CP cleanup item 9. On CP running
-        // weeks the actual/target line was promoted to the verdict
-        // text above; suppress the sub-caption so it does not
-        // render twice. Closed-week cards (over/under $ variance)
-        // keep pctSub as a secondary read of the same story.
+        // Kevin CC ruling post-#1108. CP running-week cards render
+        // the primary dollar variance as the verdict; the pctSub
+        // sub-caption is suppressed so the running tile stays a
+        // single line. Not-started CP weeks + LP + CY still carry
+        // pctSub (`0.0% actual · X.X% target` on future weeks,
+        // realized ratio on closed weeks).
         let pctSub = null;
-        const promotedToVdText = isCP && temporal === "running";
-        if (revenue != null && revenue > 0 && spent != null && budget != null && budget > 0 && !promotedToVdText) {
+        const suppressPctSub = isCP && temporal === "running";
+        if (revenue != null && revenue > 0 && spent != null && budget != null && budget > 0 && !suppressPctSub) {
           const actP = (Number(spent) / Number(revenue)) * 100;
           const tgtP = (Number(budget) / Number(revenue)) * 100;
           pctSub = `${actP.toFixed(1)}% actual · ${tgtP.toFixed(1)}% target`;
