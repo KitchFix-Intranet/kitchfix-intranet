@@ -4785,3 +4785,140 @@
    consistent with the other help affordances (Prep & off, Cost per
    game day, etc. each have >= 8px between the pill and the trigger). */
 .kpi-hs-th-help .kpi-hs-qwrap { margin-left: var(--kpi-sp-2); vertical-align: middle; }
+
+/* Kevin CC prompt 2026-09-11 (labor-next-period render). Two-card
+   plan view on Labor Next period. Left card names the period plan
+   as a dollar + percent of forecast revenue with per-week / per-day
+   averages pinned to the bottom; right card lists the four weeks
+   with their own Labor Budget + Forecast rev. Both cards stretch to
+   equal height (`.kpi-story-left` + `.kpi-story-right` already flex
+   into the grid row). Every other range keeps the existing
+   SpendCard + TierAStrip + WeekRail layout. */
+.kpi-story.kpi-npp {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+}
+.kpi-npp-left { justify-content: flex-start; }
+.kpi-npp-head {
+  display: flex; align-items: center; gap: var(--kpi-sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-npp-title {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-700);
+}
+.kpi-npp-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-600);
+}
+.kpi-npp-v {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  line-height: 1.05;
+  font-variant-numeric: var(--num-tabular);
+  color: var(--n-900);
+  margin-top: 4px;
+}
+.kpi-npp-sub {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-600);
+  margin-top: 5px;
+}
+.kpi-npp-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--kpi-sp-3);
+  margin-top: auto;
+  padding-top: var(--kpi-sp-4);
+  border-top: 1px solid var(--n-200);
+}
+.kpi-npp-split > div {
+  display: flex; flex-direction: column; gap: 3px;
+  min-width: 0;
+}
+.kpi-npp-split-k {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-npp-split-v {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: var(--num-tabular);
+  color: var(--n-900);
+  line-height: 1.1;
+}
+.kpi-npp-wks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+@media (max-width: 640px) {
+  .kpi-npp-wks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.kpi-npp-wk {
+  border: 1px solid var(--n-300);
+  border-radius: 9px;
+  padding: var(--kpi-sp-3);
+  background: var(--surface-card, #fff);
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+.kpi-npp-wk-n {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+  letter-spacing: 0.1px;
+}
+.kpi-npp-wk-d {
+  font-size: var(--kpi-t-label);
+  font-weight: 600;
+  color: var(--n-600);
+  margin-top: 2px;
+}
+.kpi-npp-wk-amt {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1.1;
+  font-variant-numeric: var(--num-tabular);
+  color: var(--n-900);
+  margin-top: var(--kpi-sp-4);
+}
+.kpi-npp-wk-lbl {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--n-600);
+  margin-top: 4px;
+}
+.kpi-npp-wk-rev {
+  margin-top: auto;
+  padding-top: var(--kpi-sp-3);
+  border-top: 1px solid var(--n-200);
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--kpi-sp-2);
+}
+.kpi-npp-wk-rev-k {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--n-600);
+  letter-spacing: 0.2px;
+}
+.kpi-npp-wk-rev-v {
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: var(--num-tabular);
+  color: var(--n-900);
+}

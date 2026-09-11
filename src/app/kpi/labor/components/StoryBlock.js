@@ -1455,11 +1455,116 @@ function fmtCompact(v) {
   return "$" + Math.round(v).toLocaleString("en-US");
 }
 
+// ── Next period plan ────────────────────────────────────────────
+// Kevin CC prompt 2026-09-11 (labor-next-period.html render).
+// Next period has no actuals, no verdict, no spent, nothing to be
+// over or under. The Labor page strips back to two cards on this
+// range: LEFT names the period plan (Labor Budget as a dollar +
+// percent of forecast revenue, plus A week / A day averages);
+// RIGHT lists the four weeks with their own Labor Budget and
+// forecast revenue.
+//
+// Kevin: "a manager should look at next period and understand their
+// budget and what that looks like week by week before the period
+// starts. Simple, straightforward."
+//
+// Scope: rendered only when isFutureRange === true. Every other
+// range (CY, LP, CP) uses the existing SpendCard + TierAStrip +
+// WeekRail layout. The WeekTable is skipped on the future-range
+// path (see page.js).
+function NextPeriodPlan({ board, salary, salaryAvailable }) {
+  const weeks = board?.weeks || [];
+  const isSalary = !!salary;
+  const budget = Number(board?.budget_at_this_revenue ?? 0);
+  const forecastRevenue = weeks.reduce((s, w) => s + (Number(w.week_revenue) || 0), 0);
+  const pctOfRevenue = forecastRevenue > 0 ? (budget / forecastRevenue) * 100 : null;
+  const perWeek = weeks.length > 0 ? budget / weeks.length : 0;
+  const perDay  = weeks.length > 0 ? budget / (weeks.length * 7) : 0;
+  const periodNo = board?.period_no;
+
+  return (
+    <div className="kpi-story kpi-npp">
+      <div className="kpi-story-left kpi-npp-left">
+        <div className="kpi-npp-head">
+          <span className="kpi-npp-title">
+            {periodNo != null ? `Period ${periodNo} · the plan` : "The plan"}
+          </span>
+          {salaryAvailable && (
+            <span
+              className={"kpi-vpill kpi-vpill-scope kpi-vpill-scope-quiet " + (isSalary ? "kpi-vpill-scope-on" : "kpi-vpill-scope-off")}
+              aria-label={isSalary ? "Salary included" : "Hourly labor only"}
+              data-scope-pill
+            >{isSalary ? "+ SALARY" : "HOURLY"}</span>
+          )}
+          <HelpPop id="qLaborNPPlan" title="Next period · the plan" body={NEXT_PERIOD_PLAN_BODY} />
+        </div>
+        <div className="kpi-npp-k">Labor Budget</div>
+        <div className="kpi-npp-v">{fmt$(budget)}</div>
+        {pctOfRevenue != null && (
+          <div className="kpi-npp-sub">{pctOfRevenue.toFixed(1)}% of forecast revenue</div>
+        )}
+        <div className="kpi-npp-split">
+          <div>
+            <span className="kpi-npp-split-k">A week</span>
+            <span className="kpi-npp-split-v">{fmt$(perWeek)}</span>
+          </div>
+          <div>
+            <span className="kpi-npp-split-k">A day</span>
+            <span className="kpi-npp-split-v">{fmt$(perDay)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="kpi-story-right kpi-npp-right">
+        <div className="kpi-wh">
+          <span className="kpi-wh-t">THE PERIOD · WEEK BY WEEK</span>
+          <HelpPop id="qLaborNPWeeks" title="Week by week" body={WEEK_BY_WEEK_BODY} />
+        </div>
+        <div className="kpi-npp-wks">
+          {weeks.map((w, i) => {
+            const wBudget = Number(w.budget_at_this_week_revenue ?? 0);
+            const wRev = Number(w.week_revenue ?? 0);
+            return (
+              <div key={w.week_start} className="kpi-npp-wk">
+                <div className="kpi-npp-wk-n">{`Wk ${i + 1}`}</div>
+                <div className="kpi-npp-wk-d">{fmtDate(w.week_start)} – {fmtDate(w.week_end)}</div>
+                <div className="kpi-npp-wk-amt">{fmt$(wBudget)}</div>
+                <div className="kpi-npp-wk-lbl">Labor Budget</div>
+                <div className="kpi-npp-wk-rev">
+                  <span className="kpi-npp-wk-rev-k">Forecast rev</span>
+                  <span className="kpi-npp-wk-rev-v">{fmt$(wRev)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const NEXT_PERIOD_PLAN_BODY = (
+  <>
+    <p><b>The Labor Budget for the coming period.</b></p>
+    <p>Dollar figure and its share of the period&rsquo;s forecast revenue, plus the average
+    week and day inside it. No actuals yet - nothing to be over or under.</p>
+    <p>The toggle switches this budget between hourly-only and hourly plus salary. Every week
+    beneath scales the same way.</p>
+  </>
+);
+
 // ── Story block main ───────────────────────────────────────────────
 // classifyTier lifted to src/lib/kpi/classifyTier.js so purchasing can
 // import it too. PR 2 R3 Part B (2026-08-24).
 
 export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary, salaryAvailable, isFutureRange, awaiting = null }) {
+  // Kevin CC prompt 2026-09-11 (labor-next-period render). Future
+  // ranges (NP today) return the stripped-back two-card plan view
+  // instead of the SpendCard + TierAStrip + WeekRail stack. Every
+  // other range keeps the existing layout - approved surfaces.
+  if (isFutureRange) {
+    return <NextPeriodPlan board={board} salary={salary} salaryAvailable={salaryAvailable} />;
+  }
   const eyebrowLabel = board?.kind === "single_period_in_progress" || board?.kind === "single_period_closed"
     ? `PERIOD ${board.period_no}`
     : (rangeLabel || "").toUpperCase();
