@@ -463,15 +463,6 @@ export default function KpiLaborPage() {
       if (bw && bw.budget_at_this_week_revenue != null) {
         w.budget_at_this_week_revenue = Number(bw.budget_at_this_week_revenue);
       }
-      // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
-      // Attach per-week revenue so the WeekTable's VS BUDGET column
-      // can render `X% actual · Y% target` (spent / revenue vs
-      // budget / revenue) on running rows. Same source Labor's
-      // WeekRail cards read - `week_revenue` from
-      // attachWeeklyBasisToBoard (labor-week-basis.js:496).
-      if (bw && bw.week_revenue != null) {
-        w.week_revenue = Number(bw.week_revenue);
-      }
     }
     // Sort desc so the newest week (P9 today) appears first.
     return [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
@@ -585,15 +576,19 @@ export default function KpiLaborPage() {
       // fall back to the group's own weeks.length so the number stays
       // defined.
       //
-      // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12
-      // (post-#1107). Also attach period-total budget + revenue from
-      // ALL board.weeks (not just weekAggregates entries). CP has
-      // weekAggregates only for weeks with actuals - on day 1 that's
-      // one week; period-band aggregation over g.weeks only saw
-      // week 1 and the vs-budget cell read that single week's
-      // ratio on the period + total rows. Kevin's expectation was
-      // period-total aggregation; source the sums from
-      // board.weeks[] which carries all 4 weeks.
+      // Kevin CC ruling 2026-09-10 (post-#1108). Attach period-
+      // total budget from STARTED board.weeks only (state !==
+      // "not_started"). The rule: "no row displays a comparison
+      // against a budget for a week that has not begun." A
+      // period-band or grand-total row that summed all weeks'
+      // batr would compare period-to-date spend against the
+      // full-period budget, understating variance on any period
+      // whose only started week is over. Started-weeks-only
+      // budget keeps the compare like-for-like: on CP day 1 the
+      // period budget equals week 1's own batr, so `▲ $X over`
+      // on the period row equals the running week's variance.
+      // On a fully-closed period every week is started so the
+      // sum equals the whole-period batr - unchanged for LP + CY.
       const boardWeeksByPeriod = new Map();
       for (const bw of (data?.board?.weeks || [])) {
         const p = periodOf(bw.week_start);
@@ -607,19 +602,14 @@ export default function KpiLaborPage() {
         g.weeks_in_period = canonical ? canonical.weeks_in_period : g.weeks.length;
         const periodBoardWeeks = boardWeeksByPeriod.get(g.period_no) || [];
         let batrSum = 0, batrAny = false;
-        let revSum = 0, revAny = false;
         for (const bw of periodBoardWeeks) {
+          if (bw.state === "not_started") continue;
           if (bw.budget_at_this_week_revenue != null) {
             batrSum += Number(bw.budget_at_this_week_revenue);
             batrAny = true;
           }
-          if (bw.week_revenue != null) {
-            revSum += Number(bw.week_revenue);
-            revAny = true;
-          }
         }
         g.period_budget_total = batrAny ? Math.round(batrSum * 100) / 100 : null;
-        g.period_revenue_total = revAny ? Math.round(revSum * 100) / 100 : null;
       }
       // Append zero-labor placeholder groups for periods missing from
       // the actuals-derived groups.
@@ -714,13 +704,7 @@ export default function KpiLaborPage() {
     // spent = costed + unpriced + unapproved. Follows the same
     // running-period exclusion the amount + hours totals do.
     const rate = data?.board?.avg_rate ?? null;
-    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
-    // `revenue` accumulates per-week week_revenue with the same
-    // running-period exclusion the amount + hours totals do -
-    // the grand-total VS BUDGET column reads this to render
-    // `X% actual · Y% target` on ranges whose grand row is in-
-    // progress (CP single-period case).
-    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0, hatched: 0, revenue: 0 };
+    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0, hatched: 0 };
     const currentP = periodOfDate(today);
     for (const period of grouped) {
       const isRunning = period.groupHint?.kind === "period"
@@ -741,15 +725,6 @@ export default function KpiLaborPage() {
           if (uphrs > 0.004) g.hatched += uphrs * Number(rate);
           if (draftHrs > 0.004 && amt > 0.5) g.hatched += draftHrs * Number(rate);
         }
-      }
-      // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12
-      // (post-#1107). Revenue accumulates from the period-total
-      // attached to `grouped[i]` (sum of ALL board.weeks in the
-      // period), not from period.weeks which stops at weeks-with-
-      // actuals. CP had g.revenue = week 1 only; the grand-total
-      // vs-budget cell read the wrong denominator.
-      if (period.period_revenue_total != null) {
-        g.revenue += Number(period.period_revenue_total);
       }
     }
     return g;
