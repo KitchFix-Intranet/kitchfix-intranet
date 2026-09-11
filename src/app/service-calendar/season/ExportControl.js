@@ -52,6 +52,13 @@ export default function ExportControl({
   // hidden for per-meal PDCs (which have no schedule to print).
   hasHomestandSchedule = false,
   hasScheduleOverlay   = false,
+  // 2026-09-10: fee accounts (accounts.billing_model=flat_fee) hide
+  // the xlsx menu items. Kevin ruling Item 3: rebuild's three-tab
+  // shape assumes per-service projected/actual; fee accounts bill
+  // flat contractual and have no such shape. Hidden not disabled -
+  // hunting for a button that does nothing is worse than never
+  // seeing one. ServiceCalendar plumbs this from accounts.billing_model.
+  isFeeAccount = false,
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,7 +108,7 @@ export default function ExportControl({
   // on when the menu opens (autofocus below).
   const menuItems = buildMenuItems({
     scope, year, periodKey, monthKey, accountKey,
-    hasHomestandSchedule, hasScheduleOverlay,
+    hasHomestandSchedule, hasScheduleOverlay, isFeeAccount,
   });
 
   const startDownload = useCallback(async (item) => {
@@ -355,7 +362,7 @@ function pdfOpsCalendarItem({ year, accountKey }) {
 
 function buildMenuItems({
   scope, year, periodKey, monthKey, accountKey,
-  hasHomestandSchedule, hasScheduleOverlay,
+  hasHomestandSchedule, hasScheduleOverlay, isFeeAccount,
 }) {
   if (!accountKey || !year) return [];
   const items = [];
@@ -366,12 +373,17 @@ function buildMenuItems({
   // See docs/design/PDC_PRINT_REDESIGN.md.
   const isPdcOrPdco = !hasHomestandSchedule;
 
+  // Fee-account gate (2026-09-10 Kevin ruling): xlsx items hidden
+  // for accounts whose billing_model=flat_fee. PDF items remain
+  // (schedule/ops-calendar PDFs still make sense for fee accounts).
+  const showXlsx = !isFeeAccount;
+
   if (scope === "month" && monthKey) {
-    items.push(xlsxItem({ scope, year, monthKey, accountKey }));
+    if (showXlsx) items.push(xlsxItem({ scope, year, monthKey, accountKey }));
     items.push(pdfMonthItem({ year, monthKey, accountKey, disabled: isPdcOrPdco }));
-    items.push(xlsxItem({ scope: "year", year, accountKey }));
+    if (showXlsx) items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "period" && periodKey) {
-    items.push(xlsxItem({ scope, year, periodKey, accountKey }));
+    if (showXlsx) items.push(xlsxItem({ scope, year, periodKey, accountKey }));
     // Owner placement 2026-08-04: after the period Excel, before the
     // period PDF - keeps the period-scope items grouped. Two adjacent
     // greys on PDC / PDCO (both the billing placeholder and the PDF
@@ -380,9 +392,9 @@ function buildMenuItems({
     // waiting-family before the Excel year fallback closes the menu.
     items.push(xlsxBillingPeriodItem());
     items.push(pdfPeriodItem({ year, periodKey, accountKey, disabled: isPdcOrPdco }));
-    items.push(xlsxItem({ scope: "year", year, accountKey }));
+    if (showXlsx) items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "year") {
-    items.push(xlsxItem({ scope: "year", year, accountKey }));
+    if (showXlsx) items.push(xlsxItem({ scope: "year", year, accountKey }));
     if (hasSchedule) {
       items.push(pdfSeasonItem({ year, accountKey }));
     }
