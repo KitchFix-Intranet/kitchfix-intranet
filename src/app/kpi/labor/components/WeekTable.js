@@ -138,15 +138,40 @@ const WEEK_TABLE_POP_BODY = (
 );
 
 // V9-5 vs budget lockup: 58px bar + 72px delta. Tick at 80%.
-function VsBudget({ spent, budget, mode }) {
+function VsBudget({ spent, budget, mode, revenue = null }) {
   // mode: "closed" | "in_progress" | "muted"
   if (mode === "muted" || budget == null) {
     return <span className="kpi-vb"><span className="kpi-vb-bar" /><span className="kpi-vb-d kpi-vb-d-mute">–</span></span>;
   }
   if (mode === "in_progress") {
     // Percent used at 80% tick basis: bar fill = spent/budget * 80%.
-    const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
     const fillPct = Math.max(0, Math.min(100, (spent / budget) * 80));
+    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
+    // Numeric verdict switched from `X% used` (spent / budget) to
+    // `X.X% actual · Y.Y% target` (spent / revenue vs budget /
+    // revenue) - same treatment item 9 landed on the week cards
+    // and the panel note reads. Coloured red when actual exceeds
+    // target, green otherwise. Only fires when the caller passes
+    // a positive revenue and both spent + budget are usable;
+    // legacy `X% used` fallback kept for the rare case where
+    // revenue is unavailable (older routes, salaried-only shape).
+    const hasRatio = revenue != null && Number(revenue) > 0 && budget > 0;
+    if (hasRatio) {
+      const actP = (Number(spent) / Number(revenue)) * 100;
+      const tgtP = (Number(budget) / Number(revenue)) * 100;
+      const overTgt = actP > tgtP + 0.005;
+      const dCls = overTgt ? "kpi-vb-d-bad" : "kpi-vb-d-good";
+      return (
+        <span className="kpi-vb">
+          <span className="kpi-vb-bar">
+            <i style={{ width: `${fillPct}%` }} />
+            <span className="kpi-vb-tick" />
+          </span>
+          <span className={`kpi-vb-d ${dCls}`}>{actP.toFixed(1)}% actual · {tgtP.toFixed(1)}% target</span>
+        </span>
+      );
+    }
+    const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
     return (
       <span className="kpi-vb">
         <span className="kpi-vb-bar">
@@ -544,7 +569,11 @@ export function WeekTable({
   // Falls back to raw only when no week in the band has per-week batr
   // (older routes / boards without the shared-basis attachment).
   const periodTotals = useMemo(() => grouped.map(g => {
-    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0, hatched: 0 };
+    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
+    // `revenue` accumulates per-week week_revenue so the band's
+    // VS BUDGET column can render `X% actual · Y% target` on
+    // in-progress periods (item 9's treatment).
+    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0, hatched: 0, revenue: 0 };
     const states = [];
     let periodBudget = null;
     let weeksInBand = 0;
@@ -572,6 +601,7 @@ export function WeekTable({
       // `hours_without_dollars` for the unpriced source; the
       // helper accepts either that or `unpriced_hrs`.
       t.hatched += weekHatchedDollars(w, avgRate).total;
+      if (w.week_revenue != null) t.revenue += Number(w.week_revenue);
       states.push(w.coverage_state);
       weeksInBand += 1;
       if (w.budget_at_this_week_revenue != null) {
@@ -918,9 +948,17 @@ export function WeekTable({
               <tr className="kpi-tbl-total">
                 <td>{totalDesc}</td>
                 <td>
+                  {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up
+                      item 12. spent = amount + hatched (R-103); the
+                      DOLLARS column in this row already reads
+                      `amount + hatched` so both columns tell the
+                      same story. `revenue` feeds the in-progress
+                      `X% actual · Y% target` render inside
+                      VsBudget; unused on closed ranges. */}
                   <VsBudget
-                    spent={grandTotal?.amount || 0}
+                    spent={(grandTotal?.amount || 0) + (grandTotal?.hatched || 0)}
                     budget={grandBudget}
+                    revenue={grandTotal?.revenue ?? null}
                     mode={grandBudget == null ? "muted" : rangeAllInProgress ? "in_progress" : "closed"}
                   />
                 </td>
@@ -1015,7 +1053,18 @@ function FragmentRows({
           </button>
         </td>
         <td>
-          <VsBudget spent={band.vs.spent} budget={band.vs.budget} mode={band.vs.mode} />
+          {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
+              spent = amount + hatched (R-103) so this cell and the
+              DOLLARS cell in the same row read the same figure.
+              revenue = band-total week_revenue accumulated in
+              periodTotals; feeds `X% actual · Y% target` on the
+              in-progress branch of VsBudget. */}
+          <VsBudget
+            spent={(band.vs.spent || 0) + (band.totals?.hatched || 0)}
+            budget={band.vs.budget}
+            revenue={band.totals?.revenue ?? null}
+            mode={band.vs.mode}
+          />
         </td>
         {showShare && <td className="kpi-tbl-shrcol" />}
         <td className="num">{fmtHrs(band.totals.hours)}</td>
@@ -1101,7 +1150,21 @@ function FragmentRows({
                   )}
                 </button>
               </td>
-              <td><VsBudget spent={vs.spent} budget={vs.budget} mode={vs.mode} /></td>
+              <td>
+                {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up
+                    item 12. spent = amount + hatched (R-103); the
+                    week's DOLLARS cell renders the same figure so
+                    both cells agree. revenue = w.week_revenue
+                    (attached from board.weeks via page.js);
+                    feeds the in-progress `X% actual · Y% target`
+                    render inside VsBudget. */}
+                <VsBudget
+                  spent={(Number(vs.spent) || 0) + weekHatchedDollars(w, avgRate).total}
+                  budget={vs.budget}
+                  revenue={w.week_revenue ?? null}
+                  mode={vs.mode}
+                />
+              </td>
               {showShare && <td className="kpi-tbl-shrcol" />}
               <td className="num">{fmtHrs(hrs)}</td>
               <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>

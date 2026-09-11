@@ -463,6 +463,15 @@ export default function KpiLaborPage() {
       if (bw && bw.budget_at_this_week_revenue != null) {
         w.budget_at_this_week_revenue = Number(bw.budget_at_this_week_revenue);
       }
+      // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
+      // Attach per-week revenue so the WeekTable's VS BUDGET column
+      // can render `X% actual · Y% target` (spent / revenue vs
+      // budget / revenue) on running rows. Same source Labor's
+      // WeekRail cards read - `week_revenue` from
+      // attachWeeklyBasisToBoard (labor-week-basis.js:496).
+      if (bw && bw.week_revenue != null) {
+        w.week_revenue = Number(bw.week_revenue);
+      }
     }
     // Sort desc so the newest week (P9 today) appears first.
     return [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
@@ -673,7 +682,13 @@ export default function KpiLaborPage() {
     // spent = costed + unpriced + unapproved. Follows the same
     // running-period exclusion the amount + hours totals do.
     const rate = data?.board?.avg_rate ?? null;
-    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0, hatched: 0 };
+    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12.
+    // `revenue` accumulates per-week week_revenue with the same
+    // running-period exclusion the amount + hours totals do -
+    // the grand-total VS BUDGET column reads this to render
+    // `X% actual · Y% target` on ranges whose grand row is in-
+    // progress (CP single-period case).
+    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0, hatched: 0, revenue: 0 };
     const currentP = periodOfDate(today);
     for (const period of grouped) {
       const isRunning = period.groupHint?.kind === "period"
@@ -694,6 +709,7 @@ export default function KpiLaborPage() {
           if (uphrs > 0.004) g.hatched += uphrs * Number(rate);
           if (draftHrs > 0.004 && amt > 0.5) g.hatched += draftHrs * Number(rate);
         }
+        if (w.week_revenue != null) g.revenue += Number(w.week_revenue);
       }
     }
     return g;

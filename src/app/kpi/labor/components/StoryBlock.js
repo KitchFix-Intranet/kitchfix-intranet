@@ -409,23 +409,18 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
               </span>
             );
           })()}
-          {/* Labor unapproved-hours fix (Kevin 2026-09-07). Verdict
-              qualification pill. Kevin acceptance: "a period with
-              unapproved hours never renders an unqualified verdict".
-              Data: sum draft_hours across board.weeks in the range +
-              count of weeks with any draft_hours (the "N open weeks"
-              side of Kevin's phrasing "the open week and its size").
-              Only fires when verdict exists (skips future ranges,
-              nothing to approve).
-              Copy grammar: singular vs plural on both dimensions.
-              Muted outline pill - not a warning colour per Kevin
-              ("nothing is wrong, the week is simply not settled"). */}
-          {vd && (() => {
-            // Kevin CC prompt 2026-09-10 CP cleanup item 7. Copy shortened
-            // to `PENDING APPROVALS` - the wk / hrs counts moved off the
-            // pill (they still surface via the aria-label + the row-level
-            // draft-hours indicators). Pill still fires only when at
-            // least one week carries draft hours.
+          {/* Labor unapproved-hours pill. Was gated on `vd &&` so it
+              only rendered when the verdict pill did too - safe
+              until CP cleanup item 1 set vd = null on CP, at which
+              point the PENDING APPROVALS pill silently disappeared
+              alongside NOTHING EARNED YET (Kevin verified live
+              2026-09-10, item 11). Ungated - the pill has its own
+              fire condition (at least one week with draft_hours)
+              and does not need the verdict pill's presence to be
+              meaningful. Still suppressed on future ranges
+              (nothing to approve on a range that has not started).
+              Copy: `PENDING APPROVALS` per item 7. */}
+          {!isFutureRange && (() => {
             const weeks = board?.weeks || [];
             const openWeeks = weeks.filter(w => Number(w.draft_hours || 0) > 0.004).length;
             const totalDraft = weeks.reduce((s, w) => s + Number(w.draft_hours || 0), 0);
@@ -898,37 +893,31 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate, isCP = 
           );
         })()}
       </div>
-      <div className={`kpi-wb-cap${(isForecast || isPartial) ? " kpi-wb-cap-forecast" : ""}`}>
+      <div className={`kpi-wb-cap${(isForecast || isPartial) && !isCP ? " kpi-wb-cap-forecast" : ""}`}>
         <b className={captionCls}>
           {captionValue}
-          {/* Labor PR-B item 5 - `plan` tag on the budget number for
-              forecast weeks. Two contexts fire it:
-                1. Future forecast week - caption value IS the budget.
-                2. Closed/running forecast week with a data gap - caption
-                   value is the spent, but the reference line above the
-                   bar is the plan, so the tag names the reference the
-                   reader will next fixate on.
-              The tag is the visible warning Kevin asked for; without it
-              the operator cannot tell a $21,876 confirmed number apart
-              from a $13,167 forecast one. */}
-          {isForecast && perWeekAdjusted != null && isFuture && (
+          {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up item 13.
+              `plan` pill, date-line suffixes, and statusLine all
+              hidden on Current period. Kevin: "all of it is
+              redundant. The week state is already on the card
+              beneath, the service count is on the card, and the
+              bar's own treatment says whether it is real or
+              planned." Other range kinds keep the annotations
+              (approved surfaces). */}
+          {!isCP && isForecast && perWeekAdjusted != null && isFuture && (
             <span className="kpi-wb-plan-tag" aria-label="Projected from forecast counts">plan</span>
           )}
         </b>
         <span className="kpi-wb-dates">
           {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
-          {isInProgress ? " · in progress" : ""}
-          {/* Walkthrough item 3 - partial state names the confirmed
-              share explicitly. "3 of 13 services confirmed · budget
-              will move" tells the reader why the number is
-              provisional without leaning on the forecast label alone. */}
-          {isPartial && w.total_services > 0 && (
+          {!isCP && isInProgress ? " · in progress" : ""}
+          {!isCP && isPartial && w.total_services > 0 && (
             ` · ${w.confirmed_services} of ${w.total_services} services confirmed · budget will move`
           )}
-          {isForecast && !isFuture && !isPartial && " · forecast, will move as counts confirm"}
-          {isForecast && isFuture && !isInProgress && " · projected"}
+          {!isCP && isForecast && !isFuture && !isPartial && " · forecast, will move as counts confirm"}
+          {!isCP && isForecast && isFuture && !isInProgress && " · projected"}
         </span>
-        {statusLine}
+        {!isCP && statusLine}
       </div>
     </div>
   );
