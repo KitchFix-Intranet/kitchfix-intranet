@@ -1398,7 +1398,15 @@ export default function KpiLaborPage() {
             toggle. Both are per-site controls; on an aggregate they
             span thousands of worker-weeks across 11 accounts and mean
             nothing useful. Passing null / undefined for onWorkersChange
-            + onToggleRedact makes WeekTable omit those chrome blocks. */}
+            + onToggleRedact makes WeekTable omit those chrome blocks.
+
+            Kevin CC prompt 2026-09-11 (labor-next-period render). Skip
+            WeekTable entirely on future ranges (NP). The plan view in
+            StoryBlock covers what the manager needs before the period
+            starts; the table has no actuals + no verdict to render
+            and was reading empty rows in the wrong shape. Other
+            ranges keep the table. */}
+        {data?.is_future_range !== true && (
         <WeekTable
           account={account}
           grouped={grouped}
@@ -1488,6 +1496,7 @@ export default function KpiLaborPage() {
           rolledUpMembers={data?.rolled_up_members || []}
           aggregateExcludedMembers={data?.aggregate_excluded_members || []}
         />
+        )}
         </div>
       )}
     </>
