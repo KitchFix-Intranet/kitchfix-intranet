@@ -609,43 +609,14 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         );
       })()}
 
-      {/* Salary PR 3 C3 - salary vacancy line. States the arithmetic;
-          never guesses the cause (spec is explicit: "under budget can
-          be an unfilled role, a mid-period departure, or a role filled
-          below budget - the board cannot tell them apart"). Three
-          shapes: at-budget (== budget), under-budget (< budget),
-          over-budget (> budget). Roles-filled clause omitted here -
-          we do not carry a budgeted-headcount on the wire, and
-          salary_summary.workers is filled count only. */}
-      {salary && salary.vacancy && (() => {
-        // Kevin CC prompt 2026-09-11. Whole salary vacancy line
-        // (`salary $X of $Y · Z%`) removed on Current period -
-        // "redundant, the figure is already in the table below,
-        // and the panel should not be the one place on either
-        // board that states the salary total outright." Kept on
-        // Current year + Last period (approved surfaces) where
-        // the range-level ratio is still meaningful. Future range
-        // never reaches SpendCard (NextPeriodPlan short-circuits
-        // upstream). This supersedes the earlier CP cleanup item
-        // 3 change that only removed the percentage.
-        const isCPSalary = kind === "single_period_in_progress" && !isFutureRange;
-        if (isCPSalary) return null;
-        const rows = salary.vacancy.filter(v => v.budget > 0 || v.actual > 0);
-        if (rows.length === 0) return null;
-        const budgetSum = rows.reduce((s, v) => s + Number(v.budget || 0), 0);
-        const actualSum = rows.reduce((s, v) => s + Number(v.actual || 0), 0);
-        if (budgetSum <= 0 && actualSum <= 0) return null;
-        const pct = budgetSum > 0 ? Math.round((actualSum / budgetSum) * 100) : null;
-        const cls = actualSum > budgetSum ? "kpi-spend-salary-over"
-                  : Math.abs(actualSum - budgetSum) < 0.5 ? "kpi-spend-salary-at"
-                  : "kpi-spend-salary-under";
-        return (
-          <div className={`kpi-spend-salary ${cls}`}>
-            salary <b>{fmt$(actualSum)}</b> of <b>{fmt$(budgetSum)}</b>
-            {pct != null && <> · {pct}%</>}
-          </div>
-        );
-      })()}
+      {/* Kevin CC prompt 2026-09-11 (post-#1114). Salary vacancy
+          line (`salary $X of $Y · Z%`) removed on every range. The
+          table already carries the salary figure, and the panel
+          should not be the one place on either board that states
+          the salary total outright. #1114 removed on Current period;
+          this PR finishes the sweep on Current year + Last period.
+          Next period never reached this render (NextPeriodPlan
+          short-circuits SpendCard upstream). */}
     </div>
   );
 }
