@@ -1524,6 +1524,13 @@ function NextPeriodPlan({ board, salary, salaryAvailable }) {
           {weeks.map((w, i) => {
             const wBudget = Number(w.budget_at_this_week_revenue ?? 0);
             const wRev = Number(w.week_revenue ?? 0);
+            // Kevin CC ruling post-#1110. Forecast rev renders as
+            // whole dollars (`$19,389`), matching the approved
+            // render's shape - `$19,388.76` at 12px 800-weight
+            // overran a 91px cell at the widths the standing probe
+            // checks. Labor Budget amount keeps its cents; the
+            // container-query grid reflow protects it from overrun.
+            const wRevWhole = "$" + Math.round(wRev).toLocaleString("en-US");
             return (
               <div key={w.week_start} className="kpi-npp-wk">
                 <div className="kpi-npp-wk-n">{`Wk ${i + 1}`}</div>
@@ -1532,7 +1539,7 @@ function NextPeriodPlan({ board, salary, salaryAvailable }) {
                 <div className="kpi-npp-wk-lbl">Labor Budget</div>
                 <div className="kpi-npp-wk-rev">
                   <span className="kpi-npp-wk-rev-k">Forecast rev</span>
-                  <span className="kpi-npp-wk-rev-v">{fmt$(wRev)}</span>
+                  <span className="kpi-npp-wk-rev-v">{wRevWhole}</span>
                 </div>
               </div>
             );
