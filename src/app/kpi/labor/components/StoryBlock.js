@@ -1132,8 +1132,14 @@ function WeekRail({ board }) {
         // (walkthrough item 3). Sits beneath the verdict line as a
         // secondary caption so a chef sees WHY the budget is
         // provisional at a glance.
+        //
+        // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 13
+        // (post-#1107). Same redundancy ruling as the bar captions:
+        // "the week state is already on the card beneath, the
+        // service count is on the card." Suppress the sub-caption
+        // on CP. Other range kinds keep the annotation.
         let partialSub = null;
-        if (basis === "partial" && w.total_services > 0) {
+        if (!isCP && basis === "partial" && w.total_services > 0) {
           partialSub = `${w.confirmed_services} of ${w.total_services} services confirmed · budget will move`;
         }
         // Kevin post-1057 sweep item 4 (2026-09-08). Week cards read
@@ -1185,7 +1191,11 @@ function WeekRail({ board }) {
               <span className="kpi-wrail-row-k">{isCP ? "Labor Budget" : "Budget"}</span>
               <span className="kpi-wrail-row-v">
                 {budget != null ? fmt$(budget) : "—"}
-                {basis === "forecast" && budget != null && (
+                {/* Kevin CC prompt 2026-09-10 CP cleanup follow-up
+                    item 13 (post-#1107). plan pill suppressed on CP
+                    week cards - same redundancy ruling as the bar
+                    captions. Other range kinds keep the tag. */}
+                {!isCP && basis === "forecast" && budget != null && (
                   <span className="kpi-wrail-plan-tag" aria-label="Projected budget">plan</span>
                 )}
               </span>

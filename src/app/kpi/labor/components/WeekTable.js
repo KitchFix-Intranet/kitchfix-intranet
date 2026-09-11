@@ -161,13 +161,24 @@ function VsBudget({ spent, budget, mode, revenue = null }) {
       const tgtP = (Number(budget) / Number(revenue)) * 100;
       const overTgt = actP > tgtP + 0.005;
       const dCls = overTgt ? "kpi-vb-d-bad" : "kpi-vb-d-good";
+      // Kevin CC ruling post-#1107. Abbreviated form `X.X% / Y.Y%`
+      // rather than the full `X.X% actual · Y.Y% target` so the
+      // cell does not overrun the column onto HOURS. The week
+      // cards render the full form because they have the width;
+      // the table cell has room only for the shorter pair.
+      // aria-label carries the full sentence for screen readers.
       return (
         <span className="kpi-vb">
           <span className="kpi-vb-bar">
             <i style={{ width: `${fillPct}%` }} />
             <span className="kpi-vb-tick" />
           </span>
-          <span className={`kpi-vb-d ${dCls}`}>{actP.toFixed(1)}% actual · {tgtP.toFixed(1)}% target</span>
+          <span
+            className={`kpi-vb-d ${dCls}`}
+            aria-label={`${actP.toFixed(1)}% actual, ${tgtP.toFixed(1)}% target`}
+          >
+            {actP.toFixed(1)}% / {tgtP.toFixed(1)}%
+          </span>
         </span>
       );
     }
@@ -609,7 +620,19 @@ export function WeekTable({
         adjustedAny = true;
       }
     }
-    if (adjustedAny) {
+    // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12
+    // (post-#1107). Prefer the period-level total attached by
+    // page.js (sum of batr across ALL board.weeks in the period,
+    // not just weekAggregates entries). CP on day 1 had only one
+    // week in weekAggregates but four weeks in board.weeks; the
+    // band's "period budget" was reading the single week instead
+    // of the true period total. Kevin's expectation was the
+    // period-total; period_budget_total delivers it. Falls back
+    // to the per-week sum only when the page-level attach is
+    // missing (older routes / month grouping).
+    if (g.period_budget_total != null) {
+      periodBudget = g.period_budget_total;
+    } else if (adjustedAny) {
       periodBudget = Math.round(adjustedSum * 100) / 100;
     } else if (g.groupHint?.kind === "period" && g.period_no != null) {
       periodBudget = budgetByPeriod.has(g.period_no) ? budgetByPeriod.get(g.period_no) : null;
@@ -622,6 +645,14 @@ export function WeekTable({
         if (wb?.amount != null) { sum += wb.amount; any = true; }
       }
       periodBudget = any ? Math.round(sum * 100) / 100 : null;
+    }
+    // Same aggregation gap for revenue: prefer the page-level
+    // period-total (all board.weeks) over the g.weeks sum which
+    // stops at weeks-with-actuals. Only meaningful on the CP
+    // band + running-period bands in a multi-period range; closed
+    // periods have every week in weekAggregates so the two agree.
+    if (g.period_revenue_total != null) {
+      t.revenue = g.period_revenue_total;
     }
     return { g, totals: t, states, periodBudget, weeksInBand };
   }), [grouped, budgetByPeriod, weekBudgetsByWeekStart, salaryAmountsByWeek, avgRate]);

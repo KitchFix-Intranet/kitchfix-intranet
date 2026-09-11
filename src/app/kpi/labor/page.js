@@ -584,10 +584,42 @@ export default function KpiLaborPage() {
       // count; if a period is missing from canonical (data drift),
       // fall back to the group's own weeks.length so the number stays
       // defined.
+      //
+      // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12
+      // (post-#1107). Also attach period-total budget + revenue from
+      // ALL board.weeks (not just weekAggregates entries). CP has
+      // weekAggregates only for weeks with actuals - on day 1 that's
+      // one week; period-band aggregation over g.weeks only saw
+      // week 1 and the vs-budget cell read that single week's
+      // ratio on the period + total rows. Kevin's expectation was
+      // period-total aggregation; source the sums from
+      // board.weeks[] which carries all 4 weeks.
+      const boardWeeksByPeriod = new Map();
+      for (const bw of (data?.board?.weeks || [])) {
+        const p = periodOf(bw.week_start);
+        if (p == null) continue;
+        if (!boardWeeksByPeriod.has(p)) boardWeeksByPeriod.set(p, []);
+        boardWeeksByPeriod.get(p).push(bw);
+      }
       for (const g of groups) {
         if (g.groupHint?.kind !== "period") continue;
         const canonical = canonicalByPeriod.get(g.period_no);
         g.weeks_in_period = canonical ? canonical.weeks_in_period : g.weeks.length;
+        const periodBoardWeeks = boardWeeksByPeriod.get(g.period_no) || [];
+        let batrSum = 0, batrAny = false;
+        let revSum = 0, revAny = false;
+        for (const bw of periodBoardWeeks) {
+          if (bw.budget_at_this_week_revenue != null) {
+            batrSum += Number(bw.budget_at_this_week_revenue);
+            batrAny = true;
+          }
+          if (bw.week_revenue != null) {
+            revSum += Number(bw.week_revenue);
+            revAny = true;
+          }
+        }
+        g.period_budget_total = batrAny ? Math.round(batrSum * 100) / 100 : null;
+        g.period_revenue_total = revAny ? Math.round(revSum * 100) / 100 : null;
       }
       // Append zero-labor placeholder groups for periods missing from
       // the actuals-derived groups.
@@ -709,7 +741,15 @@ export default function KpiLaborPage() {
           if (uphrs > 0.004) g.hatched += uphrs * Number(rate);
           if (draftHrs > 0.004 && amt > 0.5) g.hatched += draftHrs * Number(rate);
         }
-        if (w.week_revenue != null) g.revenue += Number(w.week_revenue);
+      }
+      // Kevin CC prompt 2026-09-10 CP cleanup follow-up item 12
+      // (post-#1107). Revenue accumulates from the period-total
+      // attached to `grouped[i]` (sum of ALL board.weeks in the
+      // period), not from period.weeks which stops at weeks-with-
+      // actuals. CP had g.revenue = week 1 only; the grand-total
+      // vs-budget cell read the wrong denominator.
+      if (period.period_revenue_total != null) {
+        g.revenue += Number(period.period_revenue_total);
       }
     }
     return g;
