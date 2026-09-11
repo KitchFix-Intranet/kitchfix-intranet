@@ -41,19 +41,20 @@
 //      variance cell outranks the row-scoped border-bottom - this
 //      probe catches it by measuring every cell of tbody's
 //      last-row (which IS the GM row).
-//   6. 3100 parent Target % is hatched AND Adjusted renders a
-//      dollar figure. Kevin CC prompt 2026-09-09: salary is a $
-//      target not a %; the parent 3100 contains a fixed cost so
-//      its Target % is N/A (hatched), while its Adjusted is the
-//      composed `salary_$ + hourly_pct × actual_revenue` dollar
-//      figure. Fixture is TBJ - FL Current year + salary, a payload
-//      where the server flags 3100 parent with `not_applicable_
-//      target_pct`. Fails if the target cell is NOT hatched (server
-//      flag not honoured OR client-side rule reverted), if the
-//      Adjusted cell IS hatched (client-side rule wrongly extended
-//      to Adjusted), or if the Adjusted cell renders empty / dash
-//      (server compute failed). The two are a paired treatment now
-//      and can only disagree if hatching semantics drift.
+//   6. 3100 parent Target % RENDERS a percentage AND Adjusted
+//      renders a dollar figure. Kevin CC prompt 2026-09-11
+//      (R-99 superseded): the P&L publishes target % on 3100 as
+//      `budget / budgeted revenue`, and the board mirrors it.
+//      Prior invariant asserted the target cell WAS hatched
+//      (R-99); that reversed. Fixture unchanged: TBJ - FL Current
+//      year + salary, where the server flags 3100 parent with
+//      `not_applicable_target_pct` - but that flag now signals
+//      only "parent contains a fixed cost, gate the client-side
+//      target% × revenue Adjusted override," NOT hatching. Fails
+//      if Target IS hatched (regression), if Target is empty or
+//      dashed, if Target does not read as a percentage, if
+//      Adjusted IS hatched, if Adjusted is empty. The two cells
+//      remain a paired render.
 //
 // Fixture: TBJ - FL Current year, Full view (all 13 sub rows visible).
 // Prereqs: `TEST_MODE=true npm run dev` running on :3000, Chromium
@@ -64,7 +65,7 @@
 
 import { chromium } from "playwright";
 
-const BASE = "http://localhost:3000";
+const BASE = process.env.BASE || "http://localhost:3000";
 const URL = `${BASE}/kpi/overview?account=TBJ%20-%20FL&start=2025-12-29&end=2026-08-09&include_salary=1`;
 const HEADERS = { "x-test-user": "kevin@kitchfix.com" };
 
@@ -231,18 +232,16 @@ async function measure(viewportWidth) {
         }
       }
     }
-    // Invariant 6: 3100 parent Target % cell is hatched AND the
-    // Adjusted cell renders a dollar figure. Kevin CC prompt
-    // 2026-09-09: "salary is a $ target, not a %." The parent 3100
-    // includes a fixed cost (salary) on +salary payloads, so its
-    // Target % is N/A (hatched) but its Adjusted is the composed
-    // dollar `salary_$ + hourly_pct × actual_revenue`. Fixture is
-    // TBJ - FL Current year include_salary=1 - a +salary payload
-    // where the flag `not_applicable_target_pct` fires on the 3100
-    // parent row. Report every 3100 parent whose Target % is NOT
-    // hatched OR whose Adjusted IS hatched - the two are a paired
-    // treatment now, and they can only disagree with each other if
-    // client-side hatching logic drifts from the server flag.
+    // Invariant 6: 3100 parent Target % RENDERS a percentage AND
+    // Adjusted renders a dollar figure. Kevin CC prompt 2026-09-11
+    // (R-99 superseded): the P&L publishes target % on 3100 as
+    // `budget / budgeted revenue`. Fixture is TBJ - FL Current
+    // year + salary. Report every 3100 parent that fails any of:
+    //   - Target IS hatched (regression to R-99)
+    //   - Target is empty or dashed (server null or client miss)
+    //   - Target does not read as a percentage (%)
+    //   - Adjusted IS hatched (client-side rule leaked)
+    //   - Adjusted is empty or dashed (server compute failed)
     const parent3100Samples = [];
     const parent3100Row = tbl.querySelector('tr[data-kpi-ov-line-code="3100"][data-kpi-ov-variant="line"]');
     let parent3100Info = null;
@@ -253,9 +252,15 @@ async function measure(viewportWidth) {
       const adjTd = tds[3];
       const targetHatched = targetTd?.classList?.contains('kpi-ov-pnl-na-cell');
       const adjHatched = adjTd?.classList?.contains('kpi-ov-pnl-na-cell');
+      const targetText = (targetTd?.innerText || "").trim();
       const adjText = (adjTd?.innerText || "").trim();
-      parent3100Info = { targetHatched, adjHatched, adjText };
-      if (!targetHatched) parent3100Samples.push({ issue: "target_not_hatched", ...parent3100Info });
+      parent3100Info = { targetHatched, adjHatched, targetText, adjText };
+      if (targetHatched)  parent3100Samples.push({ issue: "target_hatched", ...parent3100Info });
+      if (!targetText || targetText === "" || targetText === "—") {
+        parent3100Samples.push({ issue: "target_empty", ...parent3100Info });
+      } else if (!/%/.test(targetText)) {
+        parent3100Samples.push({ issue: "target_not_a_percentage", ...parent3100Info });
+      }
       if (adjHatched)     parent3100Samples.push({ issue: "adjusted_hatched",   ...parent3100Info });
       if (!adjText || adjText === "" || adjText === "—") parent3100Samples.push({ issue: "adjusted_empty", ...parent3100Info });
     }
@@ -321,12 +326,12 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
     console.log(`  GM row: closes as one line (border-bottom ${info.gmBorderMode || "n/a"})`);
   }
   if (info.parent3100Samples?.length) {
-    console.log(`  3100 PARENT HATCH MISMATCH (${info.parent3100Samples.length}):`);
+    console.log(`  3100 PARENT RENDER MISMATCH (${info.parent3100Samples.length}):`);
     for (const s of info.parent3100Samples) {
-      console.log(`    ${s.issue}  targetHatched=${s.targetHatched} adjHatched=${s.adjHatched} adjText="${s.adjText}"`);
+      console.log(`    ${s.issue}  targetHatched=${s.targetHatched} targetText="${s.targetText}" adjHatched=${s.adjHatched} adjText="${s.adjText}"`);
     }
   } else if (info.parent3100Info) {
-    console.log(`  3100 parent: target hatched · adjusted renders "${info.parent3100Info.adjText}"`);
+    console.log(`  3100 parent: target renders "${info.parent3100Info.targetText}" · adjusted renders "${info.parent3100Info.adjText}"`);
   } else {
     console.log(`  3100 parent: (row not found)`);
   }

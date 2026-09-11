@@ -108,7 +108,6 @@ function LineRow({
   runningLanded = null,
 }) {
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
-  const notApplicable = Array.isArray(row.flags) && row.flags.includes("not_applicable_target_pct");
   const cls = variant === "sub" ? "kpi-ov-pnl-sub" : "";
   if (isInactive) {
     // "not active" applies to every value cell. Italic per Kevin's
@@ -138,14 +137,16 @@ function LineRow({
     ? row.actual_pct
     : (row.reported && totalRevenue ? (Number(row.actual) / totalRevenue) * 100 : null);
   const refValue = refField === "adjusted" ? effectiveAdjusted : row.budget_to_date;
-  // Kevin CC prompt 2026-09-09. The flag name says what it means:
-  // Target % is N/A. It no longer hatches the Adjusted cell. Salary's
-  // Adjusted now renders its budget (a fixed cost's adjusted IS its
-  // budget) and the parent 3100 on +salary renders the composed
-  // salary $ + hourly_pct × actual_revenue figure. Hatching is
-  // reserved for the Target % column: "there is no percentage target
-  // on this line."
-  const hatchTargetFinal = hatchTarget || notApplicable;
+  // Kevin CC prompt 2026-09-11 (R-99 superseded). Hatching on the
+  // Target % column no longer reads the `not_applicable_target_pct`
+  // flag - the P&L publishes target % on 3100 (parent) and 3100.2
+  // (salary) as `budget / budgeted revenue`, and the board mirrors
+  // it. Hatching is now purely opt-in via the `hatchTarget` prop,
+  // which the caller sets for cells that genuinely have no
+  // percentage (revenue-line Adjusted, elsewhere). The flag stays
+  // on server rows for the OTHER behaviors it drives (parent
+  // running-Adj skip, salary sub-row variance basis).
+  const hatchTargetFinal = hatchTarget;
   const hatchAdjustedFinal = hatchAdjusted;
   // On running, the last column is "Left to spend" = adjusted - landed
   // (cost lines; positive = money still available). Revenue rows on
@@ -481,7 +482,18 @@ export default function PnlStatement({ payload, open, onToggle }) {
                   // on hourly (resolver emits them only when
                   // includeSalary+role) so the map below naturally
                   // renders zero subs under 3100 on hourly.
-                  const parentRunningAdj = isRunning ? costAdjustedFor(parent.target_pct) : null;
+                  // Kevin CC prompt 2026-09-11. On +salary the 3100
+                  // parent carries a fixed cost, so its Adjusted must
+                  // NOT flex via target% × revenue - "make Adjusted
+                  // equal target% × revenue reintroduces the salary-
+                  // flexing defect." The flag on the parent gates
+                  // out the client-side runningAdj override; LineRow
+                  // falls back to `row.budget_at_this_revenue` (the
+                  // R-103 composed dollar), unchanged from prior PR.
+                  // On hourly (no salary in the row), no flag, and
+                  // the target% × revenue override still fires.
+                  const parentHasFixed = Array.isArray(parent.flags) && parent.flags.includes("not_applicable_target_pct");
+                  const parentRunningAdj = (isRunning && !parentHasFixed) ? costAdjustedFor(parent.target_pct) : null;
                   const parentRunningLanded = isRunning ? Number(parent.actual ?? 0) : null;
                   return (
                     <>
@@ -498,21 +510,22 @@ export default function PnlStatement({ payload, open, onToggle }) {
                       />
                       {showSubs && subs.map(sub => {
                         const isSalary = Array.isArray(sub.flags) && sub.flags.includes("not_applicable_target_pct");
-                        // Kevin CC prompt 2026-09-09: salary sub-row's
-                        // Adjusted renders the salary budget (fixed
-                        // cost = its budget), so no more hatchAdjusted
-                        // on isSalary. hatchTarget stays - salary's
-                        // percent is an output, not a goal - and the
-                        // server flag drives Target-only hatching via
-                        // LineRow's `hatchTargetFinal = hatchTarget ||
-                        // notApplicable` rule.
+                        // Kevin CC prompt 2026-09-11 (R-99 superseded).
+                        // Salary sub-row's Target % now renders as
+                        // `salary_budget / budgeted_revenue` per the
+                        // P&L. `hatchTarget` is no longer forced on
+                        // the salary row. The `isSalary` flag still
+                        // gates:
+                        //   - subRunningAdj null (no target% × rev
+                        //     override on a fixed cost)
+                        //   - refField="budget" (variance ties to
+                        //     the fixed budget, not the adjusted)
                         const subRunningAdj = (isRunning && !isSalary) ? costAdjustedFor(sub.target_pct) : null;
                         return (
                           <LineRow
                             key={sub.line_code}
                             row={sub}
                             variant="sub"
-                            hatchTarget={isSalary}
                             axis="cost"
                             refField={isSalary ? "budget" : "adjusted"}
                             totalRevenue={totalRevenue}
