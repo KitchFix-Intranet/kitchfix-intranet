@@ -3549,6 +3549,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                   showToast={showToast}
                   hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
                   hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+                  isFeeAccount={isFeeAccount}
                 />
               ) : null
           }
@@ -3590,6 +3591,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 showToast={showToast}
                 hasHomestandSchedule={!!data?.account?.hasHomestandSchedule}
                 hasScheduleOverlay={!!data?.account?.hasScheduleOverlay}
+                isFeeAccount={isFeeAccount}
               />
             ) : null
         }
