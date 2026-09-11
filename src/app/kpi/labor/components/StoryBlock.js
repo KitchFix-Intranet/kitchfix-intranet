@@ -541,17 +541,30 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
             </>
           );
         }
-        // No revenue yet (TP day 1) OR future range. Dollars + copy.
+        // No revenue yet (TP day 1). Dollars + inline percent.
         //
-        // Kevin CC prompt 2026-09-10 (one definition of spent). Panel
-        // note pct reads spent / budget directly - `spent` already
-        // includes hatched dollars via the range-level compute at the
-        // top of SpendCard (see the `hatchedSum` block). Prior #1103
-        // fix added weekHatchedSum here on top of a costed-only spent;
-        // now that spent carries hatched by definition, the second
-        // add would double-count.
-        const spentUsedPct = (budget != null && budget > 0 && spent != null)
-          ? (Number(spent) / Number(budget)) * 100 : null;
+        // Kevin CC prompt 2026-09-11. Percent divides by the same
+        // full-period revenue the Labor Budget percent uses
+        // (`rangeRevenueForTgt` = sum of `board.weeks[].week_revenue`
+        // across every week, confirmed + partial + forecast). Prior
+        // formula divided by budget, which gave `40% of budget used`
+        // sitting next to `18.2% of revenue` in the same column - two
+        // different denominators, uncomparable. Kevin: "the spent
+        // percent and the budget percent on that panel share a
+        // denominator." Reuse `rangeRevenueForTgt` so both rows agree
+        // by construction.
+        //
+        // Scope: only Current period hits this branch. Current year +
+        // Last period fall into the `actPct != null` branch above,
+        // where actPct already divides by `revenueEarned`
+        // (board.total_revenue_for_batr) - which equals
+        // rangeRevenueForTgt on those ranges. Next period renders
+        // NextPeriodPlan (short-circuit at the top of StoryBlock)
+        // and never reaches this fallthrough. `spent` is R-103
+        // (costed + unpriced + unapproved) via the hatched fold at
+        // the top of SpendCard, unchanged.
+        const spentUsedPct = (rangeRevenueForTgt != null && rangeRevenueForTgt > 0 && spent != null)
+          ? (Number(spent) / Number(rangeRevenueForTgt)) * 100 : null;
         // Kevin CC prompt 2026-09-10 CP cleanup items 2 + 8. Panel
         // note ("No percentage yet. Labour as a percent of revenue
         // needs revenue...") removed on Current period - operators
@@ -605,6 +618,18 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
           we do not carry a budgeted-headcount on the wire, and
           salary_summary.workers is filled count only. */}
       {salary && salary.vacancy && (() => {
+        // Kevin CC prompt 2026-09-11. Whole salary vacancy line
+        // (`salary $X of $Y · Z%`) removed on Current period -
+        // "redundant, the figure is already in the table below,
+        // and the panel should not be the one place on either
+        // board that states the salary total outright." Kept on
+        // Current year + Last period (approved surfaces) where
+        // the range-level ratio is still meaningful. Future range
+        // never reaches SpendCard (NextPeriodPlan short-circuits
+        // upstream). This supersedes the earlier CP cleanup item
+        // 3 change that only removed the percentage.
+        const isCPSalary = kind === "single_period_in_progress" && !isFutureRange;
+        if (isCPSalary) return null;
         const rows = salary.vacancy.filter(v => v.budget > 0 || v.actual > 0);
         if (rows.length === 0) return null;
         const budgetSum = rows.reduce((s, v) => s + Number(v.budget || 0), 0);
@@ -614,19 +639,10 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         const cls = actualSum > budgetSum ? "kpi-spend-salary-over"
                   : Math.abs(actualSum - budgetSum) < 0.5 ? "kpi-spend-salary-at"
                   : "kpi-spend-salary-under";
-        // Kevin CC prompt 2026-09-10 CP cleanup item 3. Salary
-        // line percentage removed on Current period. On CY / LP the
-        // range-level ratio is still meaningful (a closed range has
-        // final numbers on both sides of the fraction); on CP the
-        // running-period ratio moves with every accrual step and
-        // the actual vs budget dollars beside it already tell the
-        // story. Percent kept on the other kinds so approved
-        // surfaces are unchanged.
-        const isCPSalary = kind === "single_period_in_progress" && !isFutureRange;
         return (
           <div className={`kpi-spend-salary ${cls}`}>
             salary <b>{fmt$(actualSum)}</b> of <b>{fmt$(budgetSum)}</b>
-            {pct != null && !isCPSalary && <> · {pct}%</>}
+            {pct != null && <> · {pct}%</>}
           </div>
         );
       })()}
