@@ -151,10 +151,16 @@ function VarianceFoot({ card, kind, awaiting = false }) {
   let label;
   let dir;   // "good" | "bad" per axis-aware meaning
   if (kind === "cogs") {
-    label = positive ? "Over target" : "Under target";
+    // Kevin CC prompt 2026-09-11. "Over target" -> "Over budget"
+    // (and "Under" match). "target" is an adjective; "budget" is
+    // the noun the card's own header pill already uses. Grammar
+    // precedented on the same card.
+    label = positive ? "Over budget" : "Under budget";
     dir = positive ? "bad" : "good";
   } else if (kind === "gross_margin") {
-    label = positive ? "Ahead of target" : "Behind target";
+    // Same rename applied to the GM footer for grammatical
+    // consistency with the COGS card next to it.
+    label = positive ? "Ahead of budget" : "Behind budget";
     dir = positive ? "good" : "bad";
   } else {
     label = positive ? "Above projection" : "Below projection";
@@ -586,7 +592,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
         ) : (
           <>
             <div className="kpi-ov-pair" data-kpi-ov="card-actual">
-              <span className="kpi-ov-pair-k">{actualLabel(periodState, throughWkLabel)}</span>
+              <span className="kpi-ov-pair-k">Actual</span>
               <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov={`hero-${kind}`}>
                 {actualText || "—"}
                 {actualPctText && (
@@ -594,9 +600,24 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
                 )}
               </span>
             </div>
+            {/* Kevin CC prompt 2026-09-11. Card gains a Plan row -
+                raw sum of period budgets (no %) - between Actual
+                and Adjusted. Retires the single "Target" row that
+                showed the blended figure. `budget_full_period`
+                already ships on the payload for both COGS and GM
+                cards. Renders only when the payload carries a
+                Plan dollar. */}
+            {card.budget_full_period_display && (
+              <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-plan">
+                <span className="kpi-ov-pair-k">Plan</span>
+                <span className="kpi-ov-pair-v kpi-ov-num">
+                  {card.budget_full_period_display}
+                </span>
+              </div>
+            )}
             <div className="kpi-ov-pair-rule" aria-hidden="true" />
             <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
-              <span className="kpi-ov-pair-k">Target</span>
+              <span className="kpi-ov-pair-k">Adjusted</span>
               <span className="kpi-ov-pair-v kpi-ov-num">
                 {hasTarget ? (
                   <>

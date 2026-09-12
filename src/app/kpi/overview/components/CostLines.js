@@ -706,9 +706,12 @@ export default function CostLines({ payload, previewAccount = null }) {
             </tr>
             <tr>
               <th className="l">Line</th>
-              <th className="plan plan-first">
-                Budget<sup className="kpi-ov-cl-fn-mark">*</sup>
-              </th>
+              {/* Kevin CC prompt 2026-09-11. Column renamed `Budget*`
+                  -> `Adjusted`. The card above now carries `Plan`
+                  (raw) + `Adjusted` (flexed) explicitly, so the
+                  asterisk + footnote-clarifying-the-actual-value are
+                  no longer needed - the column matches its label. */}
+              <th className="plan plan-first">Adjusted</th>
               <th className="plan plan-last" style={{ width: 68 }}>Target %</th>
               <th>{actualsHeader}</th>
               <th className={showPeriodCols ? "prev" : ""} style={{ width: 68 }}>% of rev</th>
@@ -737,15 +740,10 @@ export default function CostLines({ payload, previewAccount = null }) {
             <TotalRow rows={cogsRows} hasTarget={hasTarget} cogsCard={cogsCard} totalLabel={totalLabel} showPeriodCols={showPeriodCols} />
           </tbody>
         </table>
-        {/* Kevin ruling 2026-09-03 (simplified-layout): footnote below
-            the table explains what the * on "Budget" refers to. The
-            longer explanation still lives in the COGS card tooltip. */}
-        <p
-          className="kpi-ov-cl-footnote"
-          data-kpi-ov="cost-lines-footnote"
-        >
-          <sup>*</sup> Adjusted — what the target percent buys at the revenue actually earned.
-        </p>
+        {/* Kevin CC prompt 2026-09-11. Footnote deleted - the column
+            header now reads `Adjusted` outright and the card above
+            explicitly renders `Plan` + `Adjusted` so nothing is
+            ambiguous about what the number represents. */}
       </div>
     </div>
   );

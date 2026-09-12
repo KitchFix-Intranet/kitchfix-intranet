@@ -1471,6 +1471,18 @@ export async function resolveOverview({
   const gmDelta = grossMargin != null && grossMarginBudget != null
     ? r2(grossMargin - grossMarginBudget) : null;
 
+  // Kevin CC prompt 2026-09-11. `cogsAdjustedFromLines` populated
+  // below (after statement_rows are built) as the sum of the four
+  // parent cost lines' Adjusted. The `let` here + the delayed
+  // populate + the mutation of `cards`/`statement_totals` reads a
+  // bit unusual, but it's the smallest change that keeps the
+  // aggregate in lockstep with the per-line values shipped in
+  // statement_rows - one source of truth, no formula duplication.
+  // Cards + statement_totals below reference these bindings and
+  // are mutated post-hoc to pick up the final values.
+  let cogsAdjustedFromLines = null;
+  let gmAdjustedFromLines = null;
+
   const cards = [
     {
       key: "revenue",
@@ -1576,20 +1588,23 @@ export async function resolveOverview({
       // when !has_target (rolling window).
       target_pct_of_revenue: has_target ? pctOf(cogsBudget, revenue_budget_full_period) : null,
       target_pct_display: has_target ? formatPct(pctOf(cogsBudget, revenue_budget_full_period)) : null,
-      // PR-1 item 2 (2026-09-02): envelope + pace on the COGS card.
-      // budget_at_this_revenue = cost the target buys at actual rev.
-      // envelope_delta = budget_to_date - budget_at_this_revenue.
-      budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
-      // Kevin ruling final-presentation (2026-09-03) item 2: display
-      // string beside the target percent on the card face.
-      budget_at_this_revenue_display: formatMoneyWhole(budgetAtThisRevenue(cogsBudget)),
+      // Kevin CC prompt 2026-09-11. Adjusted = sum of the four
+      // parent lines' Adjusted (`cogsAdjustedFromLines`, computed
+      // above with salary held at budget). Prior blended formula
+      // (`budgetAtThisRevenue(cogsBudget)`) flexed the fixed
+      // salary component and disagreed with the cost table's total
+      // by ~$10K on TBJ - FL Current year salary. Envelope delta
+      // (budget_to_date - adjusted) uses the same new anchor so
+      // the pill + card + table all agree by construction.
+      budget_at_this_revenue: cogsAdjustedFromLines,
+      budget_at_this_revenue_display: formatMoneyWhole(cogsAdjustedFromLines),
       // Kevin R-58/R-59 (2026-09-03): management-fee accounts have
       // contractual revenue, so budget_at_this_revenue equals the
       // period budget by construction and the delta is $0 in
       // perpetuity. Emit envelope_delta as null on those accounts so
       // the card + cost-lines can suppress the "$0 more than planned"
       // line rather than render a figure that can never move.
-      envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
+      envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), cogsAdjustedFromLines),
       delta_dollars: r2(cogsDelta),
       delta_display: gapDollarsCost(cogsDelta),
       delta_direction: directionOfDelta(cogsDelta, "cost"),
@@ -1607,10 +1622,13 @@ export async function resolveOverview({
         // / UNDER BUDGET, tied to total cost of goods against its
         // adjusted budget - not a count of lines and not the % gap.
         // Simple, and it agrees with the card above it (which
-        // displays actual vs budget_at_this_revenue). Algebraically
-        // identical to the prior actual-% vs target-% comparison,
-        // stated in the natural "total vs total" idiom.
-        const budAtRev = budgetAtThisRevenue(cogsBudget);
+        // displays actual vs budget_at_this_revenue).
+        //
+        // Kevin CC prompt 2026-09-11. Anchor is `cogsAdjustedFromLines`
+        // now (sum of parent line Adjusteds, salary held at budget)
+        // - same reference the card + statement totals + cost-lines
+        // table all use.
+        const budAtRev = cogsAdjustedFromLines;
         // Kevin walkthrough sweep item 6 (2026-09-07). "No data" fired
         // whenever budAtRev was null (no revenue means no adjusted
         // budget) even when cogsActual carried a real dollar figure -
@@ -1660,16 +1678,15 @@ export async function resolveOverview({
       // PR-1 item 1: null target when !has_target.
       target_pct_of_revenue: has_target ? gmPctBudget : null,
       target_pct_display: has_target ? formatPct(gmPctBudget) : null,
-      // Kevin ruling final-presentation (2026-09-03) item 2: GM card
-      // carries a target dollar beside the target percent. Derived as
-      // revenue - cogs_budget_at_this_revenue so the value agrees by
-      // construction with the cost table's plan column + COGS card's
-      // target dollar. Null when has_target is false.
-      budget_at_this_revenue: (has_target && totalRevenue != null)
-        ? r2(totalRevenue - budgetAtThisRevenue(cogsBudget))
-        : null,
-      budget_at_this_revenue_display: (has_target && totalRevenue != null)
-        ? formatMoneyWhole(r2(totalRevenue - budgetAtThisRevenue(cogsBudget)))
+      // Kevin CC prompt 2026-09-11. GM Adjusted = revenue - COGS
+      // Adjusted (from lines). Agrees by construction with the
+      // COGS card's Adjusted, the cost table's total, and the
+      // statement_totals rows below. Prior formula fed
+      // budgetAtThisRevenue(cogsBudget) which was the blended
+      // figure that Kevin's ruling retires.
+      budget_at_this_revenue: gmAdjustedFromLines,
+      budget_at_this_revenue_display: (gmAdjustedFromLines != null)
+        ? formatMoneyWhole(gmAdjustedFromLines)
         : null,
       delta_dollars: gmDelta,
       delta_display: gmDelta != null ? gapDollarsMargin(gmDelta) : null,
@@ -3471,6 +3488,54 @@ export async function resolveOverview({
     };
   })();
 
+  // Kevin CC prompt 2026-09-11. `cogsAdjustedFromLines` populated
+  // from the four emitted cost-parent Adjusteds. Everything the
+  // cards + statement_totals show for COGS/GM Adjusted references
+  // these two bindings, so mutating them here propagates to both
+  // surfaces. One source of truth (the sum-of-parent-lines rule)
+  // for every consumer.
+  {
+    let sum = 0;
+    let any = false;
+    for (const r of statementRows) {
+      if (r.section !== "cogs") continue;
+      if (r.parent_line_code) continue;
+      const v = r.budget_at_this_revenue;
+      if (v != null) { sum += Number(v); any = true; }
+    }
+    cogsAdjustedFromLines = any ? r2(sum) : null;
+    gmAdjustedFromLines = (cogsAdjustedFromLines != null && totalRevenue != null)
+      ? r2(Number(totalRevenue) - Number(cogsAdjustedFromLines))
+      : null;
+    // Mutate the COGS + GM cards in place.
+    const cogsCard = cards.find(c => c.key === "cogs");
+    const gmCard = cards.find(c => c.key === "gross_margin");
+    if (cogsCard) {
+      cogsCard.budget_at_this_revenue = cogsAdjustedFromLines;
+      cogsCard.budget_at_this_revenue_display = cogsAdjustedFromLines != null ? formatMoneyWhole(cogsAdjustedFromLines) : null;
+      cogsCard.envelope_delta = isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), cogsAdjustedFromLines);
+      // Recompute the pill on the same anchor. Matches the compute
+      // originally inline at card build time (line ~1613 pre-edit).
+      if (!has_target) {
+        cogsCard.pill = { label: "No target", tone: "neutral" };
+      } else if (isRunningSinglePeriod) {
+        cogsCard.pill = { label: "Invoices still arriving", tone: "wait" };
+      } else if (cogsActual == null) {
+        cogsCard.pill = { label: "No data", tone: "neutral" };
+      } else if (cogsAdjustedFromLines == null) {
+        cogsCard.pill = { label: "cost, no revenue yet", tone: "neutral" };
+      } else {
+        cogsCard.pill = (cogsActual <= cogsAdjustedFromLines)
+          ? { label: "under budget", tone: "good" }
+          : { label: "over budget", tone: "bad" };
+      }
+    }
+    if (gmCard) {
+      gmCard.budget_at_this_revenue = gmAdjustedFromLines;
+      gmCard.budget_at_this_revenue_display = gmAdjustedFromLines != null ? formatMoneyWhole(gmAdjustedFromLines) : null;
+    }
+  }
+
   // 21. Payload assembly.
   const payload = {
     ok: true,
@@ -3566,15 +3631,17 @@ export async function resolveOverview({
         period_budget: r2(cogsBudget),
         budget_to_date: r2(cogsBudgetToDateDays),
         actual: r2(cogsActual),
-        // BATR was already shipped for the COGS card + cost lines
-        // envelope note. Explicitly repurposed here as the unified
-        // reference: variance = actual - budget_at_this_revenue,
-        // pcts = actual/revenue vs cogs_budget/rev_budget.
-        budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
+        // Kevin CC prompt 2026-09-11. Totals sum their lines rather
+        // than applying a blended pct to revenue. The three
+        // downstream fields (batr, envelope_delta, variance) all
+        // read `cogsAdjustedFromLines` = sum of parent line
+        // Adjusteds (salary held at budget). The card + cost table
+        // + these totals now agree by construction.
+        budget_at_this_revenue: cogsAdjustedFromLines,
         // R-58/R-59: MF accounts null envelope (contractual revenue).
-        envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
-        variance: (cogsActual != null && budgetAtThisRevenue(cogsBudget) != null)
-          ? r2(cogsActual - budgetAtThisRevenue(cogsBudget)) : null,
+        envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), cogsAdjustedFromLines),
+        variance: (cogsActual != null && cogsAdjustedFromLines != null)
+          ? r2(cogsActual - cogsAdjustedFromLines) : null,
         actual_pct: pctOf(cogsActual, totalRevenue),
         target_pct: (revenue_budget_full_period != null && revenue_budget_full_period > 0)
           ? pctOf(cogsBudget, revenue_budget_full_period) : null,
@@ -3583,21 +3650,14 @@ export async function resolveOverview({
         period_budget: (revenue_budget_full_period != null) ? r2(revenue_budget_full_period - cogsBudget) : null,
         budget_to_date: grossMarginBudget,
         actual: grossMargin,
-        // Kevin ruling 2026-09-03 (BLOCKER): the P&L GM row was
-        // rendering ↑ $29,215 in GREEN next to "2.0 points BEHIND"
-        // in RED - percent vs target, dollar vs budget_to_date, two
-        // different references. Unified reference:
-        //   margin_at_this_revenue = revenue × target_margin_pct
-        //   variance               = actual - margin_at_this_revenue
-        // Fires green/red on the same axis as actual_pct - target_pct.
-        margin_at_this_revenue: budgetAtThisRevenue(
-          (revenue_budget_full_period != null) ? (revenue_budget_full_period - cogsBudget) : null,
-        ),
-        variance: (grossMargin != null
-          && budgetAtThisRevenue((revenue_budget_full_period != null) ? (revenue_budget_full_period - cogsBudget) : null) != null)
-          ? r2(grossMargin - budgetAtThisRevenue(
-              (revenue_budget_full_period != null) ? (revenue_budget_full_period - cogsBudget) : null,
-            ))
+        // Kevin CC prompt 2026-09-11. GM adjusted = revenue -
+        // cogsAdjustedFromLines. Same anchor everything else uses.
+        // Variance ties to it. Preserves the R-91 unified-reference
+        // rule (variance operand matches the pct axis) - only the
+        // formula on the operand itself moves.
+        margin_at_this_revenue: gmAdjustedFromLines,
+        variance: (grossMargin != null && gmAdjustedFromLines != null)
+          ? r2(grossMargin - gmAdjustedFromLines)
           : null,
         actual_pct: pctOf(grossMargin, totalRevenue),
         target_pct: gmPctBudget,
