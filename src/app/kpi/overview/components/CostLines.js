@@ -35,6 +35,24 @@ function fmtMoney(n) {
   const s = "$" + abs.toLocaleString("en-US");
   return v < 0 ? "-" + s : s;
 }
+// Kevin CC prompt 2026-09-14 (Purchasing reskin prereq A). When a
+// cost line's net actual is <= 0, a vendor credit landed with no
+// offsetting invoice - the site did NOT spend negative money.
+// Render as `$X credit` in neutral grey (no verdict tone). Percent
+// of plan is suppressed at the call site because a percent-of-plan
+// on a net-credit line is nonsense. Aggregate math is unchanged
+// (the negative value still contributes to totals and variance).
+// Green is reserved for "under budget" - a performance verdict -
+// not for an accounting artifact like a refund.
+function fmtActual(n) {
+  if (n == null || Number.isNaN(Number(n))) return null;
+  const v = Number(n);
+  if (v < 0) {
+    const abs = Math.abs(Math.round(v));
+    return `$${abs.toLocaleString("en-US")} credit`;
+  }
+  return fmtMoney(v);
+}
 function fmtPct(n) {
   if (n == null || Number.isNaN(Number(n))) return null;
   return `${Number(n).toFixed(1)}%`;
@@ -76,10 +94,17 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
   const href = rowHref({ lineCode: row.line_code, filters, previewAccount, rangeEffectiveEnd });
   const isBilledBack = Array.isArray(row.flags) && row.flags.includes("billed_back");
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
+  // Kevin CC prompt 2026-09-14 (prereq A). A line whose net actual
+  // is negative is a vendor credit landed without an offsetting
+  // invoice - "spent negative money" is a lie. Render as
+  // `$X credit`, suppress percent of plan (nonsense on a net-credit
+  // line), and drop the good/bad verdict tone (green means under-
+  // budget performance, not a refund).
+  const isCredit = row.actual != null && Number(row.actual) < 0;
   const actualPctText = fmtPct(row.actual_pct);
   const targetPctText = fmtPct(row.target_pct);
   const batrText = fmtMoney(row.budget_at_this_revenue);
-  const actualText = fmtMoney(row.actual);
+  const actualText = fmtActual(row.actual);
   // vs-target cell (Kevin ruling 2026-09-02): percent-point gap on
   // top, dollar VARIANCE VS BATR beneath.
   //
@@ -99,7 +124,7 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
   // "$27,506 over what your revenue earned you", not "$X under your
   // original budget" - on a shortfall period the first is the fact
   // that matters.
-  const suppressVerdict = isBilledBack || isInactive || !hasTarget;
+  const suppressVerdict = isBilledBack || isInactive || !hasTarget || isCredit;
   const varianceVsBatr = (row.actual != null && row.budget_at_this_revenue != null)
     ? row.actual - row.budget_at_this_revenue
     : null;
@@ -213,7 +238,7 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
           : <span data-kpi-ov="actual-adjusted">{actualText}</span>}
       </td>
       <td className={`kpi-ov-num ${showPeriodCols ? "prev" : ""} ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`} data-kpi-ov="cost-line-actual-pct">
-        {isBilledBack || isInactive ? <span className="kpi-ov-nb">—</span>
+        {isBilledBack || isInactive || isCredit ? <span className="kpi-ov-nb">—</span>
           : actualPctText != null ? actualPctText : <span className="kpi-ov-nb">—</span>}
       </td>
       {/* Kevin Prompt 1 item 1b (2026-09-04): period columns render
@@ -506,7 +531,7 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
                     {adj != null ? fmtMoney(adj) : "—"}
                   </td>
                   <td className="kpi-ov-num" data-kpi-ov="cost-line-landed">
-                    {fmtMoney(landed) || "—"}
+                    {(fmtActual(r.actual) ?? fmtMoney(landed)) || "—"}
                   </td>
                   <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-left">
                     {left != null ? fmtMoney(left) : "—"}
