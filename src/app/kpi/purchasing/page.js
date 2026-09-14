@@ -239,7 +239,16 @@ export default function KpiPurchasingPage() {
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!account) return;
+    // Fire fetch when EITHER a URL account or a ?preview= is present.
+    // Server route (route.js resolvePreviewAccess) rewrites account =
+    // preview when urlAccount is empty. Prior `if (!account) return`
+    // stranded ?preview=X URLs (no ?account=) in the skeleton state:
+    // useEffect above skips the auto-inject on ?preview=, then this
+    // guard silently swallowed the fetch. Repro'd Purchasing prompt
+    // bug 0.1 (135 skeleton nodes on /kpi/purchasing?preview=TBJ-FL).
+    // Labor / Overview both fire fetch with empty account and let the
+    // server resolve; matching that shape here.
+    if (!account && !urlPreview) return;
     const ctrl = new AbortController();
     // PR 5 - timeout FIRES the abort with a NAMED reason we can
     // detect in the catch block. Prior code called `ctrl.abort()`
