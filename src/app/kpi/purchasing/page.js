@@ -18,7 +18,7 @@
 //   ?start     YYYY-MM-DD (defaults to current period start)
 //   ?end       YYYY-MM-DD (defaults to current period end)
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -41,7 +41,10 @@ import {
 } from "@/app/kpi/labor/lib/periods";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
-import { FolioRail, PSEUDO_KEYS } from "@/app/kpi/labor/components/FolioRail";
+// Kevin 2026-09-14 reskin PR 1: FolioRail import removed - Purchasing
+// no longer renders the rail. PSEUDO_KEYS moved to a local constant
+// so the last-account restore still knows the pseudo landing shape.
+const PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 import { costModelFor, isKnownAccount, goalFor } from "@/lib/accountModels";
 import { classifyTier } from "@/lib/kpi/classifyTier";
 // 2026-08-28 preview mode - adopts labor's shared helpers.
@@ -65,7 +68,11 @@ import {
 } from "./lib/board";
 
 import { PeriodCard } from "./components/PeriodCard";
-import { BucketCard } from "./components/BucketCard";
+// Kevin 2026-09-14 reskin PR 1: BucketCard import dropped - the two
+// duplicate charts (food + packaging mini-charts) are gone. The
+// LedgerCard + CardPurchases + CardCompliance imports remain because
+// the pass-through board (STL-FL, STL-MO, CIN-OH) still renders them
+// - PR 1 restructures the at-risk board only.
 import { LedgerCard } from "./components/LedgerCard";
 import { CardPurchases } from "./components/CardPurchases";
 import { CardCompliance } from "./components/CardCompliance";
@@ -1159,12 +1166,62 @@ export default function KpiPurchasingPage() {
           ? `Bills current · cards through ${cardsThroughLabel}`
           : "Bills current");
 
+    // Kevin 2026-09-14 Purchasing reskin PR 1. Prior at-risk render
+    // was six spend cards + duplicate food/packaging mini-charts +
+    // compliance panel + reimbursable pair row + drill table with
+    // filters. Per the render at docs/renders/purchasing-redesign.html
+    // the board becomes: coding strip at the top, money hero, "where
+    // it went" three-line table, then the shape (period chart) and
+    // the detail (drill table). PR 1 lands the structural changes
+    // and existing figures - PR 2 (spend list / vendor table / own
+    // reimbursables table) and PR 3 (week rail + period burn on
+    // running periods) rebuild the shape and the detail on top.
+    //
+    // Removed by this PR: BucketCards (food+packaging mini-charts,
+    // "two duplicate charts"), three-up LedgerCards (Vehicle +
+    // Equipment + R&M, three of six spend cards), Reimbursable pair
+    // row (reimb LedgerCard + CardPurchases, remaining spend cards
+    // plus the receipts panel), CardCompliance (compliance panel folds
+    // into the coding strip below), FolioRail (removed in a separate
+    // change above).
+    const comp = data?.compliance || null;
+    const codingStripCount = comp?.total_count || 0;
+    const codingStripAmount = Number(comp?.total_amount || 0);
+    const codingStripOldest = comp?.oldest_age_days;
     return (
       <div className="kpi-p-board">
+        {/* Coding strip · replaces the compliance panel. Amber when
+            charges are outstanding, green when clear (per render). */}
+        <div className={`kpi-p-codestrip ${codingStripCount > 0 ? "kpi-p-codestrip-attn" : "kpi-p-codestrip-ok"}`} role="status">
+          {codingStripCount > 0 ? (
+            <>
+              <span className="kpi-p-codestrip-t">
+                {codingStripCount} card charge{codingStripCount === 1 ? "" : "s"} need a P&amp;L line
+              </span>
+              <span className="kpi-p-codestrip-s">
+                {fmt$(codingStripAmount)}
+                {codingStripOldest != null ? ` · oldest ${codingStripOldest} day${codingStripOldest === 1 ? "" : "s"}` : ""}
+              </span>
+              <a className="kpi-p-codestrip-cta" href="https://app.rippling.com/spend" target="_blank" rel="noreferrer noopener">
+                Open Rippling
+              </a>
+            </>
+          ) : (
+            <>
+              <span className="kpi-p-codestrip-t">All charges coded</span>
+              <span className="kpi-p-codestrip-s">every card charge in this range has a P&amp;L line</span>
+            </>
+          )}
+        </div>
+
         <div className={`kpi-p-livenote${reportStale ? " kpi-p-livenote-stale" : ""}`} role="status">
           <span className="kpi-p-livedot" aria-hidden="true" />
           <span><b>{freshnessDetail}</b></span>
         </div>
+
+        {/* Money hero (Spent / Plan / Adjusted / Verdict) - existing
+            engine, existing figures. PR 3 replaces the embedded chart
+            with the week rail + period burn on running ranges. */}
         <PeriodCard
           periodNo={rangePeriodNo}
           rangeLabel={rangeLabel}
@@ -1187,157 +1244,70 @@ export default function KpiPurchasingPage() {
           budgetSpent={board.kpiTargets.budgetSpent}
           projectedClose={projClose}
           cardTitle={cardTitle}
-          // R13 P0-1 - closed-card comparison block payload.  Null on
-          // any range that isn't a closed single period; component
-          // suppresses the block when null.
           periodHistory={data?.period_history || null}
         />
 
-        {/* R15 A - Vehicle bucket card removed; Vehicle joins the
-            matched-ledgers row below.  Only Food + Packaging render as
-            bucket cards now (with charts). */}
-        {board.buckets
-          .filter(b => b.key !== "vehicle")
-          .map(b => (
-          <BucketCard
-            key={b.key}
-            bucketKey={b.key}
-            label={b.label}
-            sub={b.sub}
-            strokeClass={b.strokeClass}
-            identity={b.key === "packaging" ? "pkg" : "food"}
-            budget={b.budget}
-            spent={b.spent}
-            bills={b.bills}
-            cardsCoded={b.cardsCoded}
-            elapsedFrac={board.elapsedFrac}
-            closed={closed}
-            isFutureRange={isFutureRange}
-            tier={board.tier}
-            units={b.units}
-            original={b.targets.original}
-            adjusted={b.targets.adjusted}
-            budgetSpent={b.targets.budgetSpent}
-          />
-        ))}
-
-        {/* R15 B/G - three matched ledgers: Vehicle, Equipment, R&M.
-            One shape, equal height (CSS: .kpi-p-flatrow-3up stretches
-            children).  Empty cards suppress themselves; if all three are
-            empty, one meta line replaces the row. */}
+        {/* Where it went · three-line table (Food / Packaging /
+            Vehicle). Figures come from board.buckets - the same
+            source the removed BucketCard + LedgerCard heros read.
+            Total row is red when over adjusted, green when under. */}
         {(() => {
-          const three = ["veh", "equip", "rm"]
-            .map(k => board.ledgers.find(l => l.key === k))
-            .filter(l => l && (Number(l.spent || 0) > 0.005 || (l.ledgerRows || []).length > 0));
-          if (three.length === 0) {
-            return (
-              <div className="kpi-p-mf-empty-row" role="status">
-                No vehicle, equipment or repair spend in this range.
-              </div>
-            );
-          }
+          const rows = board.buckets.map(b => ({
+            key: b.key,
+            label: b.label,
+            sub: b.sub,
+            budget: Number(b.budget || 0),
+            adjusted: Number(b.targets?.adjusted || 0),
+            spent: Number(b.spent || 0),
+          }));
+          const totalBudget = rows.reduce((a, r) => a + r.budget, 0);
+          const totalAdjusted = Number(board.kpiTargets?.adjusted || 0);
+          const totalSpent = Number(board.kpiSpent || 0);
+          const totalVar = totalSpent - totalAdjusted;
+          const totalOver = totalVar > 0;
           return (
-            <div className="kpi-p-flatrow kpi-p-flatrow-3up kpi-p-flatrow-ledgers">
-              {three.map(l => (
-                <LedgerCard
-                  key={l.key}
-                  bucketKey={l.key}
-                  label={l.label}
-                  sub={l.sub}
-                  strokeClass={l.strokeClass}
-                  budget={l.budget}
-                  spent={l.spent}
-                  elapsedFrac={board.elapsedFrac}
-                  closed={closed}
-                  isFutureRange={isFutureRange}
-                  ledgerRows={l.ledgerRows}
-                  totalCount={l.totalCount}
-                  totalAmount={l.totalAmount}
-                  cap={l.cap}
-                  isAggregate={isAggregate}
-                />
-              ))}
+            <div className="kpi-p-card kpi-p-wig" data-card="where-it-went">
+              <div className="kpi-p-wig-head">
+                <span className="kpi-p-cardtitle">Where it {closed ? "went" : "goes"}</span>
+              </div>
+              <div className="kpi-p-wig-grid" role="table">
+                <div className="kpi-p-wig-h" role="columnheader">Line</div>
+                <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Plan</div>
+                <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Adjusted</div>
+                <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Spent</div>
+                <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Variance</div>
+                {rows.map(r => {
+                  const v = r.spent - r.adjusted;
+                  const over = v > 0;
+                  return (
+                    <Fragment key={r.key}>
+                      <div className="kpi-p-wig-nm" role="cell">
+                        {r.label}<span className="kpi-p-wig-gl">{r.sub}</span>
+                      </div>
+                      <div className="kpi-p-wig-c kpi-p-wig-r" role="cell">{fmt$(r.budget)}</div>
+                      <div className="kpi-p-wig-c kpi-p-wig-r" role="cell">{fmt$(r.adjusted)}</div>
+                      <div className="kpi-p-wig-c kpi-p-wig-r" role="cell">{fmt$(r.spent)}</div>
+                      <div className={`kpi-p-wig-c kpi-p-wig-r ${r.spent === 0 ? "" : over ? "kpi-p-wig-neg" : "kpi-p-wig-pos"}`} role="cell">
+                        {r.spent === 0 ? "" : `${over ? "▲ " : "▼ "}${fmt$(Math.abs(v))}`}
+                      </div>
+                    </Fragment>
+                  );
+                })}
+                <div className="kpi-p-wig-nm kpi-p-wig-tot" role="cell">Total</div>
+                <div className="kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot" role="cell">{fmt$(totalBudget)}</div>
+                <div className="kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot" role="cell">{fmt$(totalAdjusted)}</div>
+                <div className="kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot" role="cell">{fmt$(totalSpent)}</div>
+                <div className={`kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot ${totalOver ? "kpi-p-wig-neg" : "kpi-p-wig-pos"}`} role="cell">
+                  {`${totalOver ? "▲ " : "▼ "}${fmt$(Math.abs(totalVar))}`}
+                </div>
+              </div>
             </div>
           );
         })()}
 
-        {/* PR-2 R11 item 3 - Reimbursable + Card purchases side-by-side
-            on a live period, full-width fallback on a closed period.
-            Owner ruling 2026-08-25 supersedes spec §6.6's "full-width"
-            phrasing for the live case:
-              - LIVE  : pair inside .kpi-p-pairrow (1fr 1fr).
-              - CLOSED: CardPurchases returns null (no pending),
-                        Reimbursable takes the full row.
-            Prior state left Reimbursable stretched full-width even
-            when Card purchases sat below it, which is the "stretch"
-            defect this fix retires. Reimbursable may not render at
-            accounts with no reimb data - then Card purchases takes
-            the row alone on live, or nothing renders on closed. */}
-        {(() => {
-          const reimbLedger = board.ledgers.find(l => l.key === "reimb");
-          const cardPurchasesActive = !closed;   // CardPurchases returns null when closed
-          {/* R15 C - Reimbursable on the at-risk board is a receivable
-              (billed back), not a cost.  noBudget hides the budget line,
-              % used, Remaining/Over-by, and swaps the subline to
-              "recovered in full · billed back". */}
-          const reimbNode = reimbLedger && (Number(reimbLedger.spent || 0) > 0.005 || (reimbLedger.ledgerRows || []).length > 0) ? (
-            <LedgerCard
-              key={reimbLedger.key}
-              bucketKey={reimbLedger.key}
-              label={reimbLedger.label}
-              sub={reimbLedger.sub}
-              strokeClass={reimbLedger.strokeClass}
-              budget={reimbLedger.budget}
-              spent={reimbLedger.spent}
-              elapsedFrac={board.elapsedFrac}
-              closed={closed}
-              isFutureRange={isFutureRange}
-              ledgerRows={reimbLedger.ledgerRows}
-              totalCount={reimbLedger.totalCount}
-              totalAmount={reimbLedger.totalAmount}
-              cap={reimbLedger.cap}
-              isAggregate={isAggregate}
-              noBudget={true}
-            />
-          ) : null;
-          const cardPurchNode = cardPurchasesActive ? (
-            <CardPurchases
-              pendingAmount={board.pending}
-              pendingLineCount={board.pendingLineCount}
-              closed={closed}
-              /* PR-2 R6 Part B - per-charge rows from the route
-                 (uncoded rippling_spend, capped at 50). */
-              rows={data?.card_charges?.rows}
-              totalCount={data?.card_charges?.total_count}
-              totalAmount={data?.card_charges?.total_amount}
-              cap={data?.card_charges?.cap}
-              isAggregate={isAggregate}
-            />
-          ) : null;
-          if (reimbNode && cardPurchNode) {
-            return <div className="kpi-p-pairrow">{reimbNode}{cardPurchNode}</div>;
-          }
-          return <>{reimbNode}{cardPurchNode}</>;
-        })()}
-
-        {/* PR 6 - compliance card. Below the ledgers, above the drill
-            table. Population is report-side uncoded (sentinel category)
-            restricted to attributable work locations, so it counts what
-            the period card counts on the same exclusion set. Card hides
-            when nothing is outstanding (E-clause). Owner ruling ships
-            Option B: site totals with people on expand. */}
-        <CardCompliance
-          data={data?.compliance}
-          isAggregate={isAggregate}
-          scopeLabel={`${isAggregate ? (account === "ALL" ? "All accounts" : account) : account} · ${resolvedPreset === "fytd" ? "Current year" : (rangeLabel || "custom")}`}
-        />
-
-        {/* PR 4 - drill-down table. Sits below Card purchases on the
-            at-risk board. Bill rows load on expand via scoped GET;
-            the mount payload is unchanged. Footer totals asserted to
-            equal bucket card heroes (§9B one-source rule, Check 1).
-            R15 F - wrapped in a flush wrapper (no card frame), with the
-            vendor rollup passed for the By vendor row mode. */}
+        {/* The detail · drill table. Filter chips removed (PR 1); PR 2
+            replaces this with a vendor table on CY and a spend list on
+            LP + CP, plus a reimbursables table below. */}
         <div className="kpi-p-tablewrap kpi-p-tablewrap-flush">
           <PurchasingTable
             account={account}
@@ -1407,33 +1377,12 @@ export default function KpiPurchasingPage() {
           exportHref={data && account
             ? `/api/kpi/purchasing/export?account=${encodeURIComponent(account)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${resolvedPreset ? `&view_name=${encodeURIComponent(resolvedPreset)}&view_date_mode=preset` : ""}`
             : null}
-          folioRail={(() => {
-            // 2026-08-28 rail-hide (labor #873 shape).  Rules:
-            //   landing_account pseudo (ALL/EAST/WEST) -> multi-account
-            //     access -> rail visible
-            //   landing_account non-pseudo -> single-account user ->
-            //     rail hidden
-            //   preview_account set -> corporate narrowed to one ->
-            //     rail hidden (previewing what a single-account user sees)
-            // Passing null tells Shell to omit the aside; kpi.css collapses
-            // the .kpi-cols grid via [data-no-folio].
-            const PSEUDO = ["ALL", "EAST", "WEST"];
-            const isPseudoLanding = PSEUDO.includes(data?.landing_account);
-            const showRail = isPseudoLanding && !data?.preview_account;
-            if (!showRail) return null;
-            return (
-              <FolioRail
-                activeAccount={account}
-                onPickAccount={onPickAccount}
-                /* PR-2 R2 Fix 7: pass the live directory the route now ships.
-                   Prior undefined forced STATIC_DIRECTORY (team_name null on
-                   every row), leaving 8/11 rail rows blank. */
-                accountsDirectory={data?.accounts_directory}
-                regionalDirectorsDisplay={undefined}
-                folioFoot={null}
-              />
-            );
-          })()}
+          /* Kevin 2026-09-14 reskin PR 1: FolioRail removed from
+             Purchasing entirely - account selection moves to the range
+             chip in Shell. FolioRail component itself is untouched
+             (Guard 1); Purchasing simply stops rendering it. Labor +
+             Overview keep their rails via their own page.js. */
+          folioRail={null}
           main={boardContent}
         />
       </div>
