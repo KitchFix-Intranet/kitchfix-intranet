@@ -49,6 +49,19 @@ function fmtMoney(n) {
   const s = "$" + abs.toLocaleString("en-US");
   return v < 0 ? "-" + s : s;
 }
+// Kevin CC prompt 2026-09-14 (Purchasing reskin prereq A). Cost
+// line's net actual < 0 = vendor credit landed without an offsetting
+// invoice. Render as `$X credit` in neutral grey, suppress percent
+// of plan (nonsense on a net-credit line). Aggregate math unchanged.
+function fmtActual(n) {
+  if (n == null || Number.isNaN(Number(n))) return null;
+  const v = Number(n);
+  if (v < 0) {
+    const abs = Math.abs(Math.round(v));
+    return `$${abs.toLocaleString("en-US")} credit`;
+  }
+  return fmtMoney(v);
+}
 function fmtPct(n) {
   if (n == null || Number.isNaN(Number(n))) return null;
   return `${Number(n).toFixed(1)}%`;
@@ -132,7 +145,15 @@ function LineRow({
   const effectiveAdjusted = runningAdjusted != null ? runningAdjusted : row.budget_at_this_revenue;
   const effectiveActual   = runningLanded   != null ? runningLanded   : row.actual;
   const adjustedText = fmtMoney(effectiveAdjusted);
-  const actualText = fmtMoney(effectiveActual);
+  // Kevin CC prompt 2026-09-14 (prereq A). Cost rows only: net
+  // negative actual reads as a credit rather than "negative spend."
+  // Revenue rows never go negative (a negative revenue line would
+  // be a data defect worth surfacing), so fall back to fmtMoney
+  // for anything not in the cogs section.
+  const actualText = axis === "cost" && Number(effectiveActual) < 0
+    ? fmtActual(effectiveActual)
+    : fmtMoney(effectiveActual);
+  const isCredit = axis === "cost" && effectiveActual != null && Number(effectiveActual) < 0;
   const actualPct = row.actual_pct != null
     ? row.actual_pct
     : (row.reported && totalRevenue ? (Number(row.actual) / totalRevenue) * 100 : null);
@@ -179,7 +200,9 @@ function LineRow({
               : (actualText != null ? actualText : "—"))}
       </td>
       <td className="kpi-ov-num nb">
-        {actualPct != null && (isRunning || row.reported !== false) ? fmtPct(actualPct) : "—"}
+        {isCredit
+          ? "—"
+          : (actualPct != null && (isRunning || row.reported !== false) ? fmtPct(actualPct) : "—")}
       </td>
       {isRunning ? (
         <td className="kpi-ov-pnl-var nb">
