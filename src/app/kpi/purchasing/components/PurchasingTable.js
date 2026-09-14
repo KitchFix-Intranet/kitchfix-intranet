@@ -494,16 +494,12 @@ export function PurchasingTable({
             </span>
           </div>
         )}
-        {rowMode === "pnl" && (
-          <div className="kpi-p-tbl-tbg" role="group" aria-label="Show filter">
-            <span className="kpi-p-tbl-tblab">Show</span>
-            <span className="kpi-p-tbl-seg">
-              <button type="button" className={showFilter === "all" ? "on" : ""} onClick={() => setShowFilter("all")} aria-pressed={showFilter === "all"}>All</button>
-              <button type="button" className={showFilter === "bills" ? "on" : ""} onClick={() => setShowFilter("bills")} aria-pressed={showFilter === "bills"}>Bills only</button>
-              <button type="button" className={showFilter === "cards" ? "on" : ""} onClick={() => setShowFilter("cards")} aria-pressed={showFilter === "cards"}>Cards only</button>
-            </span>
-          </div>
-        )}
+        {/* Kevin 2026-09-14 reskin PR 1: Show filter (All / Bills only
+            / Cards only) removed per prompt § 1 (table filters go).
+            showFilter state stays as "all" for the row-building code
+            that still reads it; PR 2 will retire the state entirely
+            when the table is replaced by the vendor + spend list
+            surfaces. */}
       </div>
 
       {sourceSplitPending && (

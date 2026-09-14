@@ -2044,3 +2044,112 @@
 .kpi-app .kpi-p-cc-footnote-alert b {
   color: var(--red-700);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Kevin 2026-09-14 Purchasing reskin PR 1 · new sections.
+   Coding strip replaces the compliance panel. Where-it-went
+   replaces the six spend cards with a single three-line table.
+   PR 2 (spend list / vendor table / reimbursables table) and
+   PR 3 (week rail + period burn) add more section styles.
+   ───────────────────────────────────────────────────────────── */
+
+/* Coding strip · thin bar at the top of the board. Amber when
+   charges need a P&L line, green when clear. */
+.kpi-app .kpi-p-codestrip {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-3);
+  padding: 10px 14px;
+  margin-bottom: var(--kpi-sp-3);
+  border-radius: var(--kpi-radius);
+  border: 1px solid transparent;
+  border-left-width: 4px;
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-p-codestrip-attn {
+  background: #FFF7ED;
+  border-color: #FBD9AE;
+  border-left-color: #E08A2E;
+}
+.kpi-app .kpi-p-codestrip-ok {
+  background: #E9FDEC;
+  border-color: #BBF7D0;
+  border-left-color: #16A34A;
+}
+.kpi-app .kpi-p-codestrip-t {
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.kpi-app .kpi-p-codestrip-attn .kpi-p-codestrip-t { color: #92580A; }
+.kpi-app .kpi-p-codestrip-ok   .kpi-p-codestrip-t { color: #16A34A; }
+.kpi-app .kpi-p-codestrip-s {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--n-700);
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-p-codestrip-cta {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--navy-700);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Where it went · three-line table (Food · Packaging · Vehicle).
+   Same look as the drill table header row + total row for
+   consistency with existing purchasing surfaces. */
+.kpi-app .kpi-p-wig {
+  padding: var(--kpi-sp-4) var(--kpi-sp-5);
+}
+.kpi-app .kpi-p-wig-head {
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-wig-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  column-gap: 20px;
+  row-gap: 0;
+  font-size: 12px;
+}
+.kpi-app .kpi-p-wig-h {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .9px;
+  text-transform: uppercase;
+  color: var(--n-600);
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--n-300);
+}
+.kpi-app .kpi-p-wig-r { text-align: right; }
+.kpi-app .kpi-p-wig-nm {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--n-200);
+  font-weight: 700;
+  color: var(--n-900, var(--n-800));
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.kpi-app .kpi-p-wig-gl {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-wig-c {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--n-200);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--n-800);
+}
+.kpi-app .kpi-p-wig-pos { color: #16A34A; }
+.kpi-app .kpi-p-wig-neg { color: var(--red-700); }
+.kpi-app .kpi-p-wig-tot {
+  border-bottom: none;
+  border-top: 1.5px solid var(--navy-700);
+  color: var(--navy-700);
+  font-size: 13px;
+  padding-top: 11px;
+}

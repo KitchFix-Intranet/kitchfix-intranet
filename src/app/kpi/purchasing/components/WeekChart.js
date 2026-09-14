@@ -489,24 +489,11 @@ export function WeekChart({
         return (
           <div key={i} className="kpi-p-wc">
             <div className="kpi-p-plot">
-              {/* Target line PER BAR - Tier A/B originals + Tier A
-                  adjusted for running/future weeks. Tier C: per-period
-                  budget line. Solid horizontal at the top of the bar's
-                  target height. */}
-              {orLine != null && (
-                <span
-                  className="kpi-p-ln orig"
-                  style={{ bottom: `${orLine}%` }}
-                  aria-hidden="true"
-                />
-              )}
-              {adjLine != null && (
-                <span
-                  className="kpi-p-ln adj"
-                  style={{ bottom: `${adjLine}%` }}
-                  aria-hidden="true"
-                />
-              )}
+              {/* Kevin 2026-09-14 reskin PR 1: per-bar target lines
+                  removed (the 24 dashed target lines called out in
+                  the render). orLine + adjLine still computed above
+                  in case a future revision wants the values; the
+                  visual is gone. */}
               {showBar ? (
                 <div
                   className={`kpi-p-bar i-${identity} ${stateClass}${running ? " st-running" : ""}`}
