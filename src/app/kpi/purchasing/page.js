@@ -1250,34 +1250,39 @@ export default function KpiPurchasingPage() {
         {/* Where it went · three-line table (Food / Packaging /
             Vehicle). Figures come from board.buckets - the same
             source the removed BucketCard + LedgerCard heros read.
-            Total row is red when over adjusted, green when under. */}
+            Kevin 2026-09-14 (PR 1 fix): Adjusted column dropped.
+            Purchasing payload has no adjusted field - that's the
+            prompt § 2 (Section 2) work, landing in PR 3 alongside
+            the week-basis adjusted formula. PR 1 compares spent
+            against plan; PR 3 restores the Adjusted column with
+            the correct per-week revenue basis. Money card above
+            keeps its own adjusted figure via PeriodCard's existing
+            projection math. */}
         {(() => {
           const rows = board.buckets.map(b => ({
             key: b.key,
             label: b.label,
             sub: b.sub,
             budget: Number(b.budget || 0),
-            adjusted: Number(b.targets?.adjusted || 0),
             spent: Number(b.spent || 0),
           }));
           const totalBudget = rows.reduce((a, r) => a + r.budget, 0);
-          const totalAdjusted = Number(board.kpiTargets?.adjusted || 0);
           const totalSpent = Number(board.kpiSpent || 0);
-          const totalVar = totalSpent - totalAdjusted;
+          const totalVar = totalSpent - totalBudget;
           const totalOver = totalVar > 0;
           return (
             <div className="kpi-p-card kpi-p-wig" data-card="where-it-went">
               <div className="kpi-p-wig-head">
                 <span className="kpi-p-cardtitle">Where it {closed ? "went" : "goes"}</span>
+                <span className="kpi-p-wig-note">variance vs plan · PR 3 adds adjusted at revenue earned</span>
               </div>
               <div className="kpi-p-wig-grid" role="table">
                 <div className="kpi-p-wig-h" role="columnheader">Line</div>
                 <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Plan</div>
-                <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Adjusted</div>
                 <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Spent</div>
                 <div className="kpi-p-wig-h kpi-p-wig-r" role="columnheader">Variance</div>
                 {rows.map(r => {
-                  const v = r.spent - r.adjusted;
+                  const v = r.spent - r.budget;
                   const over = v > 0;
                   return (
                     <Fragment key={r.key}>
@@ -1285,7 +1290,6 @@ export default function KpiPurchasingPage() {
                         {r.label}<span className="kpi-p-wig-gl">{r.sub}</span>
                       </div>
                       <div className="kpi-p-wig-c kpi-p-wig-r" role="cell">{fmt$(r.budget)}</div>
-                      <div className="kpi-p-wig-c kpi-p-wig-r" role="cell">{fmt$(r.adjusted)}</div>
                       <div className="kpi-p-wig-c kpi-p-wig-r" role="cell">{fmt$(r.spent)}</div>
                       <div className={`kpi-p-wig-c kpi-p-wig-r ${r.spent === 0 ? "" : over ? "kpi-p-wig-neg" : "kpi-p-wig-pos"}`} role="cell">
                         {r.spent === 0 ? "" : `${over ? "▲ " : "▼ "}${fmt$(Math.abs(v))}`}
@@ -1295,7 +1299,6 @@ export default function KpiPurchasingPage() {
                 })}
                 <div className="kpi-p-wig-nm kpi-p-wig-tot" role="cell">Total</div>
                 <div className="kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot" role="cell">{fmt$(totalBudget)}</div>
-                <div className="kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot" role="cell">{fmt$(totalAdjusted)}</div>
                 <div className="kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot" role="cell">{fmt$(totalSpent)}</div>
                 <div className={`kpi-p-wig-c kpi-p-wig-r kpi-p-wig-tot ${totalOver ? "kpi-p-wig-neg" : "kpi-p-wig-pos"}`} role="cell">
                   {`${totalOver ? "▲ " : "▼ "}${fmt$(Math.abs(totalVar))}`}

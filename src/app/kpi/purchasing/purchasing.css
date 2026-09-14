@@ -2105,10 +2105,20 @@
 }
 .kpi-app .kpi-p-wig-head {
   margin-bottom: var(--kpi-sp-3);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--kpi-sp-2);
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-p-wig-note {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-600);
 }
 .kpi-app .kpi-p-wig-grid {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
+  grid-template-columns: 1fr auto auto auto;
   column-gap: 20px;
   row-gap: 0;
   font-size: 12px;
