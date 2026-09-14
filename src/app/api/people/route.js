@@ -56,7 +56,12 @@ const SHEETS = {
   NOTIFICATIONS: "notifications",
   SUBMISSIONS: "submissions",
   DRAFTS: "drafts",
-  NOTIFICATION_LOG: "notification_log",
+  // notification_log deleted 2026-09-11. The bell-icon inbox in
+  // TopNav that read this tab is retired; the email itself is the
+  // notification, and audit BCC + Slack + Vercel logs cover the
+  // admin case. Measurement probe showed the submitter's confirmation
+  // email started at t=3.7s under the sequential shape, entirely due
+  // to Sheets append latency; removing the writes drops it to t=0.
   INCIDENTS: INCIDENTS_TAB,
   LIBRARY_MANIFEST: "library_manifest",
 };
@@ -305,23 +310,6 @@ const EmailTemplates = {
 };
 
 // ─── Notification Dispatcher ───
-// Log a notification to the notification_log sheet
-async function logNotification(recipient, channel, subject, eventType, status, relatedInfo) {
-  try {
-    await appendRowSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG, [
-      new Date().toISOString(),
-      Array.isArray(recipient) ? recipient.join(", ") : recipient,
-      channel,
-      subject,
-      eventType,
-      status,
-      relatedInfo || "",
-    ]);
-  } catch (e) {
-    console.error("[Notifications] Failed to log:", e.message);
-  }
-}
-
 // Mirrors OG split pipeline: admin recipients + submitter confirmation
 async function notify(actionKey, data) {
   try {
@@ -341,7 +329,16 @@ async function notify(actionKey, data) {
       template = EmailTemplates.paf(actionKey, data);
     }
 
-    // 1. ADMIN PIPELINE — purple "Reject or Approve" button
+    // Two sends run in parallel (2026-09-11 rebuild). The prior shape
+    // was sequential admin -> log admin -> submitter -> log submitter,
+    // which held the submitter's confirmation until t=3.7s (measurement
+    // probe against real Gmail + Sheets). Sheets logging was removed
+    // entirely along with the notification_log tab it wrote to; the
+    // email itself is the notification, and audit BCC + Slack + Vercel
+    // logs cover the admin case. Promise.all is order-independent by
+    // design - nothing downstream ever depended on admin logging before
+    // submitter logging (both were UI display rows only).
+    const sends = [];
     if (adminRecipients.length > 0) {
       const adminHtml = EmailTemplates.wrapper(
         template.body,
@@ -349,17 +346,8 @@ async function notify(actionKey, data) {
         "Reject or Approve",
         "#7c3aed"
       );
-      const status = await sendEmail(
-        adminRecipients,
-        template.subject,
-        adminHtml,
-        submitter
-      );
-      await logNotification(adminRecipients, "email", template.subject, actionKey, status, employeeName);
+      sends.push(sendEmail(adminRecipients, template.subject, adminHtml, submitter));
     }
-
-    // 2. SUBMITTER PIPELINE — blue "View Submissions" button
-    // Only if submitter exists and isn't already an admin recipient
     if (submitter && !adminRecipients.includes(submitter)) {
       const userHtml = EmailTemplates.wrapper(
         template.body,
@@ -367,15 +355,11 @@ async function notify(actionKey, data) {
         "View Submissions",
         "#2563eb"
       );
-      const status = await sendEmail(
-        submitter,
-        template.subject,
-        userHtml
-      );
-      await logNotification(submitter, "email", template.subject, actionKey, status, employeeName);
+      sends.push(sendEmail(submitter, template.subject, userHtml));
     }
+    await Promise.all(sends);
 
-    console.log(`[Notifications] Processed: ${actionKey}`);
+    console.log(`[Notifications] Processed: ${actionKey} (${sends.length} sends)`);
   } catch (e) {
     console.error("[Notifications] Error:", e.message);
     // Don't throw — notifications should never block the main action
@@ -607,36 +591,9 @@ if (action === "bootstrap") {
       return NextResponse.json({ success: true, draft: null });
     }
 
-    // ─── Notification Center: Get user's notifications ───
-    if (action === "my-notifications") {
-      const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG);
-      const notifications = [];
-      const email = userEmail.toLowerCase();
-
-rows.forEach((row, i) => {
-        const recipients = String(row[1] || "").toLowerCase().trim();
-        if (recipients !== "all" && !recipients.includes(email)) return;
-
-        notifications.push({
-          id: i + 2, // sheet row index (1-indexed + header)
-          timestamp: row[0] || "",
-          subject: String(row[3] || ""),
-          eventType: String(row[4] || ""),
-          related: String(row[6] || ""),
-          read: String(row[7] || "").toUpperCase() === "TRUE",
-        });
-      });
-
-      // Most recent first, cap at 30
-      notifications.reverse();
-      const unreadCount = notifications.filter((n) => !n.read).length;
-
-      return NextResponse.json({
-        success: true,
-        notifications: notifications.slice(0, 30),
-        unreadCount,
-      });
-    }
+    // (`my-notifications` action deleted 2026-09-11 with the
+    // notification_log tab. TopNav's bell polled this every 60s from
+    // every browser and duplicated the recipient's own inbox.)
 
     if (action === "admin-queue") {
       const submissions = await getSubmissions({ module: "people" });
@@ -1103,28 +1060,8 @@ if (action === "delete-draft") {
       return NextResponse.json({ success: true });
     }
 
-    // ─── Notification Center: Mark one as read ───
-if (action === "mark-notification-read") {
-       const { notificationId } = body;
-       await updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG, notificationId, 8, "TRUE");
-      return NextResponse.json({ success: true });
-    }
-
-    // ─── Notification Center: Mark all as read ───
-if (action === "mark-all-read") {
-       const { email } = body;
-       const { rows } = await readSheetSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG);
-      const updates = [];
-rows.forEach((row, i) => {
-        const recipients = String(row[1] || "").toLowerCase().trim();
-        const isMatch = recipients === "all" || recipients.includes(email.toLowerCase());
-        if (isMatch && String(row[7] || "").toUpperCase() !== "TRUE") {
-                    updates.push(updateCellByRowColSA(SHEET_IDS.COLLECTION, SHEETS.NOTIFICATION_LOG, i + 2, 8, "TRUE"));
-        }
-      });
-      await Promise.all(updates);
-      return NextResponse.json({ success: true });
-    }
+    // (`mark-notification-read` + `mark-all-read` deleted 2026-09-11
+    // with the notification_log tab. No client calls either action now.)
 
 // ─── Withdraw / Cancel: submitter removes their own item ───
     if (action === "withdraw-submission" || action === "cancel-submission") {
@@ -1393,15 +1330,10 @@ rows.forEach((row, i) => {
         );
       }
 
-      // Audit log
-      await logNotification(
-        f.submitterEmail || "unknown",
-        "system",
-        `${incident.severity} incident ${incidentId} submitted`,
-        "incident_submit",
-        "sent",
-        `${incident.severity} | ${incident.site_code} | ${typeLabel}`
-      );
+      // (Incident-submit audit row previously appended to
+      // notification_log; that tab was retired 2026-09-11. The
+      // Slack/email chain on incident submit + Vercel logs already
+      // carry the audit trail this row duplicated.)
 
       // P4C: generate PDF report and upload to Drive folder.
       // Also returned as base64 in the response so the client can offer a
