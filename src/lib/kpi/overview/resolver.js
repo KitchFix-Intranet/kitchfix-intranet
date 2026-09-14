@@ -2449,6 +2449,32 @@ export async function resolveOverview({
     }
     return any ? r2(sum) : null;
   })();
+  // Kevin CC prompt 2026-09-14 (Purchasing reskin prereq B). On
+  // running ranges (CP + NP) the non-labor cost lines (3200 / 3400
+  // / 3500) flex to the same 4-week SC + fee revenue basis labor
+  // uses (R-101). Prior formula used `totalRevenue` (confirmed-only
+  // on running ranges), which understated Adjusted whenever the
+  // period had a mix of confirmed and forecast weeks. On CY / LP
+  // the gate is false and the compute falls back to the existing
+  // `budgetAtThisRevenue(line_budget)` - byte-identical to prior
+  // behaviour.
+  //
+  // Difference from labor's 3100: 3200 / 3400 / 3500 have NO fixed
+  // component. They flex wholly with revenue. 3100 holds salary at
+  // budget. Same revenue basis, different treatment, for a stated
+  // reason - the salary budget is fixed at hire, not a percentage
+  // of revenue; food / packaging / vehicle scale with volume.
+  const budgetAtThisRevenueForCogsRow = (lineBudget) => {
+    if (labor3100RevenueForBatrApplies && labor3100_revenue_for_batr != null) {
+      return sharedBatr({
+        actualRevenue: labor3100_revenue_for_batr,
+        lineBudget,
+        revenueBudgetFullPeriod: revenue_budget_full_period,
+        hasTarget: has_target,
+      });
+    }
+    return budgetAtThisRevenue(lineBudget);
+  };
   // R-98 (Kevin 2026-09-09): on Current period + Next period with the
   // hourly toggle (include_salary=false), the 3100 parent row shows
   // hourly-only figures - not the salary-inclusive combined figure.
@@ -2832,7 +2858,13 @@ export async function resolveOverview({
     // row never emits {btd:null, batr:0, envelope:null}. The cost-
     // lines row-consistency probe asserts this trio is all-null or
     // all-present per scored row.
-    const _batr = (suppress || btd == null) ? null : budgetAtThisRevenue(budget);
+    //
+    // Kevin CC prompt 2026-09-14 (prereq B). Running ranges use the
+    // 4-week SC + fee revenue basis via
+    // budgetAtThisRevenueForCogsRow; CY / LP use totalRevenue as
+    // before (helper falls back). See helper comment for the
+    // "flex wholly with revenue" reasoning.
+    const _batr = (suppress || btd == null) ? null : budgetAtThisRevenueForCogsRow(budget);
     return {
       line_code,
       section: "cogs",
@@ -3055,7 +3087,10 @@ export async function resolveOverview({
       const isInactive = actual == null && (period_budget == null || period_budget === 0);
       const _actPct = (parentSuppressed_ || isInactive) ? null : pctOf(actual, totalRevenue);
       const _tgtPct = (parentSuppressed_ || isInactive || !has_target) ? null : pctOf(period_budget, revenue_budget_full_period);
-      const _batr = (parentSuppressed_ || isInactive) ? null : budgetAtThisRevenue(period_budget);
+      // Kevin CC prompt 2026-09-14 (prereq B). Sub-rows share the
+      // parent's revenue basis - running ranges flex to
+      // labor3100_revenue_for_batr; CY / LP unchanged.
+      const _batr = (parentSuppressed_ || isInactive) ? null : budgetAtThisRevenueForCogsRow(period_budget);
       const label = FINANCE_LABELS[gl] || gl;
       const unmapped = !FINANCE_LABELS[gl];
       statementRows.push({
