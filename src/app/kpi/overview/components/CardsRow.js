@@ -377,10 +377,21 @@ function periodTotalLabel(rangeMeta, kind) {
 //   FYTD closed -> budget_to_date  (FYTD budget through last-closed)
 function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDollars, periodBudget, weeksDone, weeksTotal, throughWkLabel }) {
   const isOpen = periodState === "open";
-  const budgetRef = isOpen
-    ? card.budget_to_date
-    : (range?.kind === "fytd" ? card.budget_to_date : card.budget_full_period);
-  const budgetRefText = fmtMoney(budgetRef);
+  // Kevin CC prompt 2026-09-14 (prereq C). On a running single
+  // period the reference row reads "P{N} projection" and its value
+  // should be the PROJECTED period revenue - week_rail sum -
+  // not budget_full_period (the PLAN). Server ships
+  // `projected_period_revenue_display` when a week_rail exists;
+  // use it if present, else fall through to the prior compute for
+  // ranges without a running-period rail (CY / LP / etc.).
+  const budgetRef = card.projected_period_revenue_display != null
+    ? null // signal: use projected display directly below
+    : (isOpen
+      ? card.budget_to_date
+      : (range?.kind === "fytd" ? card.budget_to_date : card.budget_full_period));
+  const budgetRefText = card.projected_period_revenue_display != null
+    ? card.projected_period_revenue_display
+    : fmtMoney(budgetRef);
   const actualText = card.hero_actual_display;
   const eyebrowLabel = (rangeLabels?.kind === "fytd" || rangeLabels?.kind === "single_closed")
     ? (rangeLabels.period_span ? `Revenue actuals ${rangeLabels.period_span}` : card.label)

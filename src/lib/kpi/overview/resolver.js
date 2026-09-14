@@ -834,7 +834,23 @@ export async function resolveOverview({
   const purchBoard = await timeIt("buildBoard(purchasing)", async () => buildPurchasingBoard({
     members,
     start: rng.start,
-    end: effectiveEndISO,
+    // Kevin CC prompt 2026-09-14 (prereq C · defect 1). Pass the
+    // FULL range end for the bucket-budget compute, not
+    // effectiveEndISO. buildPurchasingBoard's `bucketBudgetForRange`
+    // sums `period_amount/4` over weekStartsInRange(start, end);
+    // on running ranges the prior `end: effectiveEndISO` truncated
+    // that to 1 week of a 4-week period, so 3200/3400/3500 pb read
+    // as 1/4 of the period plan ($6,252 not $25,009 on TBJ CP).
+    // Cosmetic until #1119 landed; now the truncated pb propagates
+    // through the week-basis batr, both cards, and every variance.
+    // `throughISO: effectiveEndISO` (below) still controls the
+    // budget-to-date proration correctly - two different
+    // computations with two different edges. Series data
+    // (weeklyRows) is pre-fetched with effectiveEndISO already, so
+    // widening the weeks list here doesn't pick up any extra
+    // actual data on running ranges; series iteration returns null
+    // for future weeks.
+    end: rng.end,
     today,
     throughISO: effectiveEndISO,
     actualsRows: purchActuals,
@@ -3568,6 +3584,30 @@ export async function resolveOverview({
     if (gmCard) {
       gmCard.budget_at_this_revenue = gmAdjustedFromLines;
       gmCard.budget_at_this_revenue_display = gmAdjustedFromLines != null ? formatMoneyWhole(gmAdjustedFromLines) : null;
+    }
+    // Kevin CC prompt 2026-09-14 (prereq C · defect 2). Revenue
+    // card's "P{N} projection" row was reading budget_full_period
+    // (the plan, $108,585 on TBJ CP), not the projected period
+    // revenue (week_rail sum, $123,322). "Projection" is what the
+    // label calls the value; the value should be the projection.
+    // Ships `projected_period_revenue` on the revenue card when a
+    // week_rail exists (single running period, both CP + NP).
+    // Client reads it as the reference figure on that row when
+    // present.
+    const revCard = cards.find(c => c.key === "revenue");
+    if (revCard && week_rail?.weeks?.length) {
+      let projSum = 0;
+      let anyRev = false;
+      for (const w of week_rail.weeks) {
+        if (w.week_revenue != null) {
+          projSum += Number(w.week_revenue);
+          anyRev = true;
+        }
+      }
+      if (anyRev) {
+        revCard.projected_period_revenue = r2(projSum);
+        revCard.projected_period_revenue_display = formatMoneyWhole(projSum);
+      }
     }
   }
 
