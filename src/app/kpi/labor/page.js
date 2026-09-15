@@ -44,6 +44,7 @@ import {
 } from "./components/StateBoxes";
 import { ToastHost } from "./components/Toast";
 import "../kpi.css";
+import "../current-period.css";
 
 // B15 last-viewed account key (localStorage). Read once on client mount
 // only; server render always uses the URL/default. Never leaks data.
