@@ -31,7 +31,7 @@
 //   line_plan / revenue_plan == statement_rows[line].target_pct / 100
 //   sum(goal) == statement_rows[line].budget_at_this_revenue
 
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 
 const dollar0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
 
@@ -49,7 +49,7 @@ function daysSinceStart(startISO, todayISO) {
 // (payroll is final); closed weeks with purchasing show "invoices
 // still landing" and never a green tick. Current-week shows "left
 // this week" or "over"; future weeks show only the goal.
-function CostCell({ landed, goal, state, isLabor, isNow, isLastRow }) {
+function CostCell({ landed, goal, state, isLabor, isNow, isLastRow, sep }) {
   const isFuture = state === "not_started";
   const isClosed = state === "closed";
   const l = Number(landed || 0);
@@ -62,6 +62,7 @@ function CostCell({ landed, goal, state, isLabor, isNow, isLastRow }) {
     isNow && "kpi-ov-cp-now",
     isLastRow && isNow && "kpi-ov-cp-now-last",
     isFuture && "kpi-ov-cp-ahead",
+    sep && "kpi-ov-cp-sep",
   ].filter(Boolean).join(" ");
 
   if (isFuture) {
@@ -102,12 +103,13 @@ function CostCell({ landed, goal, state, isLabor, isNow, isLastRow }) {
   );
 }
 
-function RevCell({ amount, basis, state, isNow, servicesLabel }) {
+function RevCell({ amount, basis, state, isNow, servicesLabel, sep }) {
   const isFuture = state === "not_started";
   const cellClasses = [
     "kpi-ov-cp-cell",
     isNow && "kpi-ov-cp-now",
     isFuture && "kpi-ov-cp-ahead",
+    sep && "kpi-ov-cp-sep",
   ].filter(Boolean).join(" ");
   return (
     <div className={cellClasses}>
@@ -119,10 +121,10 @@ function RevCell({ amount, basis, state, isNow, servicesLabel }) {
 }
 
 // Period cell for revenue - shows projection with confirmed share.
-function PerRevCell({ projection, confirmed, dayFrac }) {
+function PerRevCell({ projection, confirmed, dayFrac, sep }) {
   const p = projection > 0 ? Math.min(100, (confirmed / projection) * 100) : 0;
   return (
-    <div className="kpi-ov-cp-cell kpi-ov-cp-per">
+    <div className={`kpi-ov-cp-cell kpi-ov-cp-per${sep ? " kpi-ov-cp-sep" : ""}`}>
       <div className="kpi-ov-cp-a">{dollar0(projection)}</div>
       <div className="kpi-ov-cp-b">projecting · <b className="kpi-ov-cp-good">{dollar0(confirmed)}</b> confirmed</div>
       <div className="kpi-ov-cp-bar">
@@ -134,14 +136,15 @@ function PerRevCell({ projection, confirmed, dayFrac }) {
   );
 }
 
-function PerCostCell({ goal, landed, dayFrac }) {
+function PerCostCell({ goal, landed, dayFrac, sep }) {
   const G = Number(goal || 0);
   const L = Number(landed || 0);
   const p = G > 0 ? Math.min(100, (L / G) * 100) : 0;
   const hot = G > 0 && (L / G) > (dayFrac + 0.005);
   const barColor = hot ? "var(--red-600)" : "var(--green-600)";
   return (
-    <div className="kpi-ov-cp-cell kpi-ov-cp-per">
+    <div className={`kpi-ov-cp-cell kpi-ov-cp-per${sep ? " kpi-ov-cp-sep" : ""}`}>
+
       <div className={`kpi-ov-cp-a${hot ? " kpi-ov-cp-over" : ""}`}>{dollar0(G - L)}</div>
       <div className="kpi-ov-cp-b">left of {dollar0(G)} · <b>{dollar0(L)}</b> landed</div>
       <div className="kpi-ov-cp-bar">
@@ -312,20 +315,29 @@ export default function CurrentPeriodTable({ payload, labor, purch, error }) {
         {derived.rows.map((row, ri) => {
           const sep = ri === 1 ? " kpi-ov-cp-sep" : "";
           const lastRow = ri === derived.rows.length - 1;
+          // Kevin 2026-09-15 layout fix. Prior structure wrapped each
+          // cell in an extra div (a grid child), so the cell's own
+          // min-height didn't drive the row - the wrapper's chrome
+          // (padding + border) sat outside the cell and stacked on top,
+          // making rows 107px tall and leaving vertical gaps between
+          // consecutive lifted cells. New structure: each cell is the
+          // direct grid child (via display: contents on the rowfrag
+          // fragment), the cell owns its padding/border, min-height
+          // drives the row, and align-self: stretch keeps consecutive
+          // lifted cells flush.
+          const sepFlag = ri === 1;
           if (row.rev) {
             return (
-              <div key="rev-row" className="kpi-ov-cp-rowfrag" style={{ display: "contents" }}>
-                <div className={`kpi-ov-cp-rh${sep}`} style={{ background: "var(--green-50)" }}>
+              <Fragment key="rev-row">
+                <div className={`kpi-ov-cp-rh${sepFlag ? " kpi-ov-cp-sep" : ""}`} style={{ background: "var(--green-50)" }}>
                   <div className="kpi-ov-cp-n">{row.name}</div>
                   <div className="kpi-ov-cp-g">{row.sub}</div>
                 </div>
                 {weeks.map((w, i) => {
                   // Kevin 2026-09-15 follow-up 3. Services count lives on
-                  // labor.board.weeks[i] (confirmed_services + total_services
-                  // set by attachWeeklyBasisToBoard); Overview's week_rail
-                  // ships revenue_basis but not the counts. Read from the
-                  // labor payload we already fetch on CP so the "N of X
-                  // services" subline populates correctly on partial weeks.
+                  // labor.board.weeks[i]; Overview's week_rail doesn't ship
+                  // the counts. Read from labor which we already fetch on
+                  // CP so partial weeks show "N of X services".
                   const lbWk = (labor?.board?.weeks || [])[i] || null;
                   const conf = Number(lbWk?.confirmed_services || 0);
                   const totl = Number(lbWk?.total_services || 0);
@@ -333,50 +345,46 @@ export default function CurrentPeriodTable({ payload, labor, purch, error }) {
                     ? `${conf} of ${totl} services`
                     : null;
                   return (
-                    <div key={`rev-${i}`} className={sep ? "kpi-ov-cp-sep-wrap" : ""}>
-                      <RevCell
-                        amount={derived.rev[i]}
-                        basis={w.revenue_basis}
-                        state={w.state}
-                        isNow={w.state === "in_progress"}
-                        servicesLabel={servicesLabel}
-                      />
-                    </div>
+                    <RevCell
+                      key={`rev-${i}`}
+                      amount={derived.rev[i]}
+                      basis={w.revenue_basis}
+                      state={w.state}
+                      isNow={w.state === "in_progress"}
+                      servicesLabel={servicesLabel}
+                      sep={sepFlag}
+                    />
                   );
                 })}
-                <div className={sep ? "kpi-ov-cp-sep-wrap" : ""}>
-                  <PerRevCell projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} />
-                </div>
-              </div>
+                <PerRevCell projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} sep={sepFlag} />
+              </Fragment>
             );
           }
           const { goal, batr } = derived.goalFor(row.line);
           const landed = derived.landedFor(row.line);
           const actual = landed.reduce((s, v) => s + v, 0);
           return (
-            <div key={row.line} className="kpi-ov-cp-rowfrag" style={{ display: "contents" }}>
-              <div className={`kpi-ov-cp-rh${sep}`}>
+            <Fragment key={row.line}>
+              <div className={`kpi-ov-cp-rh${sepFlag ? " kpi-ov-cp-sep" : ""}`}>
                 <div className="kpi-ov-cp-n">
                   {row.line && <span className="kpi-ov-cp-glc">{row.line}</span>}{row.name}
                 </div>
                 <div className="kpi-ov-cp-g">{row.sub}</div>
               </div>
               {weeks.map((w, i) => (
-                <div key={`${row.line}-${i}`} className={sep ? "kpi-ov-cp-sep-wrap" : ""}>
-                  <CostCell
-                    landed={landed[i]}
-                    goal={goal[i]}
-                    state={w.state}
-                    isLabor={row.isLabor}
-                    isNow={w.state === "in_progress"}
-                    isLastRow={lastRow}
-                  />
-                </div>
+                <CostCell
+                  key={`${row.line}-${i}`}
+                  landed={landed[i]}
+                  goal={goal[i]}
+                  state={w.state}
+                  isLabor={row.isLabor}
+                  isNow={w.state === "in_progress"}
+                  isLastRow={lastRow}
+                  sep={sepFlag}
+                />
               ))}
-              <div className={sep ? "kpi-ov-cp-sep-wrap" : ""}>
-                <PerCostCell goal={batr} landed={actual} dayFrac={dayFrac} />
-              </div>
-            </div>
+              <PerCostCell goal={batr} landed={actual} dayFrac={dayFrac} sep={sepFlag} />
+            </Fragment>
           );
         })}
       </div>
