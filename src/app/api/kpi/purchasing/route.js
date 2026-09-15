@@ -418,6 +418,7 @@ export async function GET(request) {
       detail: "?account=<team_key> is required",
       landing_account,
       preview_account,
+      todayISO: today,
     }, { status: 400 });
   }
   if (D17_OUT_OF_SCOPE.has(account)) {
@@ -1347,5 +1348,9 @@ export async function GET(request) {
     };
   }
 
+  // Kevin 2026-09-15 (#426): server-provided today. Client must consume
+  // this instead of `new Date()` for every today-derived decision.
+  // Same field on every KPI route.
+  payload.todayISO = today;
   return NextResponse.json(payload);
 }
