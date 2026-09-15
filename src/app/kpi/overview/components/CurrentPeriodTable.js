@@ -175,7 +175,7 @@ function HeaderRow({ weeks, todayISO, periodStart }) {
         const dayInWeek = Math.max(0, Math.min(7, day - 7 * (wkOfPeriod - 1)));
         let pill = null;
         if (isDone) pill = <span className="kpi-ov-cp-pill kpi-ov-cp-pill-n">closed</span>;
-        else if (isNow) pill = <span className="kpi-ov-cp-pill" style={{ background: "#fff", color: "var(--navy)" }}>you are here</span>;
+        else if (isNow) pill = <span className="kpi-ov-cp-pill kpi-ov-cp-pill-here">you are here</span>;
         else if (w.revenue_basis === "partial") pill = <span className="kpi-ov-cp-pill kpi-ov-cp-pill-amb">partly confirmed</span>;
         else pill = <span className="kpi-ov-cp-pill kpi-ov-cp-pill-line">forecast</span>;
         const wkLabel = `Wk ${wkOfPeriod}`;
@@ -319,17 +319,31 @@ export default function CurrentPeriodTable({ payload, labor, purch, error }) {
                   <div className="kpi-ov-cp-n">{row.name}</div>
                   <div className="kpi-ov-cp-g">{row.sub}</div>
                 </div>
-                {weeks.map((w, i) => (
-                  <div key={`rev-${i}`} className={sep ? "kpi-ov-cp-sep-wrap" : ""}>
-                    <RevCell
-                      amount={derived.rev[i]}
-                      basis={w.revenue_basis}
-                      state={w.state}
-                      isNow={w.state === "in_progress"}
-                      servicesLabel={w.revenue_basis === "partial" ? `${w.confirmed_services || 0} of ${w.total_services || 0} services` : null}
-                    />
-                  </div>
-                ))}
+                {weeks.map((w, i) => {
+                  // Kevin 2026-09-15 follow-up 3. Services count lives on
+                  // labor.board.weeks[i] (confirmed_services + total_services
+                  // set by attachWeeklyBasisToBoard); Overview's week_rail
+                  // ships revenue_basis but not the counts. Read from the
+                  // labor payload we already fetch on CP so the "N of X
+                  // services" subline populates correctly on partial weeks.
+                  const lbWk = (labor?.board?.weeks || [])[i] || null;
+                  const conf = Number(lbWk?.confirmed_services || 0);
+                  const totl = Number(lbWk?.total_services || 0);
+                  const servicesLabel = w.revenue_basis === "partial" && totl > 0
+                    ? `${conf} of ${totl} services`
+                    : null;
+                  return (
+                    <div key={`rev-${i}`} className={sep ? "kpi-ov-cp-sep-wrap" : ""}>
+                      <RevCell
+                        amount={derived.rev[i]}
+                        basis={w.revenue_basis}
+                        state={w.state}
+                        isNow={w.state === "in_progress"}
+                        servicesLabel={servicesLabel}
+                      />
+                    </div>
+                  );
+                })}
                 <div className={sep ? "kpi-ov-cp-sep-wrap" : ""}>
                   <PerRevCell projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} />
                 </div>

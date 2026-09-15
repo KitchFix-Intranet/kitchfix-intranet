@@ -2525,6 +2525,12 @@
 .kpi-app .kpi-ov-cp-pill-n { background: var(--n-100); color: var(--n-600); }
 .kpi-app .kpi-ov-cp-pill-amb { background: var(--amber-50, #FFF2E2); color: var(--amber-600, #B25800); }
 .kpi-app .kpi-ov-cp-pill-navy { background: var(--navy, #0A2548); color: #fff; }
+/* Kevin 2026-09-15 follow-up 2. "You are here" pill sits inside the
+   navy header cell (color: #fff inherited). The prior inline
+   `color: var(--navy)` referenced a variable undefined in the
+   overview scope, so the pill cascaded to white on white. Own class
+   with a hex + !important so it can't inherit the wrong colour. */
+.kpi-app .kpi-ov-cp-pill-here { background: #fff; color: #0A2548 !important; }
 .kpi-app .kpi-ov-cp-pill-line {
   background: #fff;
   color: var(--n-600);
