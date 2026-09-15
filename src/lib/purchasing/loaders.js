@@ -771,8 +771,43 @@ export async function loadCardCharges(supa, { members, start, end, cap = 50, rep
 // spend + gl split, sorted by |spend| desc.  Uncapped - the table's
 // own scroll owns the row count.
 export async function loadVendorRollup(supa, { members, start, end }) {
-  const rows = [];
+  // Kevin 2026-09-15 (#1125 follow-up): add per-source split (bill.com
+  // vs card) so the CY vendor table can honour the source toggle.
+  // Bill.com rows key by vendor_id (resolved via billcom view). Card
+  // rows (rippling_spend) have no vendor_id - key by merchant name so
+  // they appear as their own rows in the table (matches the render:
+  // "Sysco TBJ" bill row and "Restaurant Depot" card row are separate).
   const PS = V6_PAGE_DEFAULT;
+  const byVendor = new Map();
+
+  const ensureBucket = (key, seed) => {
+    if (!byVendor.has(key)) {
+      byVendor.set(key, {
+        vendor_id: seed.vendor_id ?? null,
+        name: seed.name ?? null,
+        resolved: seed.resolved ?? false,
+        source: seed.source,                  // 'bill' | 'card' - the row's origin lane
+        spend: 0,
+        spend_bill: 0,
+        spend_card: 0,
+        line_count: 0,
+        gl_split: { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, reimbursable: 0, other: 0 },
+      });
+    }
+    return byVendor.get(key);
+  };
+
+  const applyGl = (bucket, gl, amt) => {
+    if      (gl.startsWith("3200")) bucket.gl_split.food      += amt;
+    else if (gl.startsWith("3400")) bucket.gl_split.packaging += amt;
+    else if (gl.startsWith("3500")) bucket.gl_split.vehicle   += amt;
+    else if (gl === "5002.5")       bucket.gl_split.equipment += amt;
+    else if (gl === "5002.1")       bucket.gl_split.repair    += amt;
+    else if (gl.startsWith("13"))   bucket.gl_split.reimbursable += amt;
+    else                            bucket.gl_split.other     += amt;
+  };
+
+  // Lane 1: bill.com via named view (vendor_id + vendor_name).
   for (const memberChunk of chunk(members, IN_CHUNK)) {
     let from = 0;
     while (true) {
@@ -786,42 +821,71 @@ export async function loadVendorRollup(supa, { members, start, end }) {
         .range(from, from + PS - 1);
       if (r.error) return { error: r.error };
       const data = r.data || [];
-      for (const row of data) rows.push(row);
+      for (const row of data) {
+        const key = `bill:${row.vendor_id || "__UNRESOLVED__"}`;
+        const b = ensureBucket(key, {
+          vendor_id: row.vendor_id,
+          name: row.vendor_name,
+          resolved: !!row.vendor_resolved,
+          source: "bill",
+        });
+        const amt = Number(row.amount || 0);
+        b.spend += amt;
+        b.spend_bill += amt;
+        b.line_count += 1;
+        applyGl(b, String(row.gl_line_code || ""), amt);
+      }
       if (data.length < PS) break;
       from += PS;
     }
   }
-  const byVendor = new Map();
-  for (const r of rows) {
-    const key = r.vendor_id || "__UNRESOLVED__";
-    if (!byVendor.has(key)) {
-      byVendor.set(key, {
-        vendor_id: r.vendor_id,
-        name: r.vendor_name,
-        resolved: !!r.vendor_resolved,
-        spend: 0,
-        line_count: 0,
-        gl_split: { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, reimbursable: 0, other: 0 },
-      });
+
+  // Lane 2: rippling_spend (coded card charges). vendor_or_merchant is
+  // the raw merchant string. gl_line_code IS NOT NULL to exclude
+  // uncoded card charges - those live in loadCardCharges/coding strip.
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const r = await supa.from("purchasing_actuals")
+        .select("account_key, gl_line_code, amount, vendor_or_merchant")
+        .in("account_key", memberChunk)
+        .eq("excluded", false)
+        .eq("source", "rippling_spend")
+        .not("gl_line_code", "is", null)
+        .gte("txn_date", start)
+        .lte("txn_date", end)
+        .order("id", { ascending: true })
+        .range(from, from + PS - 1);
+      if (r.error) return { error: r.error };
+      const data = r.data || [];
+      for (const row of data) {
+        const merchant = (row.vendor_or_merchant || "").trim();
+        const key = `card:${merchant || "__UNKNOWN__"}`;
+        const b = ensureBucket(key, {
+          vendor_id: null,
+          name: merchant || null,
+          resolved: !!merchant,
+          source: "card",
+        });
+        const amt = Number(row.amount || 0);
+        b.spend += amt;
+        b.spend_card += amt;
+        b.line_count += 1;
+        applyGl(b, String(row.gl_line_code || ""), amt);
+      }
+      if (data.length < PS) break;
+      from += PS;
     }
-    const v = byVendor.get(key);
-    const amt = Number(r.amount || 0);
-    v.spend += amt;
-    v.line_count += 1;
-    const gl = String(r.gl_line_code || "");
-    if      (gl.startsWith("3200")) v.gl_split.food      += amt;
-    else if (gl.startsWith("3400")) v.gl_split.packaging += amt;
-    else if (gl.startsWith("3500")) v.gl_split.vehicle   += amt;
-    else if (gl === "5002.5")       v.gl_split.equipment += amt;
-    else if (gl === "5002.1")       v.gl_split.repair    += amt;
-    else if (gl.startsWith("13"))   v.gl_split.reimbursable += amt;
-    else                            v.gl_split.other     += amt;
   }
+
   const enriched = [...byVendor.values()].map(v => ({
     vendor_id: v.vendor_id,
     name: v.name,
     resolved: v.resolved,
+    source: v.source,
     spend: Math.round(v.spend * 100) / 100,
+    spend_bill: Math.round(v.spend_bill * 100) / 100,
+    spend_card: Math.round(v.spend_card * 100) / 100,
     line_count: v.line_count,
     gl_split: {
       food:         Math.round(v.gl_split.food * 100) / 100,

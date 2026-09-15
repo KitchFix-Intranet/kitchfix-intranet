@@ -2355,3 +2355,28 @@
   font-weight: 800;
   font-size: 12.5px;
 }
+
+/* Source toggle (CY vendor table). All / bill.com / Cards. */
+.kpi-app .kpi-p-vt-spacer { flex: 1; }
+.kpi-app .kpi-p-vt-toggle {
+  display: inline-flex;
+  border: 1px solid var(--n-300);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.kpi-app .kpi-p-vt-toggle button {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border: none;
+  background: var(--n-0, #fff);
+  color: var(--n-600);
+  cursor: pointer;
+}
+.kpi-app .kpi-p-vt-toggle button.on {
+  background: var(--navy-700);
+  color: #fff;
+}
+.kpi-app .kpi-p-vt-toggle button + button {
+  border-left: 1px solid var(--n-300);
+}

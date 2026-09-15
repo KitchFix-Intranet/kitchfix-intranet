@@ -325,6 +325,10 @@ export default function KpiPurchasingPage() {
   // waits (rendering "Loading ..." with nothing visible for 150ms
   // is still better than a flashing skeleton).
   const [showSkeleton, setShowSkeleton] = useState(false);
+  // Kevin 2026-09-15 (#1125 follow-up): source toggle on the CY vendor
+  // table. 'all' | 'bill' | 'card'. Server ships spend_bill + spend_card
+  // per vendor row; client filters + retotals.
+  const [cyVendorSource, setCyVendorSource] = useState("all");
   useEffect(() => {
     if (loadState !== "loading" && loadState !== "idle") {
       setShowSkeleton(false);
@@ -1336,54 +1340,167 @@ export default function KpiPurchasingPage() {
           // Current year: one row per vendor with the food / packaging
           // / vehicle split, plus a lines count and a total. Source is
           // `vendor_rollup.rows` (per-vendor aggregate; already shipped
-          // by the route). Unresolved vendors surface as a distinct
-          // row so the count matches.
+          // by the route). Two follow-ups on the #1125 initial ship:
+          //
+          // 1. Source toggle (All / bill.com / Cards) - lives in the
+          //    header. Cards + bills are separate rows in vendor_rollup
+          //    (server aggregates rippling_spend by merchant name).
+          // 2. Reimbursable-only vendors excluded from this table so
+          //    the columns and totals agree. Their spend lives in the
+          //    reimbursables table rendered below.
           if (isCY) {
             const rows = data?.vendor_rollup?.rows || [];
-            const total = rows.reduce((s, v) => s + Number(v.spend || 0), 0);
-            const nonZero = rows.filter(v => Math.abs(Number(v.spend || 0)) > 0.005);
+            // A vendor belongs in the main table if it has non-reimb
+            // spend. Rows whose entire spend is 13xx move to the
+            // reimbursables table (case: Vio Brands = $73,872 all in
+            // 1371 - was rendering with — under every column and a
+            // total that matched nothing).
+            const mainVendors = rows.filter(v => {
+              const gs = v.gl_split || {};
+              const nonReimb = Number(gs.food || 0) + Number(gs.packaging || 0)
+                             + Number(gs.vehicle || 0) + Number(gs.equipment || 0)
+                             + Number(gs.repair || 0) + Number(gs.other || 0);
+              return Math.abs(nonReimb) > 0.005;
+            });
+            const reimbVendors = rows.filter(v => {
+              const gs = v.gl_split || {};
+              return Number(gs.reimbursable || 0) > 0.005;
+            }).sort((a, b) => Number(b.gl_split?.reimbursable || 0) - Number(a.gl_split?.reimbursable || 0));
+            // Amount for a row under the active source toggle. When
+            // filtered to bills/cards only, the "Total" and per-bucket
+            // figures must reflect that lane. gl_split doesn't carry
+            // per-source detail, so scaling the bucket by the row's
+            // source share is the cheapest honest approximation - and
+            // the common case is 100% one source anyway (a row is
+            // either a bill row or a card row given how the server
+            // keys them). Rows with mixed sources are rare (never for
+            // rippling_spend, since it has no vendor_id to merge on).
+            const activeAmount = (v) => {
+              if (cyVendorSource === "all")  return Number(v.spend || 0);
+              if (cyVendorSource === "bill") return Number(v.spend_bill || 0);
+              if (cyVendorSource === "card") return Number(v.spend_card || 0);
+              return 0;
+            };
+            const activeBucket = (v, gs, key) => {
+              const raw = Number(gs?.[key] || 0);
+              if (cyVendorSource === "all") return raw;
+              const total = Number(v.spend || 0);
+              const lane = activeAmount(v);
+              if (total <= 0) return 0;
+              return raw * (lane / total);
+            };
+            const filtered = mainVendors.filter(v => Math.abs(activeAmount(v)) > 0.005);
+            const filteredTotal = filtered.reduce((s, v) => s + activeAmount(v), 0);
+            const reimbTotal = reimbVendors.reduce((s, v) => s + Number(v.gl_split?.reimbursable || 0), 0);
+            const laneLabel = cyVendorSource === "all" ? "All vendors" : cyVendorSource === "bill" ? "bill.com only" : "Cards only";
             return (
-              <div className="kpi-p-card kpi-p-vt" data-card="vendor-table">
-                <div className="kpi-p-vt-head">
-                  <span className="kpi-p-cardtitle">Every vendor</span>
-                  <span className="kpi-p-vt-note">{nonZero.length} of {rows.length}</span>
+              <>
+                <div className="kpi-p-card kpi-p-vt" data-card="vendor-table">
+                  <div className="kpi-p-vt-head">
+                    <span className="kpi-p-cardtitle">Every vendor</span>
+                    <span className="kpi-p-vt-note">{filtered.length} of {mainVendors.length}</span>
+                    <span className="kpi-p-vt-spacer" aria-hidden="true" />
+                    <span className="kpi-p-vt-toggle" role="group" aria-label="Source filter">
+                      {[
+                        { k: "all",  label: "All" },
+                        { k: "bill", label: "bill.com" },
+                        { k: "card", label: "Cards" },
+                      ].map(opt => (
+                        <button
+                          key={opt.k}
+                          type="button"
+                          className={cyVendorSource === opt.k ? "on" : ""}
+                          onClick={() => setCyVendorSource(opt.k)}
+                          aria-pressed={cyVendorSource === opt.k}
+                        >{opt.label}</button>
+                      ))}
+                    </span>
+                  </div>
+                  <div className="kpi-p-vt-scroll">
+                    <table className="kpi-p-vt-tbl">
+                      <thead>
+                        <tr>
+                          <th className="kpi-p-vt-l">Vendor</th>
+                          <th className="kpi-p-vt-r">Food</th>
+                          <th className="kpi-p-vt-r">Packaging</th>
+                          <th className="kpi-p-vt-r">Vehicle</th>
+                          <th className="kpi-p-vt-r">Lines</th>
+                          <th className="kpi-p-vt-r">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map((v, i) => {
+                          const displayName = v.name || (v.resolved === false && v.vendor_id ? "(unresolved vendor)" : "—");
+                          const gs = v.gl_split || {};
+                          const food = activeBucket(v, gs, "food");
+                          const pack = activeBucket(v, gs, "packaging");
+                          const veh  = activeBucket(v, gs, "vehicle");
+                          const amt  = activeAmount(v);
+                          const sourceCls = v.source === "card" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill";
+                          return (
+                            <tr key={`${v.source}-${v.vendor_id || v.name || i}`}>
+                              <td className="kpi-p-vt-l">
+                                <span className={`kpi-p-srcdot ${sourceCls}`} aria-hidden="true" />
+                                {displayName}
+                              </td>
+                              <td className="kpi-p-vt-r">{Math.abs(food) > 0.005 ? fmt$(food) : "—"}</td>
+                              <td className="kpi-p-vt-r">{Math.abs(pack) > 0.005 ? fmt$(pack) : "—"}</td>
+                              <td className="kpi-p-vt-r">{Math.abs(veh)  > 0.005 ? fmt$(veh)  : "—"}</td>
+                              <td className="kpi-p-vt-r kpi-p-vt-muted">{v.line_count}</td>
+                              <td className="kpi-p-vt-r">{fmt$(amt)}</td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="kpi-p-vt-tot">
+                          <td className="kpi-p-vt-l">{laneLabel}</td>
+                          <td colSpan="4"></td>
+                          <td className="kpi-p-vt-r">{fmt$(filteredTotal)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div className="kpi-p-vt-scroll">
-                  <table className="kpi-p-vt-tbl">
-                    <thead>
-                      <tr>
-                        <th className="kpi-p-vt-l">Vendor</th>
-                        <th className="kpi-p-vt-r">Food</th>
-                        <th className="kpi-p-vt-r">Packaging</th>
-                        <th className="kpi-p-vt-r">Vehicle</th>
-                        <th className="kpi-p-vt-r">Lines</th>
-                        <th className="kpi-p-vt-r">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {nonZero.map((v, i) => {
-                        const displayName = v.name || (v.resolved === false && v.vendor_id ? "(unresolved vendor)" : "—");
-                        const gs = v.gl_split || {};
-                        return (
-                          <tr key={v.vendor_id || `unr-${i}`}>
-                            <td className="kpi-p-vt-l">{displayName}</td>
-                            <td className="kpi-p-vt-r">{gs.food ? fmt$(gs.food) : "—"}</td>
-                            <td className="kpi-p-vt-r">{gs.packaging ? fmt$(gs.packaging) : "—"}</td>
-                            <td className="kpi-p-vt-r">{gs.vehicle ? fmt$(gs.vehicle) : "—"}</td>
-                            <td className="kpi-p-vt-r kpi-p-vt-muted">{v.line_count}</td>
-                            <td className="kpi-p-vt-r">{fmt$(v.spend)}</td>
+
+                {reimbVendors.length > 0 && (
+                  <div className="kpi-p-card kpi-p-rt" data-card="reimbursables-table">
+                    <div className="kpi-p-rt-head">
+                      <span className="kpi-p-cardtitle">Also purchased · billed back to the club</span>
+                      <span className="kpi-p-rt-note">{reimbVendors.length} vendors · not part of the budget above</span>
+                    </div>
+                    <div className="kpi-p-rt-scroll">
+                      <table className="kpi-p-rt-tbl">
+                        <thead>
+                          <tr>
+                            <th className="kpi-p-rt-l">Vendor</th>
+                            <th className="kpi-p-rt-r">Lines</th>
+                            <th className="kpi-p-rt-r">Amount</th>
                           </tr>
-                        );
-                      })}
-                      <tr className="kpi-p-vt-tot">
-                        <td className="kpi-p-vt-l">All vendors</td>
-                        <td colSpan="4"></td>
-                        <td className="kpi-p-vt-r">{fmt$(total)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                        </thead>
+                        <tbody>
+                          {reimbVendors.map((v, i) => {
+                            const displayName = v.name || (v.resolved === false && v.vendor_id ? "(unresolved vendor)" : "—");
+                            const sourceCls = v.source === "card" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill";
+                            return (
+                              <tr key={`reimb-${v.source}-${v.vendor_id || v.name || i}`}>
+                                <td className="kpi-p-rt-l">
+                                  <span className={`kpi-p-srcdot ${sourceCls}`} aria-hidden="true" />
+                                  {displayName}
+                                </td>
+                                <td className="kpi-p-rt-r kpi-p-rt-muted">{v.line_count}</td>
+                                <td className="kpi-p-rt-r">{fmt$(v.gl_split.reimbursable)}</td>
+                              </tr>
+                            );
+                          })}
+                          <tr className="kpi-p-rt-tot">
+                            <td className="kpi-p-rt-l" colSpan="2">All {reimbVendors.length} reimbursable vendors</td>
+                            <td className="kpi-p-rt-r">{fmt$(reimbTotal)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
             );
           }
 
