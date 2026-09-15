@@ -337,5 +337,70 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
   }
 }
 
+// Kevin ruling 2026-09-15 (post R-111 · #1128). The R-105 restore
+// probe verified closed ranges only; the 3100.1.target_pct field
+// broke on Current period when week 1 closed on Sunday and hourlyBTD
+// became truthy - quartered target_pct on both TBJ + TBR. Add a
+// running-period assertion so the same class cannot survive again.
+//
+// Assertion: on Current period, 3100.1.target_pct exactly equals
+// 3100.1.period_budget / revenue_budget_full_period × 100. Both
+// accounts, both toggles. Hourly path doesn't emit 3100.1; salary
+// path does. Payload-only check because CP no longer renders the
+// P&L table (R-109 removed it).
+async function checkCurrentPeriodTargetPct() {
+  const REV_LINES = ["2200", "2300", "2400.1", "2400.2", "2600"];
+  const ACCOUNTS = ["TBJ - FL", "TBR - FL"];
+  const rangeQs = "&range=period:" + await currentPeriodNumber();
+  const results = [];
+  let fails = 0;
+  for (const acct of ACCOUNTS) {
+    for (const toggle of ["hourly", "salary"]) {
+      const salaryQs = toggle === "salary" ? "&include_salary=1" : "";
+      const url = `${BASE}/api/kpi/overview?account=${encodeURIComponent(acct)}${rangeQs}${salaryQs}`;
+      const j = await fetch(url, { headers: HEADERS }).then(r => r.json()).catch(() => null);
+      if (!j) { results.push({ acct, toggle, error: "fetch failed" }); fails++; continue; }
+      const sub = (j.statement_rows || []).find(r => r.line_code === "3100.1");
+      if (!sub) {
+        // Hourly path has no 3100.1 (no salary reveal). Record for
+        // orientation but do not count as failure.
+        results.push({ acct, toggle, note: "no 3100.1 (hourly path)", skip: true });
+        continue;
+      }
+      const revFullPeriod = (j.statement_rows || [])
+        .filter(r => REV_LINES.includes(r.line_code))
+        .reduce((s, r) => s + Number(r.period_budget || 0), 0);
+      const expected = revFullPeriod > 0 ? (Number(sub.period_budget || 0) / revFullPeriod) * 100 : null;
+      const actual = Number(sub.target_pct || 0);
+      const ok = expected != null && Math.abs(actual - expected) < 0.01;
+      if (!ok) fails++;
+      results.push({ acct, toggle, ok, actual, expected, hourlyPB: Number(sub.period_budget || 0), revFullPeriod });
+    }
+  }
+  console.log(`\n## R-111 · 3100.1.target_pct on Current period · Kevin assertion 2026-09-15`);
+  for (const r of results) {
+    if (r.skip) {
+      console.log(`  ${r.acct.padEnd(9)} ${r.toggle.padEnd(6)} · ${r.note}`);
+      continue;
+    }
+    if (r.error) {
+      console.log(`  FAIL ${r.acct.padEnd(9)} ${r.toggle.padEnd(6)} · ${r.error}`);
+      continue;
+    }
+    console.log(
+      `  ${r.ok ? "PASS" : "FAIL"} ${r.acct.padEnd(9)} ${r.toggle.padEnd(6)} · target_pct=${r.actual.toFixed(4)}%  expected=${r.expected.toFixed(4)}%  (hourly_pb=$${r.hourlyPB.toFixed(2)} / rev_full=$${r.revFullPeriod.toFixed(2)})  ${r.ok ? "" : `Δ=${(r.actual - r.expected).toFixed(4)}`}`
+    );
+  }
+  return fails;
+}
+
+async function currentPeriodNumber() {
+  const { currentPeriodNo } = await import("../../src/app/kpi/labor/lib/periods.js");
+  return currentPeriodNo(new Date().toISOString().slice(0, 10)) || 10;
+}
+
+const cpAssertFails = await checkCurrentPeriodTargetPct();
+failures += cpAssertFails;
+
 console.log(`\n## Summary: ${failures === 0 ? "ALL PASS" : failures + " VIEWPORT/CHECK COMBOS FAILED"}`);
 process.exit(failures === 0 ? 0 : 1);
