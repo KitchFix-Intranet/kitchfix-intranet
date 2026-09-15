@@ -2722,7 +2722,15 @@ export async function resolveOverview({
     // NOT track revenue; Kevin's item 5 says salary sub-rows and
     // tracked lines hatch the Target % + Adjusted cells (not-
     // applicable, marked with flags:["not_applicable"]).
-    const hourlyTargetPct = has_target ? pctOf(hourlyBTD.amount || hourlyPB, revenue_budget_full_period) : null;
+    // R-111 (Kevin ruling 2026-09-15): the numerator is the full
+    // period budget, not budget-to-date. `hourlyBTD.amount` becomes
+    // truthy the moment a week closes inside the running period, so
+    // the previous `hourlyBTD.amount || hourlyPB` fell to a quartered
+    // (or worse) figure on CP as soon as week 1 closed on Sunday. Same
+    // class as #1120's 3200 quartering, one line over. Closed ranges
+    // are unchanged by construction: on CY + LP the whole period is
+    // elapsed, so BTD == PB and pctOf gives the same value either way.
+    const hourlyTargetPct = has_target ? pctOf(hourlyPB, revenue_budget_full_period) : null;
     // Kevin R-101 (2026-09-09) item 4. On CP + NP the 3100.1 sub-
     // row batr uses labor3100_revenue_for_batr (4-week SC + fee) -
     // same source as the 3100 parent's hourly component - so parent
