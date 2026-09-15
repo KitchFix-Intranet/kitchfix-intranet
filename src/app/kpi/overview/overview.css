@@ -2328,17 +2328,22 @@
   display: grid;
   grid-template-columns: 160px repeat(4, minmax(0, 1fr)) 204px;
 }
-.kpi-app .kpi-ov-cp-grid > div,
-.kpi-app .kpi-ov-cp-grid > .kpi-ov-cp-rowfrag > div {
+.kpi-app .kpi-ov-cp-grid > div {
   padding: 12px 14px;
   border-top: 1px solid var(--n-200);
   font-variant-numeric: tabular-nums;
   min-width: 0;
 }
-.kpi-app .kpi-ov-cp-grid > div:first-child,
-.kpi-app .kpi-ov-cp-grid .kpi-ov-cp-rowfrag:first-child > div {
+.kpi-app .kpi-ov-cp-grid > div:first-child {
   border-top: none;
 }
+/* Header row: seven cells all sit above the border boundary. Kevin
+   2026-09-15 layout fix: cells are now direct grid children (the
+   wrapper divs were removed) so header cells' `border-top: none`
+   already came from the .kpi-ov-cp-ch rule below, but we make sure
+   the second row's row-header + cells don't get an implicit top
+   border from the generic rule when they sit at the top of the
+   revenue-row band. */
 
 /* Column header row */
 .kpi-app .kpi-ov-cp-ch {
@@ -2427,18 +2432,25 @@
 .kpi-app .kpi-ov-cp-ch.kpi-ov-cp-per .kpi-ov-cp-wk { color: var(--navy-700, #153968); }
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-a { font-size: 20px; }
 
-/* Row header */
+/* Row header. Kevin 2026-09-15: min-height off, size to content -
+   the tallest CELL in the row drives the row height, and the row
+   header stretches to match via `align-self: stretch`. Prior
+   `min-height: 82px` content-box on .rh made the row-header 107
+   intrinsically (82 + 24 padding + 1 border) and dragged every row
+   with it. */
 .kpi-app .kpi-ov-cp-rh {
   padding-left: 18px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 82px;
+  box-sizing: border-box;
+  align-self: stretch;
 }
 .kpi-app .kpi-ov-cp-rh .kpi-ov-cp-n {
   font-size: 11.25px;
   font-weight: 700;
   color: var(--n-900, var(--n-800));
+  line-height: 1.2;
 }
 .kpi-app .kpi-ov-cp-glc {
   font-size: 9.9px;
@@ -2451,15 +2463,27 @@
   font-weight: 600;
   color: var(--n-600);
   margin-top: 2px;
+  line-height: 1.2;
 }
 
-/* Cost cells - three lines minimum, 82px row */
+/* Cost cells. Kevin 2026-09-15 layout fixes:
+   - align-self: stretch so consecutive lifted "now" cells fill their
+     row completely and sit flush against each other (was the visible
+     gap defect Kevin flagged in the screenshot).
+   - min-height: 82 as the row's height contract; border-box so that
+     figure covers padding + border, not content-only (which would
+     have inflated rows to 107 as the prior sizing bug proved).
+   - Cells are now direct grid children (wrapper divs removed from the
+     JSX). Padding + border-top come from the generic
+     `.kpi-ov-cp-grid > div` rule above; no double-boxing. */
 .kpi-app .kpi-ov-cp-cell {
   text-align: right;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-height: 82px;
+  box-sizing: border-box;
+  align-self: stretch;
 }
 .kpi-app .kpi-ov-cp-a {
   font-size: 18px;
@@ -2468,16 +2492,25 @@
   color: var(--n-900, var(--n-800));
   line-height: 1.1;
 }
+/* Kevin 2026-09-15 ruling 2: NO nowrap, NO ellipsis on the sub /
+   verdict lines. A truncated money figure is worse than a tall row -
+   "$6,474 left · invoices still la…" tells an operator nothing. If a
+   verdict genuinely won't fit at 1440, shorten the copy, don't hide
+   it. Explicit line-height on b / v (1.2) matches the render's
+   default body line-height so cells don't inherit the intranet's
+   larger body line-height and drift 6-7px taller than the render. */
 .kpi-app .kpi-ov-cp-b {
   font-size: 9.9px;
   font-weight: 700;
   color: var(--n-600);
   margin-top: 3px;
+  line-height: 1.2;
 }
 .kpi-app .kpi-ov-cp-v {
   font-size: 9.9px;
   font-weight: 800;
   margin-top: 5px;
+  line-height: 1.2;
 }
 .kpi-app .kpi-ov-cp-bar {
   height: 4px;
