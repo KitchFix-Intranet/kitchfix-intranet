@@ -84,7 +84,7 @@ function CostCell({ landed, goal, state, isLabor, isNow, isLastRow, sep }) {
     verdictText = `${dollar0(g - l)} left this week`;
     verdictClass = "kpi-ov-cp-good";
   } else if (isClosed && !isLabor) {
-    verdictText = `${dollar0(g - l)} left · invoices still landing`;
+    verdictText = `${dollar0(g - l)} left · still landing`;
     verdictClass = "kpi-ov-cp-mute";
   } else {
     verdictText = `▼ ${dollar0(g - l)} under`;
