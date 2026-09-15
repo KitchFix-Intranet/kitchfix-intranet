@@ -75,6 +75,12 @@ import PnlStatement from "./components/PnlStatement";
 import AlsoTracked from "./components/AlsoTracked";
 import PlanningBoard from "./components/PlanningBoard";
 import SkeletonBoard from "./components/SkeletonBoard";
+// R-109 · new Current period one-table view. Kevin ruling 2026-09-15:
+// on CP only, the three cards + week rail + cost-lines + P&L are all
+// replaced by a single table with review cards below. Other ranges
+// unchanged (Guard 1).
+import CurrentPeriodTable from "./components/CurrentPeriodTable";
+import CurrentPeriodReview from "./components/CurrentPeriodReview";
 
 const LAST_ACCOUNT_KEY = "kpi:overview:lastAccount";
 
@@ -232,6 +238,43 @@ export default function KpiOverviewPage() {
     p.set("account", landing);
     router.replace(`/kpi/overview?${p.toString()}`);
   }, [urlAccount, data?.landing_account, data?.preview_account, router, searchParams]);
+
+  // R-109 · Labor + Purchasing fetch for the Current period one-table
+  // view. Prompt § 2: "one source, three consumers" for week_rail
+  // (Overview owns it). Per-week 3100 landed lives on Labor's board;
+  // per-week 3200/3400 lives on Purchasing weekly[]. Fired only when
+  // the CP gate is true so no extra fetches on any other range
+  // (Guard 1: other ranges untouched).
+  const [cpLabor, setCpLabor] = useState(null);
+  const [cpPurch, setCpPurch] = useState(null);
+  const [cpAuxError, setCpAuxError] = useState(null);
+  const cpGateActive = data?.range?.kind === "period" && data?.period_state === "open";
+  useEffect(() => {
+    if (!cpGateActive) {
+      setCpLabor(null);
+      setCpPurch(null);
+      setCpAuxError(null);
+      return;
+    }
+    if (!fetchAccount || !start || !end) return;
+    const ctrl = new AbortController();
+    setCpAuxError(null);
+    const p = new URLSearchParams({ account: fetchAccount, start, end });
+    if (urlPreview) p.set("preview", urlPreview);
+    if (urlIncludeSalary) p.set("include_salary", "1");
+    Promise.all([
+      fetch(`/api/kpi/labor?${p}`, { signal: ctrl.signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(`labor HTTP ${r.status}`))),
+      fetch(`/api/kpi/purchasing?${p}`, { signal: ctrl.signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(`purchasing HTTP ${r.status}`))),
+    ]).then(([lb, pu]) => {
+      if (ctrl.signal.aborted) return;
+      setCpLabor(lb);
+      setCpPurch(pu);
+    }).catch(e => {
+      if (e?.name === "AbortError") return;
+      setCpAuxError(String(e?.message || e));
+    });
+    return () => ctrl.abort();
+  }, [cpGateActive, fetchAccount, start, end, urlPreview, urlIncludeSalary]);
 
   // ── URL setters ─────────────────────────────────────────────
   const setParams = useCallback((patch) => {
@@ -480,21 +523,39 @@ export default function KpiOverviewPage() {
               })()}
             />
             <SettlingStrip settling={data.settling} />
-            <CardsRow
-              cards={data.cards}
-              rangeMeta={rangeMeta}
-              scCountsWithoutDollars={data.sc_counts_without_dollars}
-              hasTarget={data.has_target}
-              revenueSourceState={data.revenue_source_state}
-              rangeLabels={data.range_labels}
-              revenueModel={data.revenue_model}
-              statementTotals={data.statement_totals}
-              awaiting={data.status_line?.tone === "wait"}
-            />
-            {/* Kevin CC prompt 2026-09-08 item 4. Week rail below
-                the three cards on Current period. Null on every
-                other range (server-gated on isRunningSinglePeriod). */}
-            <WeekRail weekRail={data.week_rail} />
+            {/* R-109 · CP gate. On the running period (CP), the three
+                cards + week rail + cost-lines + P&L below are ALL
+                replaced by the one-table view + review cards. Every
+                other range keeps its existing surface (Guard 1). */}
+            {cpGateActive ? (
+              <>
+                <CurrentPeriodTable
+                  payload={data}
+                  labor={cpLabor}
+                  purch={cpPurch}
+                  error={cpAuxError}
+                />
+                <CurrentPeriodReview
+                  labor={cpLabor}
+                  purchasing={cpPurch}
+                />
+              </>
+            ) : (
+              <>
+                <CardsRow
+                  cards={data.cards}
+                  rangeMeta={rangeMeta}
+                  scCountsWithoutDollars={data.sc_counts_without_dollars}
+                  hasTarget={data.has_target}
+                  revenueSourceState={data.revenue_source_state}
+                  rangeLabels={data.range_labels}
+                  revenueModel={data.revenue_model}
+                  statementTotals={data.statement_totals}
+                  awaiting={data.status_line?.tone === "wait"}
+                />
+                <WeekRail weekRail={data.week_rail} />
+              </>
+            )}
           </>
         )}
         {/* PR-2 layout branch: two-column single-account grid ONLY
@@ -507,27 +568,19 @@ export default function KpiOverviewPage() {
             surface via <PlanningBoard/> above - skip the standard
             split (Chart + tables have no meaning on a future
             period). */}
-        {data.period_state === "planned" ? null : PORTFOLIO_KEYS.includes(account) ? (
+        {/* R-109 · on CP, the whole bottom fold (CostLines + PnlStatement
+            + Chart + AlsoTracked + RevenueLines) is replaced by the
+            CurrentPeriodTable + CurrentPeriodReview rendered above.
+            Nothing else renders below on CP. Other ranges unchanged. */}
+        {data.period_state === "planned" || cpGateActive ? null : PORTFOLIO_KEYS.includes(account) ? (
           /* Portfolio scope (account ∈ ALL / EAST / WEST) keeps the
               pre-PR-2 single-column layout. PR-2 explicitly scoped
               its two-column reorg to single-account only - portfolio
               byte-diff test guards against drift. */
           <>
-            {/* Kevin ruling 2026-09-08 item 1 - Chart hidden on
-                Current period on any scope; the week rail above
-                is the replacement surface. Renders on every other
-                range. */}
-            {!(data.range?.kind === "period" && data.period_state === "open") && (
-              <Chart chart={data.chart} revenueModel={data.revenue_model} />
-            )}
+            <Chart chart={data.chart} revenueModel={data.revenue_model} />
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
-            {/* Kevin ruling 2026-09-08 cleanup item 2 - Also tracked
-                does not render on Current period on any scope
-                (portfolio or single-account). Renders on every
-                other range. */}
-            {!(data.range?.kind === "period" && data.period_state === "open") && (
-              <AlsoTracked payload={data} />
-            )}
+            <AlsoTracked payload={data} />
           </>
         ) : (
           /* Kevin ruling final-presentation (2026-09-03): the chart
@@ -541,37 +594,16 @@ export default function KpiOverviewPage() {
               lines + Also tracked on the LEFT (5fr); Cost of goods
               sold + Chart on the RIGHT (7fr). */
           <>
-            {/* Kevin ruling 2026-09-08 cleanup item 2. Revenue lines +
-                Also tracked do not render on Current period - the
-                revenue detail is in the week rail and the P&L; Also
-                tracked is not scored and has nothing to show on a
-                period two days old. Both still render on every other
-                range. Same isRunningSinglePeriod gate as CostLines +
-                PnlStatement use for their own branch swaps. Without
-                the split wrapper the two right-column pieces stack
-                full-width - the natural layout that matches the
-                Current period render of record. */}
-            {(data.range?.kind === "period" && data.period_state === "open") ? (
-              /* Kevin ruling 2026-09-08 item 1. The old
-                 "COST OF GOODS SOLD, WEEK BY WEEK" chart is
-                 replaced by the week rail (rendered above by
-                 <WeekRail>) on Current period. Chart still renders
-                 on every other range. */
-              <>
-                <CostLines payload={data} previewAccount={data.preview_account} />
-              </>
-            ) : (
-              <div className="kpi-ov-split" data-kpi-ov="single-account-split">
-                <div className="kpi-ov-split-left">
-                  <RevenueLines payload={data} />
-                  <AlsoTracked payload={data} />
-                </div>
-                <div className="kpi-ov-split-right">
-                  <CostLines payload={data} previewAccount={data.preview_account} />
-                  <Chart chart={data.chart} revenueModel={data.revenue_model} />
-                </div>
+            <div className="kpi-ov-split" data-kpi-ov="single-account-split">
+              <div className="kpi-ov-split-left">
+                <RevenueLines payload={data} />
+                <AlsoTracked payload={data} />
               </div>
-            )}
+              <div className="kpi-ov-split-right">
+                <CostLines payload={data} previewAccount={data.preview_account} />
+                <Chart chart={data.chart} revenueModel={data.revenue_model} />
+              </div>
+            </div>
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
           </>
         )}
