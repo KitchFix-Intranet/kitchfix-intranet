@@ -1056,6 +1056,7 @@ export async function GET(request) {
     body.preview_account = preview_account;
     body.source = "weekly";
     body.is_future_range = is_future_range;
+    body.todayISO = today;
     return NextResponse.json(body);
   }
 
@@ -1130,6 +1131,7 @@ export async function GET(request) {
     bodyD26.preview_account = preview_account;
     bodyD26.source = "weekly";
     bodyD26.is_future_range = is_future_range;
+    bodyD26.todayISO = today;
     return NextResponse.json(bodyD26);
   }
 
@@ -1590,6 +1592,10 @@ export async function GET(request) {
       snapped_to: { start, end },
     };
   }
+  // Kevin 2026-09-15 (#426): server-provided today. Client must consume
+  // this instead of `new Date()` for every today-derived decision.
+  // Same field on every KPI route.
+  bodySingle.todayISO = today;
   return NextResponse.json(bodySingle);
 }
 
@@ -1610,5 +1616,7 @@ export async function handleDailyRangeRequest(ctx) {
   if (ctx.homestandBank)  body.homestand_bank = ctx.homestandBank;
   if (ctx.homestandSplice) Object.assign(body, ctx.homestandSplice);
   if (typeof ctx.is_future_range === "boolean") body.is_future_range = ctx.is_future_range;
+  // Kevin 2026-09-15 (#426): daily-source branch also emits today.
+  if (ctx.today) body.todayISO = ctx.today;
   return NextResponse.json(body);
 }

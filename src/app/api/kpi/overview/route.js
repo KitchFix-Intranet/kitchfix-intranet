@@ -176,6 +176,7 @@ export async function GET(request) {
     return NextResponse.json({
       landing_account,
       preview_account,
+      todayISO: today,
     });
   }
   if (account === "CORP") {
@@ -190,6 +191,7 @@ export async function GET(request) {
       reason: "not_authorised",
       landing_account,
       preview_account,
+      todayISO: today,
     });
   }
 
@@ -247,5 +249,10 @@ export async function GET(request) {
       snapped_to: { start: snap.start, end: snap.end, period_no: snap.period_no },
     };
   }
+  // Kevin 2026-09-15 (#426): server-provided today. Client must consume
+  // this instead of `new Date()` for every today-derived decision
+  // (resolvedPreset inference, elapsed fractions, R-93 fytd end, R-109
+  // Current-period one-table view). Same field on every KPI route.
+  payload.todayISO = today;
   return NextResponse.json(payload);
 }
