@@ -112,6 +112,23 @@ Setting frozen rows/columns *before* a merge operation in the same `batchUpdate`
 
 **Fix:** Apply `updateSheetProperties` (frozen panes) as the final request in the batch, after all merges.
 
+### A column map is tab-specific - copying a probe between tabs carries a map that no longer means what it says
+
+Incident: PR-A projections spot-check (2026-09-15). I built a probe to compare `sc_daily_projections` for TXR-AZ against the `Projections - 2026` tab of the TXR workbook. The probe was copy-adapted from an earlier probe against the `Actuals - 2026` tab of the same workbook, and the columns constant came with it. The two tabs live in the same file and share cell-letter positions; they do not share meanings:
+
+```
+Actuals - 2026:      F=ML Breakfast   H=ML Lunch   J=ML Dinner   L=ML EP-C/P   N=ML EP-B/S   P=MiL Breakfast   R=MiL Lunch   ...
+Projections - 2026:  F=ML Breakfast   H=ML Lunch   J=ML Dinner   L=MiL Breakfast   N=MiL Lunch   P=MiL Dinner   R=MiL Continental Breakfast   ...
+```
+
+The probe read cell L (which the Projections tab labels `MiL Breakfast`), called it `ML EP-C/P`, saw the DB store the same value under `MiL Breakfast`, and reported a "systematic 2-position shift." The DB was correct. The probe was wrong. The false finding drove a full round of scoping for a projection reseed (PR-B) before independent verification (all four EP service_ids carry zero rows and zero units - a real shift would have deposited values somewhere) exposed the probe error.
+
+**Fix:** a column map is derived from the target tab's row 2 (or wherever the labels live in that specific tab), not from a sibling tab you happen to have a probe for. When copy-adapting a probe between tabs in the same workbook, re-read the header of the destination tab and rebuild the columns constant before running.
+
+**The more useful lesson - suspect the check first when it contradicts something stable.** Projections are set once at the start of the season and do not change. A probe reporting drift against workbook projections should have been read as "the probe is wrong" before "the data is wrong." When a check contradicts state you already know to be stable (frozen forecasts, catalog data, provenance-immutable records), suspect the check before you suspect the state. The prior-probability distribution says the surface you just wrote is likelier to be wrong than the surface that has been quietly sitting there.
+
+Related: the same instinct catches wrong probes against `sc_services`, `sc_service_groups`, prices with `effective_date` in the past, and any table whose contents are settled by a documented one-time load.
+
 ---
 
 ## Postgres & OPD projection
