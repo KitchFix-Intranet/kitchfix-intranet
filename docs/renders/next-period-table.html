@@ -1,0 +1,159 @@
+<meta charset="utf-8"><title>Next period · the same table</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>
+:root{--navy:#0A2548;--navy-700:#153968;--navy-50:#F4F7FC;--navy-100:#E3EAF5;
+--green-600:#008330;--green-50:#E9FDEC;--red-600:#B9000C;--red-50:#FFEDE7;--amber-600:#B25800;--amber-50:#FFF2E2;
+--n0:#fff;--n-50:#FAF9F5;--n-100:#F4F2EC;--n-200:#F0EEE7;--n-300:#E5E7EB;--n-400:#D3CFC4;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;
+--page:#EDEFF2;--shadow:0 1px 2px rgba(10,37,72,.06),0 4px 12px rgba(10,37,72,.07);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,-apple-system,system-ui,sans-serif;background:var(--page);color:var(--n-700);-webkit-font-smoothing:antialiased;font-size:11.25px}
+button{font-family:inherit;cursor:pointer}.num{font-variant-numeric:tabular-nums}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:8px}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-left:auto}.devbar .lbl{font-size:11px;color:#93a9c9;margin-left:14px}
+.devbar button{font-size:11px;font-weight:600;padding:5px 11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.wrap{max-width:1240px;margin:0 auto;padding:16px 20px 48px}
+/* command bar · matches .kpi-cmd */
+.cmd{background:var(--navy);border-radius:14px 14px 0 0;padding:0 16px;min-height:46px;display:flex;align-items:center;gap:9px}
+.cmd .ttl{color:#fff;font-size:16.2px;font-weight:700;letter-spacing:-.16px}.cmd .acct{color:#fff;font-size:16.2px;font-weight:800;letter-spacing:-.16px}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 10px;display:flex;gap:6px;align-items:center}
+.chip .k{color:#93a9c9;font-size:9px;font-weight:800;letter-spacing:1.35px;text-transform:uppercase}
+.chip .v{color:#fff;font-size:11.25px;font-weight:700}.chip .d{color:#93a9c9;font-size:11.25px;font-weight:500}
+.meta{color:#b9c8de;font-size:9.9px;font-weight:700;letter-spacing:.5px}.meta b{color:#fff}
+.cmd .ml{margin-left:auto}
+.tog{display:flex;border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,.22)}
+.tog button{font-size:9.9px;font-weight:700;padding:6px 13px;color:#cddbee;background:transparent;border:none;letter-spacing:.4px}
+.tog button.on{background:#fff;color:var(--navy)}
+.dot{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:7px;padding:5px 10px;color:#cddbee;font-size:9.9px;font-weight:700}
+.dot i{width:6px;height:6px;border-radius:50%;background:#22c55e}
+.board{background:var(--n0);border-radius:0 0 14px 14px;padding:14px 14px 16px;box-shadow:var(--shadow);margin-bottom:14px}
+/* status row · matches .kpi-ov-statusrow */
+.status{display:flex;align-items:center;gap:9px;margin-bottom:12px;padding:0 4px}
+.stpill{font-size:9.9px;font-weight:800;letter-spacing:.693px;text-transform:uppercase;padding:5px 12px;border-radius:999px;color:#fff;background:var(--navy)}
+.status .sub{font-size:11.25px;font-weight:700;color:var(--n-600)}.status .sub b{color:var(--n-900)}
+/* pills · matches .kpi-ov-pill */
+.pill{display:inline-block;font-size:9.9px;font-weight:800;letter-spacing:.495px;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.p-good{background:var(--green-50);color:var(--green-600)}.p-over{background:var(--red-50);color:var(--red-600)}
+.p-amb{background:var(--amber-50);color:var(--amber-600)}.p-n{background:var(--n-100);color:var(--n-600)}
+.p-navy{background:var(--navy);color:#fff}.p-line{background:var(--n0);color:var(--n-600);border:1px dashed var(--n-300)}
+/* THE TABLE */
+.card{background:var(--n0);border:.5px solid var(--n-300);border-radius:10.8px;box-shadow:var(--shadow);overflow:visible;margin:8px 0}
+.card.t-navy{border-top:3px solid var(--navy-700)}
+.grid{display:grid;grid-template-columns:160px repeat(4,minmax(0,1fr)) 204px}
+.grid>div{padding:12px 14px;border-top:1px solid var(--n-200);font-variant-numeric:tabular-nums;min-width:0}
+/* the lifted column */
+.grid .ch.now,.grid .cell.now{position:relative;z-index:2;box-shadow:0 10px 26px rgba(10,37,72,.16),0 0 0 1px rgba(10,37,72,.06)}
+.grid .ch.now{margin-top:-7px;padding-top:19px;border-radius:9px 9px 0 0}
+.grid .cell.now{background:var(--n0) !important;border-top:1px solid var(--navy-100)}
+.grid .cell.now .a{font-size:20px}
+.grid .cell.now .bar{height:5px}
+.grid .cell.now.last{margin-bottom:-7px;padding-bottom:19px;border-radius:0 0 9px 9px}
+/* header row */
+.grid .ch{border-top:none;padding:12px 14px 11px;text-align:right}
+.grid .ch.l{text-align:left;padding-left:18px}
+.grid .ch .wk{font-size:9px;font-weight:800;letter-spacing:1.35px;text-transform:uppercase;color:var(--n-600)}
+.grid .ch .dt{font-size:11.25px;font-weight:700;color:var(--n-900);margin-top:2px}
+.grid .ch .pill{margin-top:7px}
+.grid .ch.now{background:var(--navy);color:#fff}
+.grid .ch.now .wk{color:#93a9c9}.grid .ch.now .dt{color:#fff}
+.grid .ch.now .prog{height:4px;border-radius:2px;background:rgba(255,255,255,.22);margin-top:8px;overflow:hidden}.grid .ch.now .pd{font-size:9px;font-weight:700;color:#93a9c9;margin-top:4px}
+.grid .ch.now .prog i{display:block;height:100%;background:#fff;border-radius:2px}
+.grid .ch.per{background:var(--navy-50);border-left:1px solid var(--n-300)}
+.grid .ch.per .wk{color:var(--navy-700)}
+/* row header */
+.grid .rh{padding-left:18px;display:flex;flex-direction:column;justify-content:center}
+.grid .rh .n{font-size:11.25px;font-weight:700;color:var(--n-900)}
+.grid .rh .n .glc{font-size:9.9px;font-weight:600;color:var(--n-600);margin-right:6px}
+.grid .rh .g{font-size:9.9px;font-weight:600;color:var(--n-600);margin-top:2px}
+/* cells · three lines, always */
+.cell{text-align:right;display:flex;flex-direction:column;justify-content:center;min-height:82px}
+.grid .rh{min-height:82px}
+.cell .a{font-size:18px;font-weight:800;letter-spacing:-.18px;color:var(--n-900);line-height:1.1}
+.cell .b{font-size:9.9px;font-weight:700;color:var(--n-600);margin-top:3px}
+.cell .v{font-size:9.9px;font-weight:800;margin-top:5px}
+.cell .bar{height:4px;border-radius:2px;background:var(--n-200);margin-top:7px;overflow:hidden;position:relative}
+.cell .bar i{display:block;height:100%;border-radius:2px}
+.cell .bar .clk{position:absolute;top:-5px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--navy);transform:translateX(-4px)}
+.grid .now .cell,.grid .cell.now{background:var(--navy-50)}
+.grid .cell.ahead .a{color:var(--n-600);font-weight:700;font-size:15px}
+.grid .cell.per{background:var(--navy-50);border-left:1px solid var(--n-300)}
+.grid .cell.per .a{font-size:20px}
+.good{color:var(--green-600)}.over{color:var(--red-600)}.amb{color:var(--amber-600)}.mute{color:var(--n-600)}
+.grid .sep{border-top:2px solid var(--n-300)}
+/* review */
+.rv{margin-top:14px}
+.rv .h{display:flex;align-items:center;gap:8px;margin-bottom:9px;padding:0 4px}
+.rv .h .t{font-size:9px;font-weight:800;letter-spacing:.81px;text-transform:uppercase;color:var(--n-700)}
+.rv .items{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rv .item{background:var(--n0);border:.5px solid var(--n-300);border-left:3px solid var(--amber-600);border-radius:10.8px;padding:13px 16px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+.rv .item .t{font-size:11.25px;font-weight:800;color:var(--n-900)}.rv .item .s{font-size:9.9px;font-weight:600;color:var(--n-600);margin-top:2px}
+.rv .item .go{margin-left:auto;font-size:9.9px;font-weight:800;color:var(--navy-700);white-space:nowrap}
+.rv .item .go::after{content:" →"}
+.notes{max-width:1240px;margin:18px auto 0;padding:0 20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.notes div{background:var(--n0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.notes h4{font-size:9px;font-weight:800;letter-spacing:.81px;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.notes b{color:var(--n-900)}
+
+.grid .ch.ahead .dt{color:var(--n-900)}
+.perk{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+.perk .k{background:var(--n0);border:.5px solid var(--n-300);border-radius:10.8px;padding:13px 16px;box-shadow:var(--shadow)}
+.perk .k .e{font-size:9px;font-weight:800;letter-spacing:.81px;text-transform:uppercase;color:var(--n-600)}
+.perk .k .v{font-size:18px;font-weight:800;letter-spacing:-.18px;color:var(--n-900);margin-top:4px;font-variant-numeric:tabular-nums}
+.perk .k .s{font-size:9.9px;font-weight:600;color:var(--n-600);margin-top:3px}
+</style>
+<div class="devbar"><b>Next period · the same table, every column ahead</b>
+<span class="lbl">board:</span>
+<button id="bOV" class="on" onclick="setB('ov')">Overview</button>
+<button id="bLB" onclick="setB('lb')">Labor</button>
+<button id="bPU" onclick="setB('pu')">Purchasing</button>
+<span class="h">no landed, no verdict, no lifted column · the plan, week by week</span></div>
+<div class="wrap"><div id="app"></div></div>
+<div class="notes" id="notes"></div>
+<script>
+const D={"weeks":[["Wk 1","10/05 \u2013 10/11"],["Wk 2","10/12 \u2013 10/18"],["Wk 3","10/19 \u2013 10/25"],["Wk 4","10/26 \u2013 11/01"]],"rev":[19389,19389,15924,15924],"lab":{"pct":18.2,"goal":[3529,3529,2898,2898]},"food":{"pct":23.03,"goal":[4465,4465,3667,3667]},"ps":{"pct":2.79,"goal":[541,541,444,444]}};
+let B='ov';
+const $=i=>document.getElementById(i);
+const m=n=>(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const sum=a=>a.reduce((x,y)=>x+y,0);
+const SECT={ov:'P&L Overview',lb:'Labor',pu:'Purchasing'};
+const revTot=sum(D.rev);
+function header(){
+ let o='<div class="ch l"><div class="wk">Bucket</div><div class="dt" style="color:var(--n-600);font-weight:600">by week</div></div>';
+ D.weeks.forEach(w=>{o+='<div class="ch ahead"><div class="wk">'+w[0]+'</div><div class="dt">'+w[1]+'</div><span class="pill p-line">forecast</span></div>';});
+ return o+'<div class="ch per"><div class="wk">Period</div><div class="dt">P11 · not started</div><span class="pill p-navy">the plan</span></div>';
+}
+function cell(v,sub){return '<div class="cell ahead"><div class="a">'+m(v)+'</div><div class="b">'+sub+'</div><div class="v mute">&nbsp;</div></div>';}
+function per(tot,sub,isRev){return '<div class="cell per"><div class="a">'+m(tot)+'</div><div class="b">'+sub+'</div><div class="v mute">'+m(tot/4)+' a week · '+m(tot/28)+' a day</div></div>';}
+function table(rows){
+ let o='<div class="card t-navy"><div class="grid">'+header();
+ rows.forEach((r,ri)=>{const [gl,name,goal,isRev,g]=r; const sep=ri===1?' sep':'';
+  o+='<div class="rh'+sep+'"'+(isRev?' style="background:var(--green-50)"':'')+'><div class="n">'+(gl?'<span class="glc">'+gl+'</span>':'')+name+'</div><div class="g">'+g+'</div></div>';
+  (isRev?D.rev:goal).forEach(v=>{let c=cell(v,isRev?'forecast':'to spend'); if(sep)c=c.replace('class="cell','class="cell sep'); o+=c;});
+  let pc=per(isRev?revTot:sum(goal),isRev?'planned revenue':'to spend',isRev); if(sep)pc=pc.replace('class="cell','class="cell sep'); o+=pc;});
+ return o+'</div></div>';
+}
+function render(){
+ const L=D.lab,F=D.food,P=D.ps; let rows;
+ if(B==='ov') rows=[[null,'Revenue',null,true,'meals + service fee'],['3100','Kitchen labor',L.goal,false,'hourly · '+L.pct+'% of revenue'],['3200','Food',F.goal,false,F.pct+'% of revenue'],['3400','Packaging',P.goal,false,P.pct+'% of revenue']];
+ else if(B==='lb') rows=[[null,'Revenue',null,true,'what each week earns'],['3100','Hourly labor',L.goal,false,L.pct+'% of week revenue · schedule to this']];
+ else rows=[[null,'Revenue',null,true,'what you are ordering for'],['3200','Food',F.goal,false,F.pct+'% of week revenue · order against this'],['3400','Packaging',P.goal,false,P.pct+'% of week revenue']];
+ const tot=B==='ov'?sum(L.goal)+sum(F.goal)+sum(P.goal):(B==='lb'?sum(L.goal):sum(F.goal)+sum(P.goal));
+ $("app").innerHTML=
+  '<div class="cmd"><span class="ttl">KPI Dashboard ·</span><span class="acct">TBJ - FL</span>'+
+  '<span class="chip"><span class="k">Section</span><span class="v">'+SECT[B]+'</span><span class="d">▾</span></span>'+
+  '<span class="chip"><span class="v">Next period</span><span class="d">10/05/26 – 11/01/26</span><span class="d">▾</span></span>'+
+  '<span class="meta">TODAY <b>09/15</b> · PERIOD <b>10</b> · WEEK <b>2</b></span><span class="ml"></span>'+
+  (B!=='pu'?'<span class="tog"><button class="on">Hourly</button><button>+ Salary</button></span>':'')+'<span class="dot"><i></i>Data current</span></div>'+
+  '<div class="board"><div class="status"><span class="stpill">Planning view</span><span class="sub"><b>P11</b> · starts 10/05 · budget only, nothing has happened yet</span></div>'+
+  table(rows)+
+  '<div class="perk"><div class="k"><div class="e">'+(B==='ov'?'Cost of goods':(B==='lb'?'Hourly labor':'Purchases'))+' · the period</div><div class="v">'+m(tot)+'</div><div class="s">'+(tot/revTot*100).toFixed(1)+'% of planned revenue</div></div>'+
+  '<div class="k"><div class="e">A week</div><div class="v">'+m(tot/4)+'</div><div class="s">four even weeks</div></div>'+
+  '<div class="k"><div class="e">A service day</div><div class="v">'+m(tot/20)+'</div><div class="s">20 service days · confirm the count</div></div></div></div>';
+ $("notes").innerHTML=[
+  '<h4>Same table, every column ahead</h4>Four forecast weeks, no landed figures, no verdicts, <b>no lifted column - nothing is "now".</b><br><br>The period column reads <b>"the plan"</b> instead of "what is left", and carries the weekly and daily rate underneath.',
+  '<h4>Why it fits</h4>A chef who has learned Current period already reads this. <b>Same columns, same rows, same GL codes, same green-tinted revenue row.</b> The only difference is that every cell is in the state Current period\'s weeks 3 and 4 are in.<br><br>When P11 starts, this table becomes that one - <b>the first column lifts and the cells fill.</b>',
+  '<h4>What replaced the approved Next period</h4>The Overview\'s two plan tables and three cards; Labor\'s two-card plan; Purchasing\'s budget card. <b>All approved, all simpler than this - but all different shapes from each other and from Current period.</b> This is one shape for two ranges.'
+ ].map(n=>'<div>'+n+'</div>').join('');
+ $("bOV").className=B==='ov'?'on':''; $("bLB").className=B==='lb'?'on':''; $("bPU").className=B==='pu'?'on':'';
+}
+function setB(x){B=x;render();window.scrollTo(0,0);}
+render();
+</script>
