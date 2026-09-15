@@ -2163,3 +2163,195 @@
   font-size: 13px;
   padding-top: 11px;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Kevin 2026-09-15 Purchasing reskin PR 2 · new detail surfaces.
+   Vendor table (CY), spend list (LP), reimbursables (LP). PR 3
+   is R-109 - CP one-table view lands as its own PR.
+   ───────────────────────────────────────────────────────────── */
+
+/* Shared: source dot next to the vendor name (bill.com vs card). */
+.kpi-app .kpi-p-srcdot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.kpi-app .kpi-p-srcdot-bill { background: var(--navy-700); }
+.kpi-app .kpi-p-srcdot-card { background: #E08A2E; }
+
+/* Bucket pills in the spend list (small tag against a soft fill). */
+.kpi-app .kpi-p-bkt {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: var(--n-700);
+  background: var(--n-100);
+}
+.kpi-app .kpi-p-bkt-food    { background: #E8F1FC; color: #14549B; }
+.kpi-app .kpi-p-bkt-pack    { background: #F3ECFB; color: #6B3FA0; }
+.kpi-app .kpi-p-bkt-veh     { background: #EAF6EC; color: #1B6B2E; }
+.kpi-app .kpi-p-bkt-equip   { background: #DFF5F0; color: #0F766E; }
+.kpi-app .kpi-p-bkt-rm      { background: #FBEAD5; color: #B45309; }
+.kpi-app .kpi-p-bkt-reimb   { background: #EEF1F6; color: var(--navy-700); }
+.kpi-app .kpi-p-bkt-notcoded{ background: #FFDABE; color: #92580A; }
+.kpi-app .kpi-p-bkt-other   { background: var(--n-100); color: var(--n-700); }
+
+/* CY vendor table. Full-width, capped scroll. */
+.kpi-app .kpi-p-vt {
+  padding: var(--kpi-sp-4) var(--kpi-sp-5);
+}
+.kpi-app .kpi-p-vt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--kpi-sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-vt-note {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-vt-scroll {
+  max-height: 520px;
+  overflow-y: auto;
+}
+.kpi-app .kpi-p-vt-tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.kpi-app .kpi-p-vt-tbl th {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .63px;
+  text-transform: uppercase;
+  color: var(--n-600);
+  padding: 0 14px 9px 0;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--n-300);
+  position: sticky;
+  top: 0;
+  background: var(--n-0, #fff);
+}
+.kpi-app .kpi-p-vt-tbl th.kpi-p-vt-l { text-align: left; }
+.kpi-app .kpi-p-vt-tbl td {
+  padding: 11px 14px 11px 0;
+  border-bottom: 1px solid var(--n-200);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--n-800);
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-vt-tbl td.kpi-p-vt-l {
+  text-align: left;
+  font-weight: 700;
+}
+.kpi-app .kpi-p-vt-tbl td.kpi-p-vt-r { text-align: right; }
+.kpi-app .kpi-p-vt-tbl td.kpi-p-vt-muted {
+  color: var(--n-600);
+  font-weight: 600;
+}
+.kpi-app .kpi-p-vt-tbl tr.kpi-p-vt-tot td {
+  background: var(--navy-700);
+  color: #fff;
+  border: none;
+  font-weight: 800;
+  font-size: 12.5px;
+}
+
+/* LP spend list (Every purchase). Same table shape as vendor
+   table so the wire is one look. */
+.kpi-app .kpi-p-sl,
+.kpi-app .kpi-p-rt {
+  padding: var(--kpi-sp-4) var(--kpi-sp-5);
+}
+.kpi-app .kpi-p-sl-head,
+.kpi-app .kpi-p-rt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--kpi-sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-sl-note,
+.kpi-app .kpi-p-rt-note {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-sl-empty {
+  padding: 26px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--n-600);
+  font-weight: 600;
+}
+.kpi-app .kpi-p-sl-scroll,
+.kpi-app .kpi-p-rt-scroll {
+  max-height: 520px;
+  overflow-y: auto;
+}
+.kpi-app .kpi-p-sl-tbl,
+.kpi-app .kpi-p-rt-tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.kpi-app .kpi-p-sl-tbl th,
+.kpi-app .kpi-p-rt-tbl th {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .63px;
+  text-transform: uppercase;
+  color: var(--n-600);
+  padding: 0 14px 9px 0;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--n-300);
+  position: sticky;
+  top: 0;
+  background: var(--n-0, #fff);
+}
+.kpi-app .kpi-p-sl-tbl th.kpi-p-sl-l,
+.kpi-app .kpi-p-rt-tbl th.kpi-p-rt-l { text-align: left; }
+.kpi-app .kpi-p-sl-tbl td,
+.kpi-app .kpi-p-rt-tbl td {
+  padding: 11px 14px 11px 0;
+  border-bottom: 1px solid var(--n-200);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--n-800);
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-sl-tbl td.kpi-p-sl-l,
+.kpi-app .kpi-p-rt-tbl td.kpi-p-rt-l {
+  text-align: left;
+  font-weight: 700;
+}
+.kpi-app .kpi-p-sl-tbl td.kpi-p-sl-r,
+.kpi-app .kpi-p-rt-tbl td.kpi-p-rt-r { text-align: right; }
+.kpi-app .kpi-p-sl-muted,
+.kpi-app .kpi-p-rt-muted {
+  color: var(--n-600);
+  font-weight: 600;
+}
+.kpi-app .kpi-p-sl-tbl tr.kpi-p-sl-tot td,
+.kpi-app .kpi-p-rt-tbl tr.kpi-p-rt-tot td {
+  background: var(--navy-700);
+  color: #fff;
+  border: none;
+  font-weight: 800;
+  font-size: 12.5px;
+}

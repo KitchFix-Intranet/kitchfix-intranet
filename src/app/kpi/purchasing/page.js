@@ -275,6 +275,13 @@ export default function KpiPurchasingPage() {
     // bug Kevin found.)
     const params = new URLSearchParams({ account, start, end });
     if (urlPreview) params.set("preview", urlPreview);
+    // Kevin 2026-09-15 reskin PR 2: request line-item detail on
+    // single-period ranges (LP + CP + NP). The new LP spend list +
+    // reimbursables table read `payload.actuals`. CY continues to
+    // read `vendor_rollup.rows` - no drill needed on the multi-period
+    // aggregate. Server-side gate: `?drill=lines` returns `actuals`
+    // in the response body; extra bytes but bounded (LP is ~4 weeks).
+    if (rangeSelectionEarly?.kind === "period") params.set("drill", "lines");
     fetch(`/api/kpi/purchasing?${params.toString()}`, {
       credentials: "include",
       signal: ctrl.signal,
@@ -308,7 +315,7 @@ export default function KpiPurchasingPage() {
       clearTimeout(to);
       ctrl.abort();
     };
-  }, [account, start, end, status, retryCount]);
+  }, [account, start, end, status, retryCount, rangeSelectionEarly, urlPreview]);
 
   // PR 5 - skeleton show-delay. Delay showing the skeleton so a
   // fast fetch does not flash a skeleton for 80ms then disappear.
@@ -1308,30 +1315,227 @@ export default function KpiPurchasingPage() {
           );
         })()}
 
-        {/* The detail · drill table. Filter chips removed (PR 1); PR 2
-            replaces this with a vendor table on CY and a spend list on
-            LP + CP, plus a reimbursables table below. */}
-        <div className="kpi-p-tablewrap kpi-p-tablewrap-flush">
-          <PurchasingTable
-            account={account}
-            start={start}
-            end={end}
-            tier={board.tier}
-            weeks={board.weeks}
-            decoratedPeriods={board.decoratedPeriods}
-            weekly={board.weekly}
-            heroTotals={{
-              food:      board.buckets.find(b => b.key === "food")?.spent      || 0,
-              packaging: board.buckets.find(b => b.key === "packaging")?.spent || 0,
-              vehicle:   board.buckets.find(b => b.key === "vehicle")?.spent   || 0,
-              equipment: board.ledgers.find(l => l.key === "equip")?.spent     || 0,
-              repair:    board.ledgers.find(l => l.key === "rm")?.spent        || 0,
-            }}
-            isAggregate={isAggregate}
-            weeksInRange={board.weeksInRange}
-            vendorRollup={data?.vendor_rollup}
-          />
-        </div>
+        {/* The detail · CY = vendor table, LP = spend list + own
+            reimbursables table, CP = existing drill table (R-109
+            replaces it), NP = no detail per prompt § 4.NP. Kevin
+            2026-09-15 reskin PR 2. */}
+        {(() => {
+          const isCY = resolvedPreset === "fytd";
+          const isLP = resolvedPreset === "last_period";
+          const isCP = resolvedPreset === "this_period";
+          // Purchasing doesn't infer `next_period` in resolvedPreset
+          // (page.js:749 lacks the branch). Use `is_future_range` from
+          // the server payload - true iff the range starts after today.
+          // Prompt § 4.NP: "No chart, no spend list, no vendors, no
+          // verdict." Money card + where-it-went above are the whole
+          // board for NP.
+          const isNP = isFutureRange;
+
+          if (isNP) return null;
+
+          // Current year: one row per vendor with the food / packaging
+          // / vehicle split, plus a lines count and a total. Source is
+          // `vendor_rollup.rows` (per-vendor aggregate; already shipped
+          // by the route). Unresolved vendors surface as a distinct
+          // row so the count matches.
+          if (isCY) {
+            const rows = data?.vendor_rollup?.rows || [];
+            const total = rows.reduce((s, v) => s + Number(v.spend || 0), 0);
+            const nonZero = rows.filter(v => Math.abs(Number(v.spend || 0)) > 0.005);
+            return (
+              <div className="kpi-p-card kpi-p-vt" data-card="vendor-table">
+                <div className="kpi-p-vt-head">
+                  <span className="kpi-p-cardtitle">Every vendor</span>
+                  <span className="kpi-p-vt-note">{nonZero.length} of {rows.length}</span>
+                </div>
+                <div className="kpi-p-vt-scroll">
+                  <table className="kpi-p-vt-tbl">
+                    <thead>
+                      <tr>
+                        <th className="kpi-p-vt-l">Vendor</th>
+                        <th className="kpi-p-vt-r">Food</th>
+                        <th className="kpi-p-vt-r">Packaging</th>
+                        <th className="kpi-p-vt-r">Vehicle</th>
+                        <th className="kpi-p-vt-r">Lines</th>
+                        <th className="kpi-p-vt-r">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nonZero.map((v, i) => {
+                        const displayName = v.name || (v.resolved === false && v.vendor_id ? "(unresolved vendor)" : "—");
+                        const gs = v.gl_split || {};
+                        return (
+                          <tr key={v.vendor_id || `unr-${i}`}>
+                            <td className="kpi-p-vt-l">{displayName}</td>
+                            <td className="kpi-p-vt-r">{gs.food ? fmt$(gs.food) : "—"}</td>
+                            <td className="kpi-p-vt-r">{gs.packaging ? fmt$(gs.packaging) : "—"}</td>
+                            <td className="kpi-p-vt-r">{gs.vehicle ? fmt$(gs.vehicle) : "—"}</td>
+                            <td className="kpi-p-vt-r kpi-p-vt-muted">{v.line_count}</td>
+                            <td className="kpi-p-vt-r">{fmt$(v.spend)}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="kpi-p-vt-tot">
+                        <td className="kpi-p-vt-l">All vendors</td>
+                        <td colSpan="4"></td>
+                        <td className="kpi-p-vt-r">{fmt$(total)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          }
+
+          // Last period: itemised spend list (bill.com + card charges)
+          // above a separate reimbursables table. Source is
+          // `payload.actuals` from `?drill=lines` (single-period gate
+          // in the fetch effect above). Reimbursables split off by
+          // `gl_line_code` starting with "13"; main list is everything
+          // else.
+          if (isLP) {
+            const actuals = data?.actuals || [];
+            const BUCKET_LABEL = (gl) => {
+              const s = String(gl || "");
+              if (s.startsWith("3200")) return "FOOD";
+              if (s.startsWith("3400")) return "PACK";
+              if (s.startsWith("3500")) return "VEH";
+              if (s === "5002.5")       return "EQUIP";
+              if (s === "5002.1")       return "R&M";
+              if (s.startsWith("13"))   return "REIMB";
+              if (!s)                    return "NOT CODED";
+              return "OTHER";
+            };
+            const mainRows = actuals
+              .filter(r => !String(r.gl_line_code || "").startsWith("13"))
+              .slice()
+              .sort((a, b) => String(b.txn_date).localeCompare(String(a.txn_date)));
+            const reimbRows = actuals
+              .filter(r => String(r.gl_line_code || "").startsWith("13"))
+              .slice()
+              .sort((a, b) => String(b.txn_date).localeCompare(String(a.txn_date)));
+            const mainTotal = mainRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+            const reimbTotal = reimbRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+            const shortDate = (iso) => (iso || "").slice(5);   // MM-DD
+            return (
+              <>
+                <div className="kpi-p-card kpi-p-sl" data-card="spend-list">
+                  <div className="kpi-p-sl-head">
+                    <span className="kpi-p-cardtitle">Every purchase</span>
+                    <span className="kpi-p-sl-note">{mainRows.length} · invoice and card, newest first</span>
+                  </div>
+                  {mainRows.length === 0 ? (
+                    <div className="kpi-p-sl-empty">No purchases in this range.</div>
+                  ) : (
+                    <div className="kpi-p-sl-scroll">
+                      <table className="kpi-p-sl-tbl">
+                        <thead>
+                          <tr>
+                            <th className="kpi-p-sl-l">Date</th>
+                            <th className="kpi-p-sl-l">Vendor</th>
+                            <th className="kpi-p-sl-l">GL</th>
+                            <th className="kpi-p-sl-l">Bucket</th>
+                            <th className="kpi-p-sl-l">Source</th>
+                            <th className="kpi-p-sl-r">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mainRows.map((r, i) => (
+                            <tr key={r.id || `m-${i}`}>
+                              <td className="kpi-p-sl-l kpi-p-sl-muted">{shortDate(r.txn_date)}</td>
+                              <td className="kpi-p-sl-l">
+                                <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
+                                {r.vendor || "—"}
+                              </td>
+                              <td className="kpi-p-sl-l kpi-p-sl-muted">{r.gl_line_code || "—"}</td>
+                              <td className="kpi-p-sl-l">
+                                <span className={`kpi-p-bkt kpi-p-bkt-${BUCKET_LABEL(r.gl_line_code).toLowerCase().replace(/[^a-z]/g, "")}`}>{BUCKET_LABEL(r.gl_line_code)}</span>
+                              </td>
+                              <td className="kpi-p-sl-l kpi-p-sl-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
+                              <td className="kpi-p-sl-r">{fmt$(r.amount)}</td>
+                            </tr>
+                          ))}
+                          <tr className="kpi-p-sl-tot">
+                            <td className="kpi-p-sl-l" colSpan="5">{mainRows.length} purchases</td>
+                            <td className="kpi-p-sl-r">{fmt$(mainTotal)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {reimbRows.length > 0 && (
+                  <div className="kpi-p-card kpi-p-rt" data-card="reimbursables-table">
+                    <div className="kpi-p-rt-head">
+                      <span className="kpi-p-cardtitle">Also purchased · billed back to the club</span>
+                      <span className="kpi-p-rt-note">{reimbRows.length} lines · not part of the budget above</span>
+                    </div>
+                    <div className="kpi-p-rt-scroll">
+                      <table className="kpi-p-rt-tbl">
+                        <thead>
+                          <tr>
+                            <th className="kpi-p-rt-l">Date</th>
+                            <th className="kpi-p-rt-l">Vendor</th>
+                            <th className="kpi-p-rt-l">GL</th>
+                            <th className="kpi-p-rt-l">Source</th>
+                            <th className="kpi-p-rt-r">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reimbRows.map((r, i) => (
+                            <tr key={r.id || `r-${i}`}>
+                              <td className="kpi-p-rt-l kpi-p-rt-muted">{shortDate(r.txn_date)}</td>
+                              <td className="kpi-p-rt-l">
+                                <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
+                                {r.vendor || "—"}
+                              </td>
+                              <td className="kpi-p-rt-l kpi-p-rt-muted">{r.gl_line_code || "—"}</td>
+                              <td className="kpi-p-rt-l kpi-p-rt-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
+                              <td className="kpi-p-rt-r">{fmt$(r.amount)}</td>
+                            </tr>
+                          ))}
+                          <tr className="kpi-p-rt-tot">
+                            <td className="kpi-p-rt-l" colSpan="4">All {reimbRows.length} reimbursable lines</td>
+                            <td className="kpi-p-rt-r">{fmt$(reimbTotal)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          }
+
+          // Current period (or custom / snapped): keep the existing
+          // drill table until R-109 replaces the CP surface entirely.
+          // Kevin ruling 2026-09-15: PR 3 cancelled - the one-table
+          // Current-period view lands as its own PR after this one.
+          return (
+            <div className="kpi-p-tablewrap kpi-p-tablewrap-flush">
+              <PurchasingTable
+                account={account}
+                start={start}
+                end={end}
+                tier={board.tier}
+                weeks={board.weeks}
+                decoratedPeriods={board.decoratedPeriods}
+                weekly={board.weekly}
+                heroTotals={{
+                  food:      board.buckets.find(b => b.key === "food")?.spent      || 0,
+                  packaging: board.buckets.find(b => b.key === "packaging")?.spent || 0,
+                  vehicle:   board.buckets.find(b => b.key === "vehicle")?.spent   || 0,
+                  equipment: board.ledgers.find(l => l.key === "equip")?.spent     || 0,
+                  repair:    board.ledgers.find(l => l.key === "rm")?.spent        || 0,
+                }}
+                isAggregate={isAggregate}
+                weeksInRange={board.weeksInRange}
+                vendorRollup={data?.vendor_rollup}
+              />
+            </div>
+          );
+        })()}
       </div>
     );
   })();
