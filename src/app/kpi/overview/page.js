@@ -256,7 +256,15 @@ export default function KpiOverviewPage() {
       setCpAuxError(null);
       return;
     }
-    if (!fetchAccount || !start || !end) return;
+    // Kevin 2026-09-15 follow-up 1. Same defect class as Purchasing
+    // #1121: `?preview=<account>` URL has no ?account=, so fetchAccount
+    // is "" and the old guard stranded the fetch indefinitely. Labor
+    // and Purchasing routes both resolve preview -> account server-
+    // side via resolvePreviewAccess when fetchAccount is empty. Fire
+    // the fetch when EITHER a fetchAccount or a preview is present;
+    // still bail if neither is set (no range to fetch).
+    if (!fetchAccount && !urlPreview) return;
+    if (!start || !end) return;
     const ctrl = new AbortController();
     setCpAuxError(null);
     const p = new URLSearchParams({ account: fetchAccount, start, end });

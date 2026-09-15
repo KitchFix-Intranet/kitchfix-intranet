@@ -54,18 +54,19 @@ export default function CurrentPeriodReview({ labor, purchasing }) {
 function laborPendingSummary(labor) {
   if (!labor) return null;
   const board = labor.board || {};
-  // Prefer aggregate signals when the labor route ships them. Fall
-  // back to summing per-worker approval-waiting hours if surface-level
-  // signals are absent. Render copy: "N hours waiting on approval".
-  const pendingHours =
-    Number(board.pending_approval_hours || 0)
-    || Number(board.unapproved_hours || 0)
-    || 0;
-  if (!(pendingHours > 0)) return null;
-  const pendingAmount =
-    Number(board.pending_approval_amount || 0)
-    || Number(board.unapproved_amount || 0)
-    || null;
+  // Kevin 2026-09-15 follow-up 4. The prior read looked for board.
+  // pending_approval_hours / board.unapproved_hours - neither exists
+  // at the top level of the labor payload. Per-week `unapproved_hours`
+  // does (attachWeeklyBasisToBoard sets it on every week); sum across
+  // the four weeks. Dollar equivalent = pending_hours × avg_rate
+  // (board.avg_rate is the range's payroll-weighted average). TBJ CP
+  // right now: 327.05 + 44.03 = 371.08 hours pending. Card
+  // suppression only kicks in on genuine zero.
+  const weeks = Array.isArray(board.weeks) ? board.weeks : [];
+  const pendingHours = weeks.reduce((s, w) => s + Number(w.unapproved_hours || 0), 0);
+  if (!(pendingHours > 0.005)) return null;
+  const avgRate = Number(board.avg_rate || 0);
+  const pendingAmount = avgRate > 0 ? pendingHours * avgRate : null;
   const detail = pendingAmount != null
     ? `Labor · ${dollar0(pendingAmount)} · counts as spent until signed off`
     : "Labor · counts as spent until signed off";
