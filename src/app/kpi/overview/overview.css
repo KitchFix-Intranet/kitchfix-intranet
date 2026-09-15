@@ -2450,6 +2450,7 @@
   font-size: 11.25px;
   font-weight: 700;
   color: var(--n-900, var(--n-800));
+  line-height: 1.2;
 }
 .kpi-app .kpi-ov-cp-glc {
   font-size: 9.9px;
@@ -2462,6 +2463,7 @@
   font-weight: 600;
   color: var(--n-600);
   margin-top: 2px;
+  line-height: 1.2;
 }
 
 /* Cost cells. Kevin 2026-09-15 layout fixes:
@@ -2490,31 +2492,25 @@
   color: var(--n-900, var(--n-800));
   line-height: 1.1;
 }
-/* Kevin 2026-09-15 layout fix 2: verdict + subline never wrap.
-   Rows kept climbing to 107/110px because "$6,474 left · invoices
-   still landing" and "$68,187 confirmed · ahead" wrapped in narrow
-   cells. Render is 82 on every row; enforce nowrap here so a long
-   verdict truncates with ellipsis instead of pushing the row taller.
-   White-space alone is enough; the copy is short enough at 1440
-   that the ellipsis never fires. If a future range breaks that,
-   the ellipsis is a visible signal rather than a silent row-height
-   drift. */
-.kpi-app .kpi-ov-cp-b,
-.kpi-app .kpi-ov-cp-v {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* Kevin 2026-09-15 ruling 2: NO nowrap, NO ellipsis on the sub /
+   verdict lines. A truncated money figure is worse than a tall row -
+   "$6,474 left · invoices still la…" tells an operator nothing. If a
+   verdict genuinely won't fit at 1440, shorten the copy, don't hide
+   it. Explicit line-height on b / v (1.2) matches the render's
+   default body line-height so cells don't inherit the intranet's
+   larger body line-height and drift 6-7px taller than the render. */
 .kpi-app .kpi-ov-cp-b {
   font-size: 9.9px;
   font-weight: 700;
   color: var(--n-600);
   margin-top: 3px;
+  line-height: 1.2;
 }
 .kpi-app .kpi-ov-cp-v {
   font-size: 9.9px;
   font-weight: 800;
   margin-top: 5px;
+  line-height: 1.2;
 }
 .kpi-app .kpi-ov-cp-bar {
   height: 4px;
