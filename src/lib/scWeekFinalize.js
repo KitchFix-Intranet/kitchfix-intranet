@@ -695,12 +695,43 @@ export async function runFinalizeEffects(ctx, deps = {}) {
         createdBy:   submitterEmail || "sc-finalize",
         deps:        { supa },
       });
+      // 2026-09-16: attach per-line detail so fireN1's record-copy PDF
+      // has the data it needs to render + total. Prior to this fix
+      // invoiceRecords carried only summary fields (slot / qboIds /
+      // pretaxTotalCents / lineCount / isTest / qboLink / ledgerRowId).
+      // recordCopyPdf.js:flattenLines reads rec.lineItems[]; when
+      // absent it produced an empty PDF with pretaxCents=0, the guard
+      // at qboNotifications.js:419-423 threw on the (0 !== real total)
+      // mismatch, and every finalize since PR #1096 killed BOTH the
+      // email AND Slack channels because the guard runs before
+      // dispatch. The record-copy PDF was the load-bearing failure but
+      // the guard on it turned a soft failure into a total silence.
+      //
+      // Shape matches recordCopyPdf.js:flattenLines exactly. Filter
+      // to SalesItemLineDetail so tax lines / subtotals / discounts
+      // do not pollute the record copy. UnitPrice + Amount are dollars
+      // in QBO; ×100 rounded to cents matches how sumCentsFromLines
+      // computes pretaxTotalCents so both totals derive from the same
+      // source and cannot drift.
+      const lineItems = (invoice.Line || [])
+        .filter((ln) => ln.DetailType === "SalesItemLineDetail")
+        .map((ln) => {
+          const det = ln.SalesItemLineDetail || {};
+          return {
+            serviceName: det.ItemRef?.name || ln.Description || "",
+            serviceDate: det.ServiceDate || "",
+            qty:         Number(det.Qty || 0),
+            rateCents:   Math.round(Number(det.UnitPrice || 0) * 100),
+            amountCents: Math.round(Number(ln.Amount || 0) * 100),
+          };
+        });
       invoiceRecords.push({
         invoiceSlot:      invoice._slot,
         qboInvoiceId:     result.qboInvoiceId,
         qboDocNumber:     result.qboDocNumber,
         pretaxTotalCents: sumCentsFromLines(invoice.Line),
         lineCount:        invoice.Line.length,
+        lineItems,
         isTest,
         qboLink:          buildQboInvoiceLink(result.qboInvoiceId),
         ledgerRowId:      result.ledgerRowId,
@@ -800,6 +831,19 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     log.info("[N1 fired]", n1Payload);
   } else {
     log.warn("[N1 delivery incomplete]", n1Payload);
+  }
+  // 2026-09-16: PDF failures now degrade to send-without-attachment
+  // rather than kill the send. Log at warn tier so ops has a signal
+  // that the record copy needs looking at, independent of whether
+  // the notification channels themselves succeeded.
+  if (n1.pdfError) {
+    log.warn("[N1 record-copy PDF failed]", {
+      subject: n1.subject,
+      accountKey,
+      weekStart: pairStart,
+      weekEnd: pairEnd,
+      pdfError: n1.pdfError,
+    });
   }
 
   return { pushed: true, invoiceRecords, n1 };

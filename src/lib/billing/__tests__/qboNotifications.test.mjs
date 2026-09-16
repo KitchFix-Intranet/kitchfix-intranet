@@ -303,31 +303,38 @@ test("fireN1 test mode: Slack text enumerates per-slot QBO deep-links", async ()
 
 // ─── Pretax-mismatch fence (Kevin ruling 2026-09-09) ───────────
 //
-// The email's fact-table $ and the PDF's footer $ MUST match. A
-// mismatch is worse than no attachment. fireN1 throws before any
-// dispatch to force loud failure over silent divergence.
+// 2026-09-16: contract change. The email's fact-table $ and the PDF's
+// footer $ still must agree, but a mismatch now degrades to
+// "send without attachment" rather than killing dispatch entirely.
+// A guard on an ATTACHMENT must never gate the MESSAGE (see PR body
+// for the incident that produced this rule). Prior behavior was
+// "throw"; new behavior is "attachment omitted, email + slack still
+// send, pdfError carries the reason".
 
-test("fireN1 THROWS when pretaxTotalCents disagrees with sum of lineItems", async () => {
+test("fireN1 degrades when pretaxTotalCents disagrees with sum of lineItems (was: throws pre-2026-09-16)", async () => {
   const email = makeFakeSender();
-  await assert.rejects(
-    () => fireN1({
-      ...N1_ARGS_BASE,
-      qboMode: "test",
-      invoiceRecords: [{
-        ...N1_ARGS_BASE.invoiceRecords[0],
-        isTest: true,
-        pretaxTotalCents: 1000000,     // claim $10,000
-        lineItems: [
-          { serviceName: "X", serviceDate: "2026-07-27",
-            qty: 1, rateCents: 500000, amountCents: 500000 }, // actual $5,000
-        ],
-      }],
-      accountMap: { salariedManagerEmails: [], rdoEmail: null },
-      deps: { emailSender: email.impl },
-    }),
-    /pretax mismatch/,
-  );
-  assert.equal(email.calls.length, 0, "must not dispatch on mismatch");
+  const slack = makeFakeSlack();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    invoiceRecords: [{
+      ...N1_ARGS_BASE.invoiceRecords[0],
+      isTest: true,
+      pretaxTotalCents: 1000000,     // claim $10,000
+      lineItems: [
+        { serviceName: "X", serviceDate: "2026-07-27",
+          qty: 1, rateCents: 500000, amountCents: 500000 }, // actual $5,000
+      ],
+    }],
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: { emailSender: email.impl, sendSlack: slack.impl, slackWebhookUrl: "https://hooks/x" },
+  });
+  assert.equal(email.calls.length, 1, "email dispatched despite mismatch (degrade contract)");
+  assert.equal(email.calls[0].attachments.length, 0, "attachment omitted");
+  assert.match(res.pdfError, /pretax mismatch/i);
+  assert.equal(slack.calls.length, 1, "slack dispatched despite mismatch");
+  assert.match(slack.calls[0].text, /Record copy PDF not attached/,
+    "slack post carries the failure as an appended line");
 });
 
 test("fireN1: approvedByLede names ALL approvers when the week had multiple (Kevin ruling)", async () => {
@@ -457,4 +464,129 @@ test("static exports: N1_STATIC_RECIPIENTS + N2_RECIPIENTS + TEST_SLACK_FOOTER",
   assert.ok(N2_RECIPIENTS.includes("sebastian@kitchfix.com"));
   assert.equal(typeof TEST_SLACK_FOOTER, "string");
   assert.ok(TEST_SLACK_FOOTER.length > 0);
+});
+
+// ─── PDF degrade-gracefully (2026-09-16 hotfix) ────────────────────
+//
+// Prior contract: if buildRecordCopyPdf threw OR the pretax mismatch
+// guard tripped, fireN1 threw and killed BOTH email and Slack. That
+// silenced every finalize when runFinalizeEffects produced
+// invoiceRecords without a lineItems[] field (a shape drift no
+// existing test caught because the fixtures hand-set lineItems).
+//
+// New contract: PDF failure omits the attachment, email + Slack
+// still dispatch, pdfError carries the reason for warn-tier logging,
+// Slack appends a warning line so ops sees the failure without
+// eroding the operator-facing email body.
+
+test("fireN1 degrades: PDF build throws -> email + slack still dispatch, pdfError set", async () => {
+  const email = makeFakeSender();
+  const slack = makeFakeSlack();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: {
+      emailSender: email.impl,
+      sendSlack: slack.impl,
+      slackWebhookUrl: "https://hooks/x",
+      buildRecordCopyPdf: async () => { throw new Error("pdf-lib blew up"); },
+    },
+  });
+  assert.equal(email.calls.length, 1, "email dispatched despite PDF failure");
+  assert.equal(res.email.result, "sent");
+  assert.equal(slack.calls.length, 1, "slack dispatched despite PDF failure");
+  assert.equal(res.slack.result.sent, true);
+  assert.equal(email.calls[0].attachments.length, 0, "no attachment when PDF failed");
+  assert.equal(res.pdf, null, "pdf summary is null on degrade");
+  assert.match(res.pdfError, /pdf-lib blew up/, "pdfError names the underlying failure");
+  assert.doesNotMatch(res.html, /pdf-lib blew up/,
+    "email body carries NO PDF-failure text - operator sees clean success");
+  assert.match(slack.calls[0].text, /Record copy PDF not attached/,
+    "slack carries the PDF failure as an appended line");
+});
+
+test("fireN1 degrades: PDF built but pretax mismatch -> attachment omitted, email + slack still send", async () => {
+  const email = makeFakeSender();
+  const slack = makeFakeSlack();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: {
+      emailSender: email.impl,
+      sendSlack: slack.impl,
+      slackWebhookUrl: "https://hooks/x",
+      // Fake PDF returns a wrong pretaxCents (0), simulating the exact
+      // shape production hit when invoiceRecords had no lineItems.
+      buildRecordCopyPdf: async () => ({
+        filename: "fake.pdf",
+        pdfBase64: "",
+        pdfBuffer: Buffer.from(""),
+        pretaxCents: 0,      // does NOT match records sum
+        lineCount: 0,
+      }),
+    },
+  });
+  assert.equal(email.calls.length, 1, "email dispatched despite pretax mismatch");
+  assert.equal(email.calls[0].attachments.length, 0, "no attachment on pretax mismatch");
+  assert.equal(res.pdf, null);
+  assert.match(res.pdfError, /pretax mismatch/i);
+  assert.equal(slack.calls.length, 1);
+  assert.match(slack.calls[0].text, /Record copy PDF not attached/);
+});
+
+test("fireN1 happy path: PDF succeeds, attachment goes, pdfError is null", async () => {
+  const email = makeFakeSender();
+  const slack = makeFakeSlack();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: { emailSender: email.impl, sendSlack: slack.impl, slackWebhookUrl: "https://hooks/x" },
+  });
+  assert.equal(res.email.result, "sent");
+  assert.equal(email.calls[0].attachments.length, 1, "attachment attached on happy path");
+  assert.equal(email.calls[0].attachments[0].mimeType, "application/pdf");
+  assert.equal(res.pdfError, null, "no pdfError on happy path");
+  assert.ok(res.pdf, "pdf summary populated on happy path");
+  assert.doesNotMatch(slack.calls[0].text, /Record copy PDF not attached/,
+    "slack does not carry a PDF-failure line on happy path");
+});
+
+test("fireN1: invoiceRecords WITHOUT lineItems -> reproduces the pre-fix silent-total-failure shape (now degrades)", async () => {
+  // This is the exact production shape that broke: invoiceRecords
+  // built by runFinalizeEffects (pre-2026-09-16-fix) with no
+  // lineItems[]. The real buildRecordCopyPdf's flattenLines iterates
+  // rec.lineItems || [] - absent yields empty array, empty totals,
+  // guard mismatches. Pre-fix that threw; post-fix it degrades.
+  const email = makeFakeSender();
+  const slack = makeFakeSlack();
+  const noLineItemsArgs = {
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    invoiceRecords: [{
+      // Same shape production produced before the runFinalizeEffects
+      // fix landed: no lineItems field.
+      invoiceSlot: "main",
+      qboInvoiceId: "INV-broken",
+      qboDocNumber: null,
+      pretaxTotalCents: 2120575,
+      lineCount: 1,
+      isTest: true,
+      qboLink: "https://app.qbo.intuit.com/app/invoice?txnId=INV-broken",
+      ledgerRowId: "led-broken",
+      // (lineItems intentionally absent)
+    }],
+    deps: { emailSender: email.impl, sendSlack: slack.impl, slackWebhookUrl: "https://hooks/x" },
+  };
+  const res = await fireN1(noLineItemsArgs);
+  // Pre-fix this would throw. Post-fix: degraded success.
+  assert.equal(res.email.result, "sent",
+    "regression: missing lineItems must NOT kill the send");
+  assert.equal(email.calls[0].attachments.length, 0,
+    "attachment omitted when the underlying PDF cannot render totals");
+  assert.match(res.pdfError, /pretax mismatch/i,
+    "pdfError names the pretax mismatch that produced the degrade");
 });
