@@ -641,7 +641,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 <div className="kpi-ov-cp-rg">{row.sub}</div>
               </div>
               {/* Week cells (cols 2..5). On future range every week
-                  is `ahead` (no isNow, no lifted). */}
+                  is `ahead` (no isNow, no lifted). `kpi-ov-cp-
+                  lastrow` on the last row's cells so the current-
+                  week's bottom cell can carry the -7px overhang. */}
               {weeks.map((w, i) => {
                 const st = isFuture ? "kpi-ov-cp-ahead" : stateClass(w);
                 const isNow = !isFuture && w.state === "in_progress";
@@ -650,7 +652,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   st,
                   isNow && "kpi-ov-cp-now",
                   i > 0 && "kpi-ov-cp-vline",
-                ].filter(Boolean).join(" ");
+                  isLast && "kpi-ov-cp-lastrow",
+                ].filter(Boolean).join(" ")
                 // On future range every week is state="not_started"
                 // - CostCellBody's isFuture branch already renders
                 // `to spend $X` and nothing else, which is exactly
