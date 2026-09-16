@@ -808,6 +808,9 @@ export default function KpiPurchasingPage() {
   // drill table, coding strip) is replaced by CurrentPeriodTable +
   // CurrentPeriodReview below.
   const cpGateActive = resolvedPreset === "this_period" && !isFutureRange;
+  // R-110 (2026-09-16). NP gate on Purchasing.
+  const npGateActive = isFutureRange === true;
+  const useCpTable = cpGateActive || npGateActive;
 
   // R-109 PR 3 · fetch Overview payload on CP only. CurrentPeriodTable
   // needs Overview's week_rail + statement_rows + cards + todayISO for
@@ -819,7 +822,7 @@ export default function KpiPurchasingPage() {
   const [cpLabor, setCpLabor] = useState(null);
   const [cpAuxError, setCpAuxError] = useState(null);
   useEffect(() => {
-    if (!cpGateActive) {
+    if (!useCpTable) {
       setCpOverview(null);
       setCpLabor(null);
       setCpAuxError(null);
@@ -846,7 +849,7 @@ export default function KpiPurchasingPage() {
       if (!cancelled) { setCpOverview(ov); setCpLabor(lb); setCpAuxError(null); }
     }).catch(e => { if (!cancelled) setCpAuxError(String(e?.message || e)); });
     return () => { cancelled = true; };
-  }, [cpGateActive, account, start, end, searchParams]);
+  }, [useCpTable, account, start, end, searchParams]);
 
   // Projected close.
   const projClose = useMemo(() => {
@@ -1259,7 +1262,12 @@ export default function KpiPurchasingPage() {
     // duplication removed in the previous PR). The freshness livenote
     // stays - it complements the shell's status pill and doesn't
     // duplicate anything on the CP surface.
-    if (cpGateActive) {
+    if (useCpTable) {
+      // R-109 PR 3 (2026-09-15) + R-110 (2026-09-16). Same shared
+      // table on CP and NP. Review cards only render on CP - nothing
+      // to review on NP. Kevin ruling: NP has no coding strip, no
+      // money card, no where-it-went, no drill; just the table + the
+      // three small cards (which the component renders when isFuture).
       return (
         <div className="kpi-p-board">
           <div className={`kpi-p-livenote${reportStale ? " kpi-p-livenote-stale" : ""}`} role="status">
@@ -1273,10 +1281,12 @@ export default function KpiPurchasingPage() {
             purch={data}
             error={cpAuxError}
           />
-          <CurrentPeriodReview
-            labor={cpLabor}
-            purchasing={data}
-          />
+          {cpGateActive && (
+            <CurrentPeriodReview
+              labor={cpLabor}
+              purchasing={data}
+            />
+          )}
         </div>
       );
     }

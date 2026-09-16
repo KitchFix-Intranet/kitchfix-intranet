@@ -204,6 +204,16 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     actualRevInDenom: 0,
     daysWithService: new Set(),
     daysWithConfirmedSvc: new Set(),
+    // R-110 (2026-09-16). Distinct dates in this week that carry a
+    // MEANINGFUL service - either a confirmed actual, or a projection
+    // that clears the R-85 denominator (has_projection AND
+    // projected_revenue > 0). Empty calendar slots (has_projection=
+    // true, projected_revenue=0) do NOT count. Feeds the Next-period
+    // one-table view's third small card ("A service day"). TBJ P11 =
+    // 24 across 4 weeks; TBR P11 = 21. Kevin ruling 2026-09-16: the
+    // render's "20 service days" was placeholder, each account
+    // renders its own.
+    daysWithMeaningfulService: new Set(),
   });
   for (const r of rows) {
     const ws = weekStartFor(r.service_date);
@@ -211,6 +221,7 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     const bucket = byWeek.get(ws);
     bucket.daysWithService.add(r.service_date);
     const inDenom = r.has_projection && Number(r.projected_revenue || 0) > 0;
+    if (r.has_actuals || inDenom) bucket.daysWithMeaningfulService.add(r.service_date);
     if (r.has_actuals) {
       // Confirmed service. Counts in denominator regardless of what
       // was projected (a service that was served is a real service).
@@ -268,6 +279,7 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       projected_services: projectedSvcs,
       total_services: totalSvcs,                            // meaningful denominator (non-zero projected + confirmed)
       empty_slot_services: emptySlotSvcs,                   // excluded from denominator; kept for the probe
+      service_days: bucket.daysWithMeaningfulService.size,  // R-110: days with confirmed or R-85-in-denom projection
       actual_revenue: Math.round(actualRev * 100) / 100,
       // Kevin ratify R-92 PR-3 (2026-09-09). R-85-strict actualRev -
       // only rows in the denom (has_projection && projected_rev > 0)
@@ -437,6 +449,7 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     w.projected_services = basis.projected_services;
     w.total_services = basis.total_services;
     w.empty_slot_services = basis.empty_slot_services;
+    w.service_days = basis.service_days;
     w.week_actual_revenue = basis.actual_revenue;
     w.week_projected_revenue = basis.projected_revenue;
 
