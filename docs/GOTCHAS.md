@@ -98,6 +98,56 @@ Related: [`docs/backlog/SILENT_FAILURE_SWEEP.md`](backlog/SILENT_FAILURE_SWEEP.m
 
 ---
 
+## CI / GitHub Actions
+
+### A step's `if:` gets `success()` prepended unless it names a status function
+
+The rule. GitHub Actions applies a default status check of `success()` to every step's `if:` condition unless the expression **already includes one of the four status check functions**: `success()`, `always()`, `failure()`, or `cancelled()`. So:
+
+```yaml
+- name: Derive people
+  if: steps.sync.outcome == 'success'
+```
+
+is evaluated at runtime as if it read:
+
+```yaml
+if: success() && steps.sync.outcome == 'success'
+```
+
+Naming a specific step's outcome does NOT decouple the step from earlier failures. The moment any prior non-`continue-on-error` step in the same job fails, `success()` becomes false, and every downstream step whose `if:` does not name a status function collapses to false regardless of what else it says.
+
+**To actually decouple** a step so it runs when an earlier specific step succeeded, independent of anything else in the job:
+
+```yaml
+if: always() && steps.sync.outcome == 'success'
+```
+
+`always()` overrides the default success check. The compound then requires exactly what its author intended: run when the named step succeeded, regardless of anything else.
+
+**Reference for the docs**: <https://docs.github.com/en/actions/learn-github-actions/expressions#status-check-functions> — *"A default status check of `success()` is applied unless you include one of these functions."*
+
+**Where this bites.** Any workflow that has:
+
+1. An early step whose failure is expected NOT to cascade (a probe, a health check, a warning that only sometimes matters), AND
+2. A later step gated on an unrelated earlier step's success (a directory refresh, a report, an artifact upload).
+
+The Aug 27 "decouple People derive from labor probes" ruling changed `if: success()` to `if: steps.sync.outcome == 'success'` in `.github/workflows/rippling-sync.yml`. It read as a decoupling. It shipped as a no-op because the implicit-prepend behavior applied to the new condition too. When probe_grain began failing on 2026-09-08 for a legitimate probe-modeling gap, People derive skipped every night for nine days until Kevin noticed the resulting stale directory on 2026-09-16 - the same six-day-stale class the Aug 27 ruling was meant to prevent.
+
+**When you write a step condition** that references a specific upstream step's `outcome` or `conclusion`, ask: *do I want this step to run if some OTHER earlier step failed?* If yes, include `always() && ...` (or `!cancelled() && ...` if you only want to escape failures, not cancellations). If no, plain `success()` is what you want, and you probably don't need the step-outcome check at all.
+
+**Sweep discipline**. When touching workflow YAML, grep for the pattern:
+
+```bash
+awk '/^ *if:/ { c=$0; sub(/^ *if: */, "", c);
+                if (c ~ /steps\..*(outcome|conclusion)/ && c !~ /success\(\)|always\(\)|failure\(\)|cancelled\(\)/)
+                  print FILENAME ":" NR ": " c }' .github/workflows/*.yml
+```
+
+Every hit is either the desired-decouple shape that needs `always() && ...` prepended or a coupled shape that should just use plain `success()` and drop the step-outcome check.
+
+---
+
 ## Data & Sheets
 
 ### Currency values from Sheets are strings, not numbers
