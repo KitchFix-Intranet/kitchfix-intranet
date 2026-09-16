@@ -84,14 +84,22 @@ export default function FinalizeOverlay({
   invokerRef,           // ref to the button that opened the overlay
   // content
   accountKey,
-  weekStart,
-  weekEnd,
-  daysServed,           // number, e.g. 6 of 7 -> pass 6 and totalDays=7
-  totalDays,            // default 7
-  totalMeals,           // number
+  weekStart,            // ISO Mon of the DISPLAYED span. For biweekly close
+                        //   this is the pair's first-week Mon (parent widens
+                        //   before mount); for weekly it is the week's Mon.
+  weekEnd,              // ISO Sun of the DISPLAYED span. For biweekly close
+                        //   this is the close-week Sunday (== pair end).
+  daysServed,           // number in the DISPLAYED span; 6 of 7 -> pass 6.
+  totalDays,            // 7 or 14. Denominator for the fact-table row.
+  totalMeals,           // number in the DISPLAYED span
   invoiceDestination,   // string - "ZZ TEST - KitchFix Intranet" or real customer name
-  pretaxTotalDollars,   // number in dollars
+  pretaxTotalDollars,   // number in dollars in the DISPLAYED span
   qboMode,              // 'test' | 'live'
+  isBiweekly = false,   // true for a bi-weekly close-week finalize; drives
+                        //   the pair-aware title and lock caption. The
+                        //   underlying action is unchanged - it still fires
+                        //   with the close-week Monday and the server
+                        //   re-derives the pair span from cadence + weekIndex.
   headerKick = "Finalize week",
 }) {
   const scrimRef = useRef(null);
@@ -172,8 +180,18 @@ export default function FinalizeOverlay({
   if (!open) return null;
 
   const isTest = qboMode === "test";
-  const titleConfirm = `Finalize the week of ${fmtWeekTitle(weekStart)}?`;
-  const titleWorking = `Finalizing the week of ${fmtWeekTitle(weekStart)}`;
+  // 2026-09-16 finalize confirm fix: title branches for bi-weekly
+  // close so the operator sees the 14-day span they are approving.
+  // Copy matches the button label ("Finalize 2-week period" from
+  // WeekFinalizeControl.js:343). fmtWeekRange keeps the weekday
+  // prefix ("Mon, Aug 10 - Sun, Aug 23"), which does load-bearing
+  // work: confirms Monday-to-Sunday alignment on a 14-day window.
+  const titleConfirm = isBiweekly
+    ? `Finalize the 2-week period of ${fmtWeekRange(weekStart, weekEnd)}?`
+    : `Finalize the week of ${fmtWeekTitle(weekStart)}?`;
+  const titleWorking = isBiweekly
+    ? `Finalizing the 2-week period of ${fmtWeekRange(weekStart, weekEnd)}`
+    : `Finalizing the week of ${fmtWeekTitle(weekStart)}`;
   const subConfirm = "Send finals to QuickBooks for AP review and billing to client.";
   const subWorking = "Creating the drafts in QuickBooks. AP will review and send to client.";
 
@@ -219,7 +237,7 @@ export default function FinalizeOverlay({
                   <dd>{accountKey}</dd>
                 </div>
                 <div className="sc-finalize-row">
-                  <dt>Service week</dt>
+                  <dt>{isBiweekly ? "Service dates" : "Service week"}</dt>
                   <dd>{fmtWeekRange(weekStart, weekEnd)}</dd>
                 </div>
                 {/* PR-H2 (2026-08-17) supersedes PR-D1's carve-out.
@@ -237,7 +255,7 @@ export default function FinalizeOverlay({
                 <div className="sc-finalize-row">
                   <dt>Days served</dt>
                   <dd>
-                    {typeof daysServed === "number" ? daysServed : "-"} of {totalDays || 7}
+                    {typeof daysServed === "number" ? daysServed : "-"} of {typeof totalDays === "number" ? totalDays : (isBiweekly ? 14 : 7)}
                   </dd>
                 </div>
                 <div className="sc-finalize-row">
@@ -256,7 +274,9 @@ export default function FinalizeOverlay({
                 </div>
               </dl>
               <div className="sc-finalize-lock" role="note">
-                <b className="sc-finalize-lock-lead">This locks the week.</b>
+                <b className="sc-finalize-lock-lead">
+                  {isBiweekly ? "This locks the 2-week period." : "This locks the week."}
+                </b>
                 <span className="sc-finalize-lock-body">
                   After this you cannot change these numbers. Kevin, Joe, or Sebastian can unlock it.
                 </span>

@@ -573,6 +573,69 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     return { pushed: false, reason: "no_billable_actuals" };
   }
 
+  // 4b. Confirm-vs-payload pretax guard (2026-09-16).
+  //
+  // The number the operator saw in the confirm overlay (passed in as
+  // ctx.confirmedPretaxCents) must equal the built payload's pretax
+  // total. Two independently-computed totals; mismatch throws. Same
+  // shape as the record-copy PDF guard in qboNotifications.js:418-423.
+  //
+  // Soft rollout: skip the assertion when ctx.confirmedPretaxCents is
+  // null / undefined (older client). The client that passes the value
+  // is the one whose overlay was just fixed; a mismatch here means
+  // the display and the payload drifted, which is exactly the
+  // regression this guard exists to catch.
+  //
+  // Failure shape mirrors the BUILD_ERROR path: transition the finalize
+  // row to push_failed, fire N2, return a failure record. Message is
+  // in operator language rather than variable=value - a chef reads
+  // "the amount on screen did not match the amount about to bill; the
+  // week is finalized but not sent; Kevin or Sebastian can unlock."
+  if (ctx.confirmedPretaxCents != null && Number.isFinite(ctx.confirmedPretaxCents)) {
+    let payloadPretaxCents = 0;
+    for (const inv of payload.invoices) {
+      payloadPretaxCents += sumCentsFromLines(inv.Line);
+    }
+    if (payloadPretaxCents !== ctx.confirmedPretaxCents) {
+      await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
+      const operatorMessage =
+        "The week is finalized but not sent to QuickBooks because the amount on screen did not match the amount about to bill. Kevin or Sebastian needs to unlock this before it can be retried.";
+      const diagnosticText =
+        `${operatorMessage}\n\nDiagnostic: confirmed=${ctx.confirmedPretaxCents} cents, payload=${payloadPretaxCents} cents, delta=${payloadPretaxCents - ctx.confirmedPretaxCents} cents, account=${accountKey}, span=${pairStart}..${pairEnd}.`;
+      const n2 = await doN2({
+        qboMode,
+        accountKey, weekStart: pairStart, weekEnd: pairEnd,
+        errorText: diagnosticText,
+        retryLink: buildRetryLink(accountKey, weekStart),
+        scWeekLink: buildScWeekLink(accountKey, weekStart),
+        attempt: 1,
+        accountMap: resolverAccountMap,
+      });
+      log.warn("[N2 fired][PRETAX_MISMATCH]", {
+        subject: n2.subject,
+        to: n2.recipients?.to,
+        slackSent: n2.slack?.result?.sent,
+        confirmedCents: ctx.confirmedPretaxCents,
+        payloadCents: payloadPretaxCents,
+      });
+      return {
+        pushed: false,
+        failure: {
+          code: "PRETAX_MISMATCH",
+          message: operatorMessage,
+          diagnostic: {
+            confirmedCents: ctx.confirmedPretaxCents,
+            payloadCents: payloadPretaxCents,
+            deltaCents: payloadPretaxCents - ctx.confirmedPretaxCents,
+            pairStart,
+            pairEnd,
+          },
+          n2,
+        },
+      };
+    }
+  }
+
   // 5. Post each invoice slot. PR-F: qboMode read from
   // accountMap.qbo_mode drives the per-mode fence. Test mode routes
   // to 22463 with markers; live mode routes to the account's mapped

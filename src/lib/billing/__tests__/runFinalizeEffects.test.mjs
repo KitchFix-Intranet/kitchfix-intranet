@@ -289,3 +289,123 @@ test("live mode: qboMode='live' + accountMap threaded to postInvoiceDraft and fi
   assert.doesNotMatch(n1Args.subject || result.n1.subject, /\[TEST\]/,
     "live-mode subject has no [TEST] prefix");
 });
+
+// ─── PRETAX_MISMATCH guard (2026-09-16) ───────────────────────────
+//
+// The seed row is 10 units * $5.89 = $58.90 = 5890 cents. Guard
+// compares ctx.confirmedPretaxCents against the payload total and
+// stops the push on mismatch. Soft rollout: absent value skips.
+
+test("guard: confirmedPretaxCents matches payload -> proceeds normally", async () => {
+  const supa = makeSupaMock({ tables: makeSeedTables() });
+  const deps = {
+    supa,
+    postInvoiceDraft: async () => ({
+      wasNoOp: false, ledgerRowId: "led-match", qboInvoiceId: "TEST-INV-M",
+      qboDocNumber: "K3MATCH", status: "test",
+    }),
+    fireN1: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "[TEST] Invoice ready", html: "",
+      email: { result: "sent" },
+      slack: { text: "ok", result: { sent: true } },
+    }),
+    fireN2: () => { throw new Error("N2 must not fire on matching confirmed cents"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+  const result = await runFinalizeEffects(
+    { ...baseCtx(), confirmedPretaxCents: 5890 },
+    deps
+  );
+  assert.equal(result.pushed, true, "matching confirmed total lets the push proceed");
+});
+
+test("guard: confirmedPretaxCents mismatch -> PRETAX_MISMATCH failure + N2 + push_failed", async () => {
+  const supa = makeSupaMock({ tables: makeSeedTables() });
+  let n2Args = null;
+  let postCalled = false;
+  const deps = {
+    supa,
+    postInvoiceDraft: async () => { postCalled = true; return {}; },
+    fireN1: () => { throw new Error("N1 must not fire on pretax mismatch"); },
+    fireN2: async (args) => {
+      n2Args = args;
+      return {
+        recipients: { to: [KEVIN_EMAIL], cc: [] },
+        subject: "[TEST] Invoice send failed",
+        preheader: "", html: "",
+        email: { result: "sent" },
+        slack: { text: "fail", result: { sent: true } },
+      };
+    },
+    logger: { info: () => {}, warn: () => {} },
+  };
+  const result = await runFinalizeEffects(
+    // Operator saw $50.00 (5000 cents); payload built at $58.90 (5890 cents).
+    { ...baseCtx(), confirmedPretaxCents: 5000 },
+    deps
+  );
+  assert.equal(result.pushed, false, "mismatch stops the push");
+  assert.equal(result.failure.code, "PRETAX_MISMATCH");
+  assert.match(
+    result.failure.message,
+    /amount on screen did not match the amount about to bill/,
+    "failure message reads in operator language, not pretax=X/Y",
+  );
+  assert.equal(result.failure.diagnostic.confirmedCents, 5000);
+  assert.equal(result.failure.diagnostic.payloadCents, 5890);
+  assert.equal(result.failure.diagnostic.deltaCents, 890);
+  assert.equal(postCalled, false, "postInvoiceDraft never called on mismatch");
+  assert.ok(n2Args, "N2 was fired");
+  assert.match(
+    n2Args.errorText,
+    /amount on screen did not match the amount about to bill/,
+    "N2 carries the operator-language message",
+  );
+});
+
+test("guard: confirmedPretaxCents absent -> guard skipped (soft rollout)", async () => {
+  const supa = makeSupaMock({ tables: makeSeedTables() });
+  const deps = {
+    supa,
+    postInvoiceDraft: async () => ({
+      wasNoOp: false, ledgerRowId: "led-absent", qboInvoiceId: "TEST-INV-A",
+      qboDocNumber: "K3ABSENT", status: "test",
+    }),
+    fireN1: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "[TEST] Invoice ready", html: "",
+      email: { result: "sent" },
+      slack: { text: "ok", result: { sent: true } },
+    }),
+    fireN2: () => { throw new Error("N2 must not fire when guard is skipped"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+  // No confirmedPretaxCents on ctx - the older-client shape.
+  const result = await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(result.pushed, true, "absent confirmed total is a no-op for the guard");
+});
+
+test("guard: null confirmedPretaxCents also skips (soft rollout - explicit null)", async () => {
+  const supa = makeSupaMock({ tables: makeSeedTables() });
+  const deps = {
+    supa,
+    postInvoiceDraft: async () => ({
+      wasNoOp: false, ledgerRowId: "led-null", qboInvoiceId: "TEST-INV-N",
+      qboDocNumber: "K3NULL", status: "test",
+    }),
+    fireN1: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "[TEST] Invoice ready", html: "",
+      email: { result: "sent" },
+      slack: { text: "ok", result: { sent: true } },
+    }),
+    fireN2: () => { throw new Error("N2 must not fire when guard is skipped"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+  const result = await runFinalizeEffects(
+    { ...baseCtx(), confirmedPretaxCents: null },
+    deps
+  );
+  assert.equal(result.pushed, true, "explicit null skips the guard");
+});
