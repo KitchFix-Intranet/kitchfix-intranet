@@ -27,6 +27,11 @@ import { periodsInBoardWeeks } from "./lib/signalCardModels";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
 import { StoryBlock } from "./components/StoryBlock";
+// R-109 PR 2 · reuse Overview's Current period one-table view on
+// Labor CP. Same component, same data (Labor page fetches Overview +
+// Purchasing on CP for the shared inputs). Rows narrowed to
+// Revenue + Hourly labor via rowSet="labor".
+import CurrentPeriodTable from "@/app/kpi/overview/components/CurrentPeriodTable";
 import { SignalCards } from "./components/SignalCards";
 import { WeekTable } from "./components/WeekTable";
 import { DayStrip } from "./components/DayStrip";
@@ -39,6 +44,7 @@ import {
 } from "./components/StateBoxes";
 import { ToastHost } from "./components/Toast";
 import "../kpi.css";
+import "../current-period.css";
 
 // B15 last-viewed account key (localStorage). Read once on client mount
 // only; server render always uses the URL/default. Never leaks data.
@@ -298,6 +304,44 @@ export default function KpiLaborPage() {
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
   }, [status, isAllowed, fetchAccount, start, end, searchParams]);
+
+  // R-109 PR 2 · fetch Overview + Purchasing for the CP one-table
+  // view. Same pattern the Overview page uses: kicks in only when
+  // board.kind === "single_period_in_progress" so no other range
+  // pays for the extra requests. Overview owns week_rail +
+  // statement_rows + cards + todayISO. Purchasing carries the
+  // 3200/3400 per-week landed the shared component reads.
+  const [cpOverview, setCpOverview] = useState(null);
+  const [cpPurch, setCpPurch] = useState(null);
+  const [cpAuxError, setCpAuxError] = useState(null);
+  const cpGateActive = data?.board?.kind === "single_period_in_progress";
+  useEffect(() => {
+    if (!cpGateActive) {
+      setCpOverview(null);
+      setCpPurch(null);
+      setCpAuxError(null);
+      return;
+    }
+    if (!fetchAccount && !urlPreview) return;
+    if (!start || !end) return;
+    const ctrl = new AbortController();
+    setCpAuxError(null);
+    const p = new URLSearchParams({ account: fetchAccount, start, end });
+    if (urlPreview) p.set("preview", urlPreview);
+    if (searchParams.get("salary") === "1") p.set("include_salary", "1");
+    Promise.all([
+      fetch(`/api/kpi/overview?${p}`, { signal: ctrl.signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(`overview HTTP ${r.status}`))),
+      fetch(`/api/kpi/purchasing?${p}`, { signal: ctrl.signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(`purchasing HTTP ${r.status}`))),
+    ]).then(([ov, pu]) => {
+      if (ctrl.signal.aborted) return;
+      setCpOverview(ov);
+      setCpPurch(pu);
+    }).catch(e => {
+      if (e?.name === "AbortError") return;
+      setCpAuxError(String(e?.message || e));
+    });
+    return () => ctrl.abort();
+  }, [cpGateActive, fetchAccount, start, end, urlPreview, searchParams]);
 
   // V-role-gates - landing redirect. Fires when the server ships
   // landing_account back on a URL that had no explicit account
@@ -1196,62 +1240,50 @@ export default function KpiLaborPage() {
         >
           {data.board?.applies !== false && (
             <>
-              <StoryBlock
-                board={data.board}
-                account={account}
-                rangeLabel={rangeLabelForBoard}
-                budgetPeriods={data?.budget_periods || []}
-                todayISO={today}
-                salary={data?.salary_included ? {
-                  summary: data.salary_summary,
-                  vacancy: data.salary_vacancy,
-                  budget_total: data.budget_total,
-                  hours_basis: data.hours_basis,
-                  rate_basis: data.rate_basis,
-                  blended_rate_hourly: data.blended_rate_hourly,
-                } : null}
-                salaryAvailable={data?.salary_available === true}
-                isFutureRange={data?.is_future_range === true}
-                awaiting={(() => {
-                  // Kevin CC prompt 2026-09-10 item 1. Awaiting-
-                  // verification pill on Current year only, matching
-                  // Overview page.js:469-479 shape exactly. Same
-                  // helper (r93ExcludedPeriodNo) + same close-date
-                  // derivation (period_end + 8 days) so the two
-                  // boards cannot disagree about which period is
-                  // excluded or when it settles.
-                  if (resolvedPreset !== "fytd") return null;
-                  const p = r93ExcludedPeriodNo(today);
-                  if (p == null) return null;
-                  const pEnd = periodEndISO(p);
-                  if (!pEnd) return null;
-                  const t = new Date(pEnd + "T00:00:00Z").getTime();
-                  const settle = new Date(t + 8 * 86400000).toISOString().slice(0, 10);
-                  return { period_no: p, close_iso: pEnd, settle_iso: settle };
-                })()}
-              />
-              {/* Kevin Labor PR-A item 7 (2026-09-04): Spending pace,
-                  Overtime, Approvals cards removed. Overtime + unapproved
-                  hours are already columns in WeekTable below - the cards
-                  were a second telling of the same figures one row up.
-                  Spending pace restated the panel, and its avg-per-week
-                  described no week that happened (seasonal average
-                  outside every period's 15% band). The board becomes
-                  three things: the panel, the chart, the table.
-                  The `9 people · oldest shift Sep 2` detail that lived
-                  in the Approvals card belongs in the period drill-down
-                  (not this PR). */}
-              {/* Kevin walkthrough sweep addendum D (2026-09-07):
-                  ComparisonStrip ("VS PERIOD 8") removed entirely,
-                  every range, every account. Kevin ruling: "it is not
-                  what an operator uses." The panel + week rail + chart
-                  + WeekTable carry every figure an operator reaches
-                  for; a comparison to the prior period taking a full
-                  strip did not earn its space. */}
-              {/* PR-B (owner ruling 2026-08-24) - DetailsStrip "ALL THE
-                  NUMBERS" folio removed entirely, dashboard-wide.
-                  Every card above already carries the relevant figure;
-                  the redundant flat list did not earn its space. */}
+              {cpGateActive ? (
+                /* R-109 PR 2 · Current period one-table view. On CP,
+                   the Labor board replaces StoryBlock (panel + week
+                   bars + captions + week cards + worker table) with
+                   the same table Overview renders. Two rows on Labor:
+                   Revenue + Hourly labor. Component fetches its own
+                   Overview + Purchasing data (owned above), so the
+                   Labor route stays untouched by construction. */
+                <CurrentPeriodTable
+                  rowSet="labor"
+                  payload={cpOverview}
+                  labor={data}
+                  purch={cpPurch}
+                  error={cpAuxError}
+                />
+              ) : (
+                <StoryBlock
+                  board={data.board}
+                  account={account}
+                  rangeLabel={rangeLabelForBoard}
+                  budgetPeriods={data?.budget_periods || []}
+                  todayISO={today}
+                  salary={data?.salary_included ? {
+                    summary: data.salary_summary,
+                    vacancy: data.salary_vacancy,
+                    budget_total: data.budget_total,
+                    hours_basis: data.hours_basis,
+                    rate_basis: data.rate_basis,
+                    blended_rate_hourly: data.blended_rate_hourly,
+                  } : null}
+                  salaryAvailable={data?.salary_available === true}
+                  isFutureRange={data?.is_future_range === true}
+                  awaiting={(() => {
+                    if (resolvedPreset !== "fytd") return null;
+                    const p = r93ExcludedPeriodNo(today);
+                    if (p == null) return null;
+                    const pEnd = periodEndISO(p);
+                    if (!pEnd) return null;
+                    const t = new Date(pEnd + "T00:00:00Z").getTime();
+                    const settle = new Date(t + 8 * 86400000).toISOString().slice(0, 10);
+                    return { period_no: p, close_iso: pEnd, settle_iso: settle };
+                  })()}
+                />
+              )}
             </>
           )}
         </div>

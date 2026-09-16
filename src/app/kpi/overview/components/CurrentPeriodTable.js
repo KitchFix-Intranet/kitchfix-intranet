@@ -208,7 +208,7 @@ function HeaderRow({ weeks, todayISO, periodStart }) {
   );
 }
 
-export default function CurrentPeriodTable({ payload, labor, purch, error }) {
+export default function CurrentPeriodTable({ payload, labor, purch, error, rowSet = "overview" }) {
   const weeks = payload?.week_rail?.weeks || [];
 
   const derived = useMemo(() => {
@@ -283,15 +283,44 @@ export default function CurrentPeriodTable({ payload, labor, purch, error }) {
     const revProj = Number(revCard?.projected_period_revenue || 0);
     const revConf = Number(revCard?.hero_actual || 0);
 
-    const rows = [
-      { line: null, name: "Revenue", sub: "meals + service fee", isRev: true, rev: true },
-      { line: "3100", name: "Kitchen labor", sub: `hourly · ${(stmtByLine.get("3100")?.target_pct || 0).toFixed(2)}% of revenue`, isLabor: true },
-      { line: "3200", name: "Food",          sub: `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue` },
-      { line: "3400", name: "Packaging",     sub: `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue` },
+    // Kevin 2026-09-15 label ruling (PR 2). On the +salary path
+    // (3100.1 + 3100.2 sub-rows present), the 3100 row's target_pct
+    // is the COMBINED figure - saying "hourly · 33.29%" is wrong
+    // because 33.29% is not the hourly rate. Read "labor · 33.29%"
+    // on salary, "hourly · 18.20%" on hourly (where the row's pct
+    // IS the hourly rate).
+    const salaryPath = stmtByLine.get("3100.1") != null && stmtByLine.get("3100.2") != null;
+    const laborPct = Number(stmtByLine.get("3100")?.target_pct || 0).toFixed(2);
+    const laborSub = salaryPath ? `labor · ${laborPct}% of revenue` : `hourly · ${laborPct}% of revenue`;
+
+    // Row set drives which board this renders on. Kevin 2026-09-15:
+    // Overview shows Revenue + 3100 + 3200 + 3400. Labor shows only
+    // Revenue + Hourly labor (the header reads "Hourly labor" on the
+    // Labor board per the prompt's § 0 shape, versus "Kitchen labor"
+    // on the Overview). Purchasing shows Revenue + 3200 + 3400. Same
+    // component; caller picks the row set.
+    const ROWS_OVERVIEW = [
+      { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
+      { line: "3100", name: "Kitchen labor", sub: laborSub, isLabor: true },
+      { line: "3200", name: "Food",      sub: `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue` },
+      { line: "3400", name: "Packaging", sub: `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue` },
     ];
+    const ROWS_LABOR = [
+      { line: null, name: "Revenue", sub: "what each week earns", rev: true },
+      { line: "3100", name: "Hourly labor", sub: laborSub, isLabor: true },
+    ];
+    const ROWS_PURCHASING = [
+      { line: null, name: "Revenue", sub: "what you are ordering for", rev: true },
+      { line: "3200", name: "Food",      sub: `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue` },
+      { line: "3400", name: "Packaging", sub: `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue` },
+    ];
+    const rows =
+        rowSet === "labor"      ? ROWS_LABOR
+      : rowSet === "purchasing" ? ROWS_PURCHASING
+      :                           ROWS_OVERVIEW;
 
     return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor };
-  }, [payload, weeks, labor, purch]);
+  }, [payload, weeks, labor, purch, rowSet]);
 
   if (weeks.length !== 4) {
     return <div className="kpi-ov-cp-empty" role="status">Waiting for week rail…</div>;
