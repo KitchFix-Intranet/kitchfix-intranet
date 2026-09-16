@@ -129,6 +129,32 @@
   font-weight: 800;
 }
 
+/* Kevin ruling 2026-09-17. Overdue nudge - sibling of settling
+   strip. Fires AFTER the R-93 settle window while Finance hasn't
+   posted. Same amber palette so the reader recognises the family;
+   copy is per-period. */
+.kpi-app .kpi-ov-overdue {
+  margin-bottom: var(--kpi-sp-3);
+  background: var(--amber-50, #FFF7ED);
+  border: 1px solid var(--amber-200, #F7C299);
+  border-radius: var(--kpi-card-r);
+  padding: var(--kpi-sp-3) var(--kpi-card-pad);
+  display: flex;
+  gap: var(--kpi-sp-4);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.kpi-app .kpi-ov-overdue-it {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-700);
+  line-height: 1.5;
+}
+.kpi-app .kpi-ov-overdue-it b {
+  color: var(--amber-600);
+  font-weight: 800;
+}
+
 /* Cost + margin card pill in wait state (mirrors the status pill
    fill so the two amber elements read as one signal). */
 .kpi-app .kpi-ov-pill-wait {

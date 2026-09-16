@@ -66,6 +66,7 @@ import {
 
 import StatusLine from "./components/StatusLine";
 import SettlingStrip from "./components/SettlingStrip";
+import OverdueNudge from "./components/OverdueNudge";
 import DataCurrentPop from "./components/DataCurrentPop";
 import CardsRow from "./components/CardsRow";
 import WeekRail from "./components/WeekRail";
@@ -566,6 +567,7 @@ export default function KpiOverviewPage() {
             />
             )}
             <SettlingStrip settling={data.settling} />
+            <OverdueNudge overduePeriods={data.overdue_periods} />
             {/* R-109 · CP gate. On the running period (CP), the three
                 cards + week rail + cost-lines + P&L below are ALL
                 replaced by the one-table view + review cards. Every

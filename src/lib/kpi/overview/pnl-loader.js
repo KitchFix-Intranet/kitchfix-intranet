@@ -25,6 +25,7 @@
 import {
   periodStartISO,
   periodEndISO,
+  r93FytdEndISO,
 } from "@/app/kpi/labor/lib/periods.js";
 
 const IN_CHUNK = 100;
@@ -380,4 +381,48 @@ export function derivePeriodState({ periodNo, todayISO, periodStatusRow }) {
   const recordClosed = !!periodStatusRow?.closed_at;
   if (calendarClosed || recordClosed) return "closed_awaiting";
   return "open";
+}
+
+// Kevin ruling 2026-09-17 · Closed · unaudited.
+//
+// A period spends most of its life in `closed_awaiting`: invoices land
+// in week one, then settle; nothing on the board ever exits it until
+// `verified_at` is stamped. `spend_settled` is the sibling boolean
+// that names the day-8 flip - true once the period is calendar-closed
+// AND at least 8 days past its end (matches R-93's Current-year
+// inclusion boundary).
+//
+// Additive · does NOT change `period_state`. `period_state` continues
+// to return `closed_awaiting` for P9 today; every existing consumer
+// (30+ references across resolver, ticker, revenue-source, chart,
+// labels) keeps working unchanged. Only the four Overview surfaces
+// that need the "unaudited but actionable" treatment consult this
+// flag.
+//
+// Rule (one source, both here and in `r93FytdEndISO`): a period is
+// `spend_settled` when it is calendar-closed OR verified AND the R-93
+// FYTD end date is at or past this period's end. That is exactly the
+// condition R-93 uses to include a period in Current year - reusing
+// `r93FytdEndISO` directly (Path A, imported above) so the state flip
+// and CY inclusion happen on the same day from one arithmetic.
+//
+// Verified periods (finance-stamped) are trivially spend_settled -
+// finance has confirmed the numbers, so the definition holds by
+// construction.
+//
+// Open / planned periods are never spend_settled.
+export function derivePeriodSpendSettled({ periodNo, todayISO, periodStatusRow }) {
+  const pEnd = periodEndISO(periodNo);
+  if (!pEnd) return false;
+  const verifiedAt = periodStatusRow?.verified_at || null;
+  if (verifiedAt) return true;   // verified is settled by definition
+  const calendarClosed = pEnd < todayISO;
+  const recordClosed = !!periodStatusRow?.closed_at;
+  if (!calendarClosed && !recordClosed) return false;  // still open
+  // R-93 boundary: settled once the FYTD end has advanced to or past
+  // this period's end. r93FytdEndISO walks back to the last period
+  // whose end is more than 7 days before today.
+  const fytdEnd = r93FytdEndISO(todayISO);
+  if (!fytdEnd) return false;
+  return fytdEnd >= pEnd;
 }
