@@ -23,6 +23,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import "../kpi.css";
+import "../current-period.css";
 import "./purchasing.css";
 
 import {
@@ -68,6 +69,12 @@ import {
 } from "./lib/board";
 
 import { PeriodCard } from "./components/PeriodCard";
+// R-109 PR 3 (Kevin 2026-09-16). On Current period only, the money
+// card + where-it-went + week rail + drill table + coding strip are
+// all replaced by the one-table view + review cards (with the coding
+// strip folded into the review-card items so it isn't shipped twice).
+import CurrentPeriodTable from "@/app/kpi/overview/components/CurrentPeriodTable";
+import CurrentPeriodReview from "@/app/kpi/overview/components/CurrentPeriodReview";
 // Kevin 2026-09-14 reskin PR 1: BucketCard import dropped - the two
 // duplicate charts (food + packaging mini-charts) are gone. The
 // LedgerCard + CardPurchases + CardCompliance imports remain because
@@ -793,6 +800,54 @@ export default function KpiPurchasingPage() {
   // build a parallel one").
   const isFutureRange = data?.is_future_range === true;
 
+  // R-109 PR 3 · Current period gate. Same predicate Labor uses (Labor
+  // reads board.kind === "single_period_in_progress" from its own
+  // payload; Purchasing does not expose kind at the top level, so we
+  // key off resolvedPreset === "this_period" plus a hasn't-started
+  // guard). When true the whole board (money card, where-it-went,
+  // drill table, coding strip) is replaced by CurrentPeriodTable +
+  // CurrentPeriodReview below.
+  const cpGateActive = resolvedPreset === "this_period" && !isFutureRange;
+
+  // R-109 PR 3 · fetch Overview payload on CP only. CurrentPeriodTable
+  // needs Overview's week_rail + statement_rows + cards + todayISO for
+  // the Revenue row; Purchasing's own board.weekly feeds the 3200/3400
+  // rows and Purchasing's `data` (this component's) is the `purch`
+  // prop. Only fires when the gate is on so non-CP ranges stay a
+  // single-fetch page.
+  const [cpOverview, setCpOverview] = useState(null);
+  const [cpLabor, setCpLabor] = useState(null);
+  const [cpAuxError, setCpAuxError] = useState(null);
+  useEffect(() => {
+    if (!cpGateActive) {
+      setCpOverview(null);
+      setCpLabor(null);
+      setCpAuxError(null);
+      return;
+    }
+    if (!account || !start || !end) return;
+    const preview = searchParams.get("preview");
+    const mkUrl = (base, extra = {}) => {
+      const u = new URL(base, window.location.origin);
+      u.searchParams.set("account", account);
+      u.searchParams.set("start", start);
+      u.searchParams.set("end", end);
+      for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
+      if (preview) u.searchParams.set("preview", preview);
+      return u.toString();
+    };
+    let cancelled = false;
+    Promise.all([
+      fetch(mkUrl("/api/kpi/overview", { include_salary: "1" }), { credentials: "include" })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(`overview ${r.status}`))),
+      fetch(mkUrl("/api/kpi/labor"), { credentials: "include" })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(`labor ${r.status}`))),
+    ]).then(([ov, lb]) => {
+      if (!cancelled) { setCpOverview(ov); setCpLabor(lb); setCpAuxError(null); }
+    }).catch(e => { if (!cancelled) setCpAuxError(String(e?.message || e)); });
+    return () => { cancelled = true; };
+  }, [cpGateActive, account, start, end, searchParams]);
+
   // Projected close.
   const projClose = useMemo(() => {
     if (!board) return null;
@@ -1195,6 +1250,37 @@ export default function KpiPurchasingPage() {
     // plus the receipts panel), CardCompliance (compliance panel folds
     // into the coding strip below), FolioRail (removed in a separate
     // change above).
+    // R-109 PR 3 · Current period one-table view. Same component
+    // Overview + Labor render, with `rowSet="purchasing"` narrowing
+    // to Revenue + Food + Packaging. The coding strip does NOT render
+    // separately on CP - CurrentPeriodReview's purchasing item carries
+    // the same signal (count + total + oldest), so Kevin's rule "do
+    // not ship both" applies (same class as Labor's WeekTable
+    // duplication removed in the previous PR). The freshness livenote
+    // stays - it complements the shell's status pill and doesn't
+    // duplicate anything on the CP surface.
+    if (cpGateActive) {
+      return (
+        <div className="kpi-p-board">
+          <div className={`kpi-p-livenote${reportStale ? " kpi-p-livenote-stale" : ""}`} role="status">
+            <span className="kpi-p-livedot" aria-hidden="true" />
+            <span><b>{freshnessDetail}</b></span>
+          </div>
+          <CurrentPeriodTable
+            rowSet="purchasing"
+            payload={cpOverview}
+            labor={cpLabor}
+            purch={data}
+            error={cpAuxError}
+          />
+          <CurrentPeriodReview
+            labor={cpLabor}
+            purchasing={data}
+          />
+        </div>
+      );
+    }
+
     const comp = data?.compliance || null;
     const codingStripCount = comp?.total_count || 0;
     const codingStripAmount = Number(comp?.total_amount || 0);
