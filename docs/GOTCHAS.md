@@ -76,6 +76,26 @@ The recurring shape hunted through the 2026-09-02 → 2026-09-04 arc. A report /
 
 Standing codebase-wide sweep of every `.catch(() => {})` + fire-and-forget parked as [`docs/backlog/SILENT_FAILURE_SWEEP.md`](backlog/SILENT_FAILURE_SWEEP.md).
 
+### A mock that is kinder than reality tests nothing
+
+Three instances in one day (2026-09-16), same shape, all made a real production defect invisible to the test suite:
+
+1. **`.maybeSingle()` returning `rows[0]` instead of erroring on `>1` matches.** Real postgrest returns `{ data: null, error: { code: "PGRST116" } }` when the query matches more than one row. The mock in `src/lib/billing/__tests__/_supa-mock.mjs` (pre-hotfix) returned the first row silently. Production had a query missing `.eq("account_key", accountKey)` on a per-account table; every account's row for that date matched; real DB errored; production code swallowed the error via a destructure that dropped it; the code ran forever without anyone noticing. The test that seeded a single row and asserted the happy path passed cleanly.
+
+2. **`fireN1` tests injecting a fake sender that returns `sent`.** The real `fireN1` internally called `buildRecordCopyPdf` before dispatch. When production produced `invoiceRecords` without a `lineItems` field (a shape drift from `runFinalizeEffects`), the real PDF built an empty document with `pretaxCents=0`, the mismatch guard threw, both email and Slack died. The tests never noticed because they never ran the real `fireN1` end-to-end - they used a fake that returned `{ email: { result: "sent" }, ... }`.
+
+3. **`FinalizeOverlay` render tests via `renderToString` without JSX transform** (attempted 2026-09-15, abandoned). Would have been the same class - a substitute environment that doesn't reproduce the failure mode of the real one.
+
+**The rule.** If the mock is more forgiving than production - swallows an error the real thing raises, returns a value the real thing wouldn't, skips a code path the real thing runs - the test proves nothing about production. Every mock is a claim about production behavior; when the claim is wrong, tests pass on paths that cannot work.
+
+**How to apply.**
+- When you write a mock, name explicitly which production behaviors it does NOT reproduce. Comment at the top of the mock file.
+- When a mock returns "success" for a query the real thing errors on, tighten the mock to error. That's a one-line fix in most cases and it catches the "tests pass but production fails" class before it can happen twice.
+- When a test injects a fake for a downstream call (email sender, PDF builder, Slack post), pair it with at least one test that runs the real function end-to-end against a fixture. The fake is fine for the recipient-resolution-shape tests; it is not fine as the only coverage.
+- The three instances above shared a common tell: the test file's fixture hand-crafted the shape the code needs to succeed. If the fixture is more helpful than production, the mock is doing work production won't.
+
+Related: [`docs/backlog/SILENT_FAILURE_SWEEP.md`](backlog/SILENT_FAILURE_SWEEP.md) covers the production side of silent failure. This entry covers the test side.
+
 ---
 
 ## Data & Sheets

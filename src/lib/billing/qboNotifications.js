@@ -402,40 +402,77 @@ export async function fireN1(args) {
     accountKey,
   });
 
-  // Build the RECORD COPY PDF. Kevin fence: the email's fact-table $
-  // and the PDF's footer $ MUST match exactly, or throw. A mismatched
-  // pair is worse than no attachment.
-  const pdf = await buildRecordCopyPdf({
-    accountKey,
-    accountLabel,
-    weekStart,
-    weekEnd,
-    finalizedDateISO: finalizedDateISO || null,
-    approvedByLabel: approverPhrase.meta,
-    invoiceRecords,
-  });
-
+  // Build the RECORD COPY PDF.
+  //
+  // 2026-09-16: degrade gracefully. Original shape threw on any PDF
+  // failure or on a pretax mismatch, which then killed the send
+  // entirely - the operator got no email, no Slack, and no signal
+  // anything had gone wrong. That was the fourth silent-failure of
+  // this arc and it happened because a guard on an ATTACHMENT was
+  // gating the MESSAGE. A guard on an attachment must never gate the
+  // message.
+  //
+  // New contract:
+  //   - PDF build throws -> pdfError captured, pdf=null, email + slack
+  //     still dispatch (without the attachment; no warning in the
+  //     email body per Kevin's ruling).
+  //   - PDF built but pretax !== email sum -> same pdfError shape,
+  //     pdf discarded, email + slack still dispatch. The mismatch
+  //     no longer refuses the send - it just refuses the attachment.
+  //   - No pdfError -> attachment goes as normal.
+  //
+  // Failure reaches Kevin via (a) a log.warn tier in the caller,
+  // (b) an appended line on the Slack post (chef reads the success
+  // subject; ops reads the Slack line). Deliberately NOT in the
+  // email body so the chef never reads a confidence-eroding warning
+  // on a message that is otherwise correct.
   const emailPretaxCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
-  if (pdf.pretaxCents !== emailPretaxCents) {
-    throw new Error(
-      `fireN1: pretax mismatch email=${emailPretaxCents} pdf=${pdf.pretaxCents} account=${accountKey} week=${weekStart}. Refusing to dispatch - a confirmation email whose fact-table disagrees with its attached record copy is a correctness failure.`
-    );
+  const buildPdf = deps?.buildRecordCopyPdf || buildRecordCopyPdf;
+  let pdf = null;
+  let pdfError = null;
+  try {
+    const built = await buildPdf({
+      accountKey,
+      accountLabel,
+      weekStart,
+      weekEnd,
+      finalizedDateISO: finalizedDateISO || null,
+      approvedByLabel: approverPhrase.meta,
+      invoiceRecords,
+    });
+    if (built.pretaxCents !== emailPretaxCents) {
+      pdfError = `pretax mismatch: email records sum to ${formatCents(emailPretaxCents)} but the record-copy PDF computed ${formatCents(built.pretaxCents)}. Attachment omitted; totals in the email body are the invoice-record totals and are correct.`;
+    } else {
+      pdf = built;
+    }
+  } catch (err) {
+    pdfError = `record-copy PDF failed: ${err?.message || String(err)}`;
   }
 
   const testPrefix = isTest ? "[TEST] " : "";
   const subject = `${testPrefix}Sent to billing: ${accountKey}, week of ${fmtWeekTitle(weekStart)}`;
-  const preheader = `${daysServed} of ${daysInWeek} days · ${mealsCount.toLocaleString("en-US")} meals · ${formatCents(pdf.pretaxCents)} pre-tax. Record copy attached.`;
+  // Preheader + body always render the emailPretaxCents (sum of the
+  // invoice records), never the PDF's own count. That way a PDF
+  // failure never changes the numbers the chef reads.
+  const preheader = pdf
+    ? `${daysServed} of ${daysInWeek} days · ${mealsCount.toLocaleString("en-US")} meals · ${formatCents(emailPretaxCents)} pre-tax. Record copy attached.`
+    : `${daysServed} of ${daysInWeek} days · ${mealsCount.toLocaleString("en-US")} meals · ${formatCents(emailPretaxCents)} pre-tax.`;
   const html = emailShell({
     preheader,
     body: n1Body({
       accountKey, weekStart, weekEnd,
       approvedByLede: approverPhrase.lede,
       mealsCount, daysServed, daysInWeek,
-      pretaxCents: pdf.pretaxCents,
+      pretaxCents: emailPretaxCents,
       scWeekLink, isTest,
     }),
   });
-  const slackText = n1SlackText({ accountKey, weekStart, invoiceRecords, isTest, scWeekLink });
+  const baseSlackText = n1SlackText({ accountKey, weekStart, invoiceRecords, isTest, scWeekLink });
+  // Slack carries the PDF failure as an appended line so ops sees it
+  // without touching the operator-facing email body.
+  const slackText = pdfError
+    ? `${baseSlackText}\n:warning: Record copy PDF not attached - ${pdfError}`
+    : baseSlackText;
 
   let emailResult = "not_sent";
   let slackResult = { sent: false, skipped: "not sent (send=false)" };
@@ -446,11 +483,17 @@ export async function fireN1(args) {
     // unit tests don't need to stub env). A missing env yields
     // 'missing_env:<KEY>' so the operator log tier surfaces WHICH
     // key is absent, not just "failed".
-    const attachments = [{
-      filename: pdf.filename,
-      mimeType: "application/pdf",
-      base64: pdf.pdfBase64,
-    }];
+    //
+    // 2026-09-16: attachments is empty when pdf is null (degrade path).
+    // The email dispatches without a record copy rather than being
+    // suppressed.
+    const attachments = pdf
+      ? [{
+          filename: pdf.filename,
+          mimeType: "application/pdf",
+          base64: pdf.pdfBase64,
+        }]
+      : [];
     if (recipients.to.length > 0) {
       const injectedSender = deps?.emailSender;
       if (!injectedSender) {
@@ -493,12 +536,18 @@ export async function fireN1(args) {
     recipients, subject, preheader, html,
     email: { result: emailResult },
     slack: { text: slackText, result: slackResult },
-    pdf: {
-      filename: pdf.filename,
-      pretaxCents: pdf.pretaxCents,
-      lineCount: pdf.lineCount,
-      byteLength: pdf.pdfBuffer.length,
-    },
+    // pdf is either the built PDF's summary or null (degrade path).
+    // pdfError carries the reason so the caller can log at warn tier -
+    // absent when the PDF built and the pretax comparison passed.
+    pdf: pdf
+      ? {
+          filename: pdf.filename,
+          pretaxCents: pdf.pretaxCents,
+          lineCount: pdf.lineCount,
+          byteLength: pdf.pdfBuffer.length,
+        }
+      : null,
+    pdfError,
     approvers: approverPhrase.approvers,
   };
 }
