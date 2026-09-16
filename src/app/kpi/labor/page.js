@@ -32,6 +32,7 @@ import { StoryBlock } from "./components/StoryBlock";
 // Purchasing on CP for the shared inputs). Rows narrowed to
 // Revenue + Hourly labor via rowSet="labor".
 import CurrentPeriodTable from "@/app/kpi/overview/components/CurrentPeriodTable";
+import CurrentPeriodReview from "@/app/kpi/overview/components/CurrentPeriodReview";
 import { SignalCards } from "./components/SignalCards";
 import { WeekTable } from "./components/WeekTable";
 import { DayStrip } from "./components/DayStrip";
@@ -1248,13 +1249,19 @@ export default function KpiLaborPage() {
                    Revenue + Hourly labor. Component fetches its own
                    Overview + Purchasing data (owned above), so the
                    Labor route stays untouched by construction. */
-                <CurrentPeriodTable
-                  rowSet="labor"
-                  payload={cpOverview}
-                  labor={data}
-                  purch={cpPurch}
-                  error={cpAuxError}
-                />
+                <>
+                  <CurrentPeriodTable
+                    rowSet="labor"
+                    payload={cpOverview}
+                    labor={data}
+                    purch={cpPurch}
+                    error={cpAuxError}
+                  />
+                  <CurrentPeriodReview
+                    labor={data}
+                    purchasing={cpPurch}
+                  />
+                </>
               ) : (
                 <StoryBlock
                   board={data.board}
@@ -1423,7 +1430,7 @@ export default function KpiLaborPage() {
           derived". The worker-filter case (selectedWorkers with zero
           matches) still routes to StateEmptyFiltered above, so this
           gate excludes it. */}
-      {!inHomestandView && !isSalaried && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
+      {!inHomestandView && !isSalaried && !cpGateActive && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
         <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
         {/* PR-B (owner ruling 2026-08-24) - on portfolio views (ALL /
             EAST / WEST), hide the worker filter and the Names | Numbers
