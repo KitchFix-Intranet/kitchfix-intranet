@@ -506,6 +506,46 @@
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-rollcard-ln-s b { color: var(--n-900, #0A2548); font-weight: 800; }
+/* ── R-110 · three small cards beneath the future-range table ──── */
+/* [Cost line · the period], [A week], [A service day]. Same navy
+   left border as the review cards for family consistency, but the
+   cards are wider and read as read-only period plan facts (no
+   drilldown, no action). */
+.kpi-app .kpi-ov-cp-perk {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.kpi-app .kpi-ov-cp-perk-k {
+  background: #fff;
+  border: 0.5px solid var(--n-300, #E5E7EB);
+  border-radius: 10.8px;
+  padding: 13px 16px;
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+}
+.kpi-app .kpi-ov-cp-perk-e {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.81px;
+  text-transform: uppercase;
+  color: var(--n-600, #64748B);
+}
+.kpi-app .kpi-ov-cp-perk-v {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.18px;
+  color: var(--n-900, #0A2548);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-cp-perk-s {
+  font-size: 9.9px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
+  margin-top: 3px;
+}
+
 /* C1 fallback: no columns, single line reading "nothing to
    redistribute yet · week 1 is still running". */
 .kpi-app .kpi-ov-cp-rollcard-empty {

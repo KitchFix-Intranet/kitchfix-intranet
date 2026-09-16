@@ -250,8 +250,19 @@ export default function KpiOverviewPage() {
   const [cpPurch, setCpPurch] = useState(null);
   const [cpAuxError, setCpAuxError] = useState(null);
   const cpGateActive = data?.range?.kind === "period" && data?.period_state === "open";
+  // R-110 (2026-09-16). NP gate. On planned periods the shared
+  // CurrentPeriodTable renders too, driven off is_future_range from
+  // the labor payload (Overview does NOT ship is_future_range - that
+  // asymmetry is intentional: Overview's period_state === "planned"
+  // is what tells us this is a future range, and it is authoritative
+  // enough for the fetch gate below). Any consumer that needs both
+  // sides has to know to consult labor's flag or overview's period_
+  // state - do not add a parallel flag to Overview without matching
+  // its planning-board consumers.
+  const npGateActive = data?.range?.kind === "period" && data?.period_state === "planned";
+  const useCpTable = cpGateActive || npGateActive;
   useEffect(() => {
-    if (!cpGateActive) {
+    if (!useCpTable) {
       setCpLabor(null);
       setCpPurch(null);
       setCpAuxError(null);
@@ -283,7 +294,7 @@ export default function KpiOverviewPage() {
       setCpAuxError(String(e?.message || e));
     });
     return () => ctrl.abort();
-  }, [cpGateActive, fetchAccount, start, end, urlPreview, urlIncludeSalary]);
+  }, [useCpTable, fetchAccount, start, end, urlPreview, urlIncludeSalary]);
 
   // ── URL setters ─────────────────────────────────────────────
   const setParams = useCallback((patch) => {
@@ -495,8 +506,18 @@ export default function KpiOverviewPage() {
             standard Overview components below are skipped for this
             state - a future period has no actuals, so the This period
             surface would render mostly empty and mislead. */}
-        {data.period_state === "planned" ? (
-          <PlanningBoard payload={data} />
+        {/* R-110 (2026-09-16): Next period · same table with is_
+            future_range on. Replaces the old PlanningBoard (which
+            was two plan tables + three cards). The CP branch below
+            still handles the running-period case; NP takes over the
+            `planned` state. */}
+        {npGateActive ? (
+          <CurrentPeriodTable
+            payload={data}
+            labor={cpLabor}
+            purch={cpPurch}
+            error={cpAuxError}
+          />
         ) : (
           <>
             {/* R-112 PR 2 (2026-09-16): CurrentPeriodTable now owns

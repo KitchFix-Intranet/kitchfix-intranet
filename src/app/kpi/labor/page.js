@@ -316,8 +316,13 @@ export default function KpiLaborPage() {
   const [cpPurch, setCpPurch] = useState(null);
   const [cpAuxError, setCpAuxError] = useState(null);
   const cpGateActive = data?.board?.kind === "single_period_in_progress";
+  // R-110 (2026-09-16). NP gate on Labor: is_future_range flags a
+  // future period. Same shared table renders in both branches; the
+  // component checks isFuture and adjusts.
+  const npGateActive = data?.is_future_range === true;
+  const useCpTable = cpGateActive || npGateActive;
   useEffect(() => {
-    if (!cpGateActive) {
+    if (!useCpTable) {
       setCpOverview(null);
       setCpPurch(null);
       setCpAuxError(null);
@@ -342,7 +347,7 @@ export default function KpiLaborPage() {
       setCpAuxError(String(e?.message || e));
     });
     return () => ctrl.abort();
-  }, [cpGateActive, fetchAccount, start, end, urlPreview, searchParams]);
+  }, [useCpTable, fetchAccount, start, end, urlPreview, searchParams]);
 
   // V-role-gates - landing redirect. Fires when the server ships
   // landing_account back on a URL that had no explicit account
@@ -1241,14 +1246,11 @@ export default function KpiLaborPage() {
         >
           {data.board?.applies !== false && (
             <>
-              {cpGateActive ? (
-                /* R-109 PR 2 · Current period one-table view. On CP,
-                   the Labor board replaces StoryBlock (panel + week
-                   bars + captions + week cards + worker table) with
-                   the same table Overview renders. Two rows on Labor:
-                   Revenue + Hourly labor. Component fetches its own
-                   Overview + Purchasing data (owned above), so the
-                   Labor route stays untouched by construction. */
+              {useCpTable ? (
+                /* R-109 PR 2 (2026-09-15) + R-110 (2026-09-16). Same
+                   table on Current period AND Next period. Component
+                   checks isFuture and adjusts. Review cards only
+                   render on CP (nothing to review on NP). */
                 <>
                   <CurrentPeriodTable
                     rowSet="labor"
@@ -1257,10 +1259,12 @@ export default function KpiLaborPage() {
                     purch={cpPurch}
                     error={cpAuxError}
                   />
-                  <CurrentPeriodReview
-                    labor={data}
-                    purchasing={cpPurch}
-                  />
+                  {cpGateActive && (
+                    <CurrentPeriodReview
+                      labor={data}
+                      purchasing={cpPurch}
+                    />
+                  )}
                 </>
               ) : (
                 <StoryBlock
@@ -1430,7 +1434,7 @@ export default function KpiLaborPage() {
           derived". The worker-filter case (selectedWorkers with zero
           matches) still routes to StateEmptyFiltered above, so this
           gate excludes it. */}
-      {!inHomestandView && !isSalaried && !cpGateActive && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
+      {!inHomestandView && !isSalaried && !useCpTable && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
         <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
         {/* PR-B (owner ruling 2026-08-24) - on portfolio views (ALL /
             EAST / WEST), hide the worker filter and the Names | Numbers

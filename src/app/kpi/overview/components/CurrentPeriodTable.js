@@ -42,8 +42,11 @@ function daysSinceStart(startISO, todayISO) {
 }
 
 // A2 · pill state derives from the week's state on the week rail
-// plus the revenue basis flag (partly-confirmed forecast weeks).
-function pillFor(w) {
+// plus the revenue basis flag (partly-confirmed forecast weeks). On
+// future ranges (R-110) every week is `forecast` regardless of state
+// because nothing has happened yet.
+function pillFor(w, isFuture) {
+  if (isFuture) return { cls: "kpi-ov-cp-pill-forecast", label: "forecast" };
   const st = w.state || "";
   if (st === "closed") return { cls: "kpi-ov-cp-pill-closed", label: "closed" };
   if (st === "in_progress") return { cls: "kpi-ov-cp-pill-current", label: "current" };
@@ -61,20 +64,22 @@ function stateClass(w) {
 
 // A4 · Revenue cell body. Confirmed/partial/forecast basis word leads
 // the figure; Service Calendar and Service fee subs; partial-week
-// footer prints "N of X services" when present.
-function RevCellBody({ w, amount, labor, i }) {
-  const basis = w.revenue_basis || "";
+// footer prints "N of X services" when present. On future range (R-
+// 110) the basis word is always `forecast` and the two subs stay if
+// the underlying labor weekly basis carries them.
+function RevCellBody({ w, amount, labor, i, isFuture }) {
+  const basis = isFuture ? "forecast" : (w.revenue_basis || "");
   const lbWk = (labor?.board?.weeks || [])[i] || null;
   const meals = Number(lbWk?.meal_revenue ?? w.meal_revenue ?? 0);
   const fee   = Number(lbWk?.fee_prorate  ?? w.fee_prorate  ?? 0);
   const conf  = Number(lbWk?.confirmed_services || 0);
   const totl  = Number(lbWk?.total_services || 0);
-  const noteText = (basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
+  const noteText = (!isFuture && basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
   return (
     <>
       <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">{basis}</span>{dollar0(amount)}</div>
-      <div className="kpi-ov-cp-sub">Service Calendar: <b>{dollar0(meals)}</b></div>
-      <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>Service fee: <b>{dollar0(fee)}</b></div>
+      {meals > 0 && <div className="kpi-ov-cp-sub">Service Calendar: <b>{dollar0(meals)}</b></div>}
+      {fee > 0 && <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>Service fee: <b>{dollar0(fee)}</b></div>}
       {noteText && <div className="kpi-ov-cp-vd kpi-ov-cp-mute">{noteText}</div>}
     </>
   );
@@ -151,8 +156,24 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }
   );
 }
 
-// Period-column body · revenue (A4).
-function PerRevCellBody({ projection, confirmed, dayFrac }) {
+// Period-column body · revenue (A4). On future range (R-110) the
+// projection == the plan (sum of week rev) and there is no confirmed
+// figure yet; period column reads "planned revenue" + weekly/daily
+// rate on the third line.
+function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays }) {
+  if (isFuture) {
+    const perWeek = projection / 4;
+    const perDay  = serviceDays > 0 ? projection / serviceDays : 0;
+    return (
+      <>
+        <div className="kpi-ov-cp-big">{dollar0(projection)}</div>
+        <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">planned revenue</div>
+        <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
+          <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
+        </div>
+      </>
+    );
+  }
   const p = projection > 0 ? Math.min(100, (confirmed / projection) * 100) : 0;
   return (
     <>
@@ -166,12 +187,25 @@ function PerRevCellBody({ projection, confirmed, dayFrac }) {
   );
 }
 
-// Period-column body · cost (A4). Prompt: `$X left of $Y` leads, then
-// the bar, then `Z% used · $L landed`. `running hot` is gone; the bar
-// colour carries the verdict.
-function PerCostCellBody({ envelope, landed, dayFrac }) {
+// Period-column body · cost (A4). On future range: `$X` big, then
+// `to spend` sub, then `$X/week · $Y/day` rate. No bar (no landed to
+// pace against).
+function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays }) {
   const G = Number(envelope || 0);
   const L = Number(landed || 0);
+  if (isFuture) {
+    const perWeek = G / 4;
+    const perDay  = serviceDays > 0 ? G / serviceDays : 0;
+    return (
+      <>
+        <div className="kpi-ov-cp-big">{dollar0(G)}</div>
+        <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">to spend</div>
+        <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
+          <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
+        </div>
+      </>
+    );
+  }
   const usedPct = G > 0 ? Math.round(Math.min(100, (L / G) * 100)) : 0;
   const hot = G > 0 && (L / G) > (dayFrac + 0.005);
   const barColor = hot ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
@@ -232,32 +266,72 @@ function useLift(ready) {
 }
 
 export default function CurrentPeriodTable({ payload, labor, purch, error, rowSet = "overview" }) {
-  const weeks = payload?.week_rail?.weeks || [];
+  // R-110 (2026-09-16). Future range gate. `labor.is_future_range` is
+  // the reliable flag - Overview ships `period_state: "planned"` but
+  // NOT `is_future_range` on planned periods (asymmetry noted so it
+  // does not trip a future reader). If labor payload is absent (early
+  // render), fall back to overview's period_state.
+  const isFuture = (labor?.is_future_range === true)
+                || (payload?.period_state === "planned");
+  // Weeks · CP reads Overview's week_rail; NP reads Labor's board.
+  // weeks (Overview's week_rail is null on planned periods).
+  const weeks = isFuture
+    ? (labor?.board?.weeks || [])
+    : (payload?.week_rail?.weeks || []);
 
   const derived = useMemo(() => {
     if (weeks.length !== 4) return null;
     const stmtByLine = new Map((payload?.statement_rows || []).map(r => [r.line_code, r]));
     const revCard = (payload?.cards || [])[0] || null;
 
+    // Kevin ruling 2026-09-16: on planned periods, batr is null for
+    // 3200 and 3400 (nothing has landed, no adjustment yet). Fall back
+    // to `period_budget` for the sum-check target - which equals sum
+    // of per-week goals by construction when target_pct is the exact
+    // ratio (R-105).
+    const envelopeOf = (row) => {
+      const batr = Number(row.budget_at_this_revenue || 0);
+      if (batr > 0) return batr;
+      return Number(row.period_budget || 0);
+    };
+
+    // Kevin ruling 2026-09-16 (R-110 clarification): on planned
+    // periods some accounts' `target_pct` (the FY ratio) diverges
+    // from the period-specific ratio `period_budget / sum(week_rev)`
+    // by tenths of a percent - e.g. TBR 3200 P11 FY is 22.34% but the
+    // P11-specific exact ratio is 22.20%. Applying the FY ratio breaks
+    // Invariant 1 by $127. Use the period-exact ratio for goals AND
+    // for the row-sub display on future range only, so the sub and
+    // the goal numbers agree.
+    const revSum = weeks.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
+
     const goalFor = (line) => {
       const row = stmtByLine.get(line);
-      if (!row) return { goal: [null, null, null, null], sum: 0, batr: 0 };
-      const ratio = Number(row.target_pct || 0) / 100;
+      if (!row) return { goal: [null, null, null, null], sum: 0, batr: 0, effectivePct: 0 };
+      const pb = Number(row.period_budget || 0);
+      const batr = Number(row.budget_at_this_revenue || 0);
+      const envelope = batr > 0 ? batr : pb;
+      // On future range: use period-exact ratio (envelope / revSum).
+      // On CP: use FY target_pct (R-105). Preserves both invariants.
+      const fyRatio = Number(row.target_pct || 0) / 100;
+      const ratio = isFuture && revSum > 0 && envelope > 0
+        ? envelope / revSum
+        : fyRatio;
       const g = weeks.map(w => Number(w.week_revenue || 0) * ratio);
       const sub1 = stmtByLine.get("3100.1");
       const sub2 = stmtByLine.get("3100.2");
       if (line === "3100" && sub1 && sub2) {
         // R-111 · per-week goal for 3100 in the salary view is
-        // `week_revenue × 3100.1 target_pct + 3100.2 period_budget / 4`,
-        // never the composed 3100 target_pct times revenue. That combined
-        // percent is a display figure - multiplying it against per-week
-        // revenue bakes a fixed cost into a proportional calc.
+        // `week_revenue × 3100.1 target_pct + 3100.2 period_budget / 4`.
+        // On CP + NP alike (3100 batr is non-null on planned periods
+        // via labor's fixed-cost handling, so the FY hourly ratio +
+        // salary/4 does sum to batr exactly).
         const hourlyRatio = Number(sub1.target_pct || 0) / 100;
         const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
         const gs = weeks.map(w => Number(w.week_revenue || 0) * hourlyRatio + salaryPerWeek);
-        return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: Number(row.budget_at_this_revenue || 0) };
+        return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
       }
-      return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: Number(row.budget_at_this_revenue || 0) };
+      return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: ratio * 100 };
     };
 
     const landedFor = (line) => {
@@ -286,27 +360,54 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     };
 
     const rev = weeks.map(w => Number(w.week_revenue || 0));
-    const revProj = Number(revCard?.projected_period_revenue || 0);
-    const revConf = Number(revCard?.hero_actual || 0);
+    // R-110 · on planned periods Overview ships no projected/confirmed;
+    // period column reads the plan (sum of week revenue) instead of a
+    // "projecting / confirmed" split. Kevin ruling 2026-09-16:
+    // "the period reads the labor weekly sum" - not overview.cards[0].
+    // budget_full_period, which is $15 off on TBJ P11 and a chef will
+    // add up the four cells and see the mismatch.
+    const revProj = isFuture
+      ? rev.reduce((s, v) => s + v, 0)
+      : Number(revCard?.projected_period_revenue || 0);
+    const revConf = isFuture
+      ? 0
+      : Number(revCard?.hero_actual || 0);
 
     const salaryPath = stmtByLine.get("3100.1") != null && stmtByLine.get("3100.2") != null;
     const laborPct = Number(stmtByLine.get("3100")?.target_pct || 0).toFixed(2);
     const laborSub = salaryPath ? `labor · ${laborPct}% of revenue` : `hourly · ${laborPct}% of revenue`;
+    // Row subtitles per Kevin's R-110 render. Labor / Purchasing get
+    // planning-tone copy on future range ("schedule to this", "order
+    // against this"). Kevin ruling 2026-09-16: on planned periods use
+    // the period-exact ratio (envelope / planned rev) for the display
+    // pct too, so the sub agrees with the per-week goals. On CP the
+    // FY target_pct stays.
+    const goalHourly = goalFor("3100.1");
+    const goalFood   = goalFor("3200");
+    const goalPack   = goalFor("3400");
+    const laborPctFuture = (goalHourly.effectivePct || 0).toFixed(2);
+    const laborSubFuture = salaryPath
+      ? `labor · ${laborPct}% of revenue · schedule to this`
+      : `hourly · ${laborPctFuture}% of week revenue · schedule to this`;
+    const foodSub    = `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue`;
+    const packSub    = `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue`;
+    const foodSubP   = `${(goalFood.effectivePct || 0).toFixed(2)}% of week revenue · order against this`;
+    const packSubP   = `${(goalPack.effectivePct || 0).toFixed(2)}% of week revenue`;
 
     const ROWS_OVERVIEW = [
       { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
       { line: "3100", name: "Kitchen labor", sub: laborSub, isLabor: true },
-      { line: "3200", name: "Food",      sub: `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue` },
-      { line: "3400", name: "Packaging", sub: `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue` },
+      { line: "3200", name: "Food",      sub: foodSub },
+      { line: "3400", name: "Packaging", sub: packSub },
     ];
     const ROWS_LABOR = [
       { line: null, name: "Revenue", sub: "what each week earns", rev: true },
-      { line: "3100", name: "Hourly labor", sub: laborSub, isLabor: true },
+      { line: "3100", name: "Hourly labor", sub: isFuture ? laborSubFuture : laborSub, isLabor: true },
     ];
     const ROWS_PURCHASING = [
       { line: null, name: "Revenue", sub: "what you are ordering for", rev: true },
-      { line: "3200", name: "Food",      sub: `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue` },
-      { line: "3400", name: "Packaging", sub: `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue` },
+      { line: "3200", name: "Food",      sub: isFuture ? foodSubP : foodSub },
+      { line: "3400", name: "Packaging", sub: isFuture ? packSubP : packSub },
     ];
     const rows =
         rowSet === "labor"      ? ROWS_LABOR
@@ -314,7 +415,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       :                           ROWS_OVERVIEW;
 
     return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor };
-  }, [payload, weeks, labor, purch, rowSet]);
+  }, [payload, weeks, labor, purch, rowSet, isFuture]);
 
   const ready = !!(derived && labor && purch && !error);
   const { box: liftBox, gridRef } = useLift(ready);
@@ -342,82 +443,111 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const total = derived.rows.length;
   const end = 2 + 2 * total;
 
-  // Section B · precompute rolling data per cost line. `closedFlags`
-  // and `weekRev` are shared across every line. `perLine[line]` gives
-  // { plan, rolling, landed, envelope, summary, isC1, isC2, isC3 };
-  // the map runs in both PLAN and ROLLING modes so the summary card
-  // has the same numbers to display in either state (though it only
-  // renders in ROLLING). C1 renders the same figures in both modes
-  // by definition (no closed weeks -> rolling == plan).
+  // R-110 · service-day count for the whole period from labor's
+  // per-week `service_days` (added 2026-09-16). Sum across weeks -
+  // TBJ P11 = 24, TBR P11 = 21, neither the render's placeholder 20.
+  // If the field is missing (older payload), fall back to 20 with a
+  // console warning so a probe surfaces the gap.
+  const serviceDaysTotal = (labor?.board?.weeks || []).reduce(
+    (s, w) => s + Number(w.service_days || 0), 0
+  );
+
+  // Section B · precompute rolling data per cost line. On R-110 future
+  // range this block is skipped entirely - closedFlags is all false,
+  // no cost line has landed, and the toggle does not render.
   const closedFlags = weeks.map(w => (w.state || "") === "closed");
   const currentIdx = weeks.findIndex(w => (w.state || "") === "in_progress");
   const perLine = new Map();
-  for (const row of derived.rows) {
-    if (row.rev) continue;
-    const gi = derived.goalFor(row.line);
-    const landed = derived.landedFor(row.line);
-    const rr = rollingOf(gi.goal, landed, gi.batr, closedFlags, derived.rev);
-    const sm = summaryFor(gi.goal, rr.rolling, closedFlags, currentIdx);
-    perLine.set(row.line, {
-      plan: gi.goal,
-      rolling: rr.rolling,
-      landed,
-      envelope: gi.batr,
-      actual: landed.reduce((s, v) => s + v, 0),
-      isC1: rr.isC1,
-      isC2: rr.isC2,
-      isC3: rr.isC3,
-      totalDelta: sm.totalDelta,
-      thisWeekDelta: sm.thisWeekDelta,
-      trim: sm.trim,
-      name: row.name,
-      isLabor: row.isLabor,
-    });
+  if (!isFuture) {
+    for (const row of derived.rows) {
+      if (row.rev) continue;
+      const gi = derived.goalFor(row.line);
+      const landed = derived.landedFor(row.line);
+      const rr = rollingOf(gi.goal, landed, gi.batr, closedFlags, derived.rev);
+      const sm = summaryFor(gi.goal, rr.rolling, closedFlags, currentIdx);
+      perLine.set(row.line, {
+        plan: gi.goal,
+        rolling: rr.rolling,
+        landed,
+        envelope: gi.batr,
+        actual: landed.reduce((s, v) => s + v, 0),
+        isC1: rr.isC1,
+        isC2: rr.isC2,
+        isC3: rr.isC3,
+        totalDelta: sm.totalDelta,
+        thisWeekDelta: sm.thisWeekDelta,
+        trim: sm.trim,
+        name: row.name,
+        isLabor: row.isLabor,
+      });
+    }
   }
-  // All cost lines share the same closed/open pattern; pick any line's
-  // isC1/isC2 for card-level decisions (the status strip and the
-  // rollcard's empty-state fallback).
   const anyLine = perLine.size ? perLine.values().next().value : null;
   const isC1 = anyLine ? anyLine.isC1 : false;
   const isC2 = anyLine ? anyLine.isC2 : false;
 
-  // Period metadata for the status strip ("P10 · week 2 of 4 · day 10
-  // of 28 · closes 10/04"). Week number reads the current-week index
-  // + 1; closes date is the last week's week_end.
+  // Status strip copy per render.
+  //   CP: "P10 · week 2 of 4 · day 10 of 28 · closes 10/04"
+  //   NP: "P11 · starts 10/05 · budget only, nothing has happened yet"
   const periodNo = payload?.range?.period_no ?? weeks[0]?.period_no ?? null;
   const wkOfPeriod = currentIdx >= 0 ? currentIdx + 1 : null;
   const closesDate = weeks[3]?.week_end || "";
   const closesLabel = closesDate.slice(5).replace(/-/, "/");
-  const statusSub = [
-    periodNo != null && <><b>P{periodNo}</b></>,
-    wkOfPeriod && ` · week ${wkOfPeriod} of 4`,
-    day > 0 && ` · day ${day} of 28`,
-    closesLabel && ` · closes ${closesLabel}`,
-  ].filter(Boolean);
+  const startsLabel = (weeks[0]?.week_start || "").slice(5).replace(/-/, "/");
+  const statusPill = isFuture ? "Planning view" : "Period running";
+  const statusSub = isFuture
+    ? [
+        periodNo != null && <><b>P{periodNo}</b></>,
+        startsLabel && ` · starts ${startsLabel}`,
+        " · budget only, nothing has happened yet",
+      ].filter(Boolean)
+    : [
+        periodNo != null && <><b>P{periodNo}</b></>,
+        wkOfPeriod && ` · week ${wkOfPeriod} of 4`,
+        day > 0 && ` · day ${day} of 28`,
+        closesLabel && ` · closes ${closesLabel}`,
+      ].filter(Boolean);
+
+  // R-110 · three small cards beneath the table. Sum across cost
+  // lines (Overview: 3100+3200+3400; Labor: 3100; Purchasing:
+  // 3200+3400) for the total; per-week = /4; per-service-day uses the
+  // real count from labor.board.weeks[].service_days.
+  const costRowsForCards = derived.rows.filter(r => !r.rev);
+  const costTotal = costRowsForCards.reduce((s, r) => {
+    const gi = derived.goalFor(r.line);
+    return s + Number(gi.batr || 0);
+  }, 0);
+  const revenueTotal = derived.rev.reduce((s, v) => s + v, 0);
+  const cardsLabel = rowSet === "labor" ? "Hourly labor"
+                   : rowSet === "purchasing" ? "Purchases"
+                   : "Cost of goods";
 
   return (
     <>
-      {/* Section B · status strip + PLAN / ROLLING toggle. PLAN
-          default. Toggle stays enabled on C1 (Kevin: "a chef
-          switching to it and finding it greyed out learns nothing"). */}
+      {/* Section B · status strip + PLAN / ROLLING toggle on CP.
+          On R-110 (future range) the pill copy switches to `Planning
+          view` and the toggle does NOT render - Rolling has no
+          meaning against a period where nothing has landed. */}
       <div className="kpi-ov-cp-status">
-        <span className="kpi-ov-cp-stpill">Period running</span>
+        <span className="kpi-ov-cp-stpill">{statusPill}</span>
         <span className="kpi-ov-cp-status-sub">{statusSub.map((s, i) => <Fragment key={i}>{s}</Fragment>)}</span>
         <span className="kpi-ov-cp-status-ml" />
-        <span className="kpi-ov-cp-seg" role="group" aria-label="Budget mode">
-          <button
-            type="button"
-            className={mode === "plan" ? "kpi-ov-cp-seg-on" : ""}
-            onClick={() => setMode("plan")}
-            aria-pressed={mode === "plan"}
-          >PLAN</button>
-          <button
-            type="button"
-            className={mode === "rolling" ? "kpi-ov-cp-seg-on" : ""}
-            onClick={() => setMode("rolling")}
-            aria-pressed={mode === "rolling"}
-          >ROLLING</button>
-        </span>
+        {!isFuture && (
+          <span className="kpi-ov-cp-seg" role="group" aria-label="Budget mode">
+            <button
+              type="button"
+              className={mode === "plan" ? "kpi-ov-cp-seg-on" : ""}
+              onClick={() => setMode("plan")}
+              aria-pressed={mode === "plan"}
+            >PLAN</button>
+            <button
+              type="button"
+              className={mode === "rolling" ? "kpi-ov-cp-seg-on" : ""}
+              onClick={() => setMode("rolling")}
+              aria-pressed={mode === "rolling"}
+            >ROLLING</button>
+          </span>
+        )}
       </div>
     <div className="kpi-ov-cp-card kpi-ov-cp-t-navy" data-r112-card="1">
       <div
@@ -433,11 +563,12 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         <div className="kpi-ov-cp-bpanel" style={{ gridRow: `2 / ${end}` }} />
 
         {/* Header row (A2). WK N + pill + date + `day n of 7` on the
-            current week; no progress bar. */}
+            current week; no progress bar. On future range every week
+            reads `forecast`, no lifted column, no day-in-week meta. */}
         {weeks.map((w, i) => {
-          const p = pillFor(w);
-          const st = stateClass(w);
-          const isNow = w.state === "in_progress";
+          const p = pillFor(w, isFuture);
+          const st = isFuture ? "kpi-ov-cp-ahead" : stateClass(w);
+          const isNow = !isFuture && w.state === "in_progress";
           const wkNo = i + 1;
           const dayInWeek = Math.max(0, Math.min(7, day - 7 * (wkNo - 1)));
           const cls = [
@@ -460,9 +591,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         <div className="kpi-ov-cp-hcell kpi-ov-cp-per" style={{ gridColumn: 6 }}>
           <div className="kpi-ov-cp-hcl1">
             <span className="kpi-ov-cp-wk">Period</span>
-            <span className="kpi-ov-cp-pill kpi-ov-cp-pill-navy">what is left</span>
+            <span className="kpi-ov-cp-pill kpi-ov-cp-pill-navy">{isFuture ? "the plan" : "what is left"}</span>
           </div>
-          <div className="kpi-ov-cp-hcl2">{Math.round(dayFrac * 100)}% of the period gone</div>
+          <div className="kpi-ov-cp-hcl2">
+            {isFuture
+              ? <>P{periodNo ?? "?"} · not started</>
+              : <>{Math.round(dayFrac * 100)}% of the period gone</>}
+          </div>
         </div>
 
         {/* Data rows. Row separators run full width across the label
@@ -497,30 +632,36 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 </div>
                 <div className="kpi-ov-cp-rg">{row.sub}</div>
               </div>
-              {/* Week cells (cols 2..5). */}
+              {/* Week cells (cols 2..5). On future range every week
+                  is `ahead` (no isNow, no lifted). */}
               {weeks.map((w, i) => {
-                const st = stateClass(w);
-                const isNow = w.state === "in_progress";
+                const st = isFuture ? "kpi-ov-cp-ahead" : stateClass(w);
+                const isNow = !isFuture && w.state === "in_progress";
                 const cls = [
                   "kpi-ov-cp-cell",
                   st,
                   isNow && "kpi-ov-cp-now",
                 ].filter(Boolean).join(" ");
+                // On future range every week is state="not_started"
+                // - CostCellBody's isFuture branch already renders
+                // `to spend $X` and nothing else, which is exactly
+                // what R-110 wants. No rolling data on NP.
+                const wForCell = isFuture ? { ...w, state: "not_started" } : w;
                 return (
                   <div key={`c-${row.line || "rev"}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
                     {isRev
-                      ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} />
+                      ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} isFuture={isFuture} />
                       : (() => {
                           const pl = perLine.get(row.line);
                           const dlt = pl ? (pl.rolling[i] - pl.plan[i]) : 0;
                           return (
                             <CostCellBody
-                              w={w}
+                              w={wForCell}
                               goal={goalInfo.goal[i]}
                               goalRolling={pl ? pl.rolling[i] : goalInfo.goal[i]}
-                              landed={landed[i]}
+                              landed={isFuture ? 0 : landed[i]}
                               isLabor={row.isLabor}
-                              mode={mode}
+                              mode={isFuture ? "plan" : mode}
                               dlt={dlt}
                               isC3={pl ? pl.isC3 : false}
                             />
@@ -539,8 +680,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
-                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} />
-                  : <PerCostCellBody envelope={goalInfo.batr} landed={actual} dayFrac={dayFrac} />}
+                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />
+                  : <PerCostCellBody envelope={goalInfo.batr} landed={actual} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />}
               </div>
             </Fragment>
           );
@@ -549,8 +690,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         {/* Lifted current-week column (A3). Positioned absolutely so
             the top edge overhangs the header by 12px and the bottom
             edge overhangs the last row by 12px. Sits behind the .now
-            cells (z-index 10/11 vs 12). */}
-        {liftBox && (
+            cells (z-index 10/11 vs 12). On future range there is no
+            "now" week - no lift renders. */}
+        {!isFuture && liftBox && (
           <>
             <div
               className="kpi-ov-cp-lift"
@@ -564,15 +706,34 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         )}
       </div>
     </div>
-    {/* Section B · summary card. Rolling mode only. Sits below the
-        table + above `Needs review today`. One column per cost line
-        (Overview 3, Labor 1, Purchasing 2). C1 replaces the columns
-        with a single line reading "nothing to redistribute yet".
-        C2 (one open week) prints only the total, since of-it-this-
-        week equals the total by construction. C3 (envelope over)
-        prints "already past the envelope · nothing left to spend"
-        in red. */}
-    {mode === "rolling" && perLine.size > 0 && (
+    {/* R-110 · three small cards below the table on future range
+        only. Structure per docs/renders/next-period-table.html:
+        [<label> · the period · $tot · X% of planned revenue],
+        [A week · $tot/4 · four even weeks],
+        [A service day · $tot/serviceDays · N service days]. */}
+    {isFuture && (
+      <div className="kpi-ov-cp-perk">
+        <div className="kpi-ov-cp-perk-k">
+          <div className="kpi-ov-cp-perk-e">{cardsLabel} · the period</div>
+          <div className="kpi-ov-cp-perk-v">{dollar0(costTotal)}</div>
+          <div className="kpi-ov-cp-perk-s">
+            {revenueTotal > 0 ? `${(costTotal / revenueTotal * 100).toFixed(1)}% of planned revenue` : "planned"}
+          </div>
+        </div>
+        <div className="kpi-ov-cp-perk-k">
+          <div className="kpi-ov-cp-perk-e">A week</div>
+          <div className="kpi-ov-cp-perk-v">{dollar0(costTotal / 4)}</div>
+          <div className="kpi-ov-cp-perk-s">four even weeks</div>
+        </div>
+        <div className="kpi-ov-cp-perk-k">
+          <div className="kpi-ov-cp-perk-e">A service day</div>
+          <div className="kpi-ov-cp-perk-v">{dollar0(serviceDaysTotal > 0 ? costTotal / serviceDaysTotal : 0)}</div>
+          <div className="kpi-ov-cp-perk-s">{serviceDaysTotal} service day{serviceDaysTotal === 1 ? "" : "s"} · from the Service Calendar</div>
+        </div>
+      </div>
+    )}
+    {/* Section B · summary card. Rolling mode only. */}
+    {!isFuture && mode === "rolling" && perLine.size > 0 && (
       <div className="kpi-ov-cp-rollcard">
         <div className="kpi-ov-cp-rollcard-t">To land the period on budget</div>
         <div className="kpi-ov-cp-rollcard-lead">
