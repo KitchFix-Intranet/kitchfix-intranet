@@ -2380,3 +2380,21 @@
 .kpi-app .kpi-p-vt-toggle button + button {
   border-left: 1px solid var(--n-300);
 }
+
+/* Kevin fix 2026-09-17 item 6: coding-caption above the CP spend
+   list. Amber left border matches the review card's "attention"
+   accent. Only renders when uncoded rows exist; the caption
+   disappears at zero rather than reading "0 charges count toward
+   Food". */
+.kpi-app .kpi-p-cp-uncoded {
+  background: var(--amber-50, #FFF2E2);
+  border: 0.5px solid var(--n-300);
+  border-left: 3px solid var(--amber-600, #B25800);
+  border-radius: var(--kpi-ctl-r, 8px);
+  padding: var(--kpi-sp-3, 12px) var(--kpi-sp-4, 16px);
+  font-size: var(--kpi-t-body, 12px);
+  font-weight: 600;
+  color: var(--n-800, #334155);
+  line-height: 1.5;
+  margin-top: var(--kpi-sp-3, 12px);
+}

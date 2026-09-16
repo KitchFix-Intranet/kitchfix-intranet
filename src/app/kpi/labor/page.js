@@ -1441,7 +1441,14 @@ export default function KpiLaborPage() {
           derived". The worker-filter case (selectedWorkers with zero
           matches) still routes to StateEmptyFiltered above, so this
           gate excludes it. */}
-      {!inHomestandView && !isSalaried && !useCpTable && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
+      {/* Kevin fix 2026-09-17 item 5: WeekTable restored on Labor CP.
+          Post-R-103 the WeekTable week totals derive from the same
+          SUM(actuals.amount) as CurrentPeriodTable's 3100 landed
+          cell - both agree cent-exact on both toggles (TBJ CP week
+          1: $8,260 hourly, $12,481 salary in both). The Rippling
+          hours + totals table sits below the CP surface; NP still
+          suppresses it (nothing has been worked yet). */}
+      {!inHomestandView && !isSalaried && !npGateActive && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
         <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
         {/* PR-B (owner ruling 2026-08-24) - on portfolio views (ALL /
             EAST / WEST), hide the worker filter and the Names | Numbers
