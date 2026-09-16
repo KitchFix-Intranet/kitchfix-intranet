@@ -216,6 +216,26 @@ jobs:
           echo "probe_people"
           node scripts/probes/_probe_people.mjs
 
+      # People freshness (Shape A, 2026-09-17). Runs `if: always()` so it
+      # fires whether or not earlier steps in this job succeeded. Reads
+      # MAX(people.last_synced_at) and fails when the newest row is more
+      # than 48h behind NOW(). The signal is independent of "did the
+      # sync report success" - both prior stale-directory incidents
+      # (2026-08-22 six-day gap, 2026-09-08..09-16 nine-day gap) were
+      # surfaced by human observation because nothing in the pipeline
+      # asserted freshness after the derives. This probe closes that.
+      #
+      # Shape B (an independent Vercel cron running the same check
+      # regardless of GHA state) is deliberately deferred to backlog
+      # (docs/backlog/people-table-staleness-signal.md). Shape A rides
+      # on the pipeline that already exists; Shape B catches the case
+      # where the pipeline itself is disabled or missing.
+      - name: People freshness
+        id: probe_freshness
+        if: always() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          node scripts/probes/_probe_people_freshness.mjs --max-hours=48
+
       # Failure surface (2026-08-27). Fires on ANY prior step failure.
       # Posts one compact message to the SC channel with the failed
       # step name and a run URL. Does not fire on dry-run. If the
@@ -240,23 +260,34 @@ jobs:
           DERIVE_SALARY: ${{ steps.derive_salary.outcome }}
           DERIVE_PEOPLE: ${{ steps.derive_people.outcome }}
           PROBE_PEOPLE:  ${{ steps.probe_people.outcome }}
+          PROBE_FRESHNESS: ${{ steps.probe_freshness.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
+          # 2026-09-17: emit a GHA ::error:: notice on missing webhook
+          # instead of silently `exit 0`. This step exists to surface a
+          # pipeline failure; a missing webhook is the alarm itself
+          # being disarmed. The step still exits 0 (continue-on-error
+          # semantics for the notice; the pipeline is already failing
+          # via the earlier step, so this step failing on top would
+          # mask which step actually broke). But the ::error:: notice
+          # makes the missing configuration loud in the Actions UI
+          # instead of a `echo` line buried at the end of the log.
           if [ -z "${SLACK_SC_WEBHOOK_URL}" ]; then
-            echo "SLACK_SC_WEBHOOK_URL absent - skipping post"
+            echo "::error title=Slack alarm disarmed::SLACK_SC_WEBHOOK_URL is absent - the failure-alerting step has no webhook to post to. Configure the secret at Settings > Secrets and variables > Actions."
             exit 0
           fi
           # First failed step wins. Order matches the pipeline sequence,
           # so the name reported is the earliest failure (later steps
           # never ran because of `if: success()`).
-          if   [ "${SYNC}"          = "failure" ]; then FAILED_STEP="Run rippling sync"
-          elif [ "${DERIVE_WEEKLY}" = "failure" ]; then FAILED_STEP="Derive labor actuals"
-          elif [ "${DERIVE_DAILY}"  = "failure" ]; then FAILED_STEP="Derive labor actuals daily"
-          elif [ "${PROBE_GRAIN}"   = "failure" ]; then FAILED_STEP="Daily grain probes"
-          elif [ "${DERIVE_SALARY}" = "failure" ]; then FAILED_STEP="Derive salary actuals"
-          elif [ "${DERIVE_PEOPLE}" = "failure" ]; then FAILED_STEP="Derive people"
-          elif [ "${PROBE_PEOPLE}"  = "failure" ]; then FAILED_STEP="People probes"
+          if   [ "${SYNC}"            = "failure" ]; then FAILED_STEP="Run rippling sync"
+          elif [ "${DERIVE_WEEKLY}"   = "failure" ]; then FAILED_STEP="Derive labor actuals"
+          elif [ "${DERIVE_DAILY}"    = "failure" ]; then FAILED_STEP="Derive labor actuals daily"
+          elif [ "${PROBE_GRAIN}"     = "failure" ]; then FAILED_STEP="Daily grain probes"
+          elif [ "${DERIVE_SALARY}"   = "failure" ]; then FAILED_STEP="Derive salary actuals"
+          elif [ "${DERIVE_PEOPLE}"   = "failure" ]; then FAILED_STEP="Derive people"
+          elif [ "${PROBE_PEOPLE}"    = "failure" ]; then FAILED_STEP="People probes"
+          elif [ "${PROBE_FRESHNESS}" = "failure" ]; then FAILED_STEP="People freshness (staleness > 48h)"
           else FAILED_STEP="unknown step"
           fi
           PAYLOAD=$(printf '{"text":"rippling sync failed at *%s*\\n<%s|Run #%s>"}' \
