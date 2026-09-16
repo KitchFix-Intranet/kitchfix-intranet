@@ -473,6 +473,11 @@ export default function KpiOverviewPage() {
     mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
   } else if (!data || (!data.cards && !data.landing_account)) {
     mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
+  } else if (useCpTable && (!cpLabor || !cpPurch) && !cpAuxError) {
+    // Kevin fix 2026-09-17 item 1: on CP or NP the CurrentPeriodTable
+    // depends on a second (labor+purchasing) fetch. Keep the board
+    // skeleton up until that lands - no second loader text state.
+    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
   } else if (data && data.cards) {
     const rangeMeta = { ...data.range, period_state: data.period_state };
     // Ghost the prior board at reduced opacity during warm refetch.

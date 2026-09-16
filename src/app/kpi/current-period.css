@@ -51,16 +51,18 @@
 }
 .kpi-app .kpi-ov-cp-card > * { pointer-events: auto; }
 
-/* ── Status strip (Kevin § B) ──────────────────────────────────── */
+/* ── Status strip (Kevin § B, item 4 fix 2026-09-17) ───────────── */
 /* Sits above the card, right of the status pill is the PLAN /
-   ROLLING seg control. 30px top margin holds the 12px lift-clearance
-   Kevin ruled in PR 1 (12px between the lifted column and whatever
-   sits above it - here that is the status pill). */
+   ROLLING seg control. 14px top margin matches Current year and
+   Last period's status-row rhythm exactly (kpi-ov-statusrow is
+   also 14px below the shell). 14px bottom margin gives the lifted
+   current-week column its 12px overhang without colliding with
+   the status pill. */
 .kpi-app .kpi-ov-cp-status {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin: 30px 2px 14px;
+  margin: 0 2px 14px;
 }
 .kpi-app .kpi-ov-cp-stpill {
   font-size: 9.9px;
@@ -142,7 +144,14 @@
 .kpi-app .kpi-ov-cp-bpanel {
   grid-column: 2 / -1;
   background: #fff;
+  /* Kevin fix 2026-09-17 item 2: bpanel carries border ONLY on right
+     and bottom. Its top edge sits under hbar (which has no bottom
+     border) and its left edge sits against lbar (which has no right
+     border) - a border on either would show a double line at the
+     seam. The rowline at grid-row 2 gives the horizontal separator
+     between hbar and the body row 1. */
   border: 0.5px solid var(--n-300);
+  border-top: none;
   border-left: none;
   border-radius: 0 0 12px 0;
   box-shadow: 3px 4px 12px rgba(10, 37, 72, 0.06);
@@ -256,6 +265,16 @@
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per.kpi-ov-cp-lastrow { border-radius: 0 0 11.5px 0; }
 .kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-firstrow { border-radius: 11.5px 0 0 0; }
 .kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-lastrow  { border-radius: 0 0 0 11.5px; }
+
+/* Row hover (Kevin fix 2026-09-17 item 3): matches
+   `.kpi-p-tbl-week:hover > td { background: var(--n-100) }` on
+   Purchasing tables and `.kpi-tbl-band:hover > td` on cost tables.
+   Week cells only - the lifted current-week (.kpi-ov-cp-now) is
+   already emphasised and the period column (.kpi-ov-cp-per) reads
+   as a summary, not a hovered target. */
+.kpi-app .kpi-ov-cp-cell:not(.kpi-ov-cp-now):not(.kpi-ov-cp-per):hover {
+  background: var(--n-100);
+}
 
 /* Row separator lines · full width across labels + cells at --n-300. */
 .kpi-app .kpi-ov-cp-rowline {

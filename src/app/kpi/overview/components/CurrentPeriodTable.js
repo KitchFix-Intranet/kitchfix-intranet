@@ -426,13 +426,20 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const [mode, setMode] = useState("plan");
 
   if (weeks.length !== 4) {
-    return <div className="kpi-ov-cp-empty" role="status">Waiting for week rail…</div>;
+    // No data yet. Kevin fix 2026-09-17 item 1: don't ship a second
+    // loader - the parent's board skeleton stays up until aux data is
+    // ready. Returning null here means the component simply doesn't
+    // mount until the payload is real.
+    return null;
   }
   if (error) {
     return <div className="kpi-ov-cp-empty" role="alert">Labor / Purchasing did not load: {error}</div>;
   }
   if (!labor || !purch) {
-    return <div className="kpi-ov-cp-empty" role="status">Loading board figures…</div>;
+    // Aux fetch still pending. Same rule as above: no second loader,
+    // the parent page keeps its skeleton up until this returns real
+    // content.
+    return null;
   }
 
   const todayISO = payload?.todayISO || new Date().toISOString().slice(0, 10);

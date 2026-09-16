@@ -1250,22 +1250,29 @@ export default function KpiLaborPage() {
                 /* R-109 PR 2 (2026-09-15) + R-110 (2026-09-16). Same
                    table on Current period AND Next period. Component
                    checks isFuture and adjusts. Review cards only
-                   render on CP (nothing to review on NP). */
-                <>
-                  <CurrentPeriodTable
-                    rowSet="labor"
-                    payload={cpOverview}
-                    labor={data}
-                    purch={cpPurch}
-                    error={cpAuxError}
-                  />
-                  {cpGateActive && (
-                    <CurrentPeriodReview
+                   render on CP (nothing to review on NP).
+                   Kevin fix 2026-09-17 item 1: skeleton stays up
+                   until the overview + purchasing aux fetch lands -
+                   no second loader between skeleton and table. */
+                (!cpOverview || !cpPurch) && !cpAuxError ? (
+                  <BoardSkeleton />
+                ) : (
+                  <>
+                    <CurrentPeriodTable
+                      rowSet="labor"
+                      payload={cpOverview}
                       labor={data}
-                      purchasing={cpPurch}
+                      purch={cpPurch}
+                      error={cpAuxError}
                     />
-                  )}
-                </>
+                    {cpGateActive && (
+                      <CurrentPeriodReview
+                        labor={data}
+                        purchasing={cpPurch}
+                      />
+                    )}
+                  </>
+                )
               ) : (
                 <StoryBlock
                   board={data.board}
