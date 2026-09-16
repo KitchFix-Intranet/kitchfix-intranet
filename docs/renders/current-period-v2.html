@@ -1,0 +1,246 @@
+<meta charset="utf-8"><title>Current period · intersecting</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>
+:root{--navy:#0A2548;--navy-700:#153968;--wk:#24508C;--navy-50:#F4F7FC;--navy-100:#E3EAF5;
+--green-600:#008330;--green-50:#E9FDEC;--red-600:#B9000C;--red-50:#FFEDE7;--amber-600:#B25800;--amber-50:#FFF2E2;
+--n0:#fff;--n-100:#F4F2EC;--n-200:#F0EEE7;--n-300:#E5E7EB;--n-400:#D3CFC4;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;
+--page:#EDEFF2;--shadow:0 1px 2px rgba(10,37,72,.06),0 4px 12px rgba(10,37,72,.07);
+--past:#FBFBFC;--ahead:#FCFCFD;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,-apple-system,system-ui,sans-serif;background:var(--page);color:var(--n-700);-webkit-font-smoothing:antialiased;font-size:11.25px}
+button{font-family:inherit;cursor:pointer}.num{font-variant-numeric:tabular-nums}
+.devbar{position:sticky;top:0;z-index:80;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:8px}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-left:auto}.devbar .lbl{font-size:11px;color:#93a9c9;margin-left:14px}
+.devbar button{font-size:11px;font-weight:600;padding:5px 11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.wrap{max-width:1260px;margin:0 auto;padding:16px 20px 48px}
+.cmd{background:var(--navy);border-radius:14px;padding:0 16px;min-height:46px;display:flex;align-items:center;gap:9px;position:relative;z-index:30}
+.cmd .ttl{color:#fff;font-size:16.2px;font-weight:700;letter-spacing:-.16px}.cmd .acct{color:#fff;font-size:16.2px;font-weight:800}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 10px;display:flex;gap:6px;align-items:center}
+.chip .k{color:#93a9c9;font-size:9px;font-weight:800;letter-spacing:1.35px;text-transform:uppercase}
+.chip .v{color:#fff;font-size:11.25px;font-weight:700}.chip .d{color:#93a9c9;font-size:11.25px;font-weight:500}
+.meta{color:#b9c8de;font-size:9.9px;font-weight:700;letter-spacing:.5px}.meta b{color:#fff}
+.cmd .ml{margin-left:auto}
+.tog{display:flex;border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,.22)}
+.tog button{font-size:9.9px;font-weight:700;padding:6px 13px;color:#cddbee;background:transparent;border:none;letter-spacing:.4px}
+.tog button.on{background:#fff;color:var(--navy)}
+.dot{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:7px;padding:5px 10px;color:#cddbee;font-size:9.9px;font-weight:700}
+.dot i{width:6px;height:6px;border-radius:50%;background:#22c55e}
+.status{display:flex;align-items:center;gap:9px;margin:14px 2px 0}
+.stpill{font-size:9.9px;font-weight:800;letter-spacing:.693px;text-transform:uppercase;padding:5px 12px;border-radius:999px;color:#fff;background:var(--navy)}
+.status .sub{font-size:11.25px;font-weight:700;color:var(--n-600)}.status .sub b{color:var(--n-900)}
+.status .ml{margin-left:auto}
+.seg{display:inline-flex;border:1px solid var(--n-300);border-radius:8px;overflow:hidden;background:var(--n0)}
+.seg button{font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 13px;border:none;background:transparent;color:var(--n-600)}
+.seg button.on{background:var(--navy);color:#fff}
+.rollcard{background:var(--n0);border:.5px solid var(--n-300);border-left:3px solid var(--navy-700);border-radius:10.8px;box-shadow:var(--shadow);padding:14px 18px;margin-top:14px}
+.rollcard .t{font-size:9px;font-weight:800;letter-spacing:.81px;text-transform:uppercase;color:var(--n-700);margin-bottom:8px}
+.rollcard .lead{font-size:11.25px;font-weight:600;color:var(--n-600);margin-bottom:10px;line-height:1.6}
+.rollcard .lead b{color:var(--n-900);font-weight:700}
+.rollcard .lines{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.rollcard .ln{padding:0 16px;border-left:1px solid var(--n-200)}
+.rollcard .ln:first-child{padding-left:0;border-left:none}
+.rollcard .ln .nm{font-size:11.25px;font-weight:800;color:var(--n-900)}
+.rollcard .ln .v{font-size:15px;font-weight:800;letter-spacing:-.2px;margin-top:4px;font-variant-numeric:tabular-nums}
+.rollcard .ln .s{font-size:9.9px;font-weight:600;color:var(--n-600);margin-top:3px;font-variant-numeric:tabular-nums}
+.rollcard .ln .s b{color:var(--n-900);font-weight:800}
+.trim{color:var(--red-600)}.cush{color:var(--green-600)}
+.dlt{font-size:9.5px;font-weight:800;margin-top:4px}
+.dlt.trim{color:var(--red-600)}.dlt.cush{color:var(--green-600)}
+.pill{display:inline-block;font-size:8.6px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:2.5px 8px;border-radius:999px;white-space:nowrap}
+.p-closed{background:var(--n-100);color:var(--n-600)}.p-current{background:#2FBF71;color:#053B20;box-shadow:0 0 0 2px rgba(47,191,113,.28)}
+.p-pending{background:var(--amber-50);color:var(--amber-600)}.p-forecast{background:var(--n0);color:var(--n-600);border:1px dashed var(--n-300)}
+.p-navy{background:var(--navy);color:#fff}
+
+/* ==== the two intersecting elements ==== */
+.board{position:relative;margin-top:30px;padding-bottom:12px}
+.grid{display:grid;grid-template-columns:150px repeat(4,minmax(0,1fr)) 198px;position:relative}
+/* header bar · spans the weeks and the period, rounded top corners */
+.hbar{grid-column:2 / -1;grid-row:1;background:var(--n0);border:.5px solid var(--n-300);border-bottom:none;border-radius:12px 12px 0 0;box-shadow:0 -2px 6px rgba(10,37,72,.05);position:relative;z-index:1}
+/* body · the label column and the cells are one panel */
+.lbar{grid-column:1;background:var(--n0);border:.5px solid var(--n-300);border-right:none;border-radius:12px 0 0 12px;box-shadow:-3px 4px 12px rgba(10,37,72,.06);position:relative;z-index:1}
+.bpanel{grid-column:2 / -1;background:var(--n0);border:.5px solid var(--n-300);border-left:none;border-radius:0 0 12px 0;box-shadow:3px 4px 12px rgba(10,37,72,.06);position:relative;z-index:1}
+.cnr{grid-column:1;grid-row:1}
+.hcell{grid-row:1;position:relative;z-index:3;padding:15px 14px 14px;text-align:right}
+.hcell .l1{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.hcell .wk{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--n-900)}
+.hcell .l2{font-size:10.5px;font-weight:600;color:var(--n-600);margin-top:5px}
+.hcell .l2 b{color:var(--n-900);font-weight:700}
+.hcell.per .wk{color:var(--navy-700)}
+.rlab{grid-column:1;position:relative;z-index:3;padding:14px 14px 14px 18px;display:flex;flex-direction:column;justify-content:center;background:var(--n0);border-right:1px solid var(--n-300)}
+.rlab .n{font-size:12px;font-weight:800;color:var(--n-900)}
+.rlab .n .glc{font-size:9.5px;font-weight:600;color:var(--n-600);margin-right:6px}
+.rlab .g{font-size:9.5px;font-weight:600;color:var(--n-600);margin-top:3px}
+.cell{position:relative;z-index:3;padding:14px;text-align:right;display:flex;flex-direction:column;justify-content:center;min-height:96px}
+.cell.past{background:var(--past)}.cell.ahead{background:var(--ahead)}
+.cell.per{background:var(--navy-50)}
+.hcell.past{background:var(--past)}.hcell.ahead{background:var(--ahead)}.hcell.per{background:var(--navy-50);border-radius:0 11.5px 0 0}
+.hcell.firstwk{border-radius:11.5px 0 0 0}
+.cell.per.lastrow{border-radius:0 0 11.5px 0}
+.rlab.firstrow{border-radius:11.5px 0 0 0}
+.rlab.lastrow{border-radius:0 0 0 11.5px}
+.rowline{grid-column:2 / -1;height:1px;background:var(--n-300);position:relative;z-index:4}
+.lline{grid-column:1;height:1px;background:var(--n-300);position:relative;z-index:4}
+/* lifted current-week column */
+.lift{position:absolute;z-index:10;background:var(--wk);border-radius:13px;box-shadow:0 14px 34px rgba(10,37,72,.22),0 0 0 1px rgba(10,37,72,.08);pointer-events:none}
+.liftbody{position:absolute;z-index:11;background:var(--n0);pointer-events:none}
+.hcell.now{z-index:12}.cell.now{z-index:12}
+.hcell.now .wk,.hcell.now .l2{color:#fff}.hcell.now .l2 b{color:#fff}
+/* numbers */
+.big{font-size:19px;font-weight:800;letter-spacing:-.2px;color:var(--n-900);line-height:1.15}
+.big small{font-size:11px;font-weight:600;color:var(--n-600);letter-spacing:0;margin-left:5px}
+.pre{font-size:11px;font-weight:700;color:var(--n-600);margin-right:6px}
+.sub{font-size:10.5px;font-weight:600;color:var(--n-600);margin-top:5px;font-variant-numeric:tabular-nums}
+.sub b{color:var(--n-900);font-weight:700}
+.vd{font-size:10px;font-weight:800;margin-top:6px}
+.bar{height:5px;border-radius:3px;background:var(--n-200);margin:8px 0 7px;overflow:hidden;position:relative}
+.bar i{display:block;height:100%;border-radius:3px}
+.bar .clk{position:absolute;top:-4px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--navy);transform:translateX(-4px)}
+.good{color:var(--green-600)}.over{color:var(--red-600)}.mute{color:var(--n-600)}
+/* review */
+.rv{margin-top:16px}
+.rv .h{display:flex;align-items:center;gap:8px;margin-bottom:9px;padding:0 4px}
+.rv .h .t{font-size:9px;font-weight:800;letter-spacing:.81px;text-transform:uppercase;color:var(--n-700)}
+.rv .items{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rv .item{background:var(--n0);border:.5px solid var(--n-300);border-left:3px solid var(--amber-600);border-radius:10.8px;padding:13px 16px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+.rv .item .t{font-size:11.25px;font-weight:800;color:var(--n-900)}.rv .item .s{font-size:9.9px;font-weight:600;color:var(--n-600);margin-top:2px}
+.rv .item .go{margin-left:auto;font-size:9.9px;font-weight:800;color:var(--navy-700)}.rv .item .go::after{content:" →"}
+.notes{max-width:1260px;margin:18px auto 0;padding:0 20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.notes div{background:var(--n0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.notes h4{font-size:9px;font-weight:800;letter-spacing:.81px;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.notes b{color:var(--n-900)}
+</style>
+
+<div class="devbar"><b>Current period · two intersecting elements</b>
+<span class="lbl">board:</span>
+<button id="bOV" class="on" onclick="setB('ov')">Overview</button>
+<button id="bLB" onclick="setB('lb')">Labor</button>
+<button id="bPU" onclick="setB('pu')">Purchasing</button>
+<span class="h">corners cut · header bar and label bar cross · current week lifts clear of the chrome</span></div>
+<div class="wrap"><div id="app"></div></div>
+<div class="notes" id="notes"></div>
+<script>
+const D={"day":10,"wkDay":3,"weeks":[["WK 1","09/07 \u2013 09/13","closed",null],["WK 2","09/14 \u2013 09/20","current","day 3 of 7"],["WK 3","09/21 \u2013 09/27","pending",null],["WK 4","09/28 \u2013 10/04","forecast",null]],"rev":[[31668,23169,8499,"confirmed",null],[36519,28020,8499,"confirmed",null],[30005,21506,8499,"partial","4 of 14 confirmed"],[25131,16632,8499,"forecast",null]],"revPer":{"proj":123322,"conf":68187,"pct":55},"rows":[["3100","Kitchen labor","hourly \u00b7 18.20% of revenue",[5764,6646,5461,4574],[8260,2289,0,0],22445,10549,47],["3200","Food","23.03% of revenue",[7294,8411,6910,5788],[839,0,0,0],28403,839,3],["3400","Packaging","2.44% of revenue",[774,893,734,614],[46,0,0,0],3015,46,2]],"review":[["437 hours waiting on approval","Labor \u00b7 $8,826 \u00b7 counts as spent until signed off"],["12 card charges need a P&L line","Purchasing \u00b7 $852 \u00b7 oldest 8 days"]]};
+let B='ov', M='plan';
+const $=i=>document.getElementById(i);
+const m=n=>(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const sum=a=>a.reduce((x,y)=>x+y,0);
+const clock=D.day/28;
+const SECT={ov:'P&L Overview',lb:'Labor',pu:'Purchasing'};
+const ST={closed:'past',current:'now',pending:'ahead',forecast:'ahead'};
+
+function rollingOf(goal,landed,tot){
+ let closedSpent=0, openRev=0;
+ D.weeks.forEach((w,i)=>{ if(w[2]==='closed') closedSpent+=landed[i]; else openRev+=D.rev[i][0]; });
+ const remain=tot-closedSpent;
+ return D.weeks.map((w,i)=> w[2]==='closed' ? goal[i] : Math.round(D.rev[i][0]/openRev*remain));
+}
+function rows(){
+ if(B==='lb') return D.rows.filter(r=>r[0]==='3100');
+ if(B==='pu') return D.rows.filter(r=>r[0]!=='3100');
+ return D.rows;
+}
+function build(){
+ const R=rows(), total=R.length+1, end=2+2*total;   /* header=1, then line/content pairs */
+ let o='<div class="grid" id="grid" style="grid-template-rows:auto repeat('+(2*total)+',auto)">';
+ o+='<div class="hbar"></div>'+
+    '<div class="lbar" style="grid-row:2 / '+end+'"></div>'+
+    '<div class="bpanel" style="grid-row:2 / '+end+'"></div>';
+ /* header cells */
+ D.weeks.forEach((w,i)=>{const [nm,dt,st,day]=w;
+  o+='<div class="hcell '+ST[st]+(st==='current'?' now':'')+(i===0?' firstwk':'')+'" style="grid-column:'+(i+2)+'">'+
+    '<div class="l1"><span class="wk">'+nm+'</span><span class="pill p-'+st+'">'+st+'</span></div>'+
+    '<div class="l2">'+dt+(day?' <b>| '+day+'</b>':'')+'</div></div>';});
+ o+='<div class="hcell per" style="grid-column:6"><div class="l1"><span class="wk">Period</span><span class="pill p-navy">what is left</span></div>'+
+   '<div class="l2">'+Math.round(clock*100)+'% of the period gone</div></div>';
+ /* revenue row */
+ o+='<div class="rowline" style="grid-row:2"></div>';
+ o+='<div class="rlab firstrow" style="grid-row:3"><div class="n">Revenue</div><div class="g">'+(B==='pu'?'what you are ordering for':(B==='lb'?'what each week earns':'meals + service fee'))+'</div></div>';
+ D.weeks.forEach((w,i)=>{const [tot,meals,fee,basis,note]=D.rev[i]; const st=ST[w[2]];
+  o+='<div class="cell '+st+(w[2]==='current'?' now':'')+'" style="grid-column:'+(i+2)+';grid-row:3">'+
+    '<div class="big"><span class="pre">'+basis+'</span>'+m(tot)+'</div>'+
+    '<div class="sub">Service Calendar: <b>'+m(meals)+'</b></div>'+
+    '<div class="sub" style="margin-top:2px">Service fee: <b>'+m(fee)+'</b></div>'+
+    (note?'<div class="vd mute">'+note+'</div>':'')+'</div>';});
+ const rp=D.revPer;
+ o+='<div class="cell per" style="grid-column:6;grid-row:3"><div class="big">'+m(rp.proj)+'<small>projecting</small></div>'+
+   '<div class="bar"><i style="width:'+rp.pct+'%;background:var(--green-600)"></i><span class="clk" style="left:'+Math.round(clock*100)+'%"></span></div>'+
+   '<div class="sub"><b>'+m(rp.conf)+'</b> confirmed | '+rp.pct+'% of period</div></div>';
+ /* cost rows */
+ R.forEach((r,ri)=>{const [gl,name,desc,goal,landed,tot,land,used]=r; const gr=4+ri*2;
+  o+='<div class="lline" style="grid-row:'+gr+'"></div><div class="rowline" style="grid-row:'+gr+'"></div>';
+  o+='<div class="rlab'+(ri===R.length-1?' lastrow':'')+'" style="grid-row:'+(gr+1)+'"><div class="n"><span class="glc">'+gl+'</span>'+name+'</div><div class="g">'+desc+'</div></div>';
+  const roll=rollingOf(goal,landed,tot), useR=(M==='rolling');
+  D.weeks.forEach((w,i)=>{const st=ST[w[2]], cur=w[2]==='current', ahead=(st==='ahead');
+   const g=useR?roll[i]:goal[i], l=landed[i], ov=l>g, lf=g-l;
+   const d=roll[i]-goal[i], showD=useR&&w[2]!=='closed'&&Math.abs(d)>1;
+   const dl=showD?'<div class="dlt '+(d<0?'trim':'cush')+'">'+(d<0?'▼ '+m(-d)+' less than plan':'▲ '+m(d)+' more than plan')+'</div>':'';
+   let body;
+   if(ahead) body='<div class="big"><span class="pre">to spend</span>'+m(g)+'</div>'+dl;
+   else body='<div class="big"><span class="pre">spent</span>'+m(l)+'<small>of '+m(g)+'</small></div>'+
+     '<div class="bar" style="margin-bottom:4px"><i style="width:'+Math.min(100,l/g*100)+'%;background:'+(ov?'var(--red-600)':'var(--green-600)')+'"></i></div>'+
+     '<div class="vd '+(ov?'over':(cur?'good':'mute'))+'">'+(ov?'▲ '+m(l-g)+' over':(cur?m(lf)+' left this week':m(lf)+' left · still landing'))+'</div>'+dl;
+   o+='<div class="cell '+st+(cur?' now':'')+'" style="grid-column:'+(i+2)+';grid-row:'+(gr+1)+'">'+body+'</div>';});
+  const hot=land/tot>clock+0.005;
+  o+='<div class="cell per'+(ri===R.length-1?' lastrow':'')+'" style="grid-column:6;grid-row:'+(gr+1)+'"><div class="big">'+m(tot-land)+'<small>left of '+m(tot)+'</small></div>'+
+    '<div class="bar"><i style="width:'+Math.min(100,used)+'%;background:'+(hot?'var(--red-600)':'var(--green-600)')+'"></i><span class="clk" style="left:'+Math.round(clock*100)+'%"></span></div>'+
+    '<div class="sub '+(hot?'over':'')+'">'+used+'% used | <b>'+m(land)+'</b> landed'+'</div></div>';});
+ return o+'</div>';
+}
+function rollCard(){
+ const R=rows();
+ const lines=R.map(r=>{
+  const [gl,name,,goal,landed,tot]=r;
+  const roll=rollingOf(goal,landed,tot);
+  const d=D.weeks.reduce((a,w,i)=>a+(w[2]==='closed'?0:roll[i]-goal[i]),0);
+  const cur=D.weeks.findIndex(w=>w[2]==='current');
+  const per=roll[cur]-goal[cur];
+  const trim=d<0;
+  return '<div class="ln"><div class="nm">'+name+'</div>'+
+   '<div class="v '+(trim?'trim':'cush')+'">'+(trim?'▼ ':'▲ ')+m(Math.abs(d))+'</div>'+
+   '<div class="s">'+(trim?'to trim':'of cushion')+' across the open weeks · <b>'+m(Math.abs(per))+'</b> of it this week</div></div>';
+ }).join('');
+ return '<div class="rollcard"><div class="t">To land the period on budget</div>'+
+  '<div class="lead">Each open week now carries <b>its share of what is left</b>, not its own plan. Closed weeks do not move.</div>'+
+  '<div class="lines" style="grid-template-columns:repeat('+R.length+',1fr)">'+lines+'</div></div>';
+}
+function render(){
+ $("app").innerHTML=
+  '<div class="cmd"><span class="ttl">KPI Dashboard ·</span><span class="acct">TBJ - FL</span>'+
+  '<span class="chip"><span class="k">Section</span><span class="v">'+SECT[B]+'</span><span class="d">▾</span></span>'+
+  '<span class="chip"><span class="v">Current period</span><span class="d">09/07/26 – 10/04/26</span><span class="d">▾</span></span>'+
+  '<span class="meta">TODAY <b>09/16</b> · PERIOD <b>10</b> · WEEK <b>2</b></span><span class="ml"></span>'+
+  (B!=='pu'?'<span class="tog"><button class="on">Hourly</button><button>+ Salary</button></span>':'')+'<span class="dot"><i></i>Data current</span></div>'+
+  '<div class="status"><span class="stpill">Period running</span><span class="sub"><b>P10</b> · week 2 of 4 · day '+D.day+' of 28 · closes 10/04</span>'+
+  '<span class="ml"></span><span class="seg">'+
+  '<button class="'+(M==='plan'?'on':'')+'" onclick="setM(\'plan\')">PLAN</button>'+
+  '<button class="'+(M==='rolling'?'on':'')+'" onclick="setM(\'rolling\')">ROLLING</button></span></div>'+
+
+  '<div class="board" id="board">'+build()+'</div>'+
+  (M==='rolling'?rollCard():'')+
+  '<div class="rv"><div class="h"><span class="t">Needs review today</span><span class="pill p-pending">'+D.review.length+'</span></div><div class="items">'+
+  D.review.map(a=>'<div class="item"><div><div class="t">'+a[0]+'</div><div class="s">'+a[1]+'</div></div><span class="go">Open</span></div>').join('')+'</div></div>';
+ requestAnimationFrame(place);
+ $("notes").innerHTML=[
+  '<h4>Two intersecting elements</h4>The header bar runs across the weeks and the period; the label bar runs down the buckets. <b>They cross, and the corners are cut</b> - no "bucket by week", no "36% of the period gone" floating in a box.<br><br>Past weeks carry the faintest grey, weeks ahead a shade fainter still. <b>The current week is the only thing with colour.</b>',
+  '<h4>The current week</h4>Lifted in a lighter blue than the command bar, <b>and it stops 12px below the chrome</b> so the range selector opens clear of it.<br><br>Header reads <b>WK 2 · Current</b> then <b>09/14 – 09/20 | day 3 of 7</b>. No progress bar.',
+  '<h4>Plan vs Rolling</h4><b>Plan</b> gives every week its own budget from its own revenue - static, and it never moves.<br><br><b>Rolling</b> takes what is left of the period and respreads it across the weeks that have not closed, in proportion to their revenue. <b>Week 1 ran $2,496 over, so weeks 2 to 4 carry $2,496 less.</b> The shift always equals the closed weeks variance, to the dollar.<br><br>Closed weeks never move in either mode - they are history.','<h4>One ruling needed</h4>Your note for the period column reads <b>"$11,896 spent of $22,455"</b> but the line under it says <b>$10,549 landed</b>. Those are different numbers - <b>$11,896 is what is left.</b><br><br>Rendered as <b>"$11,896 left of $22,445"</b> so the two lines agree. <b>Say if you want spent leading instead</b> - it would read $10,549 of $22,445.'
+ ].slice(0,3).map(n=>'<div>'+n+'</div>').join('');
+ $("bOV").className=B==='ov'?'on':''; $("bLB").className=B==='lb'?'on':''; $("bPU").className=B==='pu'?'on':'';
+}
+function place(){
+ const g=$("grid"); if(!g) return;
+ const h=g.querySelector('.hcell.now'), cs=[...g.querySelectorAll('.cell.now')];
+ if(!h||!cs.length) return;
+ const gr=g.getBoundingClientRect(), hr=h.getBoundingClientRect(), last=cs[cs.length-1].getBoundingClientRect();
+ const L=hr.left-gr.left-7, W=hr.width+14, T=hr.top-gr.top-12, Bo=last.bottom-gr.top+12;
+ let lift=g.querySelector('.lift'), body=g.querySelector('.liftbody');
+ if(!lift){lift=document.createElement('div');lift.className='lift';g.appendChild(lift);}
+ if(!body){body=document.createElement('div');body.className='liftbody';g.appendChild(body);}
+ lift.style.cssText='left:'+L+'px;top:'+T+'px;width:'+W+'px;height:'+(Bo-T)+'px';
+ const bt=hr.bottom-gr.top;
+ body.style.cssText='left:'+L+'px;top:'+bt+'px;width:'+W+'px;height:'+(Bo-bt-7)+'px;border-radius:0 0 13px 13px';
+}
+function setB(x){B=x;render();window.scrollTo(0,0);}
+function setM(x){M=x;render();}
+window.addEventListener('resize',place);
+render();
+</script>

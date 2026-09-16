@@ -1,226 +1,277 @@
 /* ─────────────────────────────────────────────────────────────────
-   R-109 · Current period one-table view (Kevin 2026-09-15).
-   Render of record: docs/renders/current-period-final.html
-   Renders on CP only; other ranges untouched. Tokens mirror the
-   render: page #EDEFF2, card radius 10.8px, navy top border,
-   82px minimum row height, tabular-nums.
+   R-112 · Current period · two intersecting elements (Kevin 2026-09-16).
+   Render of record: docs/renders/current-period-v2.html
+
+   Structure - grid layout with the top-left corner CUT AWAY:
+     .kpi-ov-cp-hbar     grid-column 2/-1 · grid-row 1     top-left+top-right rounded
+     .kpi-ov-cp-lbar     grid-column 1    · grid-row 2/end top-left+bottom-left rounded
+     .kpi-ov-cp-bpanel   grid-column 2/-1 · grid-row 2/end bottom-right rounded
+     .kpi-ov-cp-hcell    header cells (Wk 1..4, Period)     z-index 3
+     .kpi-ov-cp-rlab     row labels (Revenue, 3100, ...)    z-index 3
+     .kpi-ov-cp-cell     data cells                          z-index 3
+     .kpi-ov-cp-rowline  row separator across cells          z-index 4
+     .kpi-ov-cp-lline    row separator across label column   z-index 4
+     .kpi-ov-cp-lift     lifted current-week column bg       z-index 10
+     .kpi-ov-cp-liftbody white body under the lifted cells   z-index 11
+     .kpi-ov-cp-cell.kpi-ov-cp-now / .kpi-ov-cp-hcell.kpi-ov-cp-now  z-index 12
+
+   Guard 0: every selector is scoped to `.kpi-app` AND carries a
+   `.kpi-ov-cp-` prefix. Probe: scripts/probes/_probe_cp_css_prefix.mjs.
+   The render's own generic classes (.grid, .cell, .sub, .bar, .pill,
+   .status, .seg, .board) are live in 47+ other files across the app;
+   copying them here would leak into every other range. Translate, do
+   not copy.
    ───────────────────────────────────────────────────────────────── */
 
+/* Card + spacing. margin-top holds the lift's upward protrusion clear
+   of the command bar; padding-bottom holds the downward protrusion. */
 .kpi-app .kpi-ov-cp-card {
-  background: #fff;
-  border: 0.5px solid var(--n-300);
-  border-radius: 10.8px;
-  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+  position: relative;
+  margin: 30px 0 12px;
+  padding-bottom: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   overflow: visible;
-  margin: 8px 0;
 }
-.kpi-app .kpi-ov-cp-t-navy {
-  border-top: 3px solid var(--navy-700, #153968);
-}
+/* Retained token class from R-109 - callers may still pass it; the new
+   card visual is on the three background panels, not the card itself,
+   so this is a no-op. Kept so probes and page.js keep compiling. */
+.kpi-app .kpi-ov-cp-t-navy { }
+
+/* The grid itself carries no background. The three panels do. */
 .kpi-app .kpi-ov-cp-grid {
+  position: relative;
   display: grid;
   grid-template-columns: 160px repeat(4, minmax(0, 1fr)) 204px;
 }
-.kpi-app .kpi-ov-cp-grid > div {
-  padding: 12px 14px;
-  border-top: 1px solid var(--n-200);
-  font-variant-numeric: tabular-nums;
-  min-width: 0;
-}
-.kpi-app .kpi-ov-cp-grid > div:first-child {
-  border-top: none;
-}
-/* Header row: seven cells all sit above the border boundary. Kevin
-   2026-09-15 layout fix: cells are now direct grid children (the
-   wrapper divs were removed) so header cells' `border-top: none`
-   already came from the .kpi-ov-cp-ch rule below, but we make sure
-   the second row's row-header + cells don't get an implicit top
-   border from the generic rule when they sit at the top of the
-   revenue-row band. */
 
-/* Column header row */
-.kpi-app .kpi-ov-cp-ch {
-  border-top: none !important;
-  padding: 12px 14px 11px;
-  text-align: right;
-}
-.kpi-app .kpi-ov-cp-ch.kpi-ov-cp-ch-l {
-  text-align: left;
-  padding-left: 18px;
-}
-.kpi-app .kpi-ov-cp-wk {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 1.35px;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-cp-dt {
-  font-size: 11.25px;
-  font-weight: 700;
-  color: var(--n-900, var(--n-800));
-  margin-top: 2px;
-}
-.kpi-app .kpi-ov-cp-mute-strong {
-  color: var(--n-600) !important;
-  font-weight: 600 !important;
-}
-.kpi-app .kpi-ov-cp-ch .kpi-ov-cp-pill {
-  margin-top: 7px;
-}
-
-/* Lifted "now" column */
-.kpi-app .kpi-ov-cp-ch.kpi-ov-cp-now,
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now {
-  position: relative;
-  z-index: 2;
-  box-shadow: 0 10px 26px rgba(10, 37, 72, 0.16), 0 0 0 1px rgba(10, 37, 72, 0.06);
-}
-.kpi-app .kpi-ov-cp-ch.kpi-ov-cp-now {
-  margin-top: -7px;
-  padding-top: 19px;
-  border-radius: 9px 9px 0 0;
-  background: var(--navy, #0A2548);
-  color: #fff;
-}
-.kpi-app .kpi-ov-cp-ch.kpi-ov-cp-now .kpi-ov-cp-wk { color: #93a9c9; }
-.kpi-app .kpi-ov-cp-ch.kpi-ov-cp-now .kpi-ov-cp-dt { color: #fff; }
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now {
-  background: #fff !important;
-  border-top: 1px solid var(--navy-100, #E3EAF5);
-}
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now .kpi-ov-cp-a { font-size: 20px; }
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now .kpi-ov-cp-bar { height: 5px; }
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now-last {
-  margin-bottom: -7px;
-  padding-bottom: 19px;
-  border-radius: 0 0 9px 9px;
-}
-.kpi-app .kpi-ov-cp-prog {
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.22);
-  margin-top: 8px;
-  overflow: hidden;
-}
-.kpi-app .kpi-ov-cp-prog i {
-  display: block;
-  height: 100%;
+/* ── background panels · A1 · corner cut ────────────────────────── */
+.kpi-app .kpi-ov-cp-hbar {
+  grid-column: 2 / -1;
+  grid-row: 1;
   background: #fff;
-  border-radius: 2px;
+  border: 0.5px solid var(--n-300);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -2px 6px rgba(10, 37, 72, 0.05);
+  position: relative;
+  z-index: 1;
 }
-.kpi-app .kpi-ov-cp-pd {
-  font-size: 9px;
-  font-weight: 700;
-  color: #93a9c9;
-  margin-top: 4px;
+.kpi-app .kpi-ov-cp-lbar {
+  grid-column: 1;
+  background: #fff;
+  border: 0.5px solid var(--n-300);
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+  box-shadow: -3px 4px 12px rgba(10, 37, 72, 0.06);
+  position: relative;
+  z-index: 1;
+}
+.kpi-app .kpi-ov-cp-bpanel {
+  grid-column: 2 / -1;
+  background: #fff;
+  border: 0.5px solid var(--n-300);
+  border-left: none;
+  border-radius: 0 0 12px 0;
+  box-shadow: 3px 4px 12px rgba(10, 37, 72, 0.06);
+  position: relative;
+  z-index: 1;
 }
 
-/* Period column (rightmost) */
-.kpi-app .kpi-ov-cp-ch.kpi-ov-cp-per,
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per {
-  background: var(--navy-50, #F4F7FC);
-  border-left: 1px solid var(--n-300);
+/* ── header cells · A2 ──────────────────────────────────────────── */
+.kpi-app .kpi-ov-cp-hcell {
+  grid-row: 1;
+  position: relative;
+  z-index: 3;
+  padding: 15px 14px 14px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.kpi-app .kpi-ov-cp-ch.kpi-ov-cp-per .kpi-ov-cp-wk { color: var(--navy-700, #153968); }
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-a { font-size: 20px; }
+.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl1 {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-wk {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--n-900, #0A2548);
+}
+.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
+  margin-top: 5px;
+}
+.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-per .kpi-ov-cp-wk { color: var(--navy-700, #153968); }
 
-/* Row header. Kevin 2026-09-15: min-height off, size to content -
-   the tallest CELL in the row drives the row height, and the row
-   header stretches to match via `align-self: stretch`. Prior
-   `min-height: 82px` content-box on .rh made the row-header 107
-   intrinsically (82 + 24 padding + 1 border) and dragged every row
-   with it. */
-.kpi-app .kpi-ov-cp-rh {
-  padding-left: 18px;
+/* Header pills · A2. Current is the only saturated header colour;
+   the others are flat grey, amber and a dashed outline. */
+.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-pill {
+  display: inline-block;
+  font-size: 8.6px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2.5px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-cp-pill-closed   { background: var(--n-100, #F4F2EC); color: var(--n-600, #64748B); }
+.kpi-app .kpi-ov-cp-pill-current  { background: #2FBF71; color: #053B20; box-shadow: 0 0 0 2px rgba(47, 191, 113, 0.28); }
+.kpi-app .kpi-ov-cp-pill-pending  { background: var(--amber-50, #FFF2E2); color: var(--amber-600, #B25800); }
+.kpi-app .kpi-ov-cp-pill-forecast { background: #fff; color: var(--n-600, #64748B); border: 1px dashed var(--n-300, #E5E7EB); }
+.kpi-app .kpi-ov-cp-pill-navy     { background: var(--navy, #0A2548); color: #fff; }
+
+/* ── row labels · A5 ────────────────────────────────────────────── */
+.kpi-app .kpi-ov-cp-rlab {
+  grid-column: 1;
+  position: relative;
+  z-index: 3;
+  padding: 14px 14px 14px 18px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  box-sizing: border-box;
-  align-self: stretch;
+  background: #fff;
+  border-right: 1px solid var(--n-300, #E5E7EB);
+  font-variant-numeric: tabular-nums;
 }
-.kpi-app .kpi-ov-cp-rh .kpi-ov-cp-n {
-  font-size: 11.25px;
-  font-weight: 700;
-  color: var(--n-900, var(--n-800));
-  line-height: 1.2;
+.kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rn {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--n-900, #0A2548);
 }
-.kpi-app .kpi-ov-cp-glc {
-  font-size: 9.9px;
+.kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rn .kpi-ov-cp-glc {
+  font-size: 9.5px;
   font-weight: 600;
-  color: var(--n-600);
+  color: var(--n-600, #64748B);
   margin-right: 6px;
 }
-.kpi-app .kpi-ov-cp-rh .kpi-ov-cp-g {
-  font-size: 9.9px;
+.kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rg {
+  font-size: 9.5px;
   font-weight: 600;
-  color: var(--n-600);
-  margin-top: 2px;
-  line-height: 1.2;
+  color: var(--n-600, #64748B);
+  margin-top: 3px;
 }
+.kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-rlab-rev { background: var(--green-50, #E9FDEC); }
 
-/* Cost cells. Kevin 2026-09-15 layout fixes:
-   - align-self: stretch so consecutive lifted "now" cells fill their
-     row completely and sit flush against each other (was the visible
-     gap defect Kevin flagged in the screenshot).
-   - min-height: 82 as the row's height contract; border-box so that
-     figure covers padding + border, not content-only (which would
-     have inflated rows to 107 as the prior sizing bug proved).
-   - Cells are now direct grid children (wrapper divs removed from the
-     JSX). Padding + border-top come from the generic
-     `.kpi-ov-cp-grid > div` rule above; no double-boxing. */
+/* ── data cells · A4 ────────────────────────────────────────────── */
 .kpi-app .kpi-ov-cp-cell {
+  position: relative;
+  z-index: 3;
+  padding: 14px;
   text-align: right;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 82px;
-  box-sizing: border-box;
-  align-self: stretch;
+  min-height: 96px;
+  font-variant-numeric: tabular-nums;
 }
-.kpi-app .kpi-ov-cp-a {
-  font-size: 18px;
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-past  { background: #FBFBFC; }
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-ahead { background: #FCFCFD; }
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per   { background: var(--navy-50, #F4F7FC); }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-past  { background: #FBFBFC; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-ahead { background: #FCFCFD; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-per   { background: var(--navy-50, #F4F7FC); border-radius: 0 11.5px 0 0; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-firstwk { border-radius: 11.5px 0 0 0; }
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per.kpi-ov-cp-lastrow { border-radius: 0 0 11.5px 0; }
+.kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-firstrow { border-radius: 11.5px 0 0 0; }
+.kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-lastrow  { border-radius: 0 0 0 11.5px; }
+
+/* Row separator lines · full width across labels + cells at --n-300. */
+.kpi-app .kpi-ov-cp-rowline {
+  grid-column: 2 / -1;
+  height: 1px;
+  background: var(--n-300, #E5E7EB);
+  position: relative;
+  z-index: 4;
+  padding: 0;
+}
+.kpi-app .kpi-ov-cp-lline {
+  grid-column: 1;
+  height: 1px;
+  background: var(--n-300, #E5E7EB);
+  position: relative;
+  z-index: 4;
+  padding: 0;
+}
+
+/* ── lifted current-week column · A3 ────────────────────────────── */
+.kpi-app .kpi-ov-cp-lift {
+  position: absolute;
+  z-index: 10;
+  background: #24508C;  /* lighter than command bar #0A2548 */
+  border-radius: 13px;
+  box-shadow: 0 14px 34px rgba(10, 37, 72, 0.22), 0 0 0 1px rgba(10, 37, 72, 0.08);
+  pointer-events: none;
+}
+.kpi-app .kpi-ov-cp-liftbody {
+  position: absolute;
+  z-index: 11;
+  background: #fff;
+  pointer-events: none;
+}
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now { z-index: 12; }
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now  { z-index: 12; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-wk,
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 { color: #fff; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 b { color: #fff; }
+
+/* ── numbers · A4 typography ────────────────────────────────────── */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big {
+  font-size: 19px;
   font-weight: 800;
-  letter-spacing: -0.18px;
-  color: var(--n-900, var(--n-800));
-  line-height: 1.1;
+  letter-spacing: -0.2px;
+  color: var(--n-900, #0A2548);
+  line-height: 1.15;
 }
-/* Kevin 2026-09-15 ruling 2: NO nowrap, NO ellipsis on the sub /
-   verdict lines. A truncated money figure is worse than a tall row -
-   "$6,474 left · invoices still la…" tells an operator nothing. If a
-   verdict genuinely won't fit at 1440, shorten the copy, don't hide
-   it. Explicit line-height on b / v (1.2) matches the render's
-   default body line-height so cells don't inherit the intranet's
-   larger body line-height and drift 6-7px taller than the render. */
-.kpi-app .kpi-ov-cp-b {
-  font-size: 9.9px;
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
+  letter-spacing: 0;
+  margin-left: 5px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pre {
+  font-size: 11px;
   font-weight: 700;
-  color: var(--n-600);
-  margin-top: 3px;
-  line-height: 1.2;
+  color: var(--n-600, #64748B);
+  margin-right: 6px;
 }
-.kpi-app .kpi-ov-cp-v {
-  font-size: 9.9px;
-  font-weight: 800;
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
   margin-top: 5px;
-  line-height: 1.2;
 }
-.kpi-app .kpi-ov-cp-bar {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--n-200);
-  margin-top: 7px;
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vd {
+  font-size: 10px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--n-200, #F0EEE7);
+  margin: 8px 0 7px;
   overflow: hidden;
   position: relative;
 }
-.kpi-app .kpi-ov-cp-bar i {
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-bar i {
   display: block;
   height: 100%;
-  border-radius: 2px;
+  border-radius: 3px;
 }
-.kpi-app .kpi-ov-cp-clk {
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-bar .kpi-ov-cp-clk {
   position: absolute;
-  top: -5px;
+  top: -4px;
   width: 0;
   height: 0;
   border-left: 4px solid transparent;
@@ -228,63 +279,25 @@
   border-top: 5px solid var(--navy, #0A2548);
   transform: translateX(-4px);
 }
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-ahead .kpi-ov-cp-a {
-  color: var(--n-600);
-  font-weight: 700;
-  font-size: 15px;
-}
-
 .kpi-app .kpi-ov-cp-good { color: var(--green-600, #008330); }
-.kpi-app .kpi-ov-cp-over { color: var(--red-700, #B9000C); }
-.kpi-app .kpi-ov-cp-mute { color: var(--n-600); }
+.kpi-app .kpi-ov-cp-over { color: var(--red-600, #B9000C); }
+.kpi-app .kpi-ov-cp-mute { color: var(--n-600, #64748B); }
+.kpi-app .kpi-ov-cp-mute-strong { color: var(--n-700, #475569); }
 
-/* Pills */
-.kpi-app .kpi-ov-cp-pill {
-  display: inline-block;
-  font-size: 9.9px;
-  font-weight: 800;
-  letter-spacing: 0.495px;
-  text-transform: uppercase;
-  padding: 3px 9px;
-  border-radius: 999px;
-}
-.kpi-app .kpi-ov-cp-pill-n { background: var(--n-100); color: var(--n-600); }
-.kpi-app .kpi-ov-cp-pill-amb { background: var(--amber-50, #FFF2E2); color: var(--amber-600, #B25800); }
-.kpi-app .kpi-ov-cp-pill-navy { background: var(--navy, #0A2548); color: #fff; }
-/* Kevin 2026-09-15 follow-up 2. "You are here" pill sits inside the
-   navy header cell (color: #fff inherited). The prior inline
-   `color: var(--navy)` referenced a variable undefined in the
-   overview scope, so the pill cascaded to white on white. Own class
-   with a hex + !important so it can't inherit the wrong colour. */
-.kpi-app .kpi-ov-cp-pill-here { background: #fff; color: #0A2548 !important; }
-.kpi-app .kpi-ov-cp-pill-line {
-  background: #fff;
-  color: var(--n-600);
-  border: 1px dashed var(--n-300);
-}
-
-/* Section separator - navy 2px between revenue row and cost rows */
-.kpi-app .kpi-ov-cp-sep {
-  border-top: 2px solid var(--n-300) !important;
-}
-.kpi-app .kpi-ov-cp-sep-wrap {
-  display: contents;
-}
-.kpi-app .kpi-ov-cp-sep-wrap > .kpi-ov-cp-cell {
-  border-top: 2px solid var(--n-300);
-}
-
+/* Empty state (payload not ready / error). */
 .kpi-app .kpi-ov-cp-empty {
-  padding: 40px 18px;
-  text-align: center;
-  color: var(--n-600);
+  padding: 18px 20px;
+  color: var(--n-600, #64748B);
   font-size: 12px;
-  font-weight: 600;
+  background: #fff;
+  border-radius: 12px;
+  border: 0.5px solid var(--n-300, #E5E7EB);
+  margin: 30px 0 12px;
 }
 
-/* Review cards */
+/* ── review cards (unchanged behaviour, translated names retained) ─ */
 .kpi-app .kpi-ov-cp-rv {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 .kpi-app .kpi-ov-cp-rv-h {
   display: flex;
@@ -298,7 +311,7 @@
   font-weight: 800;
   letter-spacing: 0.81px;
   text-transform: uppercase;
-  color: var(--n-700);
+  color: var(--n-700, #475569);
 }
 .kpi-app .kpi-ov-cp-rv-items {
   display: grid;
@@ -307,7 +320,7 @@
 }
 .kpi-app .kpi-ov-cp-rv-item {
   background: #fff;
-  border: 0.5px solid var(--n-300);
+  border: 0.5px solid var(--n-300, #E5E7EB);
   border-left: 3px solid var(--amber-600, #B25800);
   border-radius: 10.8px;
   padding: 13px 16px;
@@ -319,12 +332,12 @@
 .kpi-app .kpi-ov-cp-rv-item-t {
   font-size: 11.25px;
   font-weight: 800;
-  color: var(--n-900, var(--n-800));
+  color: var(--n-900, #0A2548);
 }
 .kpi-app .kpi-ov-cp-rv-item-s {
   font-size: 9.9px;
   font-weight: 600;
-  color: var(--n-600);
+  color: var(--n-600, #64748B);
   margin-top: 2px;
 }
 .kpi-app .kpi-ov-cp-rv-go {
@@ -334,4 +347,16 @@
   color: var(--navy-700, #153968);
   white-space: nowrap;
   text-decoration: none;
+}
+
+/* Amber pill for the review count. */
+.kpi-app .kpi-ov-cp-pill-amb {
+  background: var(--amber-50, #FFF2E2);
+  color: var(--amber-600, #B25800);
+  padding: 2.5px 8px;
+  border-radius: 999px;
+  font-size: 8.6px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
