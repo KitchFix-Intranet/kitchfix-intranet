@@ -13,11 +13,22 @@
 // + period state), so the popover reads the same data the standalone
 // strip did.
 
+// Kevin ruling 2026-09-17. Closed · unaudited is `closed_awaiting`
+// PLUS `sources.spend_settled === true` - calendar-closed AND at
+// least 8 days past its end (R-93 boundary). The server ships
+// `sources.period_state_display` with the resolved label; this
+// client map is a fallback for older payloads.
 const STATE_COPY = {
-  open:            "Open · live estimate",
-  closed_awaiting: "Closed · awaiting finance",
-  verified:        "Verified against P&L",
+  open:             "Open · live estimate",
+  closed_awaiting:  "Closed · awaiting finance",
+  closed_unaudited: "Closed · unaudited",
+  verified:         "Verified against P&L",
 };
+function stateFallback(sources) {
+  const s = sources?.period_state;
+  if (s === "closed_awaiting" && sources?.spend_settled === true) return STATE_COPY.closed_unaudited;
+  return STATE_COPY[s] || null;
+}
 
 const NIGHTLY_NOTE =
   "All three sources sync nightly around 2 AM CT. Nothing is final until the period closes and is verified against the finance P&L.";
@@ -49,8 +60,7 @@ export default function DataCurrentPop({ sources }) {
   ].filter(Boolean);
 
   const stateCopy = sources.period_state_display
-    || STATE_COPY[sources.period_state]
-    || null;
+    || stateFallback(sources);
 
   // Kevin 2026-09-02 blocker Item 5: consequence sentence when a
   // period in range is still running. Reads directly from the

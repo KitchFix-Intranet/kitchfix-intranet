@@ -80,6 +80,7 @@ import {
   loadInventoryAdjustments,
   loadScDailyRevenue,
   derivePeriodState,
+  derivePeriodSpendSettled,
   capBeforeToday,
 } from "./pnl-loader.js";
 
@@ -892,6 +893,37 @@ export async function resolveOverview({
   //     periods_total on every range. Enforced at build time; the
   //     verify probe reasserts on live payloads.
   const rangeComposition = buildRangeComposition({ periods, perPeriodRevenue });
+  // Kevin ruling 2026-09-17. Overdue nudge. A period is OVERDUE when
+  // its calendar close + R-93 settle window are both behind it AND
+  // Finance still has not posted the P&L - i.e. spend_settled === true
+  // AND verified_at IS NULL. Named per period so the reader sees which
+  // period is behind and how many days. Emitted at the range level;
+  // client renders a small strip on any surface where the array has
+  // items. See buildStatusLine / SettlingStrip for the sibling states.
+  const overduePeriods = [];
+  for (const p of periods) {
+    const entry = perPeriodRevenue.get(p);
+    if (!entry || entry.state !== "closed_awaiting") continue;
+    const psRow = periodStatus.get(p) || null;
+    if (psRow?.verified_at) continue;
+    const settled = derivePeriodSpendSettled({
+      periodNo: p,
+      todayISO: today,
+      periodStatusRow: psRow,
+    });
+    if (!settled) continue;
+    const pEnd = periodEndISO(p);
+    if (!pEnd) continue;
+    const daysSinceClose = Math.round(
+      (new Date(today + "T00:00:00Z").getTime()
+       - new Date(pEnd + "T00:00:00Z").getTime()) / 86400000,
+    );
+    overduePeriods.push({
+      period_no: p,
+      period_end_iso: pEnd,
+      days_since_close: daysSinceClose,
+    });
+  }
   // Build-time invariant: every period is exactly one kind. If this
   // ever throws, the classifier lost track and a downstream surface
   // (pill / popover / status) will lie.
@@ -1235,8 +1267,19 @@ export async function resolveOverview({
   } else if (rng.kind === "explicit") {
     displayPeriodNo = periods.length > 0 ? periods[periods.length - 1] : null;
   }
+  let displaySpendSettled = false;
   if (displayPeriodNo != null) {
     displayPeriodState = derivePeriodState({
+      periodNo: displayPeriodNo,
+      todayISO: today,
+      periodStatusRow: periodStatus.get(displayPeriodNo) || null,
+    });
+    // Kevin ruling 2026-09-17. Additive `spend_settled` sibling of
+    // `period_state`. True once a closed period is at least 8 days
+    // past its end (R-93 boundary) OR verified. Existing
+    // `period_state` consumers untouched; four Overview surfaces read
+    // this to flip Closed · awaiting -> Closed · unaudited on day 8.
+    displaySpendSettled = derivePeriodSpendSettled({
       periodNo: displayPeriodNo,
       todayISO: today,
       periodStatusRow: periodStatus.get(displayPeriodNo) || null,
@@ -1971,26 +2014,28 @@ export async function resolveOverview({
     // it should be green. Now uses computePeriodTargetPctForLines
     // from the shared module - the SAME derivation Last period's
     // single-period view uses, so the two agree by construction.
-    // Kevin ruling 2026-09-09 (post-#1094 follow-up). Same defect
-    // one grain up: a period whose invoices are still arriving must
-    // hatch on the FYTD chart, whatever its variance vs budget.
-    // Fires on 09/14 when R-93 pulls P9 into Current year - without
-    // this the P9 bar would render solid on 09/14 while invoices
-    // are still landing. Same treatment the week grain got in
-    // #1094: server emits invoices_landed per series entry, client
-    // hatches closed-but-not-landed.
+    // Kevin ruling 2026-09-09 (post-#1094 follow-up) + Kevin ruling
+    // 2026-09-17 (Closed · unaudited alignment).
     //
-    // Rule (period-grain analog of the week-grain rule from #1094):
-    //   - verified periods are settled by definition (finance
-    //     signed off; no more invoices are coming).
-    //   - closed_awaiting periods are settled once today's fiscal
-    //     period is 2+ periods past them (the same integer distance
-    //     the week grain uses, one grain up). On 09/14 today is P10,
-    //     P9's diff is 1, so it hatches; once today lands in P11,
-    //     P9's diff is 2 and it goes solid.
-    //   - open / planned periods do not carry the flag - the chart's
-    //     existing in_progress / not_started branches handle them.
-    const todayPeriodForChart = periodOf(today);
+    // Original 2026-09-09 fix: a period whose invoices are still
+    // arriving must hatch on the FYTD chart. Same treatment the week
+    // grain got in #1094 - server emits `invoices_landed` per series
+    // entry, client hatches closed-but-not-landed.
+    //
+    // 2026-09-17 alignment: the ORIGINAL rule used a period-grain
+    // check (`today's period - target ≥ 2`), which held P9 hatched
+    // for ~29 days after close - through all of P10 - even though
+    // R-93 put P9 into Current year on day 8. Two thresholds for the
+    // same concept: the state pill said "settled" while the chart
+    // bar said "still landing". Kevin ruling: point the chart at
+    // `spend_settled` (the additive sibling of `period_state`, R-93
+    // 8-day boundary) so ONE threshold drives everything. P9's bar
+    // goes solid on the same day its state flips.
+    //
+    //   - verified                          -> invoices_landed = true
+    //   - closed_awaiting + spend_settled   -> invoices_landed = true
+    //   - closed_awaiting + !spend_settled  -> invoices_landed = false (hatch)
+    //   - open / planned                    -> no flag; other branches
     const series = periods.map(p => {
       const pStart = periodStartISO(p);
       const pEnd = periodEndISO(p);
@@ -2000,9 +2045,12 @@ export async function resolveOverview({
         todayISO: today,
         periodStatusRow: periodStatus.get(p) || null,
       });
-      const invoices_landed = state === "closed"
-        ? (dState === "verified" || (todayPeriodForChart != null && (todayPeriodForChart - p) >= 2))
-        : false;
+      const pSettled = derivePeriodSpendSettled({
+        periodNo: p,
+        todayISO: today,
+        periodStatusRow: periodStatus.get(p) || null,
+      });
+      const invoices_landed = state === "closed" && pSettled;
       // Period budget = sum of member budget + purchasing bucket
       // budget for this one period. Labor budget is the MERGED
       // (hourly + salary) figure per R-28 / §5.9 - the chart line
@@ -3427,7 +3475,31 @@ export async function resolveOverview({
       consequence: revenueConsequence,
     },
     period_state: displayPeriodState,
+    // Kevin ruling 2026-09-17. Additive sibling of `period_state`.
+    // `true` when a closed period is at least 8 days past its end
+    // (R-93 boundary) OR verified. Four Overview surfaces consult
+    // this to flip Closed · awaiting -> Closed · unaudited on day 8;
+    // every existing `period_state` consumer is untouched. Chart
+    // hatching also aligns to this so P9's bar goes solid on the
+    // same day its status flips (was: three more weeks under the
+    // period-grain rule that has been shipping since #1094).
+    spend_settled: displaySpendSettled,
+    // Kevin ruling 2026-09-17. Periods past their R-93 settle window
+    // that Finance has not yet posted. Empty on ranges with no such
+    // period. Client renders a strip like "P9 closed 8 days ago · no
+    // finance P&L loaded" per item. Sibling of `settling` (which is
+    // the pre-day-8 caveat) - one turns off exactly when the other
+    // turns on.
+    overdue_periods: overduePeriods,
     period_state_display: (() => {
+      // Kevin ruling 2026-09-17. When a period is closed_awaiting AND
+      // R-93-settled (spend_settled=true), the label reads Closed ·
+      // unaudited instead of Closed · awaiting finance. The operator
+      // question is "can I act on these numbers" and from day 8 the
+      // honest answer is yes.
+      if (displayPeriodState === "closed_awaiting" && displaySpendSettled) {
+        return "closed · unaudited";
+      }
       switch (displayPeriodState) {
         case "open":            return "open · live estimate";
         case "closed_awaiting": return "closed · awaiting finance";
@@ -3509,17 +3581,16 @@ export async function resolveOverview({
     last_walk_at: composedWalkAt,
   };
 
-  // Kevin R-94 (2026-09-09). Settling data for the "What is still
-  // moving" strip on Last period when displayPeriodState === "closed_
-  // awaiting". Names the two sources of movement on a period that
-  // closed on Sunday - invoice lag (bill.com nightly sync) + labour
-  // approval (unapproved hours land as approvals happen). Prior-
-  // period line count baseline ("36 against 80 in P8") is a separate
-  // targeted query so the range-scoped weekly load stays clean.
-  // Null on any state that isn't single-period closed_awaiting so the
-  // client omits the strip.
+  // Kevin R-94 (2026-09-09) + Kevin ruling 2026-09-17.
+  //
+  // Settling data for the "What is still moving" strip on Last period
+  // when displayPeriodState === "closed_awaiting" AND spend_settled
+  // === false. The added `!displaySpendSettled` gate flips the strip
+  // off on day 8 - the moment the state becomes Closed · unaudited,
+  // invoices and hours have finished landing enough that the caveat
+  // is stale. Names the two sources of movement in week one only.
   const settling = await (async () => {
-    if (rng.kind !== "period" || displayPeriodState !== "closed_awaiting") return null;
+    if (rng.kind !== "period" || displayPeriodState !== "closed_awaiting" || displaySpendSettled) return null;
     const p = rng.period_no;
     if (p == null) return null;
     const pEnd = periodEndISO(p);
@@ -3670,6 +3741,15 @@ export async function resolveOverview({
     // do. Zero unconsumed keys.
     salary_toggle_visible: access.salary_toggle_visible,
     period_state: displayPeriodState,
+    // Kevin ruling 2026-09-17. See top-level `spend_settled` on
+    // `range_context` for the full note - same value, emitted at
+    // both levels for the four Overview surfaces that consult it.
+    spend_settled: displaySpendSettled,
+    // Kevin ruling 2026-09-17. See range_context.overdue_periods for
+    // the note. Emitted here too so client callers reading the
+    // payload's top level (not range_context) can consume without a
+    // path change.
+    overdue_periods: overduePeriods,
     period_state_details: {
       period_no: displayPeriodNo,
       status_row: displayPeriodNo != null ? (periodStatus.get(displayPeriodNo) || null) : null,
@@ -3776,6 +3856,7 @@ export async function resolveOverview({
     status_line: buildStatusLine({
       ticker,
       period_state: displayPeriodState,
+      spend_settled: displaySpendSettled,
       has_target,
       range_kind: rng.kind,
     }),
@@ -3826,7 +3907,7 @@ export async function resolveOverview({
 // (gm_actual_display / gm_target_display / biggest_lever /
 // progress_display / gm_tone) removed. Card face is now the
 // comparison; the pill states the state alone.
-function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
+function buildStatusLine({ ticker, period_state, spend_settled, has_target, range_kind }) {
   if (!ticker) return null;
   const gmActualPct = ticker.gm_pct_actual;
   const gmTargetPct = ticker.gm_pct_target;
@@ -3850,7 +3931,15 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
   // figures are still moving, so the verdict is a reading, not a
   // result. Wait tone is a NEW variant beyond good/bad/neutral;
   // client renders it as amber with a leading indicator dot.
-  const rangeIsAwaiting = range_kind === "period" && period_state === "closed_awaiting";
+  //
+  // Kevin ruling 2026-09-17. Once spend_settled flips true (day 8
+  // past close, R-93 boundary), the caveat is stale: invoices and
+  // hours have landed enough that the reading IS the verdict. Fall
+  // through to the closed-copy override so the pill reads "Period
+  // closed · on/off target" - which cascades to CardsRow (awaiting
+  // = status_line.tone === "wait") turning off the Provisional pill
+  // + amber footer.
+  const rangeIsAwaiting = range_kind === "period" && period_state === "closed_awaiting" && !spend_settled;
   if (rangeIsAwaiting) {
     return {
       state: "awaiting_verification",
