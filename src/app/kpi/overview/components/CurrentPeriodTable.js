@@ -583,6 +583,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             st && st,
             isNow && "kpi-ov-cp-now",
             i === 0 && "kpi-ov-cp-firstwk",
+            i > 0 && "kpi-ov-cp-vline",   // column line between weeks
           ].filter(Boolean).join(" ");
           const dt = `${(w.week_start || "").slice(5).replace(/-/, "/")} – ${(w.week_end || "").slice(5).replace(/-/, "/")}`;
           return (
@@ -595,7 +596,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             </div>
           );
         })}
-        <div className="kpi-ov-cp-hcell kpi-ov-cp-per" style={{ gridColumn: 6 }}>
+        <div className="kpi-ov-cp-hcell kpi-ov-cp-per kpi-ov-cp-vline" style={{ gridColumn: 6 }}>
           <div className="kpi-ov-cp-hcl1">
             <span className="kpi-ov-cp-wk">Period</span>
             <span className="kpi-ov-cp-pill kpi-ov-cp-pill-navy">{isFuture ? "the plan" : "what is left"}</span>
@@ -648,6 +649,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   "kpi-ov-cp-cell",
                   st,
                   isNow && "kpi-ov-cp-now",
+                  i > 0 && "kpi-ov-cp-vline",
                 ].filter(Boolean).join(" ");
                 // On future range every week is state="not_started"
                 // - CostCellBody's isFuture branch already renders
@@ -682,6 +684,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 className={[
                   "kpi-ov-cp-cell",
                   "kpi-ov-cp-per",
+                  "kpi-ov-cp-vline",
                   isLast && "kpi-ov-cp-lastrow",
                 ].filter(Boolean).join(" ")}
                 style={{ gridColumn: 6, gridRow: rlabGr }}

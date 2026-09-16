@@ -276,6 +276,17 @@
   background: var(--n-100);
 }
 
+/* Column separator lines (Kevin fix 2026-09-17 item 1): a grid of
+   figures needs column edges as much as row edges. 1px `var(--n-300)`
+   left border on every cell/hcell in cols 3-6 draws dividers between
+   the four week columns AND before the period column. Cells in col
+   2 (first week) do NOT get the border - the body panel's left edge
+   sits against the label column already. Same weight and colour as
+   the row lines (rowline / lline / all three panel borders). */
+.kpi-app .kpi-ov-cp-vline {
+  border-left: 1px solid var(--n-300);
+}
+
 /* Row separator lines · full width across labels + cells at --n-300. */
 .kpi-app .kpi-ov-cp-rowline {
   grid-column: 2 / -1;

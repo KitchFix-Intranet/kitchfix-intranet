@@ -1274,6 +1274,38 @@ export default function KpiPurchasingPage() {
       if ((!cpOverview || !cpLabor) && !cpAuxError) {
         return <SkeletonBoard />;
       }
+      // Kevin fix 2026-09-17 item 6: restore the spend list on CP.
+      // Same shape as LP - Date · Vendor · GL · Bucket · Source ·
+      // Amount, reimbursables split into their own table beneath.
+      // Above the list, when uncoded rows exist, an option-A note:
+      // "These N charges count toward Food until someone codes them.
+      // Code them and they land where they belong." Live count; gone
+      // entirely at zero. Only renders on CP, not NP (NP has no
+      // actuals to show).
+      const cpActuals = data?.actuals || [];
+      const CP_BUCKET_LABEL = (gl) => {
+        const s = String(gl || "");
+        if (s.startsWith("3200")) return "FOOD";
+        if (s.startsWith("3400")) return "PACK";
+        if (s.startsWith("3500")) return "VEH";
+        if (s === "5002.5")       return "EQUIP";
+        if (s === "5002.1")       return "R&M";
+        if (s.startsWith("13"))   return "REIMB";
+        if (!s)                    return "NOT CODED";
+        return "OTHER";
+      };
+      const cpMainRows = cpActuals
+        .filter(r => !String(r.gl_line_code || "").startsWith("13"))
+        .slice()
+        .sort((a, b) => String(b.txn_date).localeCompare(String(a.txn_date)));
+      const cpReimbRows = cpActuals
+        .filter(r => String(r.gl_line_code || "").startsWith("13"))
+        .slice()
+        .sort((a, b) => String(b.txn_date).localeCompare(String(a.txn_date)));
+      const cpMainTotal = cpMainRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+      const cpReimbTotal = cpReimbRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+      const cpUncodedCount = cpMainRows.filter(r => !String(r.gl_line_code || "").trim()).length;
+      const cpShortDate = (iso) => (iso || "").slice(5);
       return (
         <div className="kpi-p-board">
           <div className={`kpi-p-livenote${reportStale ? " kpi-p-livenote-stale" : ""}`} role="status">
@@ -1292,6 +1324,98 @@ export default function KpiPurchasingPage() {
               labor={cpLabor}
               purchasing={data}
             />
+          )}
+          {cpGateActive && cpUncodedCount > 0 && (
+            <div className="kpi-p-cp-uncoded" role="status">
+              These {cpUncodedCount} {cpUncodedCount === 1 ? "charge" : "charges"} count toward Food until someone codes them.
+              <br />Code them and they land where they belong.
+            </div>
+          )}
+          {cpGateActive && (
+            <div className="kpi-p-card kpi-p-sl" data-card="spend-list">
+              <div className="kpi-p-sl-head">
+                <span className="kpi-p-cardtitle">Every purchase</span>
+                <span className="kpi-p-sl-note">{cpMainRows.length} · invoice and card, newest first</span>
+              </div>
+              {cpMainRows.length === 0 ? (
+                <div className="kpi-p-sl-empty">No purchases in this range.</div>
+              ) : (
+                <div className="kpi-p-sl-scroll">
+                  <table className="kpi-p-sl-tbl">
+                    <thead>
+                      <tr>
+                        <th className="kpi-p-sl-l">Date</th>
+                        <th className="kpi-p-sl-l">Vendor</th>
+                        <th className="kpi-p-sl-l">GL</th>
+                        <th className="kpi-p-sl-l">Bucket</th>
+                        <th className="kpi-p-sl-l">Source</th>
+                        <th className="kpi-p-sl-r">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cpMainRows.map((r, i) => (
+                        <tr key={r.id || `cpm-${i}`}>
+                          <td className="kpi-p-sl-l kpi-p-sl-muted">{cpShortDate(r.txn_date)}</td>
+                          <td className="kpi-p-sl-l">
+                            <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
+                            {r.vendor || "—"}
+                          </td>
+                          <td className="kpi-p-sl-l kpi-p-sl-muted">{r.gl_line_code || "—"}</td>
+                          <td className="kpi-p-sl-l">
+                            <span className={`kpi-p-bkt kpi-p-bkt-${CP_BUCKET_LABEL(r.gl_line_code).toLowerCase().replace(/[^a-z]/g, "")}`}>{CP_BUCKET_LABEL(r.gl_line_code)}</span>
+                          </td>
+                          <td className="kpi-p-sl-l kpi-p-sl-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
+                          <td className="kpi-p-sl-r">{fmt$(r.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="kpi-p-sl-tot">
+                        <td className="kpi-p-sl-l" colSpan="5">{cpMainRows.length} purchases</td>
+                        <td className="kpi-p-sl-r">{fmt$(cpMainTotal)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+          {cpGateActive && cpReimbRows.length > 0 && (
+            <div className="kpi-p-card kpi-p-rt" data-card="reimbursables-table">
+              <div className="kpi-p-rt-head">
+                <span className="kpi-p-cardtitle">Also purchased · billed back to the club</span>
+                <span className="kpi-p-rt-note">{cpReimbRows.length} lines · not part of the budget above</span>
+              </div>
+              <div className="kpi-p-rt-scroll">
+                <table className="kpi-p-rt-tbl">
+                  <thead>
+                    <tr>
+                      <th className="kpi-p-rt-l">Date</th>
+                      <th className="kpi-p-rt-l">Vendor</th>
+                      <th className="kpi-p-rt-l">GL</th>
+                      <th className="kpi-p-rt-l">Source</th>
+                      <th className="kpi-p-rt-r">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cpReimbRows.map((r, i) => (
+                      <tr key={r.id || `cpr-${i}`}>
+                        <td className="kpi-p-rt-l kpi-p-rt-muted">{cpShortDate(r.txn_date)}</td>
+                        <td className="kpi-p-rt-l">
+                          <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
+                          {r.vendor || "—"}
+                        </td>
+                        <td className="kpi-p-rt-l kpi-p-rt-muted">{r.gl_line_code || "—"}</td>
+                        <td className="kpi-p-rt-l kpi-p-rt-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
+                        <td className="kpi-p-rt-r">{fmt$(r.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="kpi-p-rt-tot">
+                      <td className="kpi-p-rt-l" colSpan="4">All {cpReimbRows.length} reimbursable lines</td>
+                      <td className="kpi-p-rt-r">{fmt$(cpReimbTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </div>
       );
