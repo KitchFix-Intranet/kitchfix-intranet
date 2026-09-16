@@ -1268,6 +1268,12 @@ export default function KpiPurchasingPage() {
       // to review on NP. Kevin ruling: NP has no coding strip, no
       // money card, no where-it-went, no drill; just the table + the
       // three small cards (which the component renders when isFuture).
+      // Kevin fix 2026-09-17 item 1: keep the board skeleton up until
+      // the overview + labor aux fetch lands - no second loader text
+      // state between skeleton and table.
+      if ((!cpOverview || !cpLabor) && !cpAuxError) {
+        return <SkeletonBoard />;
+      }
       return (
         <div className="kpi-p-board">
           <div className={`kpi-p-livenote${reportStale ? " kpi-p-livenote-stale" : ""}`} role="status">
