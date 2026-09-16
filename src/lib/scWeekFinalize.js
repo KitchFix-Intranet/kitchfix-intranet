@@ -515,14 +515,54 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   };
 
   // 2. Cadence span (biweekly requires pair-close alignment).
+  //
+  // 2026-09-16 fix. This query originally read:
+  //
+  //   const { data: meta } = await supa
+  //     .from("sc_day_metadata")
+  //     .select("period, week_label")
+  //     .eq("service_date", weekStart)
+  //     .maybeSingle();
+  //
+  // Two bugs, both silent:
+  //
+  //   (a) No account_key filter. sc_day_metadata is per-account and
+  //       every account carries a row for the same service_date. So
+  //       for weekStart=2026-08-17, the query matches 11 rows across
+  //       CIN-AZ, TXR-AZ, STL-FL, TBJ-FL, TBR-FL, etc. .maybeSingle()
+  //       errors on >1 rows.
+  //
+  //   (b) The destructure dropped `error`. .maybeSingle() with
+  //       multiple matches returns { data: null, error: PGRST116 }.
+  //       Without checking error, the code sees meta=null and
+  //       parseWeekIndex(null?.week_label) returns null. Neither the
+  //       weekIdx=1|3 nor the weekIdx=2|4 branch fires. pairStart
+  //       stays as weekStart. The downstream sc_daily_revenue load
+  //       spans the WRONG 14 days (close-week Mon + 13 days forward)
+  //       and buildInvoicePayload throws on the mis-aligned pair
+  //       because the rows span two fiscal weeks that aren't a valid
+  //       biweekly pair.
+  //
+  // Biweekly finalize had never actually worked in production. CIN-AZ
+  // is the only biweekly account and this was the first time anyone
+  // finalized a biweekly close-week. The first real use surfaced the
+  // defect that had been latent in the code since the biweekly branch
+  // was written. Fix: scope by account_key (matches the equivalent
+  // query in resolveFinalizeReviewSpan at line 261-267 which was
+  // written correctly) and surface metaErr so a future breakage of
+  // this shape cannot hide.
   const isBiweekly = accountMap.cadence === "biweekly";
   let pairStart = weekStart;
   if (isBiweekly) {
-    const { data: meta } = await supa
+    const { data: meta, error: metaErr } = await supa
       .from("sc_day_metadata")
       .select("period, week_label")
+      .eq("account_key", accountKey)
       .eq("service_date", weekStart)
       .maybeSingle();
+    if (metaErr) {
+      throw new Error(`load sc_day_metadata for pair alignment: ${metaErr.message}`);
+    }
     const weekIdx = parseWeekIndex(meta?.week_label);
     if (weekIdx === 1 || weekIdx === 3) {
       return { pushed: false, reason: "awaiting_pair_close", weekIndex: weekIdx };
