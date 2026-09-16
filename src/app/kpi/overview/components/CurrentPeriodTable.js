@@ -32,6 +32,7 @@
 import "../../current-period.css";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { rollingOf, summaryFor } from "./currentPeriodRolling";
+import { weekHatchedDollars } from "@/app/kpi/labor/lib/weekHatched";
 
 const dollar0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
 
@@ -336,8 +337,25 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
 
     const landedFor = (line) => {
       if (line === "3100") {
+        // Kevin ruling 2026-09-17 (R-103 client fix). Per R-103,
+        //   labor spent = costed + unpriced + unapproved
+        // The payload's `board.weeks[i].spent` is COSTED ONLY - the
+        // WeekTable already adds `weekHatchedDollars(w, avg_rate)`
+        // to reach the R-103 total. Do the same here so the CP
+        // surface (week cells, period figure, percent used, verdict,
+        // Rolling's closedSpent) reads the full R-103 figure. Under-
+        // reporting since the CP table shipped; TBJ CP now reads
+        // $17,155 landed instead of $10,549. `avg_rate` from
+        // `labor.board.avg_rate`. A parallel server-side fix (task
+        // #489, Guard 2) will make `board.weeks[i].spent` R-103-
+        // complete so no consumer has to remember to add hatched -
+        // this client patch stays as belt-and-suspenders until then.
         const lbWks = labor?.board?.weeks || [];
-        const byStart = new Map(lbWks.map(w => [w.week_start, Number(w.spent || 0)]));
+        const avgRate = Number(labor?.board?.avg_rate || 0);
+        const byStart = new Map(lbWks.map(w => [
+          w.week_start,
+          Number(w.spent || 0) + weekHatchedDollars(w, avgRate).total,
+        ]));
         return weeks.map(w => Number(byStart.get(w.week_start) || 0));
       }
       const wkStartSet = weeks.map(w => w.week_start);

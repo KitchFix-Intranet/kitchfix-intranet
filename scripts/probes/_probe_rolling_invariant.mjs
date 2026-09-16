@@ -38,8 +38,25 @@ async function fetchJSON(url, headers = {}) {
   return r.json();
 }
 
+// Kevin ruling 2026-09-17 (R-103 client fix). Labor landed per week
+// includes unapproved hours priced at avg_rate; also unpriced hours
+// priced at rate. Same shape as `weekHatchedDollars` in
+// src/app/kpi/labor/lib/weekHatched.js - copied here for probe
+// independence (no import of the browser-only module).
+function hatched(w, rate) {
+  const isNotStarted = (w?.state) === "not_started";
+  const upHrs = Number(w?.unpriced_hrs ?? 0);
+  const draftHrs = Number(w?.draft_hours ?? 0);
+  const cap = (rate > 0 && upHrs > 0) ? upHrs * rate : 0;
+  const unapp = (!isNotStarted && draftHrs > 0.004 && rate > 0) ? draftHrs * rate : 0;
+  return cap + unapp;
+}
 function landedFor3100(labor, weeks) {
-  const byStart = new Map((labor?.board?.weeks || []).map(w => [w.week_start, Number(w.spent || 0)]));
+  const avgRate = Number(labor?.board?.avg_rate || 0);
+  const byStart = new Map((labor?.board?.weeks || []).map(w => [
+    w.week_start,
+    Number(w.spent || 0) + hatched(w, avgRate),
+  ]));
   return weeks.map(w => Number(byStart.get(w.week_start) || 0));
 }
 
