@@ -31,6 +31,7 @@
 
 import "../../current-period.css";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { rollingOf, summaryFor } from "./currentPeriodRolling";
 
 const dollar0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
 
@@ -82,15 +83,48 @@ function RevCellBody({ w, amount, labor, i }) {
 // A4 · Cost cell body. Weeks not yet started: `to spend $X`. Started
 // weeks: `spent $L of $G` on one line, then the bar, then the verdict
 // line. "running hot" is gone - the red bar carries the verdict.
-function CostCellBody({ w, goal, landed, isLabor }) {
+//
+// Section B additions (Kevin § B, Kevin § C):
+//   - `goalRolling` is the rolling budget for THIS week (differs from
+//     `goal` when mode === "rolling" AND week is open); shown in the
+//     "of $G" position on open weeks so the cell figure changes with
+//     the toggle.
+//   - `dlt` is the per-week delta (rolling[i] - plan[i]); rendered
+//     as a fourth line "▼ $X less than plan" (trim red) or "▲ $Y
+//     more than plan" (cushion green) on open weeks only, mode ===
+//     "rolling" only.
+//   - C3 (envelope exceeded, isC3): open weeks read "$0 to spend ·
+//     already over" in red; plan-mode display is unchanged.
+function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }) {
   const isFuture = w.state === "not_started";
   const isClosed = w.state === "closed";
   const isNow = w.state === "in_progress";
-  const g = Number(goal || 0);
   const l = Number(landed || 0);
-  if (isFuture) {
-    return <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">to spend</span>{dollar0(g)}</div>;
+  const gEffective = mode === "rolling" && !isClosed ? Number(goalRolling || 0) : Number(goal || 0);
+  // C3 · open weeks clamp to $0 in Rolling; cell shows "already over".
+  if (mode === "rolling" && isC3 && !isClosed) {
+    return (
+      <>
+        <div className="kpi-ov-cp-big kpi-ov-cp-over">
+          <span className="kpi-ov-cp-pre">to spend</span>{dollar0(0)}
+        </div>
+        <div className="kpi-ov-cp-vd kpi-ov-cp-over">already over</div>
+      </>
+    );
   }
+  if (isFuture) {
+    return (
+      <>
+        <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">to spend</span>{dollar0(gEffective)}</div>
+        {mode === "rolling" && dlt != null && Math.abs(dlt) > 0 && (
+          <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
+            {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
+          </div>
+        )}
+      </>
+    );
+  }
+  const g = gEffective;
   const over = l > g && g > 0;
   const pctBar = g > 0 ? Math.min(100, (l / g) * 100) : 0;
   const barColor = over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
@@ -108,6 +142,11 @@ function CostCellBody({ w, goal, landed, isLabor }) {
         <i style={{ width: `${pctBar}%`, background: barColor }} />
       </div>
       <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
+      {mode === "rolling" && !isClosed && dlt != null && Math.abs(dlt) > 0 && (
+        <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
+          {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
+        </div>
+      )}
     </>
   );
 }
@@ -280,6 +319,11 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const ready = !!(derived && labor && purch && !error);
   const { box: liftBox, gridRef } = useLift(ready);
 
+  // Section B · mode state. PLAN is default. C4 (future range) does
+  // not reach this component - the parent gate never mounts the CP
+  // table on a future range - so no explicit C4 handling here.
+  const [mode, setMode] = useState("plan");
+
   if (weeks.length !== 4) {
     return <div className="kpi-ov-cp-empty" role="status">Waiting for week rail…</div>;
   }
@@ -298,7 +342,83 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const total = derived.rows.length;
   const end = 2 + 2 * total;
 
+  // Section B · precompute rolling data per cost line. `closedFlags`
+  // and `weekRev` are shared across every line. `perLine[line]` gives
+  // { plan, rolling, landed, envelope, summary, isC1, isC2, isC3 };
+  // the map runs in both PLAN and ROLLING modes so the summary card
+  // has the same numbers to display in either state (though it only
+  // renders in ROLLING). C1 renders the same figures in both modes
+  // by definition (no closed weeks -> rolling == plan).
+  const closedFlags = weeks.map(w => (w.state || "") === "closed");
+  const currentIdx = weeks.findIndex(w => (w.state || "") === "in_progress");
+  const perLine = new Map();
+  for (const row of derived.rows) {
+    if (row.rev) continue;
+    const gi = derived.goalFor(row.line);
+    const landed = derived.landedFor(row.line);
+    const rr = rollingOf(gi.goal, landed, gi.batr, closedFlags, derived.rev);
+    const sm = summaryFor(gi.goal, rr.rolling, closedFlags, currentIdx);
+    perLine.set(row.line, {
+      plan: gi.goal,
+      rolling: rr.rolling,
+      landed,
+      envelope: gi.batr,
+      actual: landed.reduce((s, v) => s + v, 0),
+      isC1: rr.isC1,
+      isC2: rr.isC2,
+      isC3: rr.isC3,
+      totalDelta: sm.totalDelta,
+      thisWeekDelta: sm.thisWeekDelta,
+      trim: sm.trim,
+      name: row.name,
+      isLabor: row.isLabor,
+    });
+  }
+  // All cost lines share the same closed/open pattern; pick any line's
+  // isC1/isC2 for card-level decisions (the status strip and the
+  // rollcard's empty-state fallback).
+  const anyLine = perLine.size ? perLine.values().next().value : null;
+  const isC1 = anyLine ? anyLine.isC1 : false;
+  const isC2 = anyLine ? anyLine.isC2 : false;
+
+  // Period metadata for the status strip ("P10 · week 2 of 4 · day 10
+  // of 28 · closes 10/04"). Week number reads the current-week index
+  // + 1; closes date is the last week's week_end.
+  const periodNo = payload?.range?.period_no ?? weeks[0]?.period_no ?? null;
+  const wkOfPeriod = currentIdx >= 0 ? currentIdx + 1 : null;
+  const closesDate = weeks[3]?.week_end || "";
+  const closesLabel = closesDate.slice(5).replace(/-/, "/");
+  const statusSub = [
+    periodNo != null && <><b>P{periodNo}</b></>,
+    wkOfPeriod && ` · week ${wkOfPeriod} of 4`,
+    day > 0 && ` · day ${day} of 28`,
+    closesLabel && ` · closes ${closesLabel}`,
+  ].filter(Boolean);
+
   return (
+    <>
+      {/* Section B · status strip + PLAN / ROLLING toggle. PLAN
+          default. Toggle stays enabled on C1 (Kevin: "a chef
+          switching to it and finding it greyed out learns nothing"). */}
+      <div className="kpi-ov-cp-status">
+        <span className="kpi-ov-cp-stpill">Period running</span>
+        <span className="kpi-ov-cp-status-sub">{statusSub.map((s, i) => <Fragment key={i}>{s}</Fragment>)}</span>
+        <span className="kpi-ov-cp-status-ml" />
+        <span className="kpi-ov-cp-seg" role="group" aria-label="Budget mode">
+          <button
+            type="button"
+            className={mode === "plan" ? "kpi-ov-cp-seg-on" : ""}
+            onClick={() => setMode("plan")}
+            aria-pressed={mode === "plan"}
+          >PLAN</button>
+          <button
+            type="button"
+            className={mode === "rolling" ? "kpi-ov-cp-seg-on" : ""}
+            onClick={() => setMode("rolling")}
+            aria-pressed={mode === "rolling"}
+          >ROLLING</button>
+        </span>
+      </div>
     <div className="kpi-ov-cp-card kpi-ov-cp-t-navy" data-r112-card="1">
       <div
         ref={gridRef}
@@ -390,7 +510,22 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   <div key={`c-${row.line || "rev"}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
                     {isRev
                       ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} />
-                      : <CostCellBody w={w} goal={goalInfo.goal[i]} landed={landed[i]} isLabor={row.isLabor} />}
+                      : (() => {
+                          const pl = perLine.get(row.line);
+                          const dlt = pl ? (pl.rolling[i] - pl.plan[i]) : 0;
+                          return (
+                            <CostCellBody
+                              w={w}
+                              goal={goalInfo.goal[i]}
+                              goalRolling={pl ? pl.rolling[i] : goalInfo.goal[i]}
+                              landed={landed[i]}
+                              isLabor={row.isLabor}
+                              mode={mode}
+                              dlt={dlt}
+                              isC3={pl ? pl.isC3 : false}
+                            />
+                          );
+                        })()}
                   </div>
                 );
               })}
@@ -429,5 +564,69 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         )}
       </div>
     </div>
+    {/* Section B · summary card. Rolling mode only. Sits below the
+        table + above `Needs review today`. One column per cost line
+        (Overview 3, Labor 1, Purchasing 2). C1 replaces the columns
+        with a single line reading "nothing to redistribute yet".
+        C2 (one open week) prints only the total, since of-it-this-
+        week equals the total by construction. C3 (envelope over)
+        prints "already past the envelope · nothing left to spend"
+        in red. */}
+    {mode === "rolling" && perLine.size > 0 && (
+      <div className="kpi-ov-cp-rollcard">
+        <div className="kpi-ov-cp-rollcard-t">To land the period on budget</div>
+        <div className="kpi-ov-cp-rollcard-lead">
+          Each open week now carries <b>its share of what is left</b>, not its own plan. Closed weeks do not move.
+        </div>
+        {isC1 ? (
+          <div className="kpi-ov-cp-rollcard-empty">
+            <b>Nothing to redistribute yet</b> · week 1 is still running.
+          </div>
+        ) : (
+          <div
+            className="kpi-ov-cp-rollcard-lines"
+            style={{ gridTemplateColumns: `repeat(${perLine.size}, minmax(0, 1fr))` }}
+          >
+            {[...perLine.values()].map((pl, i) => {
+              if (pl.isC3) {
+                return (
+                  <div key={pl.name + "-" + i} className="kpi-ov-cp-rollcard-ln">
+                    <div className="kpi-ov-cp-rollcard-ln-nm">{pl.name}</div>
+                    <div className="kpi-ov-cp-rollcard-ln-v kpi-ov-cp-rollcard-ln-v-trim">
+                      ▼ {dollar0(-pl.totalDelta)} over the period
+                    </div>
+                    <div className="kpi-ov-cp-rollcard-ln-s">
+                      already past the envelope · nothing left to spend
+                    </div>
+                  </div>
+                );
+              }
+              const trim = pl.trim;
+              const arrow = trim ? "▼" : "▲";
+              const totalAbs = Math.abs(pl.totalDelta);
+              const thisAbs = Math.abs(pl.thisWeekDelta);
+              return (
+                <div key={pl.name + "-" + i} className="kpi-ov-cp-rollcard-ln">
+                  <div className="kpi-ov-cp-rollcard-ln-nm">{pl.name}</div>
+                  <div className={`kpi-ov-cp-rollcard-ln-v ${trim ? "kpi-ov-cp-rollcard-ln-v-trim" : "kpi-ov-cp-rollcard-ln-v-cush"}`}>
+                    {arrow} {dollar0(totalAbs)}
+                  </div>
+                  {isC2 ? (
+                    <div className="kpi-ov-cp-rollcard-ln-s">
+                      {trim ? "to trim across" : "of cushion across"} the open week
+                    </div>
+                  ) : (
+                    <div className="kpi-ov-cp-rollcard-ln-s">
+                      {trim ? "to trim" : "of cushion"} across the open weeks · <b>{dollar0(thisAbs)}</b> of it this week
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    )}
+    </>
   );
 }

@@ -146,13 +146,23 @@ async function runAccount(acct) {
     if (envelope <= 0) { console.log(`  ${L.key}: envelope $0 · skipping`); continue; }
     const { rolling, closedSpent, openRev, remain } = rollingOf(plan, landed, envelope, closedFlags, weekRev);
     // Invariant: sum(rolling[open] - plan[open]) == -sum(landed[closed] - plan[closed])
+    // Round plan to integers before subtracting so the sum uses the
+    // same rounding basis as the rolling values (which are Math.
+    // round'd inside rollingOf). Without this the plan's fractional
+    // pennies vs rolling's integer pennies compound into the delta
+    // and TBR 3100 hourly reads -$1.35 float delta though the
+    // integer arithmetic is exact at -$1.
+    const planR = plan.map(v => Math.round(v));
     let openShift = 0, closedVar = 0;
     for (let i = 0; i < plan.length; i++) {
-      if (closedFlags[i]) closedVar += (landed[i] - plan[i]);
-      else                openShift += (rolling[i] - plan[i]);
+      if (closedFlags[i]) closedVar += (Math.round(landed[i]) - planR[i]);
+      else                openShift += (rolling[i] - planR[i]);
     }
     const delta = openShift - (-closedVar);
     const c3 = remain < 0;   // envelope already exceeded
+    // ±$1 tolerance (see file header). One dollar covers the case
+    // where three open weeks each round 33¢ off in the same direction
+    // and their sum drifts up to $1 from the ideal.
     console.log(`  ${L.key.padEnd(18)} envelope=${fmt(envelope).padStart(9)} closedSpent=${fmt(closedSpent).padStart(9)} closedVar=${fmt(closedVar).padStart(9)} openShift=${fmt(openShift).padStart(9)} delta=${fmt(delta).padStart(7)} ${Math.abs(delta) <= 1 ? "PASS" : "FAIL"}${c3 ? "  ⚠ C3 reachable (remain=" + fmt(remain) + ")" : ""}`);
     if (Math.abs(delta) > 1) {
       console.log(`    plan   = [${plan.map(v => Math.round(v)).join(", ")}]`);

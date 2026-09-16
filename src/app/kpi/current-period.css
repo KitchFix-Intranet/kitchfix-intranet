@@ -37,7 +37,10 @@
 .kpi-app .kpi-ov-cp-card {
   position: relative;
   z-index: 0;
-  margin: 30px 0 12px;
+  /* Section B (2026-09-16): status strip now sits above the card and
+     owns the 30px lift-clearance gap. Card margin-top drops so the
+     status + card stack visually. */
+  margin: 0 0 12px;
   padding-bottom: 12px;
   background: transparent;
   border: 0;
@@ -47,6 +50,57 @@
   pointer-events: none;
 }
 .kpi-app .kpi-ov-cp-card > * { pointer-events: auto; }
+
+/* ── Status strip (Kevin § B) ──────────────────────────────────── */
+/* Sits above the card, right of the status pill is the PLAN /
+   ROLLING seg control. 30px top margin holds the 12px lift-clearance
+   Kevin ruled in PR 1 (12px between the lifted column and whatever
+   sits above it - here that is the status pill). */
+.kpi-app .kpi-ov-cp-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 30px 2px 14px;
+}
+.kpi-app .kpi-ov-cp-stpill {
+  font-size: 9.9px;
+  font-weight: 800;
+  letter-spacing: 0.693px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--navy, #0A2548);
+}
+.kpi-app .kpi-ov-cp-status-sub {
+  font-size: 11.25px;
+  font-weight: 700;
+  color: var(--n-600, #64748B);
+}
+.kpi-app .kpi-ov-cp-status-sub b { color: var(--n-900, #0A2548); }
+.kpi-app .kpi-ov-cp-status-ml { margin-left: auto; }
+.kpi-app .kpi-ov-cp-seg {
+  display: inline-flex;
+  border: 1px solid var(--n-300, #E5E7EB);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.kpi-app .kpi-ov-cp-seg button {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 6px 13px;
+  border: none;
+  background: transparent;
+  color: var(--n-600, #64748B);
+  cursor: pointer;
+  font-family: inherit;
+}
+.kpi-app .kpi-ov-cp-seg button.kpi-ov-cp-seg-on {
+  background: var(--navy, #0A2548);
+  color: #fff;
+}
 /* Retained token class from R-109 - callers may still pass it; the new
    card visual is on the three background panels, not the card itself,
    so this is a no-op. Kept so probes and page.js keep compiling. */
@@ -379,3 +433,84 @@
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
+
+/* ── ROLLING · open-week delta line (Kevin § B) ────────────────── */
+/* On open weeks in Rolling mode only. `trim` = weeks need to spend
+   less than plan (red); `cush` = weeks have cushion vs plan (green).
+   `over` = C3, envelope exceeded; the delta line becomes an
+   "already over" verdict in red. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-dlt {
+  font-size: 9.5px;
+  font-weight: 800;
+  margin-top: 4px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-dlt-trim { color: var(--red-600, #B9000C); }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-dlt-cush { color: var(--green-600, #008330); }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-dlt-over { color: var(--red-600, #B9000C); }
+
+/* ── ROLLING · summary card (Kevin § B "The summary card") ─────── */
+/* Sits below the table, above Needs review today. One column per
+   cost line (3 on Overview, 1 on Labor, 2 on Purchasing). Hairline
+   dividers between columns. Navy left border so it reads as a
+   sibling of the review cards with a different accent. */
+.kpi-app .kpi-ov-cp-rollcard {
+  background: #fff;
+  border: 0.5px solid var(--n-300, #E5E7EB);
+  border-left: 3px solid var(--navy-700, #153968);
+  border-radius: 10.8px;
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+  padding: 14px 18px;
+  margin-top: 14px;
+}
+.kpi-app .kpi-ov-cp-rollcard-t {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.81px;
+  text-transform: uppercase;
+  color: var(--n-700, #475569);
+  margin-bottom: 8px;
+}
+.kpi-app .kpi-ov-cp-rollcard-lead {
+  font-size: 11.25px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+.kpi-app .kpi-ov-cp-rollcard-lead b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-rollcard-lines { display: grid; gap: 0; }
+.kpi-app .kpi-ov-cp-rollcard-ln {
+  padding: 0 16px;
+  border-left: 1px solid var(--n-200, #F0EEE7);
+}
+.kpi-app .kpi-ov-cp-rollcard-ln:first-child { padding-left: 0; border-left: none; }
+.kpi-app .kpi-ov-cp-rollcard-ln-nm {
+  font-size: 11.25px;
+  font-weight: 800;
+  color: var(--n-900, #0A2548);
+}
+.kpi-app .kpi-ov-cp-rollcard-ln-v {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-cp-rollcard-ln-v-trim { color: var(--red-600, #B9000C); }
+.kpi-app .kpi-ov-cp-rollcard-ln-v-cush { color: var(--green-600, #008330); }
+.kpi-app .kpi-ov-cp-rollcard-ln-s {
+  font-size: 9.9px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-cp-rollcard-ln-s b { color: var(--n-900, #0A2548); font-weight: 800; }
+/* C1 fallback: no columns, single line reading "nothing to
+   redistribute yet · week 1 is still running". */
+.kpi-app .kpi-ov-cp-rollcard-empty {
+  font-size: 11.25px;
+  font-weight: 600;
+  color: var(--n-700, #475569);
+}
+.kpi-app .kpi-ov-cp-rollcard-empty b { color: var(--n-900, #0A2548); }
