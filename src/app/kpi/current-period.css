@@ -24,9 +24,19 @@
    ───────────────────────────────────────────────────────────────── */
 
 /* Card + spacing. margin-top holds the lift's upward protrusion clear
-   of the command bar; padding-bottom holds the downward protrusion. */
+   of the command bar; padding-bottom holds the downward protrusion.
+   `z-index: 0` establishes a stacking context BELOW `.kpi-cmd`'s
+   `z-index: 1` so the range selector menu (nested in the command bar
+   at z-40) is not covered by the lifted column at z-10-12. Without
+   this, the card sits at z-auto in the parent context and its
+   descendants (lift, hcell.now, cell.now) render above the trapped
+   menu, obscuring the period grid. `pointer-events: none` on the
+   card + grid + panels so the empty corner (col 1, row 1) does not
+   receive events - the corner hit-test needs the page beneath, not
+   a table element. Grid children re-enable pointer events. */
 .kpi-app .kpi-ov-cp-card {
   position: relative;
+  z-index: 0;
   margin: 30px 0 12px;
   padding-bottom: 12px;
   background: transparent;
@@ -34,18 +44,24 @@
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
+  pointer-events: none;
 }
+.kpi-app .kpi-ov-cp-card > * { pointer-events: auto; }
 /* Retained token class from R-109 - callers may still pass it; the new
    card visual is on the three background panels, not the card itself,
    so this is a no-op. Kept so probes and page.js keep compiling. */
 .kpi-app .kpi-ov-cp-t-navy { }
 
-/* The grid itself carries no background. The three panels do. */
+/* The grid itself carries no background. The three panels do.
+   Pointer-events off so the empty corner (col 1 row 1) does not
+   register the grid as a hit target; children re-enable events. */
 .kpi-app .kpi-ov-cp-grid {
   position: relative;
   display: grid;
   grid-template-columns: 160px repeat(4, minmax(0, 1fr)) 204px;
+  pointer-events: none;
 }
+.kpi-app .kpi-ov-cp-grid > * { pointer-events: auto; }
 
 /* ── background panels · A1 · corner cut ────────────────────────── */
 .kpi-app .kpi-ov-cp-hbar {
@@ -162,6 +178,9 @@
 .kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-rlab-rev { background: var(--green-50, #E9FDEC); }
 
 /* ── data cells · A4 ────────────────────────────────────────────── */
+/* min-height 108 - matches the natural height of a 4-line partial-
+   week Revenue cell so cost rows expand to the same size and every
+   row settles to a single height. Kevin fix 2026-09-16: even them. */
 .kpi-app .kpi-ov-cp-cell {
   position: relative;
   z-index: 3;
@@ -170,7 +189,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 96px;
+  min-height: 109px;
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-past  { background: #FBFBFC; }

@@ -37,20 +37,21 @@ async function shoot(url, tag) {
     const cornerX = Math.round(rlBox.left + rlBox.width / 2);
     const cornerY = Math.round(hbBox.top + hbBox.height / 2);
     const hits = document.elementsFromPoint(cornerX, cornerY);
-    const cornerLeaks = hits.some(el =>
-      el.classList?.contains("kpi-ov-cp-hbar")
-      || el.classList?.contains("kpi-ov-cp-lbar")
-      || el.classList?.contains("kpi-ov-cp-bpanel")
-    );
+    // Kevin fix 2026-09-16: assert the page beneath, not ANY table
+    // element. The card, grid, hbar, lbar, bpanel all count as "table
+    // elements" for this test - the first hit must be a shell/wrapper
+    // class outside the CP surface. `.kpi-ov-cp-*` (any prefix match)
+    // fails.
+    const leaks = els => els.some(el => {
+      const cls = (el.className || "").toString();
+      return cls.split(/\s+/).some(c => c.startsWith("kpi-ov-cp"));
+    });
+    const cornerLeaks = leaks(hits);
     // Also test right at (lbar.left, hbar.top) - the pixel where the
     // cut corner would be if the panels bled together.
     const lbBox = lbar.getBoundingClientRect();
     const hits2 = document.elementsFromPoint(Math.round(lbBox.left + 4), Math.round(hbBox.top + 4));
-    const cornerLeaks2 = hits2.some(el =>
-      el.classList?.contains("kpi-ov-cp-hbar")
-      || el.classList?.contains("kpi-ov-cp-lbar")
-      || el.classList?.contains("kpi-ov-cp-bpanel")
-    );
+    const cornerLeaks2 = leaks(hits2);
     // Lift geometry
     const lift = grid.querySelector(".kpi-ov-cp-lift");
     const now = grid.querySelector(".kpi-ov-cp-hcell.kpi-ov-cp-now");
