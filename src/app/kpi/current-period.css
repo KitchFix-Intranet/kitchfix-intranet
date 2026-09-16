@@ -120,6 +120,19 @@
 .kpi-app .kpi-ov-cp-grid > * { pointer-events: auto; }
 
 /* ── background panels · A1 · corner cut ────────────────────────── */
+/* Kevin fix 2026-09-17: every panel carries the FULL standard card
+   shadow (`0 1px 2px rgba(10,37,72,.06), 0 4px 12px rgba(10,37,72,
+   .07)`) - identical to `.kpi-ov-cp-rv-item` beneath, so held up
+   against a review card at 1440 the table reads as the same object.
+   The prior directional fragments (hbar upward, lbar leftward,
+   bpanel down-and-right only) left the outline weak because
+   #DDE5EE at 1px reads as near-zero contrast on the #EDEFF2 page
+   without a card shadow to define the edge.
+
+   `clip-path: inset(...)` per panel expands the paint box on OUTWARD
+   sides (-24px, roomier than the 12px shadow reach) and clips at
+   `0` on INWARD sides so the shadow does not bleed across the seam
+   into the neighbouring panel. Order: top / right / bottom / left. */
 .kpi-app .kpi-ov-cp-hbar {
   grid-column: 2 / -1;
   grid-row: 1;
@@ -127,7 +140,8 @@
   border: 0.5px solid var(--n-300);
   border-bottom: none;
   border-radius: 12px 12px 0 0;
-  box-shadow: 0 -2px 6px rgba(10, 37, 72, 0.05);
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+  clip-path: inset(-24px -24px 0 -24px);   /* clip bottom · no bleed into bpanel */
   position: relative;
   z-index: 1;
 }
@@ -137,7 +151,8 @@
   border: 0.5px solid var(--n-300);
   border-right: none;
   border-radius: 12px 0 0 12px;
-  box-shadow: -3px 4px 12px rgba(10, 37, 72, 0.06);
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+  clip-path: inset(-24px 0 -24px -24px);   /* clip right · no bleed into bpanel */
   position: relative;
   z-index: 1;
 }
@@ -154,7 +169,8 @@
   border-top: none;
   border-left: none;
   border-radius: 0 0 12px 0;
-  box-shadow: 3px 4px 12px rgba(10, 37, 72, 0.06);
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+  clip-path: inset(0 -24px -24px 0);       /* clip top + left · no bleed into hbar or lbar */
   position: relative;
   z-index: 1;
 }
