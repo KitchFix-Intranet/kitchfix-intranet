@@ -1,0 +1,40 @@
+name: CP CSS prefix gate
+
+# R-112 · Guard 0 (owner ruling 2026-09-16). current-period.css is
+# imported by all three KPI page.js files (Overview, Labor, Purchasing).
+# The R-112 render uses generic class names (.grid, .cell, .sub, .bar,
+# .pill, .status, .seg, .board) that are live across 47+ other files
+# in the app. A single unprefixed rule in current-period.css would leak
+# into every one of those files - including Current year, Last period
+# and Next period on all three boards. That surface has already been
+# frozen (Guards 1/5); this gate is the mechanical proof that the rule
+# will not be broken by any future PR.
+#
+# The gate is a pure Node script that parses current-period.css and
+# fails if any selector is not scoped to `.kpi-app` AND does not carry
+# `.kpi-ov-cp-`. No browser, no dev server, no secrets - fast enough
+# to run on every touch.
+
+on:
+  pull_request:
+    paths:
+      - "src/app/kpi/current-period.css"
+      - "scripts/probes/_probe_cp_css_prefix.mjs"
+      - ".github/workflows/cp-css-prefix-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/app/kpi/current-period.css"
+      - "scripts/probes/_probe_cp_css_prefix.mjs"
+
+jobs:
+  gate:
+    name: Guard 0 · current-period.css prefix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run Guard 0 prefix probe
+        run: node scripts/probes/_probe_cp_css_prefix.mjs

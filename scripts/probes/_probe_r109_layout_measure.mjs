@@ -19,14 +19,17 @@ const page = await ctx.newPage();
 await page.goto(URL_TBJ, { waitUntil: "networkidle", timeout: 30000 });
 await page.waitForTimeout(3500);
 
-// Row heights: read each row's ROW-HEADER cell height (the .kpi-ov-cp-rh)
-// and the max cell height across that row's five cost/rev cells.
-const rows = await page.$$eval(".kpi-ov-cp-grid .kpi-ov-cp-rh", els => els.map((rh, ri) => {
+// Row heights: read each row's ROW-LABEL cell height (the .kpi-ov-cp-
+// rlab under R-112 · was .kpi-ov-cp-rh under R-109) and the max cell
+// height across that row's five cost/rev cells.
+const rows = await page.$$eval(".kpi-ov-cp-grid .kpi-ov-cp-rlab", els => els.map((rh, ri) => {
   const rhBox = rh.getBoundingClientRect();
-  // The row is a slice of the grid - find the six sibling boxes that
-  // share this row's top position.
+  // The row is a slice of the grid - find the sibling boxes that
+  // share this row's top position. R-112 places every cell as a
+  // direct grid child (no .kpi-ov-cp-rowfrag wrapper) so :scope > *
+  // is enough.
   const grid = rh.parentElement;
-  const allChildren = grid.querySelectorAll(":scope > *, :scope > .kpi-ov-cp-rowfrag > *");
+  const allChildren = grid.querySelectorAll(":scope > *");
   const rowTop = Math.round(rhBox.top);
   const rowCells = [];
   for (const el of allChildren) {
