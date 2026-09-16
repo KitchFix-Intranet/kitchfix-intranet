@@ -159,24 +159,44 @@ jobs:
       # People roster is one clean nightly snapshot derived from the
       # workers + users walks the sync step just landed.
       #
-      # 2026-08-27 decoupling (owner ruling): gate on
-      # `steps.sync.outcome == 'success'` NOT `success()`. Prior state:
-      # `if: success()` chained People-derive behind every labor
-      # derive. When labor derive hit a Postgres statement timeout on
-      # Aug 22, People derive stopped running - directory went stale
-      # for six days because a labor query got slow. The two concerns
-      # are unrelated: People derive reads workers + users walks only,
-      # never labor tables. The coupling was the design flaw; the
-      # timeout just exposed it. Keep this even after the timeout is
-      # fixed - a directory should not go stale because an unrelated
-      # derive is broken.
+      # 2026-08-27 decoupling (owner ruling): the intent was to gate
+      # on `steps.sync.outcome == 'success'` NOT `success()`, so a
+      # labor probe failure could not cascade into a stale directory.
+      # Prior incident: on Aug 22 a labor derive hit a Postgres
+      # statement timeout and the People derive stopped running for
+      # six days because the default step-condition semantics chained
+      # every downstream step behind the failure.
+      #
+      # 2026-09-16 fix (this comment). The Aug 27 change read
+      # correctly in review and did nothing at runtime for three
+      # weeks. On 2026-09-08 the Daily grain probes step began
+      # failing on a legitimate probe-modeling gap (one worker's GL
+      # sub-code); People derive skipped every night for nine days
+      # until Kevin surfaced the resulting stale directory on
+      # 2026-09-16. Same class as the Aug 22 six-day stale, same
+      # "fix" that never actually shipped a decoupling.
+      #
+      # The GHA behavior that swallowed the fix: a step's `if:`
+      # expression gets `success()` implicitly prepended unless it
+      # already names a status check function (success, always,
+      # failure, cancelled). So `if: steps.sync.outcome == 'success'`
+      # was evaluated as `success() && steps.sync.outcome == 'success'`;
+      # once probe_grain failed, `success()` became false, and every
+      # step below inherited the skip regardless of its own condition.
+      #
+      # The rule (now in docs/GOTCHAS.md): naming a specific step's
+      # outcome does not decouple a step from earlier failures. To
+      # actually decouple, the condition must include a status
+      # function explicitly. `always() && steps.sync.outcome == 'success'`
+      # is the shape that runs when sync succeeded regardless of what
+      # else in the job did.
       #
       # Owner columns (is_site_leader / site_leader_note) are
       # preserved by the derive's explicit upsert column list; probe
       # P3 gates that contract on every run.
       - name: Derive people
         id: derive_people
-        if: steps.sync.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
+        if: always() && steps.sync.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
           echo "derive_people --source=${SOURCE}"
@@ -186,11 +206,12 @@ jobs:
       # the derive a second time (P3 dynamic + P6 idempotency); the
       # earlier Derive people step is the first run.
       #
-      # 2026-08-27: also gated on sync only, matches Derive people.
-      # Probe should run whenever the derive it validates ran.
+      # Same `always() && ...` shape as Derive people above so the
+      # probe runs whenever the derive it validates ran, independent
+      # of unrelated labor failures earlier in the job.
       - name: People probes
         id: probe_people
-        if: steps.derive_people.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
+        if: always() && steps.derive_people.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
         run: |
           echo "probe_people"
           node scripts/probes/_probe_people.mjs
