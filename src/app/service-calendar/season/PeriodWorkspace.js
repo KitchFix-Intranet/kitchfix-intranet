@@ -269,17 +269,28 @@ export default function PeriodWorkspace({
     // switch gate: a consumer keying on the wrong readiness signal.
   }, [showFinalize, accountKey, periodRange?.start, periodRange?.end, finalizeReloadTick, periodDays]);
 
-  const handleFinalize = useCallback(async ({ accountKey: acctK, weekStart }) => {
+  const handleFinalize = useCallback(async ({ accountKey: acctK, weekStart, confirmedPretaxCents }) => {
+    // confirmedPretaxCents (2026-09-16): the pretax total the operator
+    // just saw in the confirm overlay. Server compares against the
+    // built payload total before the QBO push; a mismatch stops the
+    // push and transitions the finalize row to push_failed. Absent
+    // (older clients) skips the assertion - soft rollout.
+    const requestBody = {
+      action: "sc-finalize-week",
+      accountKey: acctK,
+      weekStart,
+      ...(Number.isFinite(confirmedPretaxCents) ? { confirmedPretaxCents } : {}),
+    };
     const res = await fetch("/api/service-calendar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ action: "sc-finalize-week", accountKey: acctK, weekStart }),
+      body: JSON.stringify(requestBody),
     });
-    const body = await res.json().catch(() => ({}));
+    const responseBody = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(body?.error || `HTTP ${res.status}`);
-      err.body = body;
+      const err = new Error(responseBody?.error || `HTTP ${res.status}`);
+      err.body = responseBody;
       throw err;
     }
     setFinalizeReloadTick((n) => n + 1);
@@ -287,7 +298,7 @@ export default function PeriodWorkspace({
     // toast can report the actual count (TBJ produces 3-8 invoices per
     // week). Shape: { pushed:true, invoiceRecords:[...], n1:{...} } |
     // { pushed:false, ... }.
-    return { invoiceRecords: body?.effects?.invoiceRecords || [] };
+    return { invoiceRecords: responseBody?.effects?.invoiceRecords || [] };
   }, []);
 
   const handleRevert = useCallback(async ({ accountKey: acctK, weekStart, reason }) => {
@@ -1283,14 +1294,51 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                 // Metrics for the overlay's total row. weekMetrics
                 // may not carry the boundary week's totals in month
                 // view - fall back to 0 rather than crash.
-                const daysServed = typeof wm?.complete === "number" ? wm.complete : 0;
-                const totalMeals = typeof wm?.actMeals === "number" ? wm.actMeals : 0;
-                const pretaxTotalDollars = typeof wm?.actRev === "number" ? wm.actRev : 0;
+                const singleDaysServed = typeof wm?.complete === "number" ? wm.complete : 0;
+                const singleTotalMeals = typeof wm?.actMeals === "number" ? wm.actMeals : 0;
+                const singlePretaxDollars = typeof wm?.actRev === "number" ? wm.actRev : 0;
 
-                // Pair total for bi-weekly close-week header display.
-                // Needs both weeks' actRev; weekMetrics is keyed on
-                // fiscal-week label in period scope, so use it when
-                // available; fall back to null in month scope.
+                // Bi-weekly close-week widen (2026-09-16 finalize confirm
+                // fix). The confirm overlay was written when finalize was
+                // single-week only, and read `wm` for the close-week row
+                // alone even when the invoice payload spans 14 days. Fix
+                // computes the pair total here at the mount site by
+                // reading weekMetrics for the partner week alongside `wm`.
+                //
+                // Partner rowKey: month scope keys on the row's Monday
+                // date (== serverWeekInfo.pairPartnerMonday); period
+                // scope keys on the fiscal-week label (pairPartnerInfo
+                // carries the partner's weekLabel). Same resolver split
+                // as line 1166-1168 for the current row.
+                const isBiweeklyClose = serverWeekInfo?.pairRole === "close";
+                const partnerRowKey = isBiweeklyClose
+                  ? (scope === "month"
+                      ? serverWeekInfo?.pairPartnerMonday
+                      : pairPartnerInfo?.weekLabel)
+                  : null;
+                const partnerWm = partnerRowKey && weekMetrics
+                  ? weekMetrics[partnerRowKey]
+                  : null;
+                // Fall back to single-week values if the close-week row
+                // is somehow flagged pairRole=close but the partner meta
+                // is missing (defensive; would only happen mid-load).
+                const canWidenToPair = isBiweeklyClose && !!partnerWm;
+                const daysServed = canWidenToPair
+                  ? singleDaysServed + (typeof partnerWm.complete === "number" ? partnerWm.complete : 0)
+                  : singleDaysServed;
+                const totalMeals = canWidenToPair
+                  ? singleTotalMeals + (typeof partnerWm.actMeals === "number" ? partnerWm.actMeals : 0)
+                  : singleTotalMeals;
+                const pretaxTotalDollars = canWidenToPair
+                  ? singlePretaxDollars + (typeof partnerWm.actRev === "number" ? partnerWm.actRev : 0)
+                  : singlePretaxDollars;
+                const totalDays = canWidenToPair ? 14 : 7;
+
+                // rowSunday = close-week Sunday (single week end). When
+                // the pair widen applies, WeekFinalizeControl uses the
+                // partner Monday + 13 as the pair end for display; the
+                // action itself still fires with weekStart=rowMonday
+                // (server re-computes pairStart from cadence + weekIndex).
                 const rowSunday = (() => {
                   const d = new Date(`${rowMonday}T12:00:00Z`);
                   d.setUTCDate(d.getUTCDate() + 6);
@@ -1326,8 +1374,10 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                       onRetry={onRetryFinalize}
                       onOpenDay={onDayClick}
                       daysServed={daysServed}
+                      totalDays={totalDays}
                       totalMeals={totalMeals}
                       pretaxTotalDollars={pretaxTotalDollars}
+                      isBiweeklyClose={canWidenToPair}
                       /* 2026-09-03 (Kevin ruling on SC cleanup item 2):
                          finalize affordance is period-only. Month drill
                          keeps the week ghosting + status captions but

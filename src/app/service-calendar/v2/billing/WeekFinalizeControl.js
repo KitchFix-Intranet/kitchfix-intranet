@@ -87,9 +87,14 @@ export default function WeekFinalizeControl({
   onRetry,                // async ({ accountKey, weekStart }) -> Promise
   onOpenDay,              // (isoDate) -> void   navigate to that day's entry
   // metrics used by the overlay
-  daysServed,             // number of days with actual entry (or all 7 for full)
-  totalMeals,             // sum of actual_count across the week
-  pretaxTotalDollars,     // number in dollars
+  daysServed,             // number of days with actual entry (pair-widened
+                          //   by PeriodWorkspace when isBiweeklyClose)
+  totalDays,              // 7 or 14. Pair-widened by PeriodWorkspace.
+  totalMeals,             // sum of actual_count across the span (pair-widened)
+  pretaxTotalDollars,     // number in dollars (pair-widened)
+  isBiweeklyClose = false, // true only on biweekly close-week rows; drives
+                          //   the confirm overlay's pair-aware title and
+                          //   the pair-end date the overlay renders.
   liveCustomerName,       // string (used in live mode; test mode ignores)
   // ─── PR-E (2026-08-14) additions ───────────────────────────────
   // Server-authoritative completeness + pair role for this week.
@@ -255,6 +260,40 @@ export default function WeekFinalizeControl({
     return d.toISOString().slice(0, 10);
   })();
 
+  // Bi-weekly close-week span for the confirm overlay's DISPLAY. The
+  // action itself still fires with weekStart=close-week Monday; the
+  // server derives pairStart from cadence + weekIndex. But the overlay
+  // must show the full pair range so the operator reads a title,
+  // range, and totals that correspond to what actually bills.
+  //
+  // pairStart = close-week Monday - 7. pairEnd = close-week Sunday
+  // (the close week's own Sunday IS the pair's end - the pair spans
+  // partner Mon .. close Sun).
+  //
+  // pairStart on the overlay's weekStart prop is safe: the prop is
+  // display-only in the overlay (onConfirm takes no args, and the
+  // parent's onFinalize call closes over WeekFinalizeControl's own
+  // weekStart, not the overlay's).
+  const overlayWeekStart = isBiweeklyClose && weekStart
+    ? (() => {
+        const d = new Date(`${weekStart}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - 7);
+        return d.toISOString().slice(0, 10);
+      })()
+    : weekStart;
+  const overlayTotalDays = typeof totalDays === "number"
+    ? totalDays
+    : (isBiweeklyClose ? 14 : 7);
+
+  // Pretax total in cents for the confirmed-vs-payload guard on the
+  // server. The guard compares the number the operator just saw in
+  // the overlay against the invoice payload the server builds. Soft
+  // rollout: send null when the display total isn't a finite number
+  // (older mounts) so the server skips the assertion.
+  const confirmedPretaxCents = Number.isFinite(pretaxTotalDollars)
+    ? Math.round(pretaxTotalDollars * 100)
+    : null;
+
   async function walkWorkingProgress() {
     // Named steps advance on a single server round trip. We report
     // this honestly - the real work happens in runFinalizeEffects
@@ -269,7 +308,7 @@ export default function WeekFinalizeControl({
     }, 700);
 
     try {
-      const finalizeResult = await onFinalize?.({ accountKey, weekStart });
+      const finalizeResult = await onFinalize?.({ accountKey, weekStart, confirmedPretaxCents });
       clearInterval(tickTimer);
       setWorkingStepIndex(4);
       // sc-38 (2026-09-02): capture invoiceRecords.length from the
@@ -447,14 +486,15 @@ export default function WeekFinalizeControl({
         }}
         invokerRef={openButtonRef}
         accountKey={accountKey}
-        weekStart={weekStart}
+        weekStart={overlayWeekStart}
         weekEnd={derivedWeekEnd}
         daysServed={daysServed}
-        totalDays={7}
+        totalDays={overlayTotalDays}
         totalMeals={totalMeals}
         invoiceDestination={invoiceDestination}
         pretaxTotalDollars={pretaxTotalDollars}
         qboMode={qboMode}
+        isBiweekly={isBiweeklyClose}
       />
     </div>
   );

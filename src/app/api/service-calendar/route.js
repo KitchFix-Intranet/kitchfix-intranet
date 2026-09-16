@@ -1778,13 +1778,22 @@ export async function POST(request) {
     // runFinalizeEffects(...) - a seam PR-C extends with the QBO push.
     // In PR-A the effects hook records state only and returns.
     if (action === "sc-finalize-week") {
-      const { accountKey, weekStart } = body;
+      const { accountKey, weekStart, confirmedPretaxCents } = body;
       if (!accountKey || !weekStart) {
         return NextResponse.json(
           { success: false, error: "accountKey and weekStart required" },
           { status: 400 }
         );
       }
+      // confirmedPretaxCents (2026-09-16): the pretax total the operator
+      // just saw in the confirm overlay. If provided, runFinalizeEffects
+      // asserts against the built payload total before the QBO push -
+      // a mismatch produces a push_failed row with an operator-language
+      // failure message. Absent (older clients) skips the assertion.
+      const confirmedCentsNormalized =
+        typeof confirmedPretaxCents === "number" && Number.isFinite(confirmedPretaxCents)
+          ? Math.round(confirmedPretaxCents)
+          : null;
       if (!isPerMealBillingAccount(accountKey)) {
         return NextResponse.json(
           { success: false, error: "Finalize is only available on per-meal billing accounts" },
@@ -1900,6 +1909,7 @@ export async function POST(request) {
           accountKey,
           weekStart,
           finalizedRow: inserted,
+          confirmedPretaxCents: confirmedCentsNormalized,
         });
       } catch (err) {
         console.error("[sc-finalize-week] runFinalizeEffects error (row stays finalized):", err);
