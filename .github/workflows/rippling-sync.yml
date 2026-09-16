@@ -144,15 +144,33 @@ jobs:
       # Salary derive rebuilds the trailing 8 fiscal weeks of
       # labor_salary_actuals so a late-entered raise or a backdated
       # termination self-heals without anyone touching a script.
-      # Runs AFTER Derive labor actuals - if this step goes red, the
-      # log makes plain that HOURLY already wrote successfully and
-      # only SALARY is stale. --window=fytd stays manual-only.
+      #
+      # 2026-09-17 decouple. This step's gate used to be plain
+      # `if: success()`, chained behind every prior step's outcome
+      # via GHA's implicit-success-prepend behavior. When Daily grain
+      # probes began failing on Sep 8, the salary derive skipped
+      # every night for nine days - Anna Hughes's Sep 7 promotion
+      # never landed in labor_salary_actuals, and every other
+      # salaried worker's Sep 7 + Sep 14 week rows are missing too.
+      # The KPI Labor view, the Overview P&L card, and the daily
+      # range endpoint all read `labor_salary_actuals` and have been
+      # reporting stale/short totals for nine days.
+      #
+      # derive_salary_actuals.mjs reads ONLY rippling_raw_compensations
+      # (and users/workers for name resolution). It has zero
+      # dependency on labor_actuals, labor_actuals_daily, or the
+      # grain probe. The gate coupling was a copy-paste artifact
+      # from the neighboring labor steps, not a real dependency.
+      #
+      # Same `always() && steps.sync.outcome == 'success'` shape as
+      # Derive people in #1146. Runs when the raw sync succeeded,
+      # independent of any labor probe cascading before it.
       - name: Derive salary actuals
         id: derive_salary
-        if: success() && (inputs.dry_run || 'false') != 'true'
+        if: always() && steps.sync.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
-          echo "note: hourly derive already wrote successfully; failure here isolates to salary"
+          echo "note: hourly derive is separate; failure here isolates to salary"
           echo "derive_salary_actuals --source=${SOURCE} --window=trailing8"
           node scripts/derive_salary_actuals.mjs --source=${SOURCE} --window=trailing8
 
