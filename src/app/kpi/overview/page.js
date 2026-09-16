@@ -499,6 +499,13 @@ export default function KpiOverviewPage() {
           <PlanningBoard payload={data} />
         ) : (
           <>
+            {/* R-112 PR 2 (2026-09-16): CurrentPeriodTable now owns
+                its own status strip on CP with the PLAN / ROLLING
+                toggle right of the period pill. Suppress the shell's
+                StatusLine on CP to avoid two "Period running" pills
+                stacking above the table. Every other range keeps
+                the shell strip untouched. */}
+            {!cpGateActive && (
             <StatusLine
               statusLine={data.status_line}
               rangeLabels={data.range_labels}
@@ -531,6 +538,7 @@ export default function KpiOverviewPage() {
                 };
               })()}
             />
+            )}
             <SettlingStrip settling={data.settling} />
             {/* R-109 · CP gate. On the running period (CP), the three
                 cards + week rail + cost-lines + P&L below are ALL
