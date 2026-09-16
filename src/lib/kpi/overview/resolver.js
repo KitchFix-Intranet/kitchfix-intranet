@@ -3721,6 +3721,7 @@ export async function resolveOverview({
     range_labels: buildRangeLabels({
       range: { start: rng.start, end: rng.end, kind: rng.kind, period_no: rng.period_no },
       rangeComposition,
+      overduePeriodNos: overduePeriods.map(o => o.period_no),
       periodState: displayPeriodState,
       lastCompleteWk,
       effectiveEndISO,
@@ -4005,7 +4006,7 @@ function buildStatusLine({ ticker, period_state, spend_settled, has_target, rang
 //     period_span: "P1-P8" | "P8" | null,
 //     period_last: "P8" | null,
 //   }
-function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk, effectiveEndISO, todayISO }) {
+function buildRangeLabels({ range, rangeComposition, overduePeriodNos = [], periodState, lastCompleteWk, effectiveEndISO, todayISO }) {
   const rc = rangeComposition;
   // Kevin ruling 2026-09-08. Explicit ranges that align to WHOLE
   // period boundaries render fytd-style labels (P1-P8 · closed and
@@ -4088,16 +4089,20 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
     const isAwaiting = rc?.awaiting?.count > 0
       && rc.awaiting.first === range.period_no
       && rc.awaiting.last === range.period_no;
-    // Kevin R-94 (2026-09-09): awaiting horizon names the CLOSE
-    // DATE + explains the state ("figures still settling") so a
-    // reader sees why the pill went amber. Verified state keeps
-    // its terse "closed and verified" form.
+    // Kevin R-94 (2026-09-09) + Kevin ruling 2026-09-17 (Closed ·
+    // unaudited). Pre-day-8: "figures still settling" - names WHY the
+    // pill is amber. Past day-8: "unaudited" - names the current
+    // truth (settled numbers, no finance sign-off). The overdue
+    // nudge underneath already carries "no finance P&L loaded" so
+    // this line does not restate that detail.
+    const isUnaudited = isAwaiting && overduePeriodNos.includes(range.period_no);
     if (isAwaiting) {
       const pEnd = periodEndISO(range.period_no);
       const md = pEnd ? `${pEnd.slice(5, 7)}/${pEnd.slice(8, 10)}` : "";
+      const suffix = isUnaudited ? "unaudited" : "figures still settling";
       horizon = md
-        ? `P${range.period_no} · closed ${md} · figures still settling`
-        : `P${range.period_no} · awaiting verification`;
+        ? `P${range.period_no} · closed ${md} · ${suffix}`
+        : `P${range.period_no} · ${isUnaudited ? "closed, unaudited" : "awaiting verification"}`;
     } else {
       horizon = `P${range.period_no} · closed and verified`;
     }
@@ -4113,9 +4118,19 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
     const sfirst = rc?.settled?.first ?? rc?.verified?.first ?? 1;
     const slast = rc?.settled?.last ?? rc?.verified?.last ?? rc?.periods_total ?? 1;
     const spanCopy = sfirst === slast ? `P${slast}` : `P${sfirst}-P${slast}`;
-    const awaitingSuffix = rc?.awaiting?.count
-      ? ` · ${rc.awaiting.label} awaiting verification`
-      : " · closed and verified";
+    // Kevin ruling 2026-09-17. Past day-8 the awaiting period is
+    // unaudited, not "awaiting verification" - the numbers are
+    // settled, just no finance sign-off. Overdue nudge underneath
+    // carries "no finance P&L loaded" so the horizon just names the
+    // state. Pre-day-8 keeps the R-94 "awaiting verification" copy.
+    const awaitingSuffix = (() => {
+      if (!rc?.awaiting?.count) return " · closed and verified";
+      const allUnaudited = rc.awaiting.first != null
+        && overduePeriodNos.includes(rc.awaiting.first)
+        && rc.awaiting.first === rc.awaiting.last;
+      if (allUnaudited) return ` · ${rc.awaiting.label} closed, unaudited`;
+      return ` · ${rc.awaiting.label} awaiting verification`;
+    })();
     horizon = `${spanCopy}${awaitingSuffix}`;
     spanHeader = spanCopy;
   }
