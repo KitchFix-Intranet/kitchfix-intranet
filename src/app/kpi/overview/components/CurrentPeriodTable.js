@@ -337,6 +337,15 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
 
     const landedFor = (line) => {
       if (line === "3100") {
+        // ┌───────────────────────────────────────────────────────────
+        // │ DO NOT REMOVE this `+ weekHatchedDollars(...)` addition
+        // │ without confirming task #489 has shipped and the labor
+        // │ payload's `board.weeks[i].spent` is R-103-complete on the
+        // │ server side. Removing this while the payload still ships
+        // │ costed-only re-introduces the silent under-reporting bug
+        // │ Kevin caught 2026-09-17.
+        // └───────────────────────────────────────────────────────────
+        //
         // Kevin ruling 2026-09-17 (R-103 client fix). Per R-103,
         //   labor spent = costed + unpriced + unapproved
         // The payload's `board.weeks[i].spent` is COSTED ONLY - the
@@ -344,12 +353,14 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         // to reach the R-103 total. Do the same here so the CP
         // surface (week cells, period figure, percent used, verdict,
         // Rolling's closedSpent) reads the full R-103 figure. Under-
-        // reporting since the CP table shipped; TBJ CP now reads
-        // $17,155 landed instead of $10,549. `avg_rate` from
-        // `labor.board.avg_rate`. A parallel server-side fix (task
-        // #489, Guard 2) will make `board.weeks[i].spent` R-103-
-        // complete so no consumer has to remember to add hatched -
-        // this client patch stays as belt-and-suspenders until then.
+        // reported by $6,606 on TBJ CP the day this landed; different
+        // amounts on other days as unapproved hours turn over. `avg_
+        // rate` from `labor.board.avg_rate`.
+        //
+        // Belt-and-braces: the durable fix (task #489, Guard 2) makes
+        // `board.weeks[i].spent` R-103-complete server-side so no
+        // consumer has to remember to add hatched. Until that lands,
+        // this client patch is what keeps the CP surface honest.
         const lbWks = labor?.board?.weeks || [];
         const avgRate = Number(labor?.board?.avg_rate || 0);
         const byStart = new Map(lbWks.map(w => [
