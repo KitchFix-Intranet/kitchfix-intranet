@@ -342,6 +342,29 @@
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 { color: #fff; }
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 b { color: #fff; }
 
+/* Kevin fix 2026-09-17: the "you are here" overhang. Without these
+   the hcell.now sits flush with hbar top and the last cell.now sits
+   flush with bpanel bottom - a tinted column rather than a card
+   resting on the table. `margin-top: -7px` pulls the hcell.now up
+   past hbar's top edge by 7px; `padding-top: 22px` (baseline 15 +
+   7 to compensate) keeps the content vertically centred. Same trick
+   at the bottom on the last-row cell.now. Border-radius handles the
+   corner where the lifted column meets the card edge.
+
+   These are siblings of the panels, not descendants, so the panels'
+   `clip-path` cannot clip them. Kevin ruling: if clip-path and the
+   overhang cannot coexist, the overhang wins. They coexist. */
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now {
+  margin-top: -7px;
+  padding-top: 22px;
+  border-radius: 9px 9px 0 0;
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now.kpi-ov-cp-lastrow {
+  margin-bottom: -7px;
+  padding-bottom: 21px;
+  border-radius: 0 0 9px 9px;
+}
+
 /* ── numbers · A4 typography ────────────────────────────────────── */
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big {
   font-size: 19px;
