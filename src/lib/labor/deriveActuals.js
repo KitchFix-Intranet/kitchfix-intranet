@@ -189,6 +189,44 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   }
   const deptMap = new Map(deptRows.map(d => [d.department_id, d]));
 
+  // 2026-09-17 classifier fix. labor_actuals is hourly-only by design
+  // (pay-segment-sourced; salaried earnings track via
+  // labor_salary_actuals and derive_salary_actuals.mjs). The prior
+  // classifier at attribute() copied `d.pnl_line` verbatim, so a
+  // worker whose CURRENT department mapped to 3100.2 (a salary line)
+  // produced 3100.2 rows in labor_actuals for their HOURLY pay
+  // segments. Every re-derive silently reclassified their history
+  // when their current dept changed.
+  //
+  // The observed instance: Anna Hughes was promoted at TXR-AZ on
+  // 2026-09-07 (hourly Lead Cafe Attendant -> Assistant Hospitality
+  // Manager, dept moves to Salary Wages - 3100.2 TXR-AZ). Her ~$17k
+  // of April-August hourly labor retroactively moved from 3100.1 to
+  // 3100.2 on the next re-derive.
+  //
+  // Fix: keep account attribution via worker's current dept (still
+  // correct for observed data - Anna stayed at TXR-AZ across her
+  // promotion; cross-account transitions would need worker_dept_history
+  // and are deferred). Replace the line_code source with a lookup on
+  // the account's HOURLY pnl_line. Every segment-derived labor_actuals
+  // row is `line_code = <account's hourly line>`, regardless of what
+  // pnl_line the worker's current dept carries.
+  //
+  // Salaried-only accounts (D26: CIN - KY, TBJ - NY per line 53)
+  // have no hourly dept in the map. Under the new fix, workers at
+  // those accounts return `account_has_no_hourly_line` and land as
+  // unattributed rather than being emitted with a mis-classified
+  // line. The explicit D26 short-circuit above the lookup is kept as
+  // belt-and-suspenders in case a hourly dept ever gets added to
+  // those accounts without also removing them from D26_SALARIED_ONLY.
+  const accountToHourlyLine = new Map();
+  for (const d of deptRows) {
+    if (d.is_container) continue;
+    if (d.pnl_line !== "3100.1") continue;
+    if (!d.account_key) continue;
+    accountToHourlyLine.set(d.account_key, d.pnl_line);
+  }
+
   const emRows = await fetchAll(supa, "earning_type_map",
     "merged_earning_type_name, multiplier, bucket");
   const earningMap = new Map(emRows.map(m => [m.merged_earning_type_name, m]));
@@ -283,6 +321,14 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   }
 
   // ── 6. Attribution ──────────────────────────────────────────
+  //
+  // 2026-09-17: line_code sources from the ACCOUNT's hourly pnl_line
+  // (accountToHourlyLine built at the deptMap block above), NOT the
+  // worker's current dept's pnl_line. labor_actuals is hourly-only;
+  // segments are hourly-earning-only; the classifier must reflect
+  // that even when a worker's current dept happens to be a salary
+  // line. See the block-comment above `accountToHourlyLine` for the
+  // Anna Hughes worked example.
   function attribute(workerId) {
     if (!workerId) return { reason: "unknown_worker" };
     if (!workerToDept.has(workerId)) return { reason: "unknown_worker", workerId };
@@ -292,9 +338,10 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
     if (!d) return { reason: "unknown_department", workerId, deptId };
     if (d.is_container) return { reason: "container_leak", workerId, deptId };
     if (d.account_key === "CORP") return null;                       // D17 out of scope
-    if (D26_SALARIED_ONLY.has(d.account_key) && d.pnl_line === "3100.1") return null;  // D26
-    if (!d.pnl_line) return { reason: "unknown_department", workerId, deptId };
-    return { account_key: d.account_key, line_code: d.pnl_line, deptId };
+    if (D26_SALARIED_ONLY.has(d.account_key)) return null;            // D26: salaried-only accounts never emit hourly rows
+    const hourlyLine = accountToHourlyLine.get(d.account_key);
+    if (!hourlyLine) return { reason: "account_has_no_hourly_line", workerId, deptId };
+    return { account_key: d.account_key, line_code: hourlyLine, deptId };
   }
 
   // ── 7. Bucket accumulator ────────────────────────────────────
