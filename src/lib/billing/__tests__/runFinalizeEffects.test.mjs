@@ -156,8 +156,13 @@ test("biweekly: first week of pair returns awaiting_pair_close (no post, no noti
   const supa = makeSupaMock({
     tables: {
       ...makeSeedTables({ map: CIN_MAP }),
+      // 2026-09-16 fix: seed now carries account_key so the scoped
+      // meta query in runFinalizeEffects finds the row. Pre-fix, the
+      // query was un-scoped and the mock silently returned rows[0];
+      // both bugs cancelled out. The scoped query + tightened
+      // maybeSingle mock exercises the correct path.
       sc_day_metadata: [
-        { service_date: "2026-07-13", period: "8", week_label: "Week 1" },
+        { account_key: "CIN - AZ", service_date: "2026-07-13", period: "8", week_label: "Week 1" },
       ],
       sc_week_finalize: [{ id: "fin-row-1", account_key: "CIN - AZ", week_start: "2026-07-13", status: "finalized", finalized_by: "leader@kitchfix.com" }],
     },
@@ -409,3 +414,159 @@ test("guard: null confirmedPretaxCents also skips (soft rollout - explicit null)
   );
   assert.equal(result.pushed, true, "explicit null skips the guard");
 });
+
+// ─── Biweekly account-scope regression (2026-09-16 hotfix) ────────
+//
+// The bug: runFinalizeEffects' pair-alignment lookup at
+// scWeekFinalize.js line 520-525 queried sc_day_metadata by
+// service_date alone, matching every account with a row for that
+// date. .maybeSingle() errored with PGRST116; the destructure
+// dropped the error; meta became null; weekIdx became null; the
+// weekIdx=2|4 branch never fired; pairStart stayed at weekStart.
+// The downstream buildInvoicePayload threw on rows spanning two
+// non-paired fiscal weeks (Week 2 + Week 3 instead of Week 1 + 2).
+//
+// CIN-AZ was the only biweekly account and this was the first time
+// anyone ran a biweekly finalize in production - so the defect had
+// been latent as long as the code existed.
+//
+// These tests seed rows for multiple accounts on the same
+// service_date to reproduce the collision, and assert that the
+// scoped query resolves the caller's account cleanly.
+
+test("biweekly close-week: multi-account rows on same date resolve correctly (regression for pairStart bug)", async () => {
+  // Seed the full CIN-AZ close-week pair span with metadata,
+  // plus rows for TXR-AZ + TBR-FL + TBJ-FL on the same close-week
+  // Monday so the un-scoped query would produce a PGRST116 collision.
+  //
+  // Also seed sc_daily_revenue for Aug 10-23 with the right week
+  // labels so buildInvoicePayload's period-alignment guard doesn't
+  // trip. The point of the test is the meta lookup path; keep the
+  // downstream small but valid.
+  const closeMonday   = "2026-08-17";
+  const partnerMonday = "2026-08-10";
+  const revenueRows = [];
+  // Two dates in each week, one row each, non-zero. Enough for the
+  // build to produce an invoice; keeps test fixture small.
+  for (const d of ["2026-08-11", "2026-08-13", "2026-08-18", "2026-08-20"]) {
+    const week = d < closeMonday ? "Week 1" : "Week 2";
+    revenueRows.push({
+      service_date: d, service_id: "svc-1", service_name: "Regular Snack",
+      account_key: "CIN - AZ",
+      is_flat_fee: false, is_tax_free: false, is_non_revenue: false,
+      actual_count: 10, actual_price_at_date: 5.89, price_at_date: 5.89,
+      period: "9", week_label: week,
+      has_actuals: true, has_projection: false,
+    });
+  }
+  const supa = makeSupaMock({
+    tables: {
+      sc_qbo_account_map: [CIN_MAP],
+      sc_qbo_service_map: [
+        { service_id: "svc-1", account_key: "CIN - AZ", qbo_item_id: "3338",
+          qbo_line_description: "CIN-AZ - Regular Snack", aggregate_group: null,
+          invoice_slot: "main", tax_override: null, line_desc_style: null, active: true },
+      ],
+      sc_daily_revenue: revenueRows,
+      sc_week_finalize: [{ id: "fin-row-1", account_key: "CIN - AZ", week_start: closeMonday, status: "finalized", finalized_by: "leader@kitchfix.com" }],
+      sc_day_metadata: [
+        // The close-week Monday row for the caller.
+        { account_key: "CIN - AZ", service_date: closeMonday, period: "9", week_label: "Week 2" },
+        // The exact multi-account collision shape that broke production:
+        // three other accounts carry rows for the same service_date.
+        // Pre-fix: .maybeSingle() errors PGRST116 on 4 matches, error
+        // was swallowed, weekIdx=null, pairStart NOT decremented.
+        { account_key: "TXR - AZ", service_date: closeMonday, period: "9", week_label: "Week 2" },
+        { account_key: "TBR - FL", service_date: closeMonday, period: "9", week_label: "Week 2" },
+        { account_key: "TBJ - FL", service_date: closeMonday, period: "9", week_label: "Week 2" },
+      ],
+    },
+  });
+
+  let postedInvoices = 0;
+  let capturedSpan = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async (invoice, ctx) => {
+      postedInvoices += 1;
+      capturedSpan = { weekStart: ctx.weekStart, weekEnd: ctx.weekEnd };
+      return {
+        wasNoOp: false, ledgerRowId: `led-${postedInvoices}`,
+        qboInvoiceId: `TEST-INV-${postedInvoices}`, qboDocNumber: `K3TEST${postedInvoices}`,
+        status: "test",
+      };
+    },
+    fireN1: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "[TEST] Invoice ready", html: "",
+      email: { result: "sent" },
+      slack: { text: "ok", result: { sent: true } },
+    }),
+    fireN2: () => { throw new Error("N2 must not fire on the happy path"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+  const result = await runFinalizeEffects(
+    baseCtx({ accountKey: "CIN - AZ", weekStart: closeMonday }),
+    deps,
+  );
+  assert.equal(result.pushed, true, "close-week finalize succeeds - pairStart correctly decremented");
+  assert.equal(capturedSpan.weekStart, partnerMonday,
+    "pairStart resolved to close-week Monday - 7 (pair start), not close-week Monday");
+  assert.equal(capturedSpan.weekEnd, "2026-08-23",
+    "pairEnd resolved to pairStart + 13 (pair end), not close-week Sunday");
+});
+
+test("biweekly close-week: metaErr on lookup is surfaced (not swallowed)", async () => {
+  // Force a query error by seeding SIX rows for the same date and
+  // relying on the tightened maybeSingle mock (matches production
+  // PGRST116 semantics). This proves the destructure surfaces the
+  // error instead of dropping it into meta=null.
+  //
+  // The seed intentionally omits the CIN-AZ row for the queried date
+  // so that even WITH the account_key filter, no row matches and the
+  // query returns cleanly. But then we swap the mock to inject an
+  // error at the metadata table to prove the error path throws.
+  //
+  // Simpler: seed ONE row but with a different account_key, so the
+  // scoped query finds zero rows -> meta=null (clean, not an error).
+  // Then override supa.from("sc_day_metadata") to force an error.
+  const supa = makeSupaMock({
+    tables: {
+      ...makeSeedTables({ map: CIN_MAP }),
+      sc_day_metadata: [
+        // Not the caller's account - the scoped query finds zero
+        // rows; base case. We inject an error via the wrapper below.
+        { account_key: "OTHER - X", service_date: "2026-07-13", period: "8", week_label: "Week 1" },
+      ],
+    },
+  });
+  const wrappedSupa = {
+    ...supa,
+    from(name) {
+      if (name === "sc_day_metadata") {
+        // Return an object that mimics the query chain but errors on
+        // maybeSingle(). This exercises the metaErr destructure path.
+        const api = {
+          select: () => api,
+          eq: () => api,
+          maybeSingle: async () => ({ data: null, error: { code: "PGRST999", message: "simulated DB error" } }),
+        };
+        return api;
+      }
+      return supa.from(name);
+    },
+  };
+  const deps = {
+    supa: wrappedSupa,
+    postInvoiceDraft: () => { throw new Error("must not attempt post"); },
+    fireN1: () => { throw new Error("N1 must not fire"); },
+    fireN2: () => { throw new Error("N2 must not fire (uncaught throw propagates)"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+  await assert.rejects(
+    () => runFinalizeEffects(baseCtx({ accountKey: "CIN - AZ", weekStart: "2026-07-13" }), deps),
+    /load sc_day_metadata for pair alignment: simulated DB error/,
+    "metaErr must be surfaced as a thrown error, not swallowed",
+  );
+});
+

@@ -23,6 +23,18 @@
 
 **Why parked**: currently agrees. Zero screen impact today. The extraction is right; the timing is wrong.
 
+### Worked example (2026-09-16): the duplication class arrived as a live defect
+
+The `isInServiceOnDay` writeup framed the duplication risk as hypothetical — two copies that could drift. On 2026-09-16 the same class arrived non-hypothetical:
+
+`scWeekFinalize.js:resolveFinalizeReviewSpan` (line 261-267) and `scWeekFinalize.js:runFinalizeEffects` step 2 (line 517-534, pre-hotfix) both looked up `sc_day_metadata` for `service_date = weekStart` to read `week_label`. Same query intent, two implementations, one file. `resolveFinalizeReviewSpan` filtered by `account_key`. `runFinalizeEffects` did not. The review gate showed 14 tiles correctly; the finalize path built a mis-aligned pair and `buildInvoicePayload` threw.
+
+Biweekly finalize had never worked in production. CIN-AZ was the only biweekly account and this was the first time anyone finalized a biweekly close-week — the first real use surfaced a defect latent since the biweekly branch was written. The reason it hid so long is the same swallow-into-empty pattern this doc lists as a general concern: the destructure `const { data: meta } = ...` dropped `.maybeSingle()`'s `PGRST116` error on the 11-account row collision, meta became null, `weekIdx` fell through, `pairStart` stayed at close-week Monday, and the throw was one function downstream where the diagnostic doesn't obviously point back to the meta lookup.
+
+Fix landed in a hotfix PR: add the account filter, surface `metaErr`, add a two-account regression test that would have caught this at write time. Sweep of the rest of `src/` found no other instances of the same shape — the sibling with the correct filter (`resolveFinalizeReviewSpan`) was the only structural template that could have caught it via consistency, and it was the one that got the query right.
+
+**Point for the extraction work in this backlog item**: the duplication risk is real, not theoretical. When the extraction lands, add a note to the parity probe about the 2026-09-16 case — the failure mode wasn't a `<` → `<=` drift, it was a missing filter clause. Parity probes should assert query shape (filters present, error handling correct), not just output equality on happy-path fixtures.
+
 ---
 
 ## 2. `classifyDayStatus` (server) vs `computeWeekCompleteness` (client-fetched) — parity probe

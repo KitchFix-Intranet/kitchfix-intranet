@@ -87,9 +87,21 @@ export function makeSupaMock({ tables = {} } = {}) {
       if (state.limit != null) rows = rows.slice(0, state.limit);
       if (state.single) {
         if (rows.length === 0) return { data: null, error: { code: "PGRST116", message: "single: no rows" } };
+        if (rows.length > 1) return { data: null, error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" } };
         return { data: rows[0], error: null };
       }
-      if (state.maybeSingle) return { data: rows[0] || null, error: null };
+      if (state.maybeSingle) {
+        // 2026-09-16 fix: real .maybeSingle() ERRORS when the query
+        // matches more than one row, returning
+        //   { data: null, error: { code: "PGRST116", ... } }.
+        // Previously the mock silently returned rows[0], which hid a
+        // production defect (runFinalizeEffects biweekly meta query
+        // missing account_key filter, matching 11 rows across
+        // accounts). Match production semantics so the corresponding
+        // tests can seed a multi-row shape and assert the error path.
+        if (rows.length > 1) return { data: null, error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" } };
+        return { data: rows[0] || null, error: null };
+      }
       return { data: rows, error: null };
     }
 
