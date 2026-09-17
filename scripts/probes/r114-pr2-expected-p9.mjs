@@ -46,8 +46,9 @@ const current = {
   packaging_3400: await sumPurchasing("3400"),
 };
 
-// Item 6 deltas: TBJ - FL P9 3500.2 goes from 0 to 611.
-const delta6_vehicle = 611.00 - current.vehicle_3500_2;
+// Item 6 deltas: TBJ - FL P9 3500.2 goes from 0 to 611.41 (Sebastian
+// P9 sheet row 51 · finance actual · YTD $5,511.50).
+const delta6_vehicle = 611.41 - current.vehicle_3500_2;
 
 // Item 7 deltas: INVJE synthetic rows contribute -adjusting_je to
 // cost (per R-61: adjusted cost = purchases - JE).
@@ -109,10 +110,10 @@ console.log(`  3200 food           ${fmt(current.food_3200)}`);
 console.log(`  3400 packaging      ${fmt(current.packaging_3400)}\n`);
 
 console.log("item 6 delta (vehicle insurance):");
-console.log(`  3500.2 target       ${fmt(611.00)}`);
+console.log(`  3500.2 target       ${fmt(611.41)}   (Sebastian P9 sheet row 51)`);
 console.log(`  delta               ${fmt(delta6_vehicle)}`);
-console.log(`  vehicle line after  3500.4 ${fmt(current.vehicle_3500_4)} + 3500.2 ${fmt(611.00)} = ${fmt(current.vehicle_3500_4 + 611.00)}`);
-console.log(`  Kevin target:       $735 · ${Math.abs((current.vehicle_3500_4 + 611.00) - 735) < 1 ? "MATCH" : "MISS"}\n`);
+console.log(`  vehicle line after  3500.4 ${fmt(current.vehicle_3500_4)} + 3500.2 ${fmt(611.41)} = ${fmt(current.vehicle_3500_4 + 611.41)}`);
+console.log(`  Kevin target:       ~$735 · ${Math.abs((current.vehicle_3500_4 + 611.41) - 735) < 1 ? "MATCH" : "MISS"}\n`);
 
 console.log("item 7 delta (inventory adjustments):");
 console.log(`  food INVJE          ${fmt(delta7_food_cost)}     (JE ${fmt(invje_food_je)})`);

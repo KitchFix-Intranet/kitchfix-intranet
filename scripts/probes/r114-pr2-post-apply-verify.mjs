@@ -49,7 +49,7 @@ const { data: tbj_p9 } = await db
   .gte("txn_date", "2026-08-10")
   .lte("txn_date", "2026-09-06");
 const tbj_p9_sum = (tbj_p9 || []).reduce((s, r) => s + Number(r.amount), 0);
-check("TBJ - FL P9 3500.2 amount", tbj_p9_sum, 611.00);
+check("TBJ - FL P9 3500.2 amount", tbj_p9_sum, 611.41);
 
 const { data: tbj_ytd } = await db
   .from("purchasing_actuals")
@@ -58,7 +58,8 @@ const { data: tbj_ytd } = await db
   .eq("gl_line_code", "3500.2")
   .eq("source", "pnl_finance_load");
 const tbj_ytd_sum = (tbj_ytd || []).reduce((s, r) => s + Number(r.amount), 0);
-check("TBJ - FL P1-P9 3500.2 YTD sum", tbj_ytd_sum, 5511.09, 0.02);   // 4900.09 P1-P8 + 611 P9
+// $4,900.09 P1-P8 (pnl_actuals) + $611.41 P9 (Sebastian sheet) = $5,511.50
+check("TBJ - FL P1-P9 3500.2 YTD sum", tbj_ytd_sum, 5511.50, 0.02);
 
 // TBJ - FL P9 vehicle line total (fuel + insurance).
 const { data: tbj_veh_p9 } = await db
@@ -70,7 +71,8 @@ const { data: tbj_veh_p9 } = await db
   .lte("txn_date", "2026-09-06")
   .eq("excluded", false);
 const tbj_veh_p9_sum = (tbj_veh_p9 || []).reduce((s, r) => s + Number(r.amount), 0);
-check("TBJ - FL P9 vehicle line total", tbj_veh_p9_sum, 735.19, 0.02);
+// $124.19 fuel + $611.41 insurance = $735.60
+check("TBJ - FL P9 vehicle line total", tbj_veh_p9_sum, 735.60, 0.02);
 
 // ── Item 7 · P9 inventory adjustments ────────────────────────────────
 console.log("\nItem 7 · P9 inventory adjustments");
