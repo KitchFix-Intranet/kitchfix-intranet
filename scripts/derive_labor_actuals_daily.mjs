@@ -149,6 +149,31 @@ const deptById = new Map();
 for (const d of deptMap) deptById.set(d.department_id, d);
 console.log(`  earning_types=${earningMap.size} workers=${workers.length} depts=${deptById.size}`);
 
+// 2026-09-17 classifier fix - mirror of the accountToHourlyLine rule
+// shipped in src/lib/labor/deriveActuals.js the same day. The prior
+// attribute() below copied `d.pnl_line` verbatim, so an hourly worker
+// whose CURRENT department mapped to 3100.2 (a salary line) produced
+// 3100.2 rows in labor_actuals_daily even though the segment is an
+// hourly clock-in. That was the D1 divergence on Anna Hughes's
+// TXR-AZ hourly weeks 2026-07-13..2026-08-10: weekly emitted 3100.1
+// (fix landed), daily still emitted 3100.2 (fix landed only on the
+// weekly file). Same defect, same rule, same lookup.
+//
+// The daily derive and the weekly derive are separate implementations
+// - the daily's attribute() closes over its own skippedUnattr counters,
+// and pulling attribute() into a shared helper is a deferred refactor
+// (see this file's ── 2. Attribution comment, and the isInServiceOnDay
+// duplication class more broadly). Until that refactor lands, any
+// classifier change must be applied to both files. This block matches
+// deriveActuals.js verbatim so a future reviewer can diff them.
+const accountToHourlyLine = new Map();
+for (const d of deptMap) {
+  if (d.is_container) continue;
+  if (d.pnl_line !== "3100.1") continue;
+  if (!d.account_key) continue;
+  accountToHourlyLine.set(d.account_key, d.pnl_line);
+}
+
 // ─── 2. Attribution (mirrors weekly deriveActuals.js:attribute) ─────
 // Kept in sync with src/lib/labor/deriveActuals.js. If the weekly
 // rules change (new D-ruling), update this too - PR-1 does not
@@ -163,10 +188,11 @@ function attribute(workerId) {
   const d = deptById.get(deptId);
   if (!d) return { reason: "unknown_department", workerId, deptId };
   if (d.is_container) return { reason: "container_leak", workerId, deptId };
-  if (d.account_key === "CORP") return null;
-  if (D26_SALARIED_ONLY.has(d.account_key) && d.pnl_line === "3100.1") return null;
-  if (!d.pnl_line) return { reason: "unknown_department", workerId, deptId };
-  return { account_key: d.account_key, line_code: d.pnl_line };
+  if (d.account_key === "CORP") return null;                       // D17 out of scope
+  if (D26_SALARIED_ONLY.has(d.account_key)) return null;            // D26: salaried-only accounts never emit hourly rows
+  const hourlyLine = accountToHourlyLine.get(d.account_key);
+  if (!hourlyLine) return { reason: "account_has_no_hourly_line", workerId, deptId };
+  return { account_key: d.account_key, line_code: hourlyLine };
 }
 
 // ─── 3. Load pay_segments + presence + dedupe (shared helper) ───────

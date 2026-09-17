@@ -35,6 +35,24 @@ Fix landed in a hotfix PR: add the account filter, surface `metaErr`, add a two-
 
 **Point for the extraction work in this backlog item**: the duplication risk is real, not theoretical. When the extraction lands, add a note to the parity probe about the 2026-09-16 case — the failure mode wasn't a `<` → `<=` drift, it was a missing filter clause. Parity probes should assert query shape (filters present, error handling correct), not just output equality on happy-path fixtures.
 
+### Worked example (2026-09-17): the duplication class arrived a second time — and the file admits it
+
+The `isInServiceOnDay` writeup framed the risk hypothetically. `detectNoService` vs `isOff` was the first live instance. The 2026-09-17 labor-derive classifier is the second — and this time the file itself openly names the debt.
+
+`src/lib/labor/deriveActuals.js:attribute()` (weekly) and `scripts/derive_labor_actuals_daily.mjs:attribute()` (daily) are two implementations of the same worker → account+line classifier. On 2026-09-17 the classifier learned a new rule: `labor_actuals` is hourly-only, so `line_code` must come from the account's 3100.1 pnl_line, not the worker's current dept pnl_line. Anna Hughes's promotion at TXR-AZ on 2026-09-07 moved her dept to a 3100.2 (salary) line, and the prior classifier retro-reclassified 20 weeks of her hourly labor as 3100.2 on every re-derive.
+
+The fix reached the weekly. The daily kept emitting 3100.2 for the same rows. Five weeks (2026-07-13 through 2026-08-10) tied to the cent on amount and differed only on `line_code`. D1 stayed red for a second night on a rule the weekly had already learned.
+
+`scripts/derive_labor_actuals_daily.mjs` line ~153 has been carrying this comment for weeks:
+
+> Kept in sync with `src/lib/labor/deriveActuals.js`. If the weekly rules change (new D-ruling), update this too — PR-1 does not extract this into a shared helper because the weekly attribute closes over local `bumpUnattr` state; a shared version is a separate refactor.
+
+The file admits the debt and describes the extraction as "a separate refactor." That punt is what cost a second night and a second PR. **The cost of two implementations is not theoretical: it is one fix reaching one of them.**
+
+The regression probe (`scripts/probes/_probe_labor_actuals_line_codes.mjs`) had the same failure mode as the classifier: it imported `deriveLaborActuals` and asserted no 3100.2 in that in-memory result, so it went green while `labor_actuals_daily` on disk still held Anna's five bad rows. The probe extension added two table-state assertions against `labor_actuals_daily` — different check style (post-write DB read, not pre-write derive), same rule shape. A shared derive would replace both check styles with one probe against one code path.
+
+**Point for the extraction work in this backlog item**: this is a separate extraction from `isInServiceOnDay` — different class of siblings (two derives, not client/server), different file layout — but the pattern and the lesson are the same. When the labor-derive extraction lands, the same discipline applies: a parity probe that asserts rule shape across every callsite, not output equality on one path. And when a file's own comment names a shared-helper punt, treat that comment as backlog debt in this doc, not just as documentation.
+
 ---
 
 ## 2. `classifyDayStatus` (server) vs `computeWeekCompleteness` (client-fetched) — parity probe
