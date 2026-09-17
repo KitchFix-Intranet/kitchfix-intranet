@@ -1,0 +1,24 @@
+# SHA256 for each staged historical SC workbook. Generated 2026-09-17.
+# The loader pins reads against this file; a mismatch halts.
+
+06b13e1935c43cf01b3b7d3fd4b6299dd25d86f8502f9c719cd247d37bc951b4  Cincinnati Reds MLB Service Calendar - 2026 (2).xlsx
+e0052ab15fec2f1d409639d8afcd858ff2e2d0d7a96a70ec827c1c282eec30ce  Louisville Bats Service Calendar - 2024.xlsx
+d619f2ef6c35280491daddf404b875be8a9a84978fdd86a809f9c1e34948c1ab  Louisville Bats Service Calendar - 2025.xlsx
+61ee6b08990ea5ce30fccc0269ff5a54954ff8ff1fe2b21b14dcc41aeaee4760  Louisville Bats Service Calendar - 2026 (2).xlsx
+802782aa1d7b656a9074341fd1093bd2c28f721985e0c0e485f674c35c6dd91a  REDS AZ - Service Calendar - 2023.xlsx
+6835009c99bba70d7039b3eec082456d873290cb2400860ed001b065d32f8945  REDS AZ - Service Calendar 2024.xlsx
+3b8c1bf467ff10512a7b0f154b307b5a4c4533088eac5619ea5cc219946a7cf3  REDS AZ - Service Calendar 2025.xlsx
+76f84b58d999f058101c915f47ba59b1d061e5324971663c49e05719bebcd603  St. Louis Cardinals MLB - Service Calendar - 2026 (3).xlsx
+13578a6ee0eadbd3d3822ecaa6f2a689417810ed475f443a412ec2c30cf47c1f  TBJ BUF - Service Calendar - 2023.xlsx
+9cf774032478736359563e259403e2603ae3e7d2d6ff144dbfa056c7d72d71c8  TBJ BUF - Service Calendar - 2024.xlsx
+d0f435cb9f534be7a4d89af31c28aed56cda5502e0251e56d22f2139c9922068  TBJ BUF - Service Calendar - 2025.xlsx
+57c2486e1777ab5eccbb4adc53e4524bc5a0198af2fe37f0a2abf0b7dfafb59c  TBJ FL - Service Calendar - 2023.xlsx
+43134f40808e8dc560a6269c79ffb2e05201f15313fc7d1555e1d86e657e0119  TBJ FL - Service Calendar - 2024.xlsx
+72bec40111d77c9f3af70b307bf981a53331c57f14bc8310fb33acf6ac3222b9  TBJ FL - Service Calendar - 2025.xlsx
+ecefb1923ab9860fcfb579806937534e48f74ebae1885ac4cf387472239be6fc  TXR AZ - Service Calendar - 2023.xlsx
+4b934151dfa9fd9f82270585a9d302a9f268567bf51fefaf19e5587796bc1156  TXR AZ - Service Calendar - 2024.xlsx
+b256c3a5e2db6f998574cb9a1dd85287dcc16d48dd410129126ee112556f862b  TXR AZ - Service Calendar - 2025.xlsx
+f9cdf825fd3e0a3aaca0fc7d09b2235e80b69acfa1d9d1f057302f468a161bb9  Tampa Bay Rays - Service Calendar - 2023.xlsx
+8df42e4c00a8e39a051220a64653c77977e8b1153bcd59265319d53a7d90d2a1  Tampa Bay Rays Service Calendar - 2024.xlsx
+705f8a3e69f300e051fc659c6f5c16ee6312e1b9025df04116dd0412a403f9b8  Tampa Bay Rays Service Calendar - 2025.xlsx
+a85a1b047dad3bc6677801da2ec4056a4866c460c9f2d9e189bbf3ed32c644a1  Texas Rangers MLB - Home - Service Calendar - 2026 (2).xlsx
