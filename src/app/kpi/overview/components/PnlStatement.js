@@ -64,7 +64,8 @@ function fmtActual(n) {
 }
 function fmtPct(n) {
   if (n == null || Number.isNaN(Number(n))) return null;
-  return `${Number(n).toFixed(1)}%`;
+  // R-114 (Kevin 2026-09-17). Two decimals. See formatting.js.
+  return `${Number(n).toFixed(2)}%`;
 }
 
 // Variance cell renderer. Positive delta means over/above.

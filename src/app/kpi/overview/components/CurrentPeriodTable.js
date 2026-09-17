@@ -759,7 +759,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
           <div className="kpi-ov-cp-perk-e">{cardsLabel} · the period</div>
           <div className="kpi-ov-cp-perk-v">{dollar0(costTotal)}</div>
           <div className="kpi-ov-cp-perk-s">
-            {revenueTotal > 0 ? `${(costTotal / revenueTotal * 100).toFixed(1)}% of planned revenue` : "planned"}
+            {revenueTotal > 0 ? `${(costTotal / revenueTotal * 100).toFixed(2)}% of planned revenue` : "planned"}
           </div>
         </div>
         <div className="kpi-ov-cp-perk-k">

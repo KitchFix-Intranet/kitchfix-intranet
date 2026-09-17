@@ -56,11 +56,15 @@ export function formatDayLabel(iso) {
   return `${wd} ${m[2]}/${m[3]}`;
 }
 
-// One-decimal percent. Handles null (returns null) so callers can
-// distinguish "no data" from "0.0%".
+// R-114 (Kevin 2026-09-17). Two-decimal percent. One decimal made
+// computed figures look invented - $75,000 next to 60.0% read as
+// hardcoded when the true total was $74,999.06 and the true ratio
+// 59.98%. Precision is what makes the figure legible as a
+// calculation. Handles null (returns null) so callers can
+// distinguish "no data" from "0.00%".
 export function formatPct(n) {
   if (n == null || Number.isNaN(n)) return null;
-  return Number(n).toFixed(1) + "%";
+  return Number(n).toFixed(2) + "%";
 }
 
 // Percent of A over B. Returns null if B is null/undefined/zero -
@@ -90,14 +94,17 @@ export function gapDollars(delta, goodWord, badWord) {
   return `${s} ${d >= 0 ? goodWord : badWord}`;
 }
 
-// Percentage-point gap: absolute value with one decimal + direction.
-// Under-0.05pp reads "on target" (below rounding threshold at one
-// decimal). Never "points" (R-24).
+// Percentage-point gap: absolute value with two decimals + direction.
+// Under-0.005pp reads "on target" (below rounding threshold at two
+// decimals). Never "points" (R-24).
+// R-114 (Kevin 2026-09-17). Two decimals to match `formatPct` -
+// gap and pct render alongside on the same card; a mixed precision
+// makes one figure read as approximate.
 export function gapPoints(deltaPct, goodWord, badWord) {
   if (deltaPct == null || Number.isNaN(deltaPct)) return null;
   const d = Number(deltaPct);
-  if (Math.abs(d) < 0.05) return "on target";
-  return `${Math.abs(d).toFixed(1)}% ${d >= 0 ? goodWord : badWord}`;
+  if (Math.abs(d) < 0.005) return "on target";
+  return `${Math.abs(d).toFixed(2)}% ${d >= 0 ? goodWord : badWord}`;
 }
 
 // Axis-specific gap helpers. The axis triple names the direction
