@@ -68,6 +68,7 @@ import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { NOTIFICATION_TYPES } from "@/lib/billing/recipients";
 import { fireN3 } from "@/lib/billing/chaseNotifications";
 import { resolveChasePersonName } from "@/lib/billing/chasePersonName";
+import { getSalariedManagerEmails, getSalariedManagerEmailsBatch } from "@/lib/billing/getSalariedManagerEmails";
 
 export const dynamic    = "force-dynamic";
 export const maxDuration = 60;
@@ -242,9 +243,16 @@ async function acceptanceMatrix(request) {
   const STAGES = [NOTIFICATION_TYPES.N3_REMINDER, NOTIFICATION_TYPES.N3_URGENT];
 
   async function ctxOf(accountKey) {
-    const [acc, map] = await Promise.all([
+    // salaried derived live from `people` (Kevin ruling 2026-09-17,
+    // see src/lib/billing/getSalariedManagerEmails.js). The
+    // sc_qbo_account_map.salaried_manager_emails column stays in
+    // schema through this PR and drops as a follow-on after this
+    // soaks. Fetching people-derived here and the account map in
+    // parallel keeps the round-trip count flat.
+    const [acc, map, salaried] = await Promise.all([
       supa.from("accounts").select("team_key, timezone, region").eq("team_key", accountKey).maybeSingle(),
-      supa.from("sc_qbo_account_map").select("account_key, qbo_mode, cadence, salaried_manager_emails, rdo_email").eq("account_key", accountKey).maybeSingle(),
+      supa.from("sc_qbo_account_map").select("account_key, qbo_mode, cadence, rdo_email").eq("account_key", accountKey).maybeSingle(),
+      getSalariedManagerEmails(supa, accountKey),
     ]);
     const rdoDerived = REGIONAL_DIRECTORS[acc.data?.region] || null;
     return {
@@ -252,7 +260,7 @@ async function acceptanceMatrix(request) {
       region:   acc.data?.region,
       qboMode:  map.data?.qbo_mode,
       cadence:  map.data?.cadence,
-      salaried: map.data?.salaried_manager_emails || [],
+      salaried,
       rdoEmail: map.data?.rdo_email || rdoDerived || null,
     };
   }
@@ -374,11 +382,14 @@ export async function GET(request) {
   const perMealList = [...PER_MEAL_BILLING_ACCOUNTS]
     .filter(k => !forcedAccount || k === forcedAccount);
 
-  const [accountsRes, mapRes] = await Promise.all([
+  const [accountsRes, mapRes, salariedByKey] = await Promise.all([
     supa.from("accounts").select("team_key, timezone, region").in("team_key", perMealList),
     supa.from("sc_qbo_account_map")
-      .select("account_key, qbo_mode, cadence, salaried_manager_emails, rdo_email")
+      .select("account_key, qbo_mode, cadence, rdo_email")
       .in("account_key", perMealList),
+    // Derived live from `people` (Kevin ruling 2026-09-17). Same
+    // predicate + ordering as scWeekFinalize's per-account call.
+    getSalariedManagerEmailsBatch(supa, perMealList),
   ]);
   if (accountsRes.error) return NextResponse.json({ ok: false, phase: "accounts", error: accountsRes.error.message }, { status: 500 });
   if (mapRes.error)      return NextResponse.json({ ok: false, phase: "sc_qbo_account_map", error: mapRes.error.message }, { status: 500 });
@@ -468,11 +479,12 @@ export async function GET(request) {
     // catches duplicates; if RETURNING is empty, another cron worker
     // already claimed this send - skip.
     const isTest = map.qbo_mode === "test";
+    const salaried = salariedByKey.get(accountKey) || [];
     if (dryRun) {
       // Recipient headcount for the log: test-mode collapses to Kevin;
       // live-mode reminder = salaried only, urgent = salaried + Sebastian
       // + Kevin + RDO (deduped later inside resolveRecipients).
-      const salariedCount = (map.salaried_manager_emails || []).length;
+      const salariedCount = salaried.length;
       const liveToCount = stage === NOTIFICATION_TYPES.N3_URGENT
         ? salariedCount + 2 + (rdoEmail ? 1 : 0)
         : salariedCount;
@@ -517,7 +529,7 @@ export async function GET(request) {
       accountKey,
       weekStart,
       weekEnd,
-      salariedManagerEmails: map.salaried_manager_emails || [],
+      salariedManagerEmails: salaried,
     });
     const rdoFirstName = stage === NOTIFICATION_TYPES.N3_URGENT
       ? await rdoFirstNameFor(supa, rdoEmail)
@@ -532,7 +544,7 @@ export async function GET(request) {
         complete, total, missingDates: missing,
         scWeekLink: scWeekLinkFor(accountKey, weekStart),
         accountMap: {
-          salariedManagerEmails: map.salaried_manager_emails || [],
+          salariedManagerEmails: salaried,
           rdoEmail,
         },
         chasedPersonName: chasedPerson?.displayName || null,
