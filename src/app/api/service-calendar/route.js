@@ -424,13 +424,28 @@ export async function GET(request) {
       if (email) {
         try {
           const supa = getServiceClient();
-          // Both queries use the same email match the route already
-          // applies for the SC's user identification - no new auth path.
-          const [acctRes, rolesRes] = await Promise.all([
+          // sc-46 (2026-09-17): sc_landing_override wins over
+          // user_accounts_derived when a row exists. Kevin ruling:
+          // "an explicit row exists because someone decided it, and
+          // a derived default should never beat a deliberate
+          // choice." Runs in parallel with the existing two reads;
+          // adds one round trip that touches a two-row table.
+          //
+          // Case discipline. sc_landing_override.email is CHECK
+          // (email = lower(email)) at the schema level, so a canonical
+          // .eq() on lowercased input is deterministic. The two older
+          // reads keep .ilike() because their tables (user_accounts_-
+          // derived, contacts) union sources that store mixed casing;
+          // sc_landing_override is fresh and has no such source.
+          const emailLower = String(email).trim().toLowerCase();
+          const [overrideRes, acctRes, rolesRes] = await Promise.all([
+            supa.from("sc_landing_override").select("account_key").eq("email", emailLower).limit(1),
             supa.from("user_accounts_derived").select("account").ilike("email", email).limit(1),
             supa.from("contacts").select("role").ilike("email", email),
           ]);
-          if (!acctRes.error && acctRes.data?.[0]?.account) {
+          if (!overrideRes.error && overrideRes.data?.[0]?.account_key) {
+            defaultAccount = overrideRes.data[0].account_key;
+          } else if (!acctRes.error && acctRes.data?.[0]?.account) {
             defaultAccount = acctRes.data[0].account;
           }
           if (!rolesRes.error && rolesRes.data?.length) {
@@ -439,9 +454,8 @@ export async function GET(request) {
               .filter(r => r != null && String(r).trim() !== "");
           }
         } catch {
-          // user_accounts_derived / contacts missing or query failed -
-          // swallow. Frontend falls back to CIN-AZ + Season default
-          // landing.
+          // Any of the three reads missing or failing - swallow.
+          // Frontend falls back to CIN-AZ + Season default landing.
         }
       }
       return NextResponse.json({ success: true, accounts, defaultAccount, roles });
