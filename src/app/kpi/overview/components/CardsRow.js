@@ -64,7 +64,8 @@ function fmtMoney(n) {
 }
 function fmtPct(n) {
   if (n == null || Number.isNaN(Number(n))) return null;
-  return `${Number(n).toFixed(1)}%`;
+  // R-114 (Kevin 2026-09-17). Two decimals. See formatting.js.
+  return `${Number(n).toFixed(2)}%`;
 }
 
 // Kevin post-1060 sweep (2026-09-09). Variance footer under each of
@@ -278,25 +279,52 @@ const HELP_BODIES = {
 // COGS card. Off the card face; concept still load-bearing (R-45)
 // because it explains why Adjusted Budget in the tables differs from
 // the plan. Moved into the COGS tooltip with the live figure.
-function cogsTooltip({ isManagementFee, envelopeDelta, hasTarget }) {
+//
+// R-114 (Kevin 2026-09-17). The Plan row also lives here now - Plan
+// multiplies against nothing on a closed period once salary is held
+// fixed, so it moves off the card face into the ? tooltip where it
+// stays referenceable. Renders "Plan for P{N} - $X · YY.YY%" using
+// budget_full_period_display + target_pct_display.
+function cogsTooltip({ isManagementFee, envelopeDelta, hasTarget, planText, planPeriodLabel }) {
   const base = isManagementFee ? HELP_BODIES.cogs_base_fee : HELP_BODIES.cogs_base_sc;
-  if (isManagementFee || !hasTarget || envelopeDelta == null || Math.abs(envelopeDelta) < 1) {
-    return <p>{base}</p>;
+  const parts = [<p key="base">{base}</p>];
+  if (planText) {
+    parts.push(
+      <p key="plan" style={{ marginTop: 8 }} data-kpi-ov="cogs-tip-plan">
+        <b>Plan{planPeriodLabel ? ` for ${planPeriodLabel}` : ""}</b> — what the year's budget set for this period, before revenue moved. {planText}
+      </p>
+    );
   }
-  // envelope_delta sign: negative = revenue ran ABOVE plan (envelope
-  // is BIGGER); positive = revenue ran BELOW plan (envelope is
-  // SMALLER). See resolver.js envelopeDelta.
-  const bigger = envelopeDelta < 0;
-  const magnitude = fmtMoney(Math.abs(envelopeDelta));
-  const sentence = bigger
-    ? `Adjusted budget is what your target percent buys at the revenue you actually made. Revenue is running above plan, so the envelope is ${magnitude} more than the original budget allowed.`
-    : `Adjusted budget is what your target percent buys at the revenue you actually made. Revenue is running below plan, so the envelope is ${magnitude} less than the original budget allowed.`;
-  return (
-    <>
-      <p>{base}</p>
-      <p style={{ marginTop: 8 }} data-kpi-ov="cogs-tip-envelope">{sentence}</p>
-    </>
-  );
+  if (!isManagementFee && hasTarget && envelopeDelta != null && Math.abs(envelopeDelta) >= 1) {
+    // envelope_delta sign: negative = revenue ran ABOVE plan (envelope
+    // is BIGGER); positive = revenue ran BELOW plan (envelope is
+    // SMALLER). See resolver.js envelopeDelta.
+    const bigger = envelopeDelta < 0;
+    const magnitude = fmtMoney(Math.abs(envelopeDelta));
+    const sentence = bigger
+      ? `Adjusted is what your target percent buys at the revenue you actually made. Revenue is running above plan, so the envelope is ${magnitude} more than the original budget allowed.`
+      : `Adjusted is what your target percent buys at the revenue you actually made. Revenue is running below plan, so the envelope is ${magnitude} less than the original budget allowed.`;
+    parts.push(
+      <p key="env" style={{ marginTop: 8 }} data-kpi-ov="cogs-tip-envelope">{sentence}</p>
+    );
+  }
+  return <>{parts}</>;
+}
+
+// R-114 (Kevin 2026-09-17). Gross-margin tooltip gains the same Plan
+// block for symmetry with the cost card. Plan on the margin card is
+// (revenue plan - cogs plan) - what the year's budget expected the
+// margin dollars to be for this period, before revenue moved.
+function gmTooltip({ planText, planPeriodLabel }) {
+  const parts = [<p key="base">{HELP_BODIES.gross_margin}</p>];
+  if (planText) {
+    parts.push(
+      <p key="plan" style={{ marginTop: 8 }} data-kpi-ov="gm-tip-plan">
+        <b>Plan{planPeriodLabel ? ` for ${planPeriodLabel}` : ""}</b> — what the year's budget set for this period, before revenue moved. {planText}
+      </p>
+    );
+  }
+  return <>{parts}</>;
 }
 
 // Kevin 2026-09-03: full-year budget was the "$1,921,966" number on
@@ -524,6 +552,12 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
   const actualText = card.hero_actual_display;
   const targetText = card.budget_at_this_revenue_display;
   const actualPctText = card.pct_of_revenue_display;
+  // R-114 (Kevin 2026-09-17). Percent beside Adjusted is adjusted /
+  // actual_revenue, not the plan ratio. Fall back to
+  // `target_pct_display` on ranges that don't compute the adjusted
+  // percent (e.g. This period held state, where the resolver skips
+  // the recompute block). Plan-ratio value now lives in the ? tip.
+  const adjustedPctText = card.adjusted_pct_of_revenue_display || card.target_pct_display;
   const targetPctText = card.target_pct_display;
   // Kevin R-94 (2026-09-09): when the period is closed but not yet
   // finance-verified, cost + margin cards read "Provisional" in AMBER
@@ -538,13 +572,23 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
     : card.pill?.tone === "bad" ? "kpi-ov-bad"
     : "";
 
+  // R-114 (Kevin 2026-09-17). Plan text for the tooltip - "$X · YY.YY%".
+  // budget_full_period_display already ships on both COGS and GM
+  // cards; target_pct_display carries the plan ratio. Null when
+  // either half is absent - the tooltip renders base copy alone.
+  const planText = (card.budget_full_period_display && card.target_pct_display)
+    ? `${card.budget_full_period_display} · ${card.target_pct_display}`
+    : (card.budget_full_period_display || null);
+  const planPeriodLabel = range?.period_no != null ? `P${range.period_no}` : null;
   const helpBody = isCogs
     ? cogsTooltip({
         isManagementFee,
         envelopeDelta: card.envelope_delta,
         hasTarget,
+        planText,
+        planPeriodLabel,
       })
-    : <p>{HELP_BODIES.gross_margin}</p>;
+    : gmTooltip({ planText, planPeriodLabel });
 
   return (
     <div className={`kpi-ov-card ${isCogs ? "kpi-ov-card-cogs" : "kpi-ov-card-gm"}${awaiting ? " kpi-ov-card-awaiting" : ""}`} data-kpi-ov={`card-${kind}`}>
@@ -611,30 +655,23 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
                 )}
               </span>
             </div>
-            {/* Kevin CC prompt 2026-09-11. Card gains a Plan row -
-                raw sum of period budgets (no %) - between Actual
-                and Adjusted. Retires the single "Target" row that
-                showed the blended figure. `budget_full_period`
-                already ships on the payload for both COGS and GM
-                cards. Renders only when the payload carries a
-                Plan dollar. */}
-            {card.budget_full_period_display && (
-              <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-plan">
-                <span className="kpi-ov-pair-k">Plan</span>
-                <span className="kpi-ov-pair-v kpi-ov-num">
-                  {card.budget_full_period_display}
-                </span>
-              </div>
-            )}
+            {/* R-114 (Kevin 2026-09-17). Plan row retires from the
+                card face - it multiplies against nothing on a
+                closed period once salary is held fixed. It survives
+                inside the ? tooltip (cogsTooltip / gmTooltip below)
+                which now names the Plan dollar and the plan ratio
+                as a reference. Adjusted becomes the sole reference
+                row and reads navy (not grey), the same weight as
+                Actual. */}
             <div className="kpi-ov-pair-rule" aria-hidden="true" />
-            <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
+            <div className="kpi-ov-pair kpi-ov-pair-ref kpi-ov-pair-adj" data-kpi-ov="card-reference">
               <span className="kpi-ov-pair-k">Adjusted</span>
-              <span className="kpi-ov-pair-v kpi-ov-num">
+              <span className="kpi-ov-pair-v kpi-ov-num" data-kpi-ov={`target-${kind}`}>
                 {hasTarget ? (
                   <>
                     {targetText || "—"}
-                    {targetPctText && (
-                      <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-pct`}>{targetPctText}</small>
+                    {adjustedPctText && (
+                      <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-pct`}>{adjustedPctText}</small>
                     )}
                   </>
                 ) : <span className="kpi-ov-nb">—</span>}

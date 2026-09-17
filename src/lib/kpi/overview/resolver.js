@@ -1765,13 +1765,18 @@ export async function resolveOverview({
         // cost.
         if (gmPctActual == null && grossMargin != null) return { label: "cost, no revenue yet", tone: "neutral" };
         if (gmPctActual == null || gmPctBudget == null) return { label: "No data", tone: "neutral" };
-        // Kevin post-1060 sweep (2026-09-09): pill drops the percent
-        // figure. Cost + margin cards now carry a variance footer
-        // with dollar arrow/amount; the pill scans identically to
-        // revenue's ("above projection" / "below projection") and
-        // labor's ("Over target" / "On target"). Prior form:
-        // "0.7% AHEAD" / "0.7% BEHIND". New form: state words only.
-        return gmPctActual >= gmPctBudget
+        // R-114 (Kevin 2026-09-17). Anchor moves from plan-ratio
+        // (gmPctActual vs gmPctBudget) to dollar comparison against
+        // gmAdjustedFromLines - same reference the footer and the
+        // Adjusted row use. On P9 TBJ - FL the two anchors disagreed:
+        // 40.24% vs 40.02% said AHEAD while $53,154 vs $57,079 said
+        // BEHIND. Card contradicting itself. The recompute below at
+        // ~L3665 sets the final value once gmAdjustedFromLines is
+        // populated; this build-time value will always fall through
+        // to "No data" (gmAdjustedFromLines is null here) which is
+        // fine - the recompute is authoritative.
+        if (grossMargin == null || gmAdjustedFromLines == null) return { label: "No data", tone: "neutral" };
+        return grossMargin >= gmAdjustedFromLines
           ? { label: "ahead of target", tone: "good" }
           : { label: "behind target", tone: "bad" };
       })(),
@@ -3663,6 +3668,44 @@ export async function resolveOverview({
     if (gmCard) {
       gmCard.budget_at_this_revenue = gmAdjustedFromLines;
       gmCard.budget_at_this_revenue_display = gmAdjustedFromLines != null ? formatMoneyWhole(gmAdjustedFromLines) : null;
+      // R-114 (Kevin 2026-09-17). GM pill recompute on the same
+      // dollar anchor as the footer. Prior build-time pill used
+      // plan-ratio (gmPctActual vs gmPctBudget) and could disagree
+      // with the footer on periods where salary is held fixed - P9
+      // TBJ - FL rendered "ahead of target" over a footer saying
+      // "behind budget $3,927". Mirrors the COGS recompute shape
+      // above so both cards share one anchor.
+      if (!has_target) {
+        gmCard.pill = { label: "No target", tone: "neutral" };
+      } else if (isRunningSinglePeriod) {
+        gmCard.pill = { label: "Waiting on cost", tone: "neutral" };
+      } else if (grossMargin == null) {
+        gmCard.pill = { label: "No data", tone: "neutral" };
+      } else if (gmAdjustedFromLines == null) {
+        gmCard.pill = { label: "cost, no revenue yet", tone: "neutral" };
+      } else {
+        gmCard.pill = (grossMargin >= gmAdjustedFromLines)
+          ? { label: "ahead of target", tone: "good" }
+          : { label: "behind target", tone: "bad" };
+      }
+    }
+    // R-114 (Kevin 2026-09-17). Percent beside "Adjusted" on the
+    // COGS + GM cards is that dollar over actual revenue, never the
+    // plan ratio. Prior card rendered `target_pct_display` (plan
+    // ratio) which produced 60.0% next to $75,000 on TBJ - FL P9 -
+    // reading 59.76% spent as on target when the true allowed
+    // ratio was 56.78%. New field derives at this point because
+    // both `cogsAdjustedFromLines` / `gmAdjustedFromLines` and
+    // `totalRevenue` are known.
+    if (cogsCard) {
+      const p = pctOf(cogsAdjustedFromLines, totalRevenue);
+      cogsCard.adjusted_pct_of_revenue = p;
+      cogsCard.adjusted_pct_of_revenue_display = p != null ? formatPct(p) : null;
+    }
+    if (gmCard) {
+      const p = pctOf(gmAdjustedFromLines, totalRevenue);
+      gmCard.adjusted_pct_of_revenue = p;
+      gmCard.adjusted_pct_of_revenue_display = p != null ? formatPct(p) : null;
     }
     // Kevin CC prompt 2026-09-14 (prereq C · defect 2). Revenue
     // card's "P{N} projection" row was reading budget_full_period

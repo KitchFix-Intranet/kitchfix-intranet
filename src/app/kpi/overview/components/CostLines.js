@@ -55,7 +55,8 @@ function fmtActual(n) {
 }
 function fmtPct(n) {
   if (n == null || Number.isNaN(Number(n))) return null;
-  return `${Number(n).toFixed(1)}%`;
+  // R-114 (Kevin 2026-09-17). Two decimals. See formatting.js.
+  return `${Number(n).toFixed(2)}%`;
 }
 function gapDollars(delta, goodWord, badWord) {
   const abs = fmtMoney(Math.abs(delta));
@@ -130,7 +131,7 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
     : null;
   const over = varianceVsBatr != null && varianceVsBatr > 0;
   const varPctText = row.variance_pct != null
-    ? `${Math.abs(Number(row.variance_pct)).toFixed(1)}% ${row.variance_pct <= 0 ? "under" : "over"}`
+    ? `${Math.abs(Number(row.variance_pct)).toFixed(2)}% ${row.variance_pct <= 0 ? "under" : "over"}`
     : null;
   const varianceText = varianceVsBatr != null
     ? gapDollars(varianceVsBatr, "under", "over")
@@ -306,11 +307,20 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel, showPeriodCols }) {
   const totalBatr = sumBatr > 0 ? fmtMoney(sumBatr) : null;
   const totalVarianceVsBatr = sumBatr > 0 ? sumActualScored - sumBatr : null;
   const cogsPct = cogsCard?.pct_of_revenue;
-  const cogsTargetPct = cogsCard?.target_pct_of_revenue;
+  // R-114 (Kevin 2026-09-17). Total-row "Target %" column shows the
+  // percent beside the adjusted dollar. That percent is adjusted /
+  // actual_revenue, not the plan ratio. Per-line rows above still
+  // print their plan ratio (correct per R-105 - target is plan for
+  // lines) but on the total, adjusted is not plan × revenue once
+  // salary is held fixed, so beside `sum(adjusted)` the honest
+  // percent is `sum(adjusted) / revenue`. Same fix Kevin applied to
+  // the card face.
+  const cogsAdjustedPct = cogsCard?.adjusted_pct_of_revenue;
+  const cogsTargetPct = cogsAdjustedPct;
   const varPct = (cogsPct != null && cogsTargetPct != null) ? (cogsPct - cogsTargetPct) : null;
   const over = totalVarianceVsBatr != null && totalVarianceVsBatr > 0;
   const varPctText = varPct != null
-    ? `${Math.abs(varPct).toFixed(1)}% ${varPct <= 0 ? "under" : "over"}`
+    ? `${Math.abs(varPct).toFixed(2)}% ${varPct <= 0 ? "under" : "over"}`
     : null;
   const varianceText = totalVarianceVsBatr != null ? gapDollars(totalVarianceVsBatr, "under", "over") : null;
   return (
@@ -463,7 +473,7 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
             </span>
             {delta !== 0 && pct != null && (
               <span className={`kpi-ov-envrow-chg ${envToneCls}`} data-kpi-ov="cost-envelope-delta">
-                {delta > 0 ? "▲" : "▼"} {fmtMoney(Math.abs(delta))} · {pct >= 0 ? pct.toFixed(1) : Math.abs(pct).toFixed(1)}%
+                {delta > 0 ? "▲" : "▼"} {fmtMoney(Math.abs(delta))} · {pct >= 0 ? pct.toFixed(2) : Math.abs(pct).toFixed(2)}%
               </span>
             )}
             {srcClause && (

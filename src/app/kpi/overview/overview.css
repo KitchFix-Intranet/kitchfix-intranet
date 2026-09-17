@@ -1280,6 +1280,20 @@
 .kpi-app .kpi-ov-pair-ref .kpi-ov-pair-k {
   color: var(--n-600);
 }
+/* R-114 (Kevin 2026-09-17). Adjusted renders navy - the same weight
+   family as Actual above it. Prior treatment used muted grey which
+   read as "unconfirmed", the same treatment as the revenue card's
+   Projection row. Adjusted is a calculated figure and the verdict
+   is struck from it; it is neither an estimate nor provisional.
+   Only Revenue's Projection row keeps muted grey (still an
+   estimate). Applies to COGS + GM cards on every range. */
+.kpi-app .kpi-ov-pair-ref.kpi-ov-pair-adj .kpi-ov-pair-v {
+  color: var(--n-900);
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-pair-ref.kpi-ov-pair-adj .kpi-ov-pair-sub {
+  color: var(--n-900);
+}
 /* Kevin ruling final-presentation (2026-09-03) item 2: COGS + GM
    cards carry a small figure beside the primary. Kevin post-1060
    sweep (2026-09-09): the sub INHERITS the parent's colour on
