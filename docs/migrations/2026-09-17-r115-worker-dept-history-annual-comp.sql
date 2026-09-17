@@ -19,10 +19,27 @@
 -- Not a synthetic Rippling snapshot. This is a spell-scoped rate
 -- override on the same table that already scopes spells by account.
 
+-- Idempotency posture (Kevin catch 2026-09-17):
+--
+--   ADD COLUMN IF NOT EXISTS  -  re-run does not abort on the schema
+--                                change if the column already exists.
+--   INSERT ... SELECT ... WHERE NOT EXISTS  -  guards on the DATA,
+--                                not on a unique constraint that
+--                                does not exist on this table.
+--
+-- worker_dept_history's only unique constraint today is the auto-
+-- generated PK on `id`. There is no unique index on
+-- (worker_id, effective_from), so an ON CONFLICT DO NOTHING clause
+-- has nothing to conflict against and would silently insert a
+-- duplicate row on every re-run. Follow-up backlog entry
+-- docs/backlog/worker-dept-history-unique-index.md tracks adding
+-- one; until it lands, every seed migration on this table must use
+-- the WHERE NOT EXISTS pattern below.
+
 BEGIN;
 
 ALTER TABLE worker_dept_history
-  ADD COLUMN annual_comp numeric NULL;
+  ADD COLUMN IF NOT EXISTS annual_comp numeric NULL;
 
 COMMENT ON COLUMN worker_dept_history.annual_comp IS
   'Annual compensation to use for this spell instead of the Rippling comp record. NULL means the loader falls through to rippling_raw_compensations (raise-restatement rule). Kevin ruling 2026-09-17.';
@@ -36,11 +53,15 @@ COMMENT ON COLUMN worker_dept_history.annual_comp IS
 -- TXR - AZ without any change to Rippling data.
 INSERT INTO worker_dept_history
   (worker_id, effective_from, end_date, account_key, source, annual_comp, note)
-VALUES
-  ('619534b78b87cf5e27f17c00', '2025-12-29', '2026-05-03', 'TXR - AZ',
-   'kevin_manual', 92520,
-   'Exec Chef TXR - AZ until the RDO West move 2026-05-04')
-ON CONFLICT DO NOTHING;
+SELECT '619534b78b87cf5e27f17c00', '2025-12-29', '2026-05-03', 'TXR - AZ',
+       'kevin_manual', 92520,
+       'Exec Chef TXR - AZ until the RDO West move 2026-05-04'
+WHERE NOT EXISTS (
+  SELECT 1 FROM worker_dept_history
+  WHERE worker_id = '619534b78b87cf5e27f17c00'
+    AND account_key = 'TXR - AZ'
+    AND effective_from = '2025-12-29'
+);
 
 COMMIT;
 
