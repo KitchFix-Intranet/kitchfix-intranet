@@ -7,6 +7,24 @@
 
 ---
 
+## Incident record
+
+### 2026-09-17 · Overview 500 on every range except Next period · FY2026 undefined
+
+**Symptom:** `/api/kpi/overview` returned 500 with `resolve_overview: FY2026 is not defined` on Current year / Last period / Current period for every account. Next period (which has no salary actuals to shape) returned 200. Duration ~10 minutes; hotfix in #1169.
+
+**Root cause:** #1166 (`fin2027 pr-a · kpi/labor year-safety fix`) deleted the top-level `const FY2026 = 2026` in `src/lib/labor/salaryBoard.js` and parameterised `load3100_2Budgets` with a `fiscalYear = 2026` default, but missed another use of the bare identifier at line 116 inside `shapeSalaryRow`. Overview's `buildBoard` calls the shape function on every range with salary actuals, so every affected range 500'd.
+
+**Why nothing caught it:**
+- Playwright suite has zero coverage for `/api/kpi/overview` (grep of `tests/*.spec.ts` for `overview`, `resolve_overview`, `salaryBoard`, `shapeSalaryRow`, `salary` = empty).
+- Nav matrix (required) stubs every API call and only exercises the service-calendar navigation state machine.
+- Preview smoke (required) hits `GET $URL/` and `GET $URL/service-calendar` — literally a two-URL liveness check. It cannot see a 500 on any other route.
+- Type check / build is not runtime-safe: `FY2026` is a bare identifier resolved at runtime, not import time. `next build` succeeded.
+
+**Lesson:** the "Nav matrix" name creates a false sense of coverage. Green on it means the SC navigation state machine works with stubbed APIs. It does not mean any other route is even loadable. When adding a smoke check for a load-bearing route, model it on preview-smoke (a real HTTP call against the preview URL) not nav-matrix (stubbed Playwright). A single `curl` against `/api/kpi/overview?account=<known>&range=period:<N>` in preview smoke would have caught this in 3 seconds.
+
+---
+
 ## Debugging method
 
 ### After the second failed fix, stop reasoning and instrument
