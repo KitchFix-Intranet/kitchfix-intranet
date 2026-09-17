@@ -35,6 +35,7 @@ Each entry: `account · line · range · the gap · cause · status · where the
 | TBJ - FL · TBR - FL | 3400.1 P9 · 3500.1 P1 · 3500.5 P9 | LP / CY | $150 + $96.33 + $1,000 finance-only amounts | Not on bill.com, not on Rippling card. | fixed 2026-09-17 | R-114 follow-up (#1170) · `docs/migrations/2026-09-17-r114-followup-missing-finance-line-actuals.sql` |
 | TBR - FL | 3500.3 Leased vehicle | CY | +$1,761.88 (Enterprise Rent A Car 08/13 duplicate) | Rippling pending/settled pair captured twice · `dup_rippling` | fixed 2026-09-17 | `docs/RECONCILIATION.md` (this file, below) |
 | TBJ - FL | 3400.5 Linen | CY | +$2,823.39 (10× Cintas 04/06/26 unpaid duplicates) | bill.com duplicates on unpaid rows; one paid row is the real week · `dup_billcom` | fixed 2026-09-17 | `docs/RECONCILIATION.md` (this file, below) |
+| TXR - AZ | 3100.2 Salary (Anna Hughes) | LP · CY | +$6,730.78 (7 weeks 2026-07-20..2026-08-31) | Anna was hourly through 2026-09-04; Rippling classifier flipped her to salaried starting 2026-07-20 while she still had hourly hours in those weeks. Loader now gates: a worker with hourly hours in a week is not salaried that week. | fixed 2026-09-17 | Anna PR · `scripts/derive_salary_actuals.mjs` (hourly-week gate) + `scripts/probes/_probe_salary_hourly_overlap.mjs` (standing gate) |
 
 ## Open
 
