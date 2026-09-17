@@ -430,8 +430,16 @@ export async function GET(request) {
           // a derived default should never beat a deliberate
           // choice." Runs in parallel with the existing two reads;
           // adds one round trip that touches a two-row table.
+          //
+          // Case discipline. sc_landing_override.email is CHECK
+          // (email = lower(email)) at the schema level, so a canonical
+          // .eq() on lowercased input is deterministic. The two older
+          // reads keep .ilike() because their tables (user_accounts_-
+          // derived, contacts) union sources that store mixed casing;
+          // sc_landing_override is fresh and has no such source.
+          const emailLower = String(email).trim().toLowerCase();
           const [overrideRes, acctRes, rolesRes] = await Promise.all([
-            supa.from("sc_landing_override").select("account_key").ilike("email", email).limit(1),
+            supa.from("sc_landing_override").select("account_key").eq("email", emailLower).limit(1),
             supa.from("user_accounts_derived").select("account").ilike("email", email).limit(1),
             supa.from("contacts").select("role").ilike("email", email),
           ]);

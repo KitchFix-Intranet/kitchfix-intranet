@@ -36,6 +36,21 @@
 -- defaultAccount. When absent, falls back to
 -- user_accounts_derived.account as today.
 --
+-- CASE INVARIANT (Kevin ruling 2026-09-17, follow-up on v1)
+-- v1 paired a case-sensitive TEXT PK with an ILIKE handler read.
+-- That would silently accept R.Moore@ and r.moore@ as separate
+-- rows AND match both on read, returning an arbitrary one at
+-- landing time - the silent-failure shape recent PRs have been
+-- full of. Fix: normalize on write, match exactly on read.
+--   1. CHECK (email = lower(email)) enforces the invariant at the
+--      DB layer. Impossible to insert R.Moore@ even from Studio.
+--   2. Seed values are lowercase.
+--   3. The handler lookup uses .eq() on lowercased input, not
+--      .ilike(). See the sc-46 code change in the same PR.
+-- One canonical form, one row, deterministic. The other tables
+-- that use ILIKE (user_accounts_derived, contacts) do so precisely
+-- because they lack this guarantee across their union sources.
+--
 -- SEED
 -- Two rows for the two RDOs. Email + account_key + reason confirmed
 -- by 2026-09-17 probe: both are people ACTIVE, CORP, salaried,
@@ -80,7 +95,8 @@ ORDER BY team_key;
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS sc_landing_override (
-  email        TEXT NOT NULL PRIMARY KEY,
+  email        TEXT NOT NULL PRIMARY KEY
+               CHECK (email = lower(email)),
   account_key  TEXT NOT NULL REFERENCES accounts(team_key),
   reason       TEXT NOT NULL,
   added_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -91,7 +107,7 @@ COMMENT ON TABLE sc_landing_override IS
   'Per-email SC landing account override. Read by the sc-accounts handler; when an email has a row here, its account_key wins over user_accounts_derived for defaultAccount resolution. Used for RDOs whose people.account_key is CORP but who should land on an operational account. sc-46 (2026-09-17).';
 
 COMMENT ON COLUMN sc_landing_override.email IS
-  'Case-preserving TEXT match; sc-accounts handler uses ILIKE for parity with the user_accounts_derived read.';
+  'Canonical lower-case only, enforced by CHECK (email = lower(email)). The sc-accounts handler reads with .eq() on lowercased input, not .ilike() - one casing, one row, deterministic. Studio inserts must supply lower(email).';
 
 COMMENT ON COLUMN sc_landing_override.reason IS
   'Human note (never displayed) explaining why this override exists. Studio-maintained.';
@@ -118,20 +134,36 @@ WHERE table_schema = 'public'
   AND table_name   = 'sc_landing_override'
 ORDER BY ordinal_position;
 
--- Confirm the two seed rows landed with the correct account_key.
+-- Confirm the lowercase CHECK constraint exists. Expected: one row,
+-- constraint_name ending in _check or matching sc_landing_override_
+-- email_check depending on the deferred-name policy.
+SELECT conname, pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE conrelid = 'sc_landing_override'::regclass
+  AND contype  = 'c'
+ORDER BY conname;
+
+-- Confirm the two seed rows landed with the correct account_key
+-- AND satisfy the lowercase invariant (email = lower(email)).
 -- Expected:
 --   r.moore@kitchfix.com -> CIN - AZ
 --   s.lynch@kitchfix.com -> TBJ - FL
-SELECT email, account_key, reason, added_by
+--   both rows: email_is_lower = true
+SELECT email, account_key, reason, added_by,
+       (email = lower(email)) AS email_is_lower
 FROM sc_landing_override
 ORDER BY email;
 
 -- Rows Kevin will add later (via Studio) look like:
 --   INSERT INTO sc_landing_override (email, account_key, reason, added_by)
---   VALUES ('some.email@kitchfix.com', 'ACCOUNT - KEY', 'human reason',
---           'kevin@studio-YYYY-MM-DD')
+--   VALUES (lower('some.email@kitchfix.com'), 'ACCOUNT - KEY',
+--           'human reason', 'kevin@studio-YYYY-MM-DD')
 --   ON CONFLICT (email) DO UPDATE
 --     SET account_key = EXCLUDED.account_key,
 --         reason      = EXCLUDED.reason,
 --         added_by    = EXCLUDED.added_by,
 --         added_at    = now();
+--
+-- The lower() wrap on the literal is belt-and-suspenders; the CHECK
+-- constraint would reject any non-lowercase value with a hard error
+-- naming the row. Studio-typed emails should be lowercase already.
