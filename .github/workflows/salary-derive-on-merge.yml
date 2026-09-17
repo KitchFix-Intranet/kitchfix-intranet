@@ -1,0 +1,119 @@
+name: salary derive on merge
+
+# Kevin ruling 2026-09-17. Auto-invoke the salary derivation whenever a
+# change to the loader itself, its resolver, or its shared dependencies
+# lands on main. Closes the "merged but not effective until 07:00 UTC"
+# gap that let two same-day loader defects (Anna Hughes gate + raise
+# restatement) sit stale between merge and cron.
+#
+# Scope is deliberately narrow. This is NOT a general "run everything on
+# every merge" workflow:
+#
+#   Runs derive_salary_actuals.mjs --window=fytd.
+#   Does NOT walk the Rippling API. raw_* tables are unchanged by any
+#     merge to main; the nightly cron already keeps them fresh.
+#   Does NOT re-derive labor_actuals. That path is decoupled from
+#     salary and has its own trigger cadence.
+#
+# Path filter targets only files that can change what the salary
+# derivation writes:
+#
+#   scripts/derive_salary_actuals.mjs   the loader itself
+#   scripts/lib/dept_history.mjs        R-70/R-115 resolver
+#   src/lib/labor/salariedPredicate.js  EXEMPT/salaried classifier
+#   src/lib/rippling/paginate.js        shared fetch helpers
+#   this workflow                       edits to the trigger itself
+#
+# Migration files (docs/migrations/*worker_dept_history*.sql) are NOT
+# in the trigger set. Migrations do not auto-apply on merge; Kevin
+# applies via Studio or MCP. After a seed migration lands, Kevin runs
+# workflow_dispatch (below) to re-derive against the new seed.
+#
+# Concurrency shares the `rippling-raw-sync` group with the nightly
+# workflow. A merge landing during the 07:00 UTC window queues rather
+# than colliding; either flavor's delete-and-insert is safe under the
+# lock. cancel-in-progress: false so a merge-triggered run does not
+# abort a nightly mid-flight.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/derive_salary_actuals.mjs'
+      - 'scripts/lib/dept_history.mjs'
+      - 'src/lib/labor/salariedPredicate.js'
+      - 'src/lib/rippling/paginate.js'
+      - '.github/workflows/salary-derive-on-merge.yml'
+  workflow_dispatch:
+    inputs:
+      window:
+        description: 'Window for the rebuild (fytd | trailing8). Default fytd - the reason to trigger manually is usually to backfill full history after a seed change.'
+        required: false
+        default: 'fytd'
+      dry_run:
+        description: 'If "true", run the loader with --dry-run flag (loads inputs, prints derived row count, does not write).'
+        required: false
+        default: 'false'
+
+concurrency:
+  # Share the nightly's group so a merge landing at 07:00 UTC queues
+  # behind the running sync, and vice versa. Both surfaces write to
+  # labor_salary_actuals via delete-and-insert; serialising them
+  # keeps that safe.
+  group: rippling-raw-sync
+  cancel-in-progress: false
+
+jobs:
+  derive:
+    name: derive_salary_actuals --window=fytd
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Report trigger context
+        run: |
+          echo "trigger: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "commit:  ${{ github.sha }}"
+            echo "message: ${{ github.event.head_commit.message }}"
+          fi
+          echo "window:  ${{ inputs.window || 'fytd' }}"
+          echo "dry_run: ${{ inputs.dry_run || 'false' }}"
+
+      - name: Derive salary actuals
+        id: derive
+        run: |
+          WINDOW="${{ inputs.window || 'fytd' }}"
+          DRY_RUN_FLAG=""
+          if [ "${{ inputs.dry_run || 'false' }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          # source=manual on push (this is a code-change triggered rebuild, not the nightly);
+          # source=manual on workflow_dispatch too. The nightly's source=nightly is reserved
+          # for the 07:00 UTC cron path.
+          echo "derive_salary_actuals --source=manual --window=${WINDOW} ${DRY_RUN_FLAG}"
+          node scripts/derive_salary_actuals.mjs --source=manual --window=${WINDOW} ${DRY_RUN_FLAG}
+
+      - name: Standing probes
+        if: ${{ inputs.dry_run != 'true' }}
+        run: |
+          echo "_probe_salary_hourly_overlap"
+          node scripts/probes/_probe_salary_hourly_overlap.mjs
+          echo ""
+          echo "_probe_salary_restatement_effect"
+          node scripts/probes/_probe_salary_restatement_effect.mjs
