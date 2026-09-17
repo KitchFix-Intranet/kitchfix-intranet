@@ -105,6 +105,18 @@ Beyond `billing_model`, two orthogonal booleans on `accounts` gate the schedule 
 
 ---
 
+## GL mapping conventions
+
+### 3400.1 packaging inventory · finance folds, board splits
+
+- **What:** Finance books packaging inventory adjustments into GL `3400.1` (Packaging) directly. The board keeps a separate synthetic `3400.INVJE` row per R-74, so the packaging inventory movement lives on `3400.INVJE` on our side and on `3400.1` on finance's side.
+- **How to read it:** For six of the FY2026 periods on TBJ - FL, `pnl_actuals.3400.1.actual` differs from `purchasing_actuals` `3400.1` sum by exactly the value on the corresponding `inventory_adjustments` `packaging` row. The parent `3400` totals agree by construction; only the split between the sub-line and the INVJE row differs.
+- **Not a defect either way:** finance's ledger uses the sub-line convention; the board's UI needs the JE broken out for R-61's `adjusted cost = purchases - JE` disclosure. Both views are valid; they aggregate to the same total.
+- **Discovered:** 2026-09-17 during the R-114 independent audit against `pnl_actuals`. What initially looked like six periods of missing 3400.1 data on TBJ - FL was this mapping difference. Only P9's $150 was genuinely absent (loaded in the R-114 follow-up migration).
+- **Related:** R-61 (inventory adjustment math), R-74 (INVJE synthetic row rule).
+
+---
+
 ## Period rules
 
 *(empty - to be populated as audits find them)*
