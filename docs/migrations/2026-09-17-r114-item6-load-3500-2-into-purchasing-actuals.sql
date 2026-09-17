@@ -13,6 +13,23 @@
 -- purchasing_actuals and adds a manual P9 row for TBJ - FL (Kevin's
 -- confirmed value; finance P9 P&L not yet loaded to pnl_actuals).
 --
+-- ─── SOURCE PROVENANCE (READ THIS) ───────────────────────────────────
+-- These rows are FINANCE-LOADED 3500.2 vehicle insurance from
+-- `pnl_actuals`. They are tagged `source = 'upload'` because the
+-- purchasing_actuals_source_check constraint currently only allows
+-- {billcom, billcom_credit, rippling_spend, upload} - none of which
+-- describes "finance load from pnl_actuals". Semantic identifiers
+-- landed in adjacent columns:
+--   source_bill_id       'pnl_actuals::<account>::FY<yy>::P<n>'
+--   source_line_id       '<account>::FY<yy>::P<n>::3500.2'
+--   vendor_or_merchant   'Vehicle Insurance (finance)'
+-- A follow-up task extends the constraint to add a real
+-- 'pnl_finance_load' value; tracked at
+-- docs/backlog/r114-purchasing-actuals-source-pnl-finance-load.md.
+-- Until that lands, `upload` is the working substitute and this
+-- migration is the reference for what these rows are.
+-- ─────────────────────────────────────────────────────────────────────
+--
 -- Idempotent via the unique (source, source_line_id) index. Rerunning
 -- updates amount + txn_date to the pnl_actuals figure of record;
 -- everything else is stable.
@@ -27,16 +44,16 @@ INSERT INTO purchasing_actuals (
   source, source_bill_id, source_line_id,
   account_key, excluded, gl_line_code, gl_bucket,
   txn_date, posting_date, amount, vendor_or_merchant, paid,
-  approx_date, derived_at, reason
+  approx_date, derived_at
 )
 SELECT
-  'pnl_finance_load'                                                 AS source,
+  'upload'                                                           AS source,
   'pnl_actuals::' || account_key || '::FY' || fiscal_year || '::P' || period_no AS source_bill_id,
   account_key || '::FY' || fiscal_year || '::P' || period_no || '::3500.2' AS source_line_id,
   account_key,
   false                                                              AS excluded,
   '3500.2'                                                           AS gl_line_code,
-  'vehicle'                                                          AS gl_bucket,
+  'pl_cogs'                                                          AS gl_bucket,
   -- txn_date = period end (FY2026 P{n} ends on 2025-12-29 + 28n - 1 days)
   ('2025-12-29'::date + (period_no * 28 - 1) * INTERVAL '1 day')::date AS txn_date,
   ('2025-12-29'::date + (period_no * 28 - 1) * INTERVAL '1 day')::date AS posting_date,
@@ -44,8 +61,7 @@ SELECT
   'Vehicle Insurance (finance)'                                      AS vendor_or_merchant,
   true                                                               AS paid,
   false                                                              AS approx_date,
-  now()                                                              AS derived_at,
-  'R-114 PR 2 item 6 · 3500.2 finance load'                          AS reason
+  now()                                                              AS derived_at
 FROM pnl_actuals
 WHERE line_code = '3500.2'
   AND actual IS NOT NULL AND actual <> 0
@@ -65,28 +81,39 @@ ON CONFLICT (source, source_line_id) DO UPDATE
 -- clause. amount will overwrite to whatever pnl_actuals carries -
 -- expected same value, but the finance load is the source of truth
 -- once it runs.
+-- P9 manual bootstrap · Sebastian P9 sheet row 51 · $611.41
+-- (YTD $5,511.50) · Kevin ruling 2026-09-17. No `reason` column -
+-- the check constraint reserves reason for excluded=true rows;
+-- provenance is in the header block above + this comment + the
+-- source_bill_id / source_line_id / vendor_or_merchant fields.
+--
+-- NOTE (2026-09-17 apply-time): finance loaded P9 to pnl_actuals in
+-- the same window this PR ran, at exactly $611.41 (matching this
+-- bootstrap). The SELECT block above now picks up P9 without help,
+-- so this block is idempotent no-op via the ON CONFLICT clause. Kept
+-- in the migration for the record + as a safety net for the next
+-- time the shape recurs (P10 lands before finance loads).
 INSERT INTO purchasing_actuals (
   source, source_bill_id, source_line_id,
   account_key, excluded, gl_line_code, gl_bucket,
   txn_date, posting_date, amount, vendor_or_merchant, paid,
-  approx_date, derived_at, reason
+  approx_date, derived_at
 )
 VALUES (
-  'pnl_finance_load',
+  'upload',
   'pnl_actuals::TBJ - FL::FY2026::P9',
   'TBJ - FL::FY2026::P9::3500.2',
   'TBJ - FL',
   false,
   '3500.2',
-  'vehicle',
+  'pl_cogs',
   '2026-09-06'::date,
   '2026-09-06'::date,
   611.41,
   'Vehicle Insurance (finance)',
   true,
   false,
-  now(),
-  'R-114 PR 2 item 6 · P9 manual bootstrap · Sebastian P9 sheet row 51 · $611.41 (YTD $5,511.50) · Kevin ruling 2026-09-17'
+  now()
 )
 ON CONFLICT (source, source_line_id) DO UPDATE
   SET amount    = EXCLUDED.amount,

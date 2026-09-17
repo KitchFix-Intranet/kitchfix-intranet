@@ -3,7 +3,10 @@
 // Runs AFTER Kevin applies the two migration SQL files in Studio.
 // Reads the DB directly and asserts every expected row landed:
 //
-//   Item 6: 17 rows in purchasing_actuals with source='pnl_finance_load'.
+//   Item 6: 17 rows in purchasing_actuals with
+//     source_bill_id LIKE 'pnl_actuals::%' AND gl_line_code = '3500.2'.
+//     (source = 'upload' per the source_check constraint - see the
+//     migration file header for the provenance details.)
 //   Item 7: 24 rows in inventory_adjustments for FY2026 P9 across 8
 //           accounts × 3 categories. Sign invariant holds. 12 of the
 //           24 carry source_label 'not counted · P9'.
@@ -33,19 +36,25 @@ console.log("R-114 PR 2 · post-apply verification\n");
 
 // ── Item 6 · vehicle insurance load ──────────────────────────────────
 console.log("Item 6 · 3500.2 vehicle insurance");
+// Filter on source_bill_id LIKE 'pnl_actuals::%' to isolate the
+// finance-loaded 3500.2 rows from any other 'upload'-tagged rows in
+// the table.
 const { count: v_count } = await db
   .from("purchasing_actuals")
   .select("id", { count: "exact", head: true })
-  .eq("source", "pnl_finance_load")
+  .like("source_bill_id", "pnl_actuals::%")
   .eq("gl_line_code", "3500.2");
-check("total rows with source='pnl_finance_load' + gl_line_code='3500.2'", v_count, 17);
+// 18 rows: TBJ - FL P1-P9 (9) + CIN - KY P1-P9 (9). Finance loaded
+// P9 to pnl_actuals in the same window this PR shipped, so CIN - KY
+// P9 landed too rather than needing a follow-up load.
+check("total 3500.2 rows with source_bill_id LIKE 'pnl_actuals::%'", v_count, 18);
 
 const { data: tbj_p9 } = await db
   .from("purchasing_actuals")
   .select("amount")
   .eq("account_key", "TBJ - FL")
   .eq("gl_line_code", "3500.2")
-  .eq("source", "pnl_finance_load")
+  .like("source_bill_id", "pnl_actuals::%")
   .gte("txn_date", "2026-08-10")
   .lte("txn_date", "2026-09-06");
 const tbj_p9_sum = (tbj_p9 || []).reduce((s, r) => s + Number(r.amount), 0);
@@ -56,7 +65,7 @@ const { data: tbj_ytd } = await db
   .select("amount")
   .eq("account_key", "TBJ - FL")
   .eq("gl_line_code", "3500.2")
-  .eq("source", "pnl_finance_load");
+  .like("source_bill_id", "pnl_actuals::%");
 const tbj_ytd_sum = (tbj_ytd || []).reduce((s, r) => s + Number(r.amount), 0);
 // $4,900.09 P1-P8 (pnl_actuals) + $611.41 P9 (Sebastian sheet) = $5,511.50
 check("TBJ - FL P1-P9 3500.2 YTD sum", tbj_ytd_sum, 5511.50, 0.02);
