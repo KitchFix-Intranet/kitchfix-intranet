@@ -251,7 +251,7 @@ async function acceptanceMatrix(request) {
     // parallel keeps the round-trip count flat.
     const [acc, map, salaried] = await Promise.all([
       supa.from("accounts").select("team_key, timezone, region").eq("team_key", accountKey).maybeSingle(),
-      supa.from("sc_qbo_account_map").select("account_key, qbo_mode, cadence, rdo_email").eq("account_key", accountKey).maybeSingle(),
+      supa.from("sc_qbo_account_map").select("account_key, qbo_mode, cadence, rdo_email, notify_operators").eq("account_key", accountKey).maybeSingle(),
       getSalariedManagerEmails(supa, accountKey),
     ]);
     const rdoDerived = REGIONAL_DIRECTORS[acc.data?.region] || null;
@@ -262,6 +262,7 @@ async function acceptanceMatrix(request) {
       cadence:  map.data?.cadence,
       salaried,
       rdoEmail: map.data?.rdo_email || rdoDerived || null,
+      notifyOperators: map.data?.notify_operators !== false,
     };
   }
 
@@ -289,7 +290,11 @@ async function acceptanceMatrix(request) {
         weekStart: target.weekStart, weekEnd: target.weekEnd,
         complete: target.complete, total: target.total, missingDates: target.missing,
         scWeekLink: `${process.env.NEXT_PUBLIC_BASE_URL || ""}/service-calendar?account=${encodeURIComponent(account)}&month=${target.weekStart.slice(0,7)}&day=${target.weekStart}`,
-        accountMap: { salariedManagerEmails: ctx.salaried, rdoEmail: ctx.rdoEmail },
+        accountMap: {
+          salariedManagerEmails: ctx.salaried,
+          rdoEmail: ctx.rdoEmail,
+          notifyOperators: ctx.notifyOperators,
+        },
         chasedPersonName: null,
         rdoFirstName: null,
         send: false,
@@ -323,7 +328,11 @@ async function acceptanceMatrix(request) {
     weekStart: target.weekStart, weekEnd: target.weekEnd,
     complete: target.complete, total: target.total, missingDates: target.missing,
     scWeekLink: "http://localhost:3000/",
-    accountMap: { salariedManagerEmails: [], rdoEmail: "r.moore@kitchfix.com" },
+    accountMap: {
+      salariedManagerEmails: [],
+      rdoEmail: "r.moore@kitchfix.com",
+      notifyOperators: true,
+    },
     chasedPersonName: null,
     rdoFirstName: null,
     send: false,
@@ -385,7 +394,7 @@ export async function GET(request) {
   const [accountsRes, mapRes, salariedByKey] = await Promise.all([
     supa.from("accounts").select("team_key, timezone, region").in("team_key", perMealList),
     supa.from("sc_qbo_account_map")
-      .select("account_key, qbo_mode, cadence, rdo_email")
+      .select("account_key, qbo_mode, cadence, rdo_email, notify_operators")
       .in("account_key", perMealList),
     // Derived live from `people` (Kevin ruling 2026-09-17). Same
     // predicate + ordering as scWeekFinalize's per-account call.
@@ -480,16 +489,19 @@ export async function GET(request) {
     // already claimed this send - skip.
     const isTest = map.qbo_mode === "test";
     const salaried = salariedByKey.get(accountKey) || [];
+    const notifyOperators = map.notify_operators !== false;
     if (dryRun) {
-      // Recipient headcount for the log: test-mode collapses to Kevin;
-      // live-mode reminder = salaried only, urgent = salaried + Sebastian
+      // Recipient headcount for the log. Two structural collapses both
+      // route to Kevin only (sc-45 + test-mode): report either as 1.
+      // Live-notify reminder = salaried only, urgent = salaried + Sebastian
       // + Kevin + RDO (deduped later inside resolveRecipients).
       const salariedCount = salaried.length;
       const liveToCount = stage === NOTIFICATION_TYPES.N3_URGENT
         ? salariedCount + 2 + (rdoEmail ? 1 : 0)
         : salariedCount;
-      log.push(`${accountKey}: ${stage} DRY-RUN would send to ${JSON.stringify({ to_len: isTest ? 1 : liveToCount, cc_len: 0 })}`);
-      results.push({ accountKey, stage, weekStart, dryRun: true, moment, complete, total, missingCount: missing.length, isTest, rdoEmail });
+      const collapsed = isTest || !notifyOperators;
+      log.push(`${accountKey}: ${stage} DRY-RUN would send to ${JSON.stringify({ to_len: collapsed ? 1 : liveToCount, cc_len: 0 })}`);
+      results.push({ accountKey, stage, weekStart, dryRun: true, moment, complete, total, missingCount: missing.length, isTest, notifyOperators, rdoEmail });
       continue;
     }
     const insertRes = await supa
@@ -546,6 +558,7 @@ export async function GET(request) {
         accountMap: {
           salariedManagerEmails: salaried,
           rdoEmail,
+          notifyOperators,
         },
         chasedPersonName: chasedPerson?.displayName || null,
         rdoFirstName,

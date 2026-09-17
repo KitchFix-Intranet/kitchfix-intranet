@@ -516,9 +516,13 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   // ships as a follow-on PR after this soaks.
   const salariedManagerEmails = await getSalariedManagerEmails(supa, accountKey);
   // Map DB snake_case columns to camelCase for the resolver contract.
+  // notify_operators (sc-45): default TRUE preserved by `!== false` -
+  // an accountMap missing the column (pre-migration row cache, dev
+  // stub) resolves as notify=true rather than accidentally silencing.
   const resolverAccountMap = {
     salariedManagerEmails,
     rdoEmail: accountMap.rdo_email || null,
+    notifyOperators: accountMap.notify_operators !== false,
   };
 
   // 2. Cadence span (biweekly requires pair-close alignment).
