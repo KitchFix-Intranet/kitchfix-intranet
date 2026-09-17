@@ -204,11 +204,34 @@ const hourlyWorkerWeek = new Set();
 // worker-dept-history-1.sql applied, this load fails with the table
 // missing. Treat that as an empty history (parity with the pre-R-70
 // behaviour) and log a warning rather than crashing the nightly run.
+// R-115 (Kevin ruling 2026-09-17). annual_comp is a nullable rate
+// override per spell. When set, the loader uses it instead of the
+// raw Rippling comp for weeks inside the spell. When null, the
+// loader falls through to rippling_raw_compensations (raise-
+// restatement rule).
+//
+// Feature-detected: pre-migration or in a fresh clone without R-115
+// applied, the SELECT of annual_comp fails; we retry without it. If
+// worker_dept_history itself is absent (pre-R-70), we log and use
+// an empty history array (parity with pre-R-70 behaviour).
 let deptHistory = [];
 try {
-  deptHistory = await fetchAll("worker_dept_history", "worker_id, effective_from, end_date, account_key, source");
+  deptHistory = await fetchAll("worker_dept_history", "worker_id, effective_from, end_date, account_key, source, annual_comp");
 } catch (e) {
-  if (/schema cache|worker_dept_history/.test(String(e?.message || ""))) {
+  const msg = String(e?.message || "");
+  if (/annual_comp/.test(msg)) {
+    console.log("    [WARN] worker_dept_history.annual_comp column not present - R-115 migration not applied yet. Loading without annual_comp; falls through to rippling_raw_compensations for every worker.");
+    try {
+      deptHistory = await fetchAll("worker_dept_history", "worker_id, effective_from, end_date, account_key, source");
+    } catch (e2) {
+      if (/schema cache|worker_dept_history/.test(String(e2?.message || ""))) {
+        console.log("    [WARN] worker_dept_history table not found - migration not yet applied. Falling back to current-department attribution for every worker (pre-R-70 behaviour).");
+        deptHistory = [];
+      } else {
+        throw e2;
+      }
+    }
+  } else if (/schema cache|worker_dept_history/.test(msg)) {
     console.log("    [WARN] worker_dept_history table not found - migration not yet applied. Falling back to current-department attribution for every worker (pre-R-70 behaviour).");
     deptHistory = [];
   } else {
@@ -371,9 +394,28 @@ for (const [wid, list] of compsByWorker) {
       continue;
     }
     if (attr.account_key === "CORP") { skippedCorp++; continue; }
-    const comp = annualInForceForWeek(wid, weekStartISO);
-    if (!comp) { skippedNoCompForWeek++; continue; }
-    const amount = Math.round((Number(comp.annual_value) / 52) * 100) / 100;
+    // R-115 (Kevin ruling 2026-09-17). If the matched worker_dept_history
+    // row carries annual_comp, use it verbatim - this is the manual
+    // rate override for cases where a worker crossed accounts AND
+    // changed rate AND the prior rate isn't in our raw comp snapshots
+    // (Ryan Moore's pre-2026-05-04 TXR - AZ rate). Otherwise fall
+    // through to rippling_raw_compensations with the raise-restatement
+    // rule.
+    let annualValue = null;
+    let compRipplingId = null;
+    let compEffectiveFrom = null;
+    if (attr.annual_comp != null) {
+      annualValue = Number(attr.annual_comp);
+      compRipplingId = `worker_dept_history:${attr.source}`;
+      compEffectiveFrom = null;
+    } else {
+      const comp = annualInForceForWeek(wid, weekStartISO);
+      if (!comp) { skippedNoCompForWeek++; continue; }
+      annualValue = Number(comp.annual_value);
+      compRipplingId = comp.rippling_id;
+      compEffectiveFrom = comp.salary_effective_date || null;
+    }
+    const amount = Math.round((annualValue / 52) * 100) / 100;
     // Kevin ruling 2026-09-17. Hourly-week gate. A worker with hourly
     // hours in a week is NOT salaried that week. Gate on the actual
     // condition (hourly hours > 0), not on salary_effective_date - six
@@ -391,12 +433,14 @@ for (const [wid, list] of compsByWorker) {
       week_start:               weekStartISO,
       worker_id:                wid,
       amount:                   amount,
-      annual_comp_at_time:      Number(comp.annual_value),
-      effective_from:           comp.salary_effective_date || null,
-      compensation_rippling_id: comp.rippling_id,
-      // R-70: source now signals which path attributed this row.
-      //   "history:kevin_manual"   -> worker_dept_history match
-      //   "worker_current_dept"    -> Rippling current-dept fallback
+      annual_comp_at_time:      annualValue,
+      effective_from:           compEffectiveFrom,
+      compensation_rippling_id: compRipplingId,
+      // R-70: source signals which path attributed this row.
+      //   "history:kevin_manual"   -> worker_dept_history match (may
+      //                               also carry annual_comp override
+      //                               per R-115).
+      //   "worker_current_dept"    -> Rippling current-dept fallback.
       // Loader's write of `source` on the row lets Kevin eyeball
       // which weeks came from the manual table vs the fallback.
       source:                   attr.source,

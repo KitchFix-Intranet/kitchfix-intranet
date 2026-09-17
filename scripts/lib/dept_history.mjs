@@ -27,20 +27,36 @@
 //
 // RESOLVER RULE
 //
-//   attribute(workerId, workDateISO) returns { account_key, source }.
+//   attribute(workerId, workDateISO) returns
+//   { account_key, source, annual_comp }.
 //
 //   1. Walk that worker's history rows (sorted by effective_from
 //      ascending). Pick the last row where
 //        effective_from <= workDateISO
 //         AND (end_date IS NULL OR workDateISO <= end_date)
-//      If a row matches, source = "history:<row.source>".
+//      If a row matches, source = "history:<row.source>" and
+//      annual_comp = row.annual_comp (may be null).
 //
 //   2. If no history row matches, fall back to
 //        workerToCurrentDept[workerId] -> deptToAccount[deptId]
-//      source = "worker_current_dept".
+//      source = "worker_current_dept", annual_comp = null.
 //
 //   3. If neither works, return null and let the caller bump the
 //      unattr counter.
+//
+// ANNUAL_COMP (R-115, Kevin ruling 2026-09-17)
+//
+//   `worker_dept_history.annual_comp` is nullable. When set on the
+//   matched row, the caller uses this rate for the spell instead of
+//   consulting rippling_raw_compensations. When null (the default
+//   and 99% case), the caller falls through to the raw compensations
+//   table with the raise-restatement rule (annualInForceForWeek in
+//   derive_salary_actuals.mjs).
+//
+//   Used for cases where a worker moved accounts AND changed rate,
+//   AND the pre-move rate isn't in our raw compensation snapshots -
+//   Ryan Moore's pre-2026-05-04 TXR - AZ rate is the canonical
+//   example.
 //
 // end_date matters when a worker leaves. Kevin's Gordon Rouse III
 // case: left TBJ - FL 2026-04-30, needs a single row with
@@ -83,7 +99,11 @@ export function buildDeptResolver({ historyRows, workerToCurrentDept, deptToAcco
         if (endOk) picked = h;
       }
       if (picked) {
-        return { account_key: picked.account_key, source: `history:${picked.source || "unknown"}` };
+        return {
+          account_key: picked.account_key,
+          source: `history:${picked.source || "unknown"}`,
+          annual_comp: picked.annual_comp == null ? null : Number(picked.annual_comp),
+        };
       }
     }
 
@@ -95,6 +115,6 @@ export function buildDeptResolver({ historyRows, workerToCurrentDept, deptToAcco
     if (dept.is_container) return null;
     if (!dept.account_key) return null;
 
-    return { account_key: dept.account_key, source: "worker_current_dept" };
+    return { account_key: dept.account_key, source: "worker_current_dept", annual_comp: null };
   };
 }
