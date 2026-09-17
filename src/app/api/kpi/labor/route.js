@@ -88,6 +88,14 @@ import {
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
+// FIN-2027 W1 PR-A year-safety: FY2026 window used to scope the four
+// no-year / hardcoded reads below (staleness banner, daily floor,
+// per-account labor-budget merge). Bounds match
+// src/app/kpi/labor/lib/periods.js FY_START_ISO / FY_END_ISO for the
+// current fiscal year. A general helper lands with the pnl-3
+// fiscal_periods table in Stage 2 (PR-B).
+const FY_START_ISO = "2025-12-29";
+const FY_END_ISO   = "2026-12-27";
 // v6 PR-1 - reserved uppercase pseudo-account keys per V6-19. Chosen
 // to collide with nothing the account regex admits (which requires
 // spaced hyphens in the middle). URL: ?account=ALL / EAST / WEST.
@@ -315,10 +323,16 @@ export async function GET(request) {
   // was silently failing, until Kevin checked Actions by hand; the
   // banner is meant to stop that from happening again. Single-row
   // scalar reads via order+limit+maybeSingle; no wide scan.
+  // FIN-2027 W1 PR-A year-safety: FY-scoped by week_start. Without
+  // the scope, a re-derive of history would report a fresh
+  // derived_at for FY2026's freshness banner. See FY_START_ISO /
+  // FY_END_ISO at the top of this file.
   const [weeklyMaxQ, dailyMaxQ] = await Promise.all([
     supa.from("labor_actuals").select("derived_at")
+      .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
       .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
     supa.from("labor_actuals_daily").select("derived_at")
+      .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
       .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   // Step 2 ride-along 2026-08-29: `last_walk_ids_seen` removed from
@@ -381,10 +395,14 @@ export async function GET(request) {
   // Daily floor is data-derived from labor_actuals.week_source =
   // 'sc_day_metadata' (currently 2026-04-20). Weeks before that
   // were rippling_report-backfilled with no per-day segments.
+  // FIN-2027 W1 PR-A year-safety: FY-scoped by week_start. Rows with
+  // week_source='sc_day_metadata' from an earlier fiscal year would
+  // wrongly shift the daily floor if history is ever backfilled.
   const floorQ = await supa
     .from("labor_actuals")
     .select("week_start")
     .eq("week_source", "sc_day_metadata")
+    .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
     .order("week_start")
     .limit(1)
     .maybeSingle();
@@ -1179,6 +1197,12 @@ export async function GET(request) {
         .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
         .is("resolved_at", null)
         .order("total_amount", { ascending: false }),
+      // FIN-2027 W1 PR-A year-safety: this inline block mirrors
+      // resolveMemberBudget() in src/lib/labor/loaders.js; kept
+      // inline here to keep the merged Promise.all shape stable.
+      // kpi_budgets pinned to FY2026 (stopgap - route caller does
+      // not thread fiscalYear yet). sc_labor_budgets year-scoped via
+      // effective_from window (no fiscal_year column on that table).
       supa.from("kpi_budgets")
         .select("period_no, amount")
         .eq("account_key", account)
@@ -1187,7 +1211,9 @@ export async function GET(request) {
       supa.from("sc_labor_budgets")
         .select("period, hourly_budget, reason")
         .eq("account_key", account)
-        .is("superseded_at", null),
+        .is("superseded_at", null)
+        .gte("effective_from", FY_START_ISO)
+        .lte("effective_from", FY_END_ISO),
     ]);
   } catch (e) {
     return NextResponse.json(safeError("labor_actuals", { message: e.message }), { status: 500 });

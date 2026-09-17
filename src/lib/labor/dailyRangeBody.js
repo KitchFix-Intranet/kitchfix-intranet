@@ -36,6 +36,9 @@ export async function buildDailyRangeBody(ctx) {
     includeSalary,
     resolveWorkerMeta,
   } = ctx;
+  // FIN-2027 W1 PR-A year-safety: fiscalYear read from ctx with
+  // FY2026 default. Route does not pass it yet; behavior preserved.
+  const fiscalYear = ctx.fiscalYear ?? 2026;
 
   // 1. Resolve members.
   let members;
@@ -116,7 +119,7 @@ export async function buildDailyRangeBody(ctx) {
     .select("account_key, period_no, amount")
     .in("account_key", members)
     .eq("line_code", "3100.1")
-    .eq("fiscal_year", 2026);
+    .eq("fiscal_year", fiscalYear);
   if (budgetPeriodsQ.error) return { error: safeErr("kpi_budgets_daily", budgetPeriodsQ.error) };
   const perAccountBudgets = new Map();
   for (const b of (budgetPeriodsQ.data || [])) {

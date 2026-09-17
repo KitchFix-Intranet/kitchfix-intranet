@@ -30,8 +30,6 @@ import {
 } from "@/lib/kpi/shared/periodBasis.js";
 import { periodEndISO, periodOf } from "@/app/kpi/labor/lib/periods.js";
 
-const FISCAL_YEAR = 2026;
-
 // Kevin Labor PR-A item 8 (2026-09-04). Given a set of periods,
 // return the subset whose end date is strictly before today
 // (calendar-closed). Batr uses this so both boards restrict to the
