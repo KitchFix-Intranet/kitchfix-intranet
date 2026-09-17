@@ -141,14 +141,26 @@ export function resolveRecipients(args) {
   const rdo = args?.accountMap?.rdoEmail || null;
 
   switch (notification) {
-    // N1 Invoice ready: Sebastian, Kevin, Joe, Josh, salaried managers, submitter, RDO.
+    // N1 Invoice ready: Sebastian, Kevin, salaried managers, submitter, RDO.
     // RDO added 2026-09-09 per Kevin ruling in the confirmation-email
     // rebuild - "all account managers and RDO"; managers are already
-    // covered by salaried_manager_emails, RDO was the missing piece.
+    // covered by salariedManagerEmails, RDO was the missing piece.
     // dedup() drops the null when rdoEmail is unset.
+    //
+    // 2026-09-17 Kevin ruling: Joe (VPO) and Josh (CEO) are OFF N1
+    // for now. Both confirmed they do not want the per-invoice stream.
+    // "For now" is deliberate - this is a preference and may flip back
+    // per-person or per-account later. When it does, the right home is
+    // a per-account exec-CC column on sc_qbo_account_map, NOT a
+    // constant reintroduced here: a hardcoded recipient list is a
+    // thing nobody can change without a deploy, which is exactly why
+    // this took a month to action. Sebastian + Kevin stay structural
+    // (Sebastian reviews and sends every invoice; Kevin owns the
+    // system). The JOE_EMAIL + JOSH_EMAIL constants remain exported
+    // because N4 (credit-needed) still routes to them per §A6.
     case NOTIFICATION_TYPES.N1: {
       const to = dedup([
-        SEBASTIAN_EMAIL, KEVIN_EMAIL, JOE_EMAIL, JOSH_EMAIL,
+        SEBASTIAN_EMAIL, KEVIN_EMAIL,
         ...salaried,
         submitter,
         rdo,
