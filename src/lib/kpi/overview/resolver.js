@@ -116,6 +116,7 @@ import { composeFlags, isPackagingGapAccount, isSeededAccount } from "./flags.js
 
 import { periodOf, periodStartISO, periodEndISO, weekStartsInRange, endOfLastCompleteWeek } from "@/app/kpi/labor/lib/periods.js";
 import { PURCHASING_ENVELOPE_EXCLUSIONS } from "@/lib/accountModels.js";
+import { canonicalSubLine } from "@/lib/purchasing/glRollup.js";
 
 const FISCAL_YEAR = 2026;
 
@@ -3076,6 +3077,12 @@ export async function resolveOverview({
   // gap on TBJ - FL. (2) The pass-through parent-sum edge case
   // disappears - no synthetic row to gate, so sub-rows tie to parent
   // on billed-back accounts without a special-case guard.
+  // Kevin ruling 2026-09-17. Sub-lines roll up their children.
+  // A raw GL `3200.1.1` belongs on the canonical sub-line `3200.1`,
+  // not on its own row. Ingress canonicalises the raw code (drop
+  // segments past the second dot); the actual-by-line map then keys
+  // on the canonical sub-line so `3200.1` = 3200.1 + 3200.1.1 +
+  // 3200.1.2 (etc.) in one aggregation pass.
   const glsUnderParent = new Map(PARENT_PREFIXES.map(p => [p, new Set()]));
   const purchActualsByLine = new Map();
   const purchActualsLinesPresent = new Set();
@@ -3084,14 +3091,16 @@ export async function resolveOverview({
     if (!gl) continue;
     const parent = parentPrefixOf(gl);
     if (!parent) continue;
-    glsUnderParent.get(parent).add(gl);
-    purchActualsByLine.set(gl, (purchActualsByLine.get(gl) || 0) + Number(r.amount || 0));
-    purchActualsLinesPresent.add(gl);
+    const canonical = canonicalSubLine(gl);
+    if (!canonical) continue;
+    glsUnderParent.get(parent).add(canonical);
+    purchActualsByLine.set(canonical, (purchActualsByLine.get(canonical) || 0) + Number(r.amount || 0));
+    purchActualsLinesPresent.add(canonical);
   }
   if (purchBudgets && typeof purchBudgets.keys === "function") {
     for (const gl of purchBudgets.keys()) {
       const parent = parentPrefixOf(gl);
-      if (parent) glsUnderParent.get(parent).add(gl);
+      if (parent) glsUnderParent.get(parent).add(canonicalSubLine(gl));
     }
   }
   // Per-line budget sum across members + periods. purchBudgets shape
