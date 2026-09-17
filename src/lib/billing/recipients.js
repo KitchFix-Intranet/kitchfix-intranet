@@ -16,6 +16,16 @@
 // F6 grep proof + a matrix test that walks every (notification,
 // account) pair.
 //
+// ─── notifyOperators is a second structural override (sc-45) ──────
+//
+// The second branch checks accountMap.notifyOperators === false and
+// also returns Kevin only. Decouples "who gets the notification"
+// from "which QBO customer receives the invoice." Used when Kevin
+// wants real invoices (mode='live') but wants operator emails
+// silenced (weekend before Monday training, sc-45 ruling
+// 2026-09-17). Both overrides collapse to Kevin so their order is
+// immaterial; test-mode remains first for historical continuity.
+//
 // ─── Live-mode lookups (addendum §A6) ─────────────────────────────
 //
 // Two per-account lookups feed live-mode resolution:
@@ -94,6 +104,8 @@ function dedup(list) {
  * @param {Object} [args.accountMap]     Live-mode lookups.
  * @param {string[]} [args.accountMap.salariedManagerEmails]
  * @param {string|null} [args.accountMap.rdoEmail]
+ * @param {boolean} [args.accountMap.notifyOperators] Default true. When explicitly false,
+ *        resolveRecipients returns Kevin-only regardless of mode. sc-45.
  * @param {string} [args.adjusterEmail] N4 only.
  * @returns {{ to: string[], cc: string[] }}
  */
@@ -103,6 +115,16 @@ export function resolveRecipients(args) {
   // in test mode. Kevin's address, immediately. See docs/SC_QBO_SHAPE_SPEC_
   // ADDENDUM_A.md §A5: "Recipient override is structural, not conditional".
   if (args?.mode === "test") {
+    return { to: [KEVIN_EMAIL], cc: [] };
+  }
+
+  // ─── SECOND BRANCH: structural notify-operators override (sc-45) ─
+  // Symmetric shape with the test-mode branch. Explicit `=== false`
+  // so an accountMap without the field (older callers, transitional
+  // rows) resolves as live-mode notify=true rather than accidentally
+  // silencing. Kevin sets notify_operators=false only for the pilots'
+  // silent-operators weekend.
+  if (args?.accountMap?.notifyOperators === false) {
     return { to: [KEVIN_EMAIL], cc: [] };
   }
 

@@ -508,10 +508,14 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   // migration cannot silently flip to live-mode behaviour.
   const qboMode = accountMap.qbo_mode === "live" ? "live" : "test";
   // Map DB snake_case columns to camelCase for the resolver contract.
+  // notify_operators (sc-45): default TRUE preserved by `!== false` -
+  // an accountMap missing the column (pre-migration row cache, dev
+  // stub) resolves as notify=true rather than accidentally silencing.
   const resolverAccountMap = {
     salariedManagerEmails: Array.isArray(accountMap.salaried_manager_emails)
       ? accountMap.salaried_manager_emails : [],
     rdoEmail: accountMap.rdo_email || null,
+    notifyOperators: accountMap.notify_operators !== false,
   };
 
   // 2. Cadence span (biweekly requires pair-close alignment).
