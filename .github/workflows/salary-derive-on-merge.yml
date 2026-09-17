@@ -74,13 +74,26 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
+      # Match the nightly rippling-sync workflow exactly for install
+      # auth. The repo's .npmrc reads ${GITHUB_TOKEN} which npm needs
+      # in the env. setup-node@v4 leaves the repo .npmrc in place;
+      # setup-node@v6 rewrites it to require NODE_AUTH_TOKEN and the
+      # generated .npmrc points at a scope that expects a different
+      # token. First-run of this workflow (2026-09-17, PR #1178)
+      # failed at `npm ci` under setup-node@v6 with E401 against
+      # npm.pkg.github.com. Sticking with @v4 + node 22 + plain
+      # `npm ci` matches rippling-sync + purchasing-sync +
+      # purchasing-report-ingest, all of which run this way nightly.
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -109,11 +122,17 @@ jobs:
           echo "derive_salary_actuals --source=manual --window=${WINDOW} ${DRY_RUN_FLAG}"
           node scripts/derive_salary_actuals.mjs --source=manual --window=${WINDOW} ${DRY_RUN_FLAG}
 
-      - name: Standing probes
+      # Each probe is its own step so failure is attributed clearly to
+      # the failing gate (not to a combined block that hides which
+      # probe fired). GitHub Actions runs `run:` blocks with
+      # `bash --noprofile --norc -eo pipefail {0}` on Linux, so a
+      # non-zero exit from `node <probe>.mjs` fails the step and the
+      # job. Skipped on --dry-run because no data was written to
+      # check.
+      - name: Standing gate · hourly-week overlap
         if: ${{ inputs.dry_run != 'true' }}
-        run: |
-          echo "_probe_salary_hourly_overlap"
-          node scripts/probes/_probe_salary_hourly_overlap.mjs
-          echo ""
-          echo "_probe_salary_restatement_effect"
-          node scripts/probes/_probe_salary_restatement_effect.mjs
+        run: node scripts/probes/_probe_salary_hourly_overlap.mjs
+
+      - name: Standing gate · raise restatement effect
+        if: ${{ inputs.dry_run != 'true' }}
+        run: node scripts/probes/_probe_salary_restatement_effect.mjs
