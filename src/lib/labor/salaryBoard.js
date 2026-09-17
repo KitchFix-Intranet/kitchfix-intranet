@@ -113,7 +113,7 @@ export function shapeSalaryRow(r) {
     line_code: "3100.2",
     week_start: r.week_start,
     week_end: weekEnd,
-    fiscal_year: FY2026,
+    fiscal_year: 2026,
     period_no: null,
     week_source: "salary_derive",
     hours_regular: 0,
