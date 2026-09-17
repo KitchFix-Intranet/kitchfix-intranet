@@ -434,7 +434,7 @@ for (const [acct, codes] of perAccountLines) {
         anchor_a:    round2(c.loadedActualSum),             // loader's own P1..P13 sum
         anchor_b:    round2(c.workbookYearTotalActual),     // workbook YTD-P13 Actual (col 194)
         delta:       deltaA,
-        note:        "actual: loaded P1..P13 sum vs workbook YTD-P13 Actual (col 194)",
+        note:        "actual: workbook YTD-P13 is a manual reconciliation (YTD-P12 + P13 + hand-typed constant); per-period cells are copied/allocated literals. anchor_b holds the workbook's reconciled year total - prefer it over the sum of per-period rows.",
       });
     }
     if (failB) {
