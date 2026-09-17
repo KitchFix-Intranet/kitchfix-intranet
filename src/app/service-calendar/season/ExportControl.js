@@ -194,16 +194,11 @@ export default function ExportControl({
               ref={idx === 0 ? firstItemRef : null}
               type="button"
               role="menuitem"
-              className={`sc-export-menu-item${item.disabled ? " sc-export-menu-item-disabled" : ""}`}
-              onClick={() => { if (!item.disabled) startDownload(item); }}
-              aria-disabled={item.disabled || undefined}
-              title={item.disabledTitle || undefined}
+              className="sc-export-menu-item"
+              onClick={() => startDownload(item)}
             >
-              <span className="sc-export-menu-item-label">
-                {item.label}
-                {item.comingSoon ? <span className="sc-export-menu-item-tag">COMING SOON</span> : null}
-              </span>
-              <span className="sc-export-menu-item-sub">{item.disabled ? item.disabledSub : item.filename}</span>
+              <span className="sc-export-menu-item-label">{item.label}</span>
+              <span className="sc-export-menu-item-sub">{item.filename}</span>
             </button>
           ))}
         </div>
@@ -256,83 +251,37 @@ function xlsxItem({ scope, year, periodKey, monthKey, accountKey }) {
   return null;
 }
 
-// The PDC/PDCO drill PDF is PARKED behind Coming Soon per Kevin's ruling
-// 2026-07-13. The redesign lives at docs/design/PDC_PRINT_REDESIGN.md;
-// the current sheet was superseded-in-waiting so the menu greys the
-// drill item + the route returns 404 for scope=month|period on these
-// accounts. Excel + Season PDF + Ops Calendar PDF are UNTOUCHED - PDC/
-// PDCO operators keep every other export. See buildMenuItems() below
-// for the gating rule (drill items grey when has_homestand_schedule is
-// false + has_schedule_overlay drives the PDCO/PDC split).
-const PDC_DRILL_DISABLED_TITLE = "PDF print for this account is being redesigned - see docs/design/PDC_PRINT_REDESIGN.md";
+// PDC/PDCO drill PDFs (month + period scope) are OMITTED from the menu.
+// The wall-poster redesign lives at docs/design/PDC_PRINT_REDESIGN.md;
+// the route returns 404 for scope=month|period on those accounts.
+// MLB + AAA drill PDFs remain live. See buildMenuItems below - the
+// `isPdcOrPdco` gate skips the push entirely rather than rendering a
+// coming-soon placeholder. Kevin ruling 2026-09-17 pre-training:
+// permanently-disabled menu items are promises nobody kept.
 
-// Period-close billing export placeholder (2026-08-04). Owner meets AP
-// tomorrow to settle the column list; the format (Excel) and the
-// availability rule (period must be complete: every day entered) are
-// already settled. This item exists so the export has a visible home
-// before it ships. Unconditionally disabled; no href, no route, no
-// filename - the renderer at :190-201 reads only `disabled`,
-// `comingSoon`, `disabledTitle`, `disabledSub`, and `label` on a
-// placeholder, so absent fields cannot leak (button element carries
-// no HTML href attribute; startDownload is gated on !item.disabled).
-const BILLING_PERIOD_DISABLED_TITLE = "Excel period-close billing - not yet built; will become available once every day in the period is entered.";
-
-function pdfMonthItem({ year, monthKey, accountKey, disabled }) {
+function pdfMonthItem({ year, monthKey, accountKey }) {
   const safeAccount = String(accountKey).replace(/\s+/g, "");
   const dateStr = todayDateStr();
   const [yy, mm] = monthKey.split("-").map(Number);
   const monthName = new Date(yy, mm - 1, 1).toLocaleDateString("en-US", { month: "long" });
-  const item = {
+  return {
     key: "pdf-month",
     label: `PDF - ${monthName} schedule`,
     filename: `KitchFix_SC_${safeAccount}_${monthKey}_${dateStr}.pdf`,
     href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=month&year=${year}&month=${monthKey}`,
   };
-  if (disabled) {
-    item.disabled = true;
-    item.comingSoon = true;
-    item.disabledTitle = PDC_DRILL_DISABLED_TITLE;
-    item.disabledSub = "redesign in progress";
-  }
-  return item;
 }
 
-// Period-close billing placeholder. No href, no filename - the export
-// does not exist yet. Same disabled/comingSoon shape the PDC drill PDF
-// uses (`pdfMonthItem` / `pdfPeriodItem` when disabled=true), so the
-// renderer's `sc-export-menu-item-disabled` + COMING SOON tag paths
-// carry it byte-identically. Label copy is owner-verbatim; no period
-// number in the label because the menu is already period-scoped and
-// the number sits on adjacent items. Every account (fee + per-meal
-// both bill); no gating on schedule flags.
-function xlsxBillingPeriodItem() {
-  return {
-    key: "xlsx-billing-period",
-    label: "Excel - Period Close Billing",
-    disabled: true,
-    comingSoon: true,
-    disabledTitle: BILLING_PERIOD_DISABLED_TITLE,
-    disabledSub: "available at period close",
-  };
-}
-
-function pdfPeriodItem({ year, periodKey, accountKey, disabled }) {
+function pdfPeriodItem({ year, periodKey, accountKey }) {
   const safeAccount = String(accountKey).replace(/\s+/g, "");
   const dateStr = todayDateStr();
   const num = String(periodKey).replace(/^P/i, "");
-  const item = {
+  return {
     key: "pdf-period",
     label: `PDF - Period ${num} schedule`,
     filename: `KitchFix_SC_${safeAccount}_Period${num}_FY${year}_${dateStr}.pdf`,
     href: `/api/service-calendar/print?account=${encodeURIComponent(accountKey)}&scope=period&year=${year}&period=${num}`,
   };
-  if (disabled) {
-    item.disabled = true;
-    item.comingSoon = true;
-    item.disabledTitle = PDC_DRILL_DISABLED_TITLE;
-    item.disabledSub = "redesign in progress";
-  }
-  return item;
 }
 
 function pdfSeasonItem({ year, accountKey }) {
@@ -380,18 +329,11 @@ function buildMenuItems({
 
   if (scope === "month" && monthKey) {
     if (showXlsx) items.push(xlsxItem({ scope, year, monthKey, accountKey }));
-    items.push(pdfMonthItem({ year, monthKey, accountKey, disabled: isPdcOrPdco }));
+    if (!isPdcOrPdco) items.push(pdfMonthItem({ year, monthKey, accountKey }));
     if (showXlsx) items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "period" && periodKey) {
     if (showXlsx) items.push(xlsxItem({ scope, year, periodKey, accountKey }));
-    // Owner placement 2026-08-04: after the period Excel, before the
-    // period PDF - keeps the period-scope items grouped. Two adjacent
-    // greys on PDC / PDCO (both the billing placeholder and the PDF
-    // are disabled there) is intentional signal, not clutter: both
-    // are "not yet" for this account on this period, grouped as one
-    // waiting-family before the Excel year fallback closes the menu.
-    items.push(xlsxBillingPeriodItem());
-    items.push(pdfPeriodItem({ year, periodKey, accountKey, disabled: isPdcOrPdco }));
+    if (!isPdcOrPdco) items.push(pdfPeriodItem({ year, periodKey, accountKey }));
     if (showXlsx) items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "year") {
     if (showXlsx) items.push(xlsxItem({ scope: "year", year, accountKey }));

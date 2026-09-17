@@ -32,6 +32,7 @@ import { isScLockOverride } from "@/lib/admin";
 import { buildInvoicePayload } from "@/lib/billing/buildInvoicePayload";
 import { postInvoiceDraft, NotAllowlistedError, QboPostError } from "@/lib/billing/qboAdapter";
 import { fireN1, fireN2 } from "@/lib/billing/qboNotifications";
+import { getSalariedManagerEmails } from "@/lib/billing/getSalariedManagerEmails";
 
 // ─────────────────────────────────────────────────────────────────
 // Mon-Sun week derivation (banned from `week_label` per C-3).
@@ -507,13 +508,19 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   // Missing column falls back to 'test' so a partially-applied
   // migration cannot silently flip to live-mode behaviour.
   const qboMode = accountMap.qbo_mode === "live" ? "live" : "test";
+  // salariedManagerEmails derived live from `people` (Kevin ruling
+  // 2026-09-17). Same predicate + ordering everywhere - see
+  // src/lib/billing/getSalariedManagerEmails.js. Replaces the read
+  // of sc_qbo_account_map.salaried_manager_emails, which was hand-
+  // maintained and had drifted on two of four accounts. Column drop
+  // ships as a follow-on PR after this soaks.
+  const salariedManagerEmails = await getSalariedManagerEmails(supa, accountKey);
   // Map DB snake_case columns to camelCase for the resolver contract.
   // notify_operators (sc-45): default TRUE preserved by `!== false` -
   // an accountMap missing the column (pre-migration row cache, dev
   // stub) resolves as notify=true rather than accidentally silencing.
   const resolverAccountMap = {
-    salariedManagerEmails: Array.isArray(accountMap.salaried_manager_emails)
-      ? accountMap.salaried_manager_emails : [],
+    salariedManagerEmails,
     rdoEmail: accountMap.rdo_email || null,
     notifyOperators: accountMap.notify_operators !== false,
   };
