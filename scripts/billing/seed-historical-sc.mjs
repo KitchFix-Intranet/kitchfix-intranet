@@ -307,19 +307,23 @@ function classifyFamily(ws) {
   if (!fdr) return "NO-DATE-COL";
   const hr = fdr - 1;
   const last = lastColOn(ws, hr);
+  const colD = (asText(ws.getCell(hr, 4).value) ?? "").trim();
+  const colE = (asText(ws.getCell(hr, 5).value) ?? "").trim();
+  // BG-SINGLE positive signal: col D header is 'Lunch'. Every
+  // STANDARD/TBR-STD tab has col D = 'Week'. No overlap possible.
+  // (Prior heuristic used row-1 bands.length === 0, but ExcelJS
+  // fills merged cells - row 1 spills 'Day' across cols 6-7 on the
+  // BG tabs - so band count reads > 0 and misclassified BG as
+  // STANDARD. Whereas openpyxl returns null for merged children,
+  // which is why the Python family probe classified correctly.
+  // Direct col-D check sidesteps the merged-cell semantics.)
+  if (colD.toLowerCase() === "lunch") return "BG-SINGLE";
+  // Bands count (only relevant now for STANDARD vs TBR-STD split).
   const bands = [];
   for (let c = 6; c <= last; c++) {
     const v = asText(ws.getCell(1, c).value);
     if (v != null && v.trim() !== "") bands.push(v);
   }
-  let services = 0;
-  for (let c = 6; c <= last; c += 2) {
-    const v = asText(ws.getCell(hr, c).value);
-    if (v != null && v.trim() !== "") services++;
-  }
-  const colD = (asText(ws.getCell(hr, 4).value) ?? "").trim();
-  const colE = (asText(ws.getCell(hr, 5).value) ?? "").trim();
-  if (bands.length === 0 && services === 1 && colD.toLowerCase() === "lunch") return "BG-SINGLE";
   if (bands.length >= 1 && colE === "Week") return "TBR-STD";
   if (bands.length >= 1) return "STANDARD";
   return "UNKNOWN";
@@ -387,9 +391,32 @@ function parseStandard(ws, shift) {
       bandByCol[c] = cur;
     }
   }
-  // Service columns: (name col, rate col) at c, c+1 for c in 6, 8, 10 ...
+  // Detect service-start column dynamically. Header layouts vary:
+  //   col 6:  Day/Date/Period/Week/Camp Name/Breakfast (27 tabs)
+  //   col 7:  Day/Date/Period/Week/Homestand/Game Type/Breakfast (12 tabs)
+  //           or Day/Date/Period/Week/Game Type/Game Time/Arrival
+  // First pair where cell(hr, c) is a non-empty string AND
+  // cell(hr, c+1) is a number is the first (service, rate) pair.
+  // Hardcoding col 6 would misread "Game Type" (or "Homestand") as
+  // a service name and the following "Breakfast" (a service) as a
+  // rate string - causing every subsequent even col to be a rate
+  // labeled as a service (e.g. "24.98" as service_name), which
+  // then collides on the unique index.
+  let serviceStart = null;
+  for (let c = 3; c < last; c++) {
+    const nameVal = ws.getCell(hr, c).value;
+    const rateVal = ws.getCell(hr, c + 1).value;
+    const nameU = unwrap(nameVal);
+    const rateU = unwrap(rateVal);
+    if (nameU == null || nameU === "") continue;
+    if (typeof nameU === "number") continue;
+    if (typeof rateU === "number") { serviceStart = c; break; }
+  }
+  if (serviceStart == null) return [];   // no service columns found
+  // Service columns: (name col, rate col) at c, c+1 for c in
+  // serviceStart, serviceStart+2, ...
   const services = [];
-  for (let c = 6; c <= last; c += 2) {
+  for (let c = serviceStart; c <= last; c += 2) {
     const name = asText(ws.getCell(hr, c).value);
     if (name == null || name.trim() === "") continue;
     services.push({
@@ -649,6 +676,33 @@ async function main() {
   console.log(`  sc_historical_projections: ${projectionsRows.length.toString().padStart(6)} rows`);
   console.log(`  TOTAL:                     ${(actualsRows.length + projectionsRows.length).toString().padStart(6)} rows`);
 
+  // Dedupe check: detect in-memory rows that would collide on the
+  // unique index (source_file, source_tab, service_date, service_name,
+  // coalesce(group_name,'(none)'), stream).
+  function scanDupes(name, rows) {
+    const seen = new Map();
+    const dupSamples = [];
+    for (const r of rows) {
+      const key = [r.source_file, r.source_tab, r.service_date, r.service_name, r.group_name ?? "(none)", r.stream].join("||");
+      const cur = seen.get(key) || 0;
+      if (cur === 1 && dupSamples.length < 8) dupSamples.push({ key, second_seen: r });
+      seen.set(key, cur + 1);
+    }
+    const dupeCount = [...seen.values()].filter(v => v > 1).length;
+    console.log(`  ${name}: ${dupeCount} unique-key collisions across ${rows.length} emit rows`);
+    if (dupeCount > 0) {
+      console.log(`    sample colliding keys:`);
+      for (const s of dupSamples) console.log(`      ${s.key}`);
+    }
+    return dupeCount;
+  }
+  const aDupe = scanDupes("sc_historical_actuals", actualsRows);
+  const pDupe = scanDupes("sc_historical_projections", projectionsRows);
+  if (aDupe > 0 || pDupe > 0) {
+    console.error(`\n::error::in-memory duplicates would collide on the sc-47 unique index. Halting before write.`);
+    process.exit(3);
+  }
+
   if (hadFatalError) {
     console.error(`\n::error::halted before write due to earlier fatal errors`);
     process.exit(2);
@@ -667,12 +721,19 @@ async function main() {
     let written = 0;
     for (let i = 0; i < rows.length; i += BATCH) {
       const chunk = rows.slice(i, i + BATCH);
-      // ON CONFLICT DO NOTHING via the unique index on
-      // (source_file, source_tab, service_date, service_name,
-      //  coalesce(group_name), stream). supabase-js .upsert() with
-      // ignoreDuplicates=true maps to ON CONFLICT DO NOTHING.
+      // Plain INSERT. sc-47 created an expression-based unique index
+      // on (source_file, source_tab, service_date, service_name,
+      // COALESCE(group_name, '(none)'), stream) - the COALESCE is
+      // load-bearing for BG-SINGLE tabs where group_name is NULL. But
+      // PostgreSQL's ON CONFLICT cannot resolve to an expression
+      // index via supabase-js's column-list onConflict option, so
+      // upsert() rejects with "no unique or exclusion constraint
+      // matching the ON CONFLICT specification". First-load safety:
+      // tables are empty (verified pre-run); plain INSERT succeeds.
+      // Re-run idempotency deferred; if needed, either TRUNCATE
+      // first or add a plain non-expression unique index.
       const { error, count } = await supa.from(table)
-        .upsert(chunk, { onConflict: "source_file,source_tab,service_date,service_name,group_name,stream", ignoreDuplicates: true, count: "exact" });
+        .insert(chunk, { count: "exact" });
       if (error) throw new Error(`${table} insert at offset ${i}: ${error.message}`);
       written += count ?? chunk.length;
     }
