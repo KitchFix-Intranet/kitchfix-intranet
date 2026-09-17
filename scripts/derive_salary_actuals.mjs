@@ -147,6 +147,37 @@ const [workers, comps, deptMap] = await Promise.all([
   fetchAllKeyset(supa, "rippling_raw_compensations_latest", "rippling_id, worker_id, payment_type, annual_value, salary_effective_date, currency"),
   fetchAll("rippling_department_map",           "department_id, account_key, is_container"),
 ]);
+
+// Kevin ruling 2026-09-17. Anna-Hughes-scale double-count gate: a
+// worker with hourly hours in a week is NOT salaried that week. Load
+// the (worker_id, week_start) set with hourly hours > 0 in the window
+// and skip any salary derivation that would collide. Anna Hughes
+// (658c8203d69a90ae354e00b6) had 7 weeks of $6,730.78 salary landing
+// on TXR - AZ while she was still on hourly through 2026-09-04; the
+// audit surfaced her by cross-checking hourly hours pre-effective-date
+// on every worker with a pre-eff salary row. Six false positives (comp
+// records where salary_effective_date is a raise date, not a start
+// date) and one real defect. This gate encodes the discriminator.
+console.log("  loading hourly-week overlap set from labor_actuals_latest...");
+const hourlyWorkerWeek = new Set();
+{
+  // In-window rows only. Filtered client-side by hours > 0. Uses
+  // fetchAllOffset instead of fetchAllKeyset because labor_actuals_latest
+  // keys by (account_key, worker_id, week_start), not a single rippling_id.
+  // Window is narrow (default 8 weeks) so page size stays bounded.
+  const rows = await fetchAllOffset(
+    supa,
+    "labor_actuals_latest",
+    "worker_id, week_start, hours_regular, hours_overtime, hours_double_time, hours_premium_other",
+    [(q) => q.gte("week_start", windowStartISO).lte("week_start", windowEndISO)]
+  );
+  for (const r of rows) {
+    const h = Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) +
+              Number(r.hours_double_time || 0) + Number(r.hours_premium_other || 0);
+    if (h > 0) hourlyWorkerWeek.add(`${r.worker_id}||${r.week_start}`);
+  }
+  console.log(`    hourly (worker, week) combos with hours > 0: ${hourlyWorkerWeek.size}`);
+}
 // R-70 (Kevin 2026-09-04): Kevin-maintained per-worker effective-dated
 // attribution. Rippling exposes only current dept; this table fills
 // the gap so transfers land on the right account per week. Empty by
@@ -282,6 +313,8 @@ let totalCandidateWeeks = 0;
 let skippedNoCompForWeek = 0;
 let skippedCorp = 0;
 let skippedInactive = 0;
+let skippedHourlyOverlap = 0;
+const hourlyOverlapDollars = new Map();  // worker_id -> total $ NOT emitted (informational)
 
 // R-70 (Kevin 2026-09-04): account attribution is now PER-WEEK via
 // buildDeptResolver, not once-per-worker. A moved worker (Bailey,
@@ -310,6 +343,18 @@ for (const [wid, list] of compsByWorker) {
     const comp = annualInForceForWeek(wid, weekStartISO);
     if (!comp) { skippedNoCompForWeek++; continue; }
     const amount = Math.round((Number(comp.annual_value) / 52) * 100) / 100;
+    // Kevin ruling 2026-09-17. Hourly-week gate. A worker with hourly
+    // hours in a week is NOT salaried that week. Gate on the actual
+    // condition (hourly hours > 0), not on salary_effective_date - six
+    // of seven pre-effective-date salaried workers were legitimate
+    // raises (comp record changed but worker was already salaried);
+    // only Anna Hughes had hourly hours in the same weeks. The rule
+    // catches the real defect and does not exclude legitimate raises.
+    if (hourlyWorkerWeek.has(`${wid}||${weekStartISO}`)) {
+      skippedHourlyOverlap++;
+      hourlyOverlapDollars.set(wid, (hourlyOverlapDollars.get(wid) || 0) + amount);
+      continue;
+    }
     rows.push({
       account_key:              attr.account_key,
       week_start:               weekStartISO,
@@ -331,7 +376,11 @@ for (const [wid, list] of compsByWorker) {
 // ─── 5. Report + write ───────────────────────────────────────────────
 console.log(`  derived rows: ${rows.length}`);
 console.log(`    candidate worker-weeks: ${totalCandidateWeeks}`);
-console.log(`    skipped: inactive=${skippedInactive}  no_comp_for_week=${skippedNoCompForWeek}  corp_worker_weeks=${skippedCorp}`);
+console.log(`    skipped: inactive=${skippedInactive}  no_comp_for_week=${skippedNoCompForWeek}  corp_worker_weeks=${skippedCorp}  hourly_overlap=${skippedHourlyOverlap}`);
+if (skippedHourlyOverlap > 0) {
+  const totalDollars = [...hourlyOverlapDollars.values()].reduce((s, v) => s + v, 0);
+  console.log(`    hourly-overlap dollars gated OUT: $${totalDollars.toFixed(2)} across ${hourlyOverlapDollars.size} worker(s)`);
+}
 
 const distinctWorkers = new Set(rows.map(r => r.worker_id)).size;
 const perAccount = new Map();
