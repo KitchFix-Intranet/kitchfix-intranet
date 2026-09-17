@@ -1,26 +1,39 @@
 #!/usr/bin/env node
 // Regression probe for the 2026-09-17 classifier fix in
-// src/lib/labor/deriveActuals.js. Runs deriveLaborActuals against
-// the live DB (read-only; nothing persisted) and asserts:
+// src/lib/labor/deriveActuals.js + scripts/derive_labor_actuals_daily.mjs.
+// Two surfaces, one probe.
 //
-//   1. Zero 3100.2 rows emitted into labor_actuals (labor_actuals is
-//      hourly-only by design; 3100.2 is the salary line and lives in
-//      labor_salary_actuals via derive_salary_actuals.mjs).
-//   2. Only accounts with a 3100.1 department in rippling_department_map
-//      have emissions. D26 salaried-only accounts (CIN - KY, TBJ - NY)
-//      emit zero rows.
+// Weekly (labor_actuals) - derive-based assertions:
+//   Runs deriveLaborActuals against the live DB (read-only; nothing
+//   persisted) and asserts:
+//     1. Zero 3100.2 rows emitted into labor_actuals (labor_actuals is
+//        hourly-only by design; 3100.2 is the salary line and lives in
+//        labor_salary_actuals via derive_salary_actuals.mjs).
+//     2. D26 salaried-only accounts (CIN - KY, TBJ - NY) emit zero rows.
+//   These fire BEFORE writes and catch a weekly-derive regression at
+//   review time.
+//
+// Daily (labor_actuals_daily) - table-state assertions:
+//   Reads labor_actuals_daily directly and asserts:
+//     3. Zero rows with line_code='3100.2' in labor_actuals_daily.
+//     4. Zero rows with account_key in D26 in labor_actuals_daily.
+//   These are POST-derive - they read what the nightly wrote. The
+//   daily derive script is a top-level executable, not an importable
+//   module; extracting an in-memory version is a deferred refactor,
+//   so the probe reads the table state after the daily nightly lands.
+//
+//   The 2026-09-17 D1 miss (weekly went green after the classifier
+//   fix, daily still emitted 3100.2 on Anna Hughes's TXR-AZ hourly
+//   weeks 2026-07-13..2026-08-10) got past the original probe because
+//   assertion #1 covered labor_actuals only; #3 and #4 close that
+//   gap.
 //
 // USAGE:
 //   node --env-file=.env.local scripts/probes/_probe_labor_actuals_line_codes.mjs
 //
 // EXIT:
-//   0  no 3100.2 emitted, no D26-account emissions
-//   1  any 3100.2 emitted OR any D26-account emitted
-//
-// The prior classifier bug (fixed by the 2026-09-17 attribute() rewrite)
-// silently reclassified an hourly worker's history when they changed
-// department. If a future edit reintroduces the "use worker's current
-// dept's pnl_line as line_code" pattern, this probe fires immediately.
+//   0  every assertion passes on both surfaces
+//   1  any assertion fails on either surface
 
 import { createClient } from "@supabase/supabase-js";
 import { deriveLaborActuals } from "../../src/lib/labor/deriveActuals.js";
@@ -91,6 +104,54 @@ console.log(`\nPer-account line_code distribution:`);
 for (const [acct, codes] of Object.entries(perAccountLineCodes)) {
   const s = Object.entries(codes).map(([c, n]) => `${c}=${n}`).join(", ");
   console.log(`  ${acct.padEnd(15)} ${s}`);
+}
+
+// ── Assertions 3 + 4: labor_actuals_daily table state ───────────
+// The daily derive is a top-level script (scripts/derive_labor_-
+// actuals_daily.mjs), not an importable module. Rather than block on
+// extracting a callable deriveLaborActualsDaily(), assert on the
+// written table state - the same rule shape, evaluated after the
+// nightly write instead of before.
+console.log(`\nlabor_actuals_daily assertions (post-write state check)`);
+
+const dailyBad = await supa
+  .from("labor_actuals_daily")
+  .select("account_key, worker_id, work_date, line_code", { count: "exact", head: false })
+  .eq("line_code", "3100.2")
+  .limit(20);
+if (dailyBad.error) {
+  console.error(`::error::labor_actuals_daily 3100.2 read: ${dailyBad.error.message}`);
+  violations += 1;
+} else {
+  const total = dailyBad.count ?? (dailyBad.data || []).length;
+  if (total > 0) {
+    console.error(`::error title=labor_actuals_daily emitting 3100.2::${total} rows. labor_actuals_daily is hourly-only; a 3100.2 row means derive_labor_actuals_daily.mjs:attribute() is reading the worker's current-dept pnl_line as line_code instead of the account's 3100.1 pnl_line.`);
+    for (const r of dailyBad.data || []) console.error(`  ${r.account_key} worker=${r.worker_id} date=${r.work_date} line=${r.line_code}`);
+    if (total > (dailyBad.data || []).length) console.error(`  ... and ${total - (dailyBad.data || []).length} more`);
+    violations += 1;
+  } else {
+    console.log(`OK  zero 3100.2 rows in labor_actuals_daily`);
+  }
+}
+
+const d26Bad = await supa
+  .from("labor_actuals_daily")
+  .select("account_key, worker_id, work_date, line_code", { count: "exact", head: false })
+  .in("account_key", [...D26_SALARIED_ONLY])
+  .limit(20);
+if (d26Bad.error) {
+  console.error(`::error::labor_actuals_daily D26 read: ${d26Bad.error.message}`);
+  violations += 1;
+} else {
+  const total = d26Bad.count ?? (d26Bad.data || []).length;
+  if (total > 0) {
+    console.error(`::error title=labor_actuals_daily D26 salaried-only account emitting rows::${total} rows`);
+    for (const r of d26Bad.data || []) console.error(`  ${r.account_key} worker=${r.worker_id} date=${r.work_date} line=${r.line_code}`);
+    if (total > (d26Bad.data || []).length) console.error(`  ... and ${total - (d26Bad.data || []).length} more`);
+    violations += 1;
+  } else {
+    console.log(`OK  labor_actuals_daily has zero rows for D26 accounts (${[...D26_SALARIED_ONLY].join(", ")})`);
+  }
 }
 
 if (violations > 0) {
