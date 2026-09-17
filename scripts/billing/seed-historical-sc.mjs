@@ -80,6 +80,47 @@
 // overlapping dates take actuals' labels; 1 unmatched Dec date per
 // file emits NULL for both.
 //
+// AMOUNT SERVICES
+// Some workbook services are dollar allocations, not per-cover
+// charges. The value in the "count" column IS the dollar revenue;
+// there is no per-cover rate that applies. The live SC handles this
+// via sc_services.is_non_revenue=true and the export excludes those
+// services as "dollar allocations, not billable revenue."
+//
+// A rate of $0 in the header does NOT mean "no charge" - it means
+// "this column is not priced per cover." The distinction is what
+// AMOUNT_SERVICES encodes. TBJ's "Fun $$$$ Allocated" is the current
+// instance:
+//   TBJ 2023 Actuals: rate=$0, 5 rows w/ values summing to $16,233 -
+//     under a per-cover parser those rows emit revenue=$0, silently
+//     under-counting TBJ FL 2023 revenue by $16K.
+//   TBJ 2024 Actuals: rate=$0, 11 rows summing to $24,997 - same
+//     under-count.
+//   TBJ 2025 Actuals: rate=$27,404 (annual dollar allocation
+//     misfiled in the header rate cell), 9 rows summing to $25,052 -
+//     the per-cover parser computed revenue = 25,052 * 27,404 =
+//     $686M, catastrophically over-counting.
+//
+// AMOUNT_SERVICES is keyed on (account_key + "||" + service_name).
+// Same service gets the same treatment at any tab or year, matching
+// how sc_services.is_non_revenue works on the live system. When a
+// row matches, emit: count=null, rate=null, revenue = value from
+// the "count" column (same shape as BG-SINGLE tabs).
+//
+// The list is explicit rather than inferred from the rate because
+// EITHER end of the rate range hides an error: rate=$0 silently
+// under-counts (2023/2024), rate>$500 catastrophically over-counts
+// (2025). No heuristic on the rate value catches both.
+//
+// OUTLIER SANITY ASSERTION
+// Post-parse, pre-write: compute account-year revenue totals per
+// table. Halt if any total exceeds 10x the median of all account-
+// year totals. Report low outliers (below median/10) but do not
+// halt - a genuinely small account-year is plausible; a genuinely
+// enormous one is not. Kevin ruling 2026-09-17: "$687M against a
+// $100K-$1.9M population should never have required a human to
+// notice."
+//
 // PERIOD LABELS ARE NOT CANONICAL (widely)
 // The 2026-09-17 divergence audit ran the same period-agreement
 // check across every paired (actuals, projections) tab in the load
@@ -154,6 +195,27 @@ const YEAR_SHIFT_OVERRIDES = new Map([
 const PERIOD_OVERRIDES = new Map([
   ["REDS AZ - Service Calendar 2024.xlsx||Projected Numbers - A. Meuser N", "Actuals - Billing - 2024"],
   ["TXR AZ - Service Calendar - 2024.xlsx||Projections - 2024",             "Actuals - Billing - 2024"],
+]);
+
+// Amount services (dollar allocations, not per-cover charges). Keyed
+// on "<account_key>||<service_name>". When a parsed row matches, the
+// loader emits: count=null, rate=null, revenue=value-from-column.
+// Same shape as BG-SINGLE tabs.
+//
+// Kevin ruling 2026-09-17: mirror the live system's
+// sc_services.is_non_revenue=true set. Explicit list, one line per
+// service with the reason. Do not infer from rate value - a rate of
+// $0 in the header does not mean "no charge", it means "this column
+// is not priced per cover". See the header block "AMOUNT SERVICES"
+// for the full rationale + the three failure modes this catches.
+const AMOUNT_SERVICES = new Set([
+  // TBJ Fun Money - dollar allocation, not billable per-cover. Live
+  // SC carries is_non_revenue=true on this service. Historical
+  // workbook records the dollar amount in the value column with a
+  // rate of $0 (2023, 2024) or $27,404 (2025 header cell, an annual
+  // allocation figure mistakenly filed as a rate). Either way, the
+  // value column is dollars.
+  "TBJ - FL||Fun $$$$ Allocated",
 ]);
 
 // ─── Supabase (only initialised when --write) ────────────────────
@@ -375,7 +437,7 @@ function checkDayDateAgreement(ws, tabKey, shift) {
 }
 
 // ─── Per-family parsers ──────────────────────────────────────────
-function parseStandard(ws, shift) {
+function parseStandard(ws, shift, accountKey) {
   const fdr = firstDataRow(ws);
   if (!fdr) return [];
   const hr = fdr - 1;
@@ -415,15 +477,28 @@ function parseStandard(ws, shift) {
   if (serviceStart == null) return [];   // no service columns found
   // Service columns: (name col, rate col) at c, c+1 for c in
   // serviceStart, serviceStart+2, ...
+  //
+  // A service is (text-name, numeric-rate). Many workbooks have a
+  // trailing summary block at the far right - "Total Revenue",
+  // "Total Meals", "Total Snacks", "Total Charged Items", "Average
+  // $/Item" - all TEXT cells with no numeric rate between them.
+  // Prior to 2026-09-17 the parser accepted any (text-name,
+  // anything) pair, so "Total Revenue" got emitted as a service
+  // paired with "Total Meals" as its "rate" (null). Per-row the
+  // total-revenue formula result then filed as `count`, producing
+  // 7,847 bad rows in the first --write. Require rate to be a
+  // number here; anything else ends the service list.
   const services = [];
   for (let c = serviceStart; c <= last; c += 2) {
     const name = asText(ws.getCell(hr, c).value);
     if (name == null || name.trim() === "") continue;
+    const rate = asNum(ws.getCell(hr, c + 1).value);
+    if (rate == null) break;   // trailing summary column - stop
     services.push({
       name_col: c,
       rate_col: c + 1,
       service_name: name.trim(),
-      rate: asNum(ws.getCell(hr, c + 1).value),
+      rate,
       group_name: bandByCol[c] ?? null,
     });
   }
@@ -440,6 +515,20 @@ function parseStandard(ws, shift) {
       const cnt = asNum(ws.getCell(r, s.name_col).value);
       if (cnt == null || cnt <= 0) continue;
       anyNonZero = true;
+      // Amount-service check. When (account_key, service_name) is in
+      // AMOUNT_SERVICES, treat the value column as dollar revenue,
+      // not a per-cover count. Same emit shape as BG-SINGLE tabs.
+      const isAmount = AMOUNT_SERVICES.has(`${accountKey}||${s.service_name}`);
+      if (isAmount) {
+        perService.push({
+          service_name: s.service_name,
+          group_name: s.group_name,
+          count: null,
+          rate: null,
+          revenue: Math.round(cnt * 100) / 100,
+        });
+        continue;
+      }
       const rate = (s.rate != null && Number.isFinite(s.rate)) ? s.rate : 0;
       perService.push({
         service_name: s.service_name,
@@ -607,7 +696,7 @@ async function main() {
         hadFatalError = true; continue;
       }
 
-      const emits = (family === "BG-SINGLE") ? parseBgSingle(ws, shift) : parseStandard(ws, shift);
+      const emits = (family === "BG-SINGLE") ? parseBgSingle(ws, shift) : parseStandard(ws, shift, t.account);
       const stream = streamFor(t.account, ws.name);
 
       // PERIOD_OVERRIDE: replace source_period + source_week_label
@@ -701,6 +790,94 @@ async function main() {
   if (aDupe > 0 || pDupe > 0) {
     console.error(`\n::error::in-memory duplicates would collide on the sc-47 unique index. Halting before write.`);
     process.exit(3);
+  }
+
+  // Kevin ruling 2026-09-17: permanent pre-write assertions on
+  // service_name shape. These catch two parser-drift classes that
+  // both landed in the first --write and made the tables audit-
+  // useless until truncated:
+  //   1. service_name matching ^[0-9.]+$ = a rate value misread as
+  //      a service name. The col-6 hardcoded serviceStart bug did
+  //      this before the dynamic detector landed (Louisville 2025
+  //      "24.98" tell).
+  //   2. service_name in the summary-column tell set - Total
+  //      Revenue, Total Meals, Total Snacks, Total Charged Items,
+  //      Average $/Item. The "accept any name after serviceStart"
+  //      bug did this - 7,847 bad rows in the first --write.
+  // Both fixes exist in the parser now; these assertions stop a
+  // future parser regression from filing bad audit data silently.
+  const NUMERIC_NAME = /^[0-9.]+$/;
+  const SUMMARY_TELLS = new Set([
+    "Total Revenue", "Total Meals", "Total Snacks",
+    "Total Charged Items", "Average $/Item",
+    "Total Bev Services",   // REDS AZ 2024+2025 trailing summary
+    "Total Charged Meals",  // preemptive: seen in some workbook variants
+  ]);
+  function scanServiceNameShape(name, rows) {
+    const numeric = rows.filter(r => NUMERIC_NAME.test(String(r.service_name)));
+    const summary = rows.filter(r => SUMMARY_TELLS.has(String(r.service_name)));
+    console.log(`  ${name}: numeric-name rows=${numeric.length}  summary-tell rows=${summary.length}`);
+    if (numeric.length > 0) {
+      console.log(`    sample numeric-name rows (rate misread as service):`);
+      for (const r of numeric.slice(0, 5)) console.log(`      ${r.source_file} ${r.source_tab} ${r.service_date} name=${JSON.stringify(r.service_name)}`);
+    }
+    if (summary.length > 0) {
+      console.log(`    sample summary-tell rows (summary column emitted as service):`);
+      for (const r of summary.slice(0, 5)) console.log(`      ${r.source_file} ${r.source_tab} ${r.service_date} name=${JSON.stringify(r.service_name)}`);
+    }
+    return numeric.length + summary.length;
+  }
+  const aBad = scanServiceNameShape("sc_historical_actuals", actualsRows);
+  const pBad = scanServiceNameShape("sc_historical_projections", projectionsRows);
+  if (aBad > 0 || pBad > 0) {
+    console.error(`\n::error::service_name shape assertions failed. Halting before write. See samples above.`);
+    process.exit(4);
+  }
+
+  // Kevin ruling 2026-09-17: outlier sanity assertion. Compute per-
+  // (account, year) revenue totals per table. Halt if any total
+  // exceeds 10x the median of all account-year totals. Report low
+  // outliers (below median/10) but do not halt - a genuinely small
+  // account-year is plausible; a genuinely enormous one is not.
+  // Would have caught TBJ FL 2025's $687M against the $100K-$1.9M
+  // population automatically.
+  const OUTLIER_MULTIPLE = 10;
+  function scanAccountYearOutliers(name, rows) {
+    const totals = new Map();   // "account|year" -> sum(revenue)
+    for (const r of rows) {
+      const yr = r.service_date.slice(0, 4);
+      const key = `${r.account_key}|${yr}`;
+      totals.set(key, (totals.get(key) || 0) + Number(r.revenue || 0));
+    }
+    const positives = [...totals.values()].filter(v => v > 0).sort((a, b) => a - b);
+    if (positives.length < 3) {
+      console.log(`  ${name}: only ${positives.length} positive account-year totals, skipping outlier check`);
+      return 0;
+    }
+    const median = positives[Math.floor(positives.length / 2)];
+    const highThresh = median * OUTLIER_MULTIPLE;
+    const lowThresh  = median / OUTLIER_MULTIPLE;
+    const high = [], low = [];
+    for (const [k, v] of totals) {
+      if (v > highThresh) high.push({ key: k, revenue: v, ratio: v / median });
+      else if (v > 0 && v < lowThresh) low.push({ key: k, revenue: v, ratio: v / median });
+    }
+    console.log(`  ${name}: median account-year revenue = $${median.toFixed(2)}, outlier bounds = [$${lowThresh.toFixed(2)}, $${highThresh.toFixed(2)}]`);
+    if (low.length > 0) {
+      console.log(`    LOW outliers (report only, no halt):`);
+      for (const o of low) console.log(`      ${o.key}  $${o.revenue.toFixed(2)}  (${o.ratio.toFixed(3)}x median)`);
+    }
+    if (high.length > 0) {
+      console.log(`    HIGH outliers (halt):`);
+      for (const o of high) console.log(`      ${o.key}  $${o.revenue.toFixed(2)}  (${o.ratio.toFixed(2)}x median)`);
+    }
+    return high.length;
+  }
+  const aHigh = scanAccountYearOutliers("sc_historical_actuals", actualsRows);
+  const pHigh = scanAccountYearOutliers("sc_historical_projections", projectionsRows);
+  if (aHigh > 0 || pHigh > 0) {
+    console.error(`\n::error::account-year revenue exceeds ${OUTLIER_MULTIPLE}x median on ${aHigh + pHigh} cell(s). Halting before write.`);
+    process.exit(5);
   }
 
   if (hadFatalError) {
