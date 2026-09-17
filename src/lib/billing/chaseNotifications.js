@@ -84,14 +84,17 @@ function panelRow(k, v, borderColor = "#E2E8F0", valueClass = "") {
   </tr>`;
 }
 
-// No-site-recipient note. Emitted at the top of the body when
-// live-mode salaried_manager_emails is empty. Reminder-only concern
-// (Sunday sends to salaried only); Urgent has escalation fallbacks.
+// No-site-recipient note. Emitted at the top of the body when the
+// derived salaried list for the account is empty. Reminder-only
+// concern (Sunday sends to salaried only); Urgent has escalation
+// fallbacks. Under the 2026-09-17 derivation the fix is to ensure
+// an ACTIVE salaried manager exists for the account in `people`
+// (via Rippling classification), not to edit sc_qbo_account_map.
 function noSiteRecipientNote(accountKey) {
   return `<tr><td style="padding:0 0 12px 0;font-size:12px;color:#8A5A16;background:#FDF6EC;border-left:3px solid #D9892F;padding:10px 12px;border-radius:4px">
-    <b>No site recipient is configured for ${escapeHtml(accountKey)}.</b>
-    Populate <code>sc_qbo_account_map.salaried_manager_emails</code> in Studio
-    so the chase reaches the site next week.
+    <b>No site recipient is on record for ${escapeHtml(accountKey)}.</b>
+    No worker at this account currently classifies as salaried in <code>people</code>.
+    Fix the worker classification in Rippling so the chase reaches the site next week.
   </td></tr>`;
 }
 

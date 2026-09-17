@@ -19,11 +19,13 @@
 // ─── Live-mode lookups (addendum §A6) ─────────────────────────────
 //
 // Two per-account lookups feed live-mode resolution:
-//   - salariedManagerEmails: TEXT[] read from
-//     sc_qbo_account_map.salaried_manager_emails (sc-35). Owner-
-//     populated. Empty until Kevin writes the list per addendum §A8
-//     principle - the codebase has no authoritative person-level
-//     "salaried manager" flag.
+//   - salariedManagerEmails: TEXT[]. Derived live from `people`
+//     (2026-09-17, Kevin ruling; see src/lib/billing/
+//     getSalariedManagerEmails.js). Was stored on
+//     sc_qbo_account_map.salaried_manager_emails until that column
+//     drifted on two of four accounts. The addendum §A8 rationale
+//     ("no authoritative person-level salaried flag") no longer
+//     holds - people.is_salaried is that flag.
 //   - rdoEmail: TEXT read from sc_qbo_account_map.rdo_email (sc-35).
 //     Owner-populated. NULL until Kevin writes it. When set, joins
 //     N3.3 and N4 only (addendum §A6 ruling: RDOs skip N1 so the
