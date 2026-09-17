@@ -88,34 +88,55 @@ const { count: uncounted_count } = await db
 check("'not counted · P9' rows", uncounted_count, 12);
 
 // Sign invariant: closing_balance = prior_balance + adjusting_je on
-// every row where both balances are non-null.
+// EVERY row. Every P9 row is required to carry numeric balances
+// (uncounted accounts carry P8 closing forward), so any null here is
+// a fail. Additionally, closing >= 0 on every row - inventory cannot
+// hold a negative balance and a negative here means the workbook
+// figure landed wrong (the defect Kevin caught pre-apply in v1).
 const { data: inv_rows } = await db
   .from("inventory_adjustments")
   .select("account_key,category,adjusting_je,prior_balance,closing_balance,source_label")
   .eq("fiscal_year", 2026).eq("period_no", 9);
 let invariant_ok = true;
+let non_negative_ok = true;
 for (const r of inv_rows || []) {
-  if (r.prior_balance == null || r.closing_balance == null) continue;
+  if (r.prior_balance == null || r.closing_balance == null) {
+    console.log(`  ✗ null balance: ${r.account_key}/${r.category} · prior=${r.prior_balance} closing=${r.closing_balance}`);
+    invariant_ok = false;
+    fails.push(`null balance ${r.account_key}/${r.category}`);
+    continue;
+  }
   const derived = Number(r.prior_balance) + Number(r.adjusting_je);
   if (Math.abs(derived - Number(r.closing_balance)) > 0.01) {
     console.log(`  ✗ sign invariant broken: ${r.account_key}/${r.category} · prior ${r.prior_balance} + JE ${r.adjusting_je} = ${derived}, closing ${r.closing_balance}`);
     invariant_ok = false;
     fails.push(`sign invariant ${r.account_key}/${r.category}`);
   }
+  if (Number(r.closing_balance) < 0) {
+    console.log(`  ✗ closing < 0: ${r.account_key}/${r.category} · closing ${r.closing_balance} (inventory cannot be negative - check workbook figure)`);
+    non_negative_ok = false;
+    fails.push(`closing < 0 ${r.account_key}/${r.category}`);
+  }
 }
-check("closing = prior + JE on all non-null rows", invariant_ok, true);
+check("closing = prior + JE on every row (no nulls)", invariant_ok, true);
+check("closing >= 0 on every row", non_negative_ok, true);
 
-// Explicit workbook checks (Kevin's exact figures).
+// Explicit workbook checks (Kevin's per-category figures 2026-09-17):
+//   account   food       packaging   supplies
+//   TBJ - FL  -331.06    -60.29      -763.12
+//   TBR - FL  -2321.34   +99.01      -113.76
+//   CIN - AZ  -1380.18   -299.36     -138.02
+//   TBJ - NY   0.00       0.00        0.00
 const workbook = [
   ["TBJ - FL", "food",      -331.06],
-  ["TBJ - FL", "packaging", -823.41],
-  ["TBJ - FL", "supplies",     0.00],
+  ["TBJ - FL", "packaging",  -60.29],
+  ["TBJ - FL", "supplies",  -763.12],
   ["TBR - FL", "food",     -2321.34],
-  ["TBR - FL", "packaging",  -14.75],
-  ["TBR - FL", "supplies",     0.00],
+  ["TBR - FL", "packaging",   99.01],
+  ["TBR - FL", "supplies",  -113.76],
   ["CIN - AZ", "food",     -1380.18],
-  ["CIN - AZ", "packaging", -437.38],
-  ["CIN - AZ", "supplies",     0.00],
+  ["CIN - AZ", "packaging", -299.36],
+  ["CIN - AZ", "supplies",  -138.02],
   ["TBJ - NY", "food",         0.00],
   ["TBJ - NY", "packaging",    0.00],
   ["TBJ - NY", "supplies",     0.00],

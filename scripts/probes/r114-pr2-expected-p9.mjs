@@ -51,11 +51,19 @@ const delta6_vehicle = 611.00 - current.vehicle_3500_2;
 
 // Item 7 deltas: INVJE synthetic rows contribute -adjusting_je to
 // cost (per R-61: adjusted cost = purchases - JE).
-// TBJ - FL P9 workbook: food -$331.06, packaging -$823.41.
+// TBJ - FL P9 workbook (per-category, reconciled prior + JE = closing):
+//   food      JE -$331.06   prior $8,058.41  closing $7,727.35
+//   packaging JE   -$60.29  prior    $60.29  closing     $0.00
+//   supplies  JE  -$763.12  prior $2,347.55  closing $1,584.43
+// packaging + supplies share the 3400 bucket so the resolver sees
+// one combined `3400.INVJE` synthetic row (per R-74).
 const invje_food_je      = -331.06;
-const invje_packaging_je = -823.41;
+const invje_packaging_je =  -60.29;
+const invje_supplies_je  = -763.12;
 const delta7_food_cost      = -invje_food_je;      // 331.06 added to food cost
-const delta7_packaging_cost = -invje_packaging_je; // 823.41 added to packaging cost
+const delta7_packaging_cost = -invje_packaging_je; // 60.29
+const delta7_supplies_cost  = -invje_supplies_je;  // 763.12
+const delta7_3400_cost      = delta7_packaging_cost + delta7_supplies_cost; // 823.41 into bucket 3400
 
 // Labor (3100) is not touched by either migration.
 // For the cost-of-goods total we need labor + food + packaging + vehicle.
@@ -80,7 +88,7 @@ const gm_adjusted          = gmCard.budget_at_this_revenue;
 const revenue              = revCard.hero_actual;
 
 // Post-migration cost delta.
-const cogs_delta = delta6_vehicle + delta7_food_cost + delta7_packaging_cost;
+const cogs_delta = delta6_vehicle + delta7_food_cost + delta7_3400_cost;
 const cogs_after   = cogs_before + cogs_delta;
 const gm_after     = gm_before - cogs_delta;    // revenue unchanged
 
@@ -107,13 +115,14 @@ console.log(`  vehicle line after  3500.4 ${fmt(current.vehicle_3500_4)} + 3500.
 console.log(`  Kevin target:       $735 · ${Math.abs((current.vehicle_3500_4 + 611.00) - 735) < 1 ? "MATCH" : "MISS"}\n`);
 
 console.log("item 7 delta (inventory adjustments):");
-console.log(`  food INVJE          ${fmt(delta7_food_cost)}  (JE ${fmt(invje_food_je)})`);
-console.log(`  packaging INVJE     ${fmt(delta7_packaging_cost)}  (JE ${fmt(invje_packaging_je)})`);
-console.log(`  supplies INVJE      ${fmt(0)}  (JE 0.00)\n`);
+console.log(`  food INVJE          ${fmt(delta7_food_cost)}     (JE ${fmt(invje_food_je)})`);
+console.log(`  packaging INVJE     ${fmt(delta7_packaging_cost)}      (JE ${fmt(invje_packaging_je)})`);
+console.log(`  supplies INVJE      ${fmt(delta7_supplies_cost)}     (JE ${fmt(invje_supplies_je)})`);
+console.log(`  bucket 3400 total   ${fmt(delta7_3400_cost)}     (packaging + supplies share 3400)\n`);
 
 console.log("cost of goods (COGS):");
 console.log(`  before              ${fmt(cogs_before)}`);
-console.log(`  total delta         ${fmt(cogs_delta)}  (vehicle ${fmt(delta6_vehicle)} + food ${fmt(delta7_food_cost)} + packaging ${fmt(delta7_packaging_cost)})`);
+console.log(`  total delta         ${fmt(cogs_delta)}  (vehicle ${fmt(delta6_vehicle)} + food ${fmt(delta7_food_cost)} + 3400 ${fmt(delta7_3400_cost)})`);
 console.log(`  after               ${fmt(cogs_after)}`);
 console.log(`  Kevin target:       ~$80,691 · ${Math.abs(cogs_after - 80691) < 5 ? "MATCH" : "MISS"}\n`);
 
