@@ -209,6 +209,20 @@ COMMENT ON COLUMN sc_historical_projections.stream IS
   'Same as sc_historical_actuals.stream - TBR/B&G split, account_key elsewhere.';
 
 
+-- Grants. The loader (scripts/billing/seed-historical-sc.mjs) writes
+-- via the service role. New tables do NOT inherit grants from sibling
+-- tables - notify-1 failed on that exact assumption and surfaced
+-- `permission denied for table` at first insert, not at migration
+-- time. Same class of failure applies to BIGSERIAL sequences: the
+-- table grant alone is not enough; nextval() needs USAGE on the
+-- sequence too. Both grants belong in the same block that creates
+-- the objects so the check in Block C runs against the final state.
+GRANT SELECT, INSERT, UPDATE, DELETE ON sc_historical_actuals     TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON sc_historical_projections TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE sc_historical_actuals_id_seq      TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE sc_historical_projections_id_seq  TO service_role;
+
+
 COMMIT;
 
 
@@ -235,6 +249,62 @@ SELECT 'sc_historical_actuals' AS tbl, count(*) AS rows FROM sc_historical_actua
 UNION ALL
 SELECT 'sc_historical_projections', count(*) FROM sc_historical_projections;
 
+-- Confirm service_role has SELECT + INSERT + UPDATE + DELETE on both
+-- tables. Same pattern as sc-42's grant-verification query and for
+-- the same reason: notify-1 shipped without exercising the grant and
+-- surfaced `permission denied for table` at first application read.
+-- Verify at apply time, not at first write.
+SELECT table_name, grantee,
+       string_agg(privilege_type, ', ' ORDER BY privilege_type) AS grants
+FROM information_schema.table_privileges
+WHERE table_schema = 'public'
+  AND table_name IN ('sc_historical_actuals', 'sc_historical_projections')
+GROUP BY table_name, grantee
+ORDER BY table_name, grantee;
+
+-- Expected (load-bearing rows in bold):
+--   sc_historical_actuals     | anon            | REFERENCES, TRIGGER, TRUNCATE
+--   sc_historical_actuals     | authenticated   | REFERENCES, TRIGGER, TRUNCATE
+--   sc_historical_actuals     | postgres        | DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE
+--   sc_historical_actuals     | service_role    | DELETE, INSERT, SELECT, UPDATE   <== load-bearing
+--   sc_historical_projections | anon            | REFERENCES, TRIGGER, TRUNCATE
+--   sc_historical_projections | authenticated   | REFERENCES, TRIGGER, TRUNCATE
+--   sc_historical_projections | postgres        | DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE
+--   sc_historical_projections | service_role    | DELETE, INSERT, SELECT, UPDATE   <== load-bearing
+-- (per-role row set may vary slightly by role config)
+--
+-- If service_role is missing any of DELETE / INSERT / SELECT / UPDATE
+-- on either table, DO NOT flip the migration gate green - the loader
+-- will fail on its first insert. Re-run Block B's GRANTs and re-run
+-- this query.
+
+-- Confirm service_role has USAGE + SELECT on both BIGSERIAL sequences.
+-- Table-level INSERT alone is not enough; nextval() calls the
+-- sequence directly and needs USAGE (SELECT lets currval() and
+-- lastval() work too, which the load path does not use but is
+-- granted for symmetry). Second-order form of the notify-1 failure
+-- - a table grant with a missing sequence grant fails at first
+-- insert with `permission denied for sequence`.
+SELECT s.relname AS sequence_name,
+       r.rolname AS grantee,
+       string_agg(p.privilege_type, ', ' ORDER BY p.privilege_type) AS grants
+FROM pg_class s
+JOIN pg_namespace n     ON n.oid = s.relnamespace
+JOIN LATERAL aclexplode(s.relacl) p ON true
+JOIN pg_roles r         ON r.oid = p.grantee
+WHERE s.relkind = 'S'
+  AND n.nspname = 'public'
+  AND s.relname IN ('sc_historical_actuals_id_seq', 'sc_historical_projections_id_seq')
+GROUP BY s.relname, r.rolname
+ORDER BY s.relname, r.rolname;
+
+-- Expected: service_role appears with SELECT, USAGE on both
+-- sequences. Missing USAGE means the loader's first insert will
+-- fail with `permission denied for sequence`. If either row is
+-- absent, DO NOT flip the migration gate green - re-run:
+--   GRANT USAGE, SELECT ON SEQUENCE sc_historical_actuals_id_seq     TO service_role;
+--   GRANT USAGE, SELECT ON SEQUENCE sc_historical_projections_id_seq TO service_role;
+
 -- Loader command (dry-run first):
---   node --env-file=.env.local scripts/billing/seed-historical-sc.mjs --dry-run
+--   node --env-file=.env.local scripts/billing/seed-historical-sc.mjs
 --   node --env-file=.env.local scripts/billing/seed-historical-sc.mjs --write
