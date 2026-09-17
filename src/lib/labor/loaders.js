@@ -108,19 +108,37 @@ export async function paginateActuals(supa, { members, start, end, pageSize }) {
 // only downstream difference is the `basis` word on each period,
 // which the sub-line surfaces.
 // Empty on truly no rows. Never selects 3100.2 or any group total (8.2).
-export async function resolveMemberBudget(supa, accountKey) {
+//
+// FIN-2027 W1 PR-A year-safety: fiscalYear param added with FY2026
+// default so existing callers stay byte-identical. sc_labor_budgets
+// has no fiscal_year column; scope via effective_from window. FY
+// bounds inlined to avoid dragging the labor client bundle; a general
+// helper lands with the pnl-3 fiscal_periods table in Stage 2 (PR-B).
+export async function resolveMemberBudget(supa, accountKey, fiscalYear = 2026) {
+  const fyBounds = fiscalYear === 2026
+    ? { start: "2025-12-29", end: "2026-12-27" }
+    : null;
   const [pnlQ, scQ] = await Promise.all([
     supa
       .from("kpi_budgets")
       .select("period_no, amount")
       .eq("account_key", accountKey)
       .eq("line_code", "3100.1")
-      .eq("fiscal_year", 2026),
-    supa
-      .from("sc_labor_budgets")
-      .select("period, hourly_budget, reason")
-      .eq("account_key", accountKey)
-      .is("superseded_at", null),
+      .eq("fiscal_year", fiscalYear),
+    fyBounds
+      ? supa
+          .from("sc_labor_budgets")
+          .select("period, hourly_budget, reason")
+          .eq("account_key", accountKey)
+          .is("superseded_at", null)
+          .gte("effective_from", fyBounds.start)
+          .lte("effective_from", fyBounds.end)
+      : supa
+          .from("sc_labor_budgets")
+          .select("period, hourly_budget, reason")
+          .eq("account_key", accountKey)
+          .is("superseded_at", null)
+          .eq("period", "__NO_MATCH__"),
   ]);
   if (pnlQ.error) return { error: pnlQ.error, scope: "kpi_budgets_3100_1" };
   if (scQ.error)  return { error: scQ.error,  scope: "sc_labor_budgets" };

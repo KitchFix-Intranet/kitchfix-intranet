@@ -42,20 +42,20 @@ import { countDistinctPeople } from "./personCount.js";
 
 function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
-const FY2026 = 2026;
-
+// FIN-2027 W1 PR-A year-safety: fiscalYear is now a parameter with
+// FY2026 default so existing callers stay byte-identical.
 /**
  * Load 3100.2 (salary) budgets per (account, period).
  * @returns {Promise<{ byAccount: Map<string, Map<number, number>>, error?: string }>}
  */
-export async function load3100_2Budgets(supa, members) {
+export async function load3100_2Budgets(supa, members, fiscalYear = 2026) {
   if (!members || members.length === 0) return { byAccount: new Map() };
   const q = await supa
     .from("kpi_budgets")
     .select("account_key, period_no, amount")
     .in("account_key", members)
     .eq("line_code", "3100.2")
-    .eq("fiscal_year", FY2026);
+    .eq("fiscal_year", fiscalYear);
   if (q.error) return { byAccount: new Map(), error: q.error.message };
   const byAccount = new Map();
   for (const r of q.data || []) {
