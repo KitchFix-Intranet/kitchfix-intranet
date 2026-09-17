@@ -90,11 +90,17 @@ function pickCompForWeek(list, weekStartISO) {
   return picked;
 }
 
-// Load current labor_salary_actuals across CY.
-const rows = await fetchAll("labor_salary_actuals",
-  "account_key, worker_id, week_start, amount",
+// Load current labor_salary_actuals across CY. Rows written from a
+// worker_dept_history annual_comp override (R-115) are excluded from
+// the check: they intentionally use a manual rate that will not match
+// rippling_raw_compensations. Identified by compensation_rippling_id
+// prefix 'worker_dept_history:'.
+const allRows = await fetchAll("labor_salary_actuals",
+  "account_key, worker_id, week_start, amount, compensation_rippling_id",
   [(q) => q.gte("week_start", FY_START).lte("week_start", CY_END)]);
-console.log(`labor_salary_actuals rows CY (P1-P9): ${rows.length}\n`);
+const rows = allRows.filter(r => !String(r.compensation_rippling_id || "").startsWith("worker_dept_history:"));
+const overrideCount = allRows.length - rows.length;
+console.log(`labor_salary_actuals rows CY (P1-P9): ${allRows.length}  (excluded from check: ${overrideCount} manual annual_comp overrides)\n`);
 
 // For each row, compute corrected amount using the new rule.
 const deltas = new Map();  // account_key -> { current_cy, target_cy, current_lp, target_lp }
