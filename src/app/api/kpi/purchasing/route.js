@@ -152,6 +152,7 @@ import {
   loadVendorRollup,
   loadCompliance,
 } from "@/lib/purchasing/loaders.js";
+import { canonicalSubLine, isDescendantOfLine } from "@/lib/purchasing/glRollup.js";
 
 const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -629,12 +630,21 @@ export async function GET(request) {
   // Adaptive categories: union of every gl_line_code with actual > 0
   // in range OR budget > 0 in range. Actual side sourced from the
   // weekly view (already aggregated + filtered to non-excluded rows).
+  //
+  // Kevin ruling 2026-09-17. Categories emit at the CANONICAL SUB-LINE
+  // level (parent + one segment - e.g. `3200.1`, `1385.3`). Raw codes
+  // deeper than that (`3200.1.1`, `1385.3.2`, etc.) collapse to their
+  // canonical sub-line here; the spent* helpers below aggregate every
+  // descendant against that line. Budgets already only carry the
+  // canonical shape; canonicalSubLine is idempotent on those.
   const glLineCodesInWeekly = new Set();
-  for (const r of weekly) if (r.gl_line_code) glLineCodesInWeekly.add(r.gl_line_code);
-  const glLineCodesInBudget = new Set([...budgetsByLine.keys()].filter(gl => {
-    const b = budgetForRange({ byLine: budgetsByLine, glLineCode: gl, members, start, end });
-    return b > 0;
-  }));
+  for (const r of weekly) if (r.gl_line_code) glLineCodesInWeekly.add(canonicalSubLine(r.gl_line_code));
+  const glLineCodesInBudget = new Set([...budgetsByLine.keys()]
+    .map(gl => canonicalSubLine(gl))
+    .filter(gl => {
+      const b = budgetForRange({ byLine: budgetsByLine, glLineCode: gl, members, start, end });
+      return b > 0;
+    }));
   const allGl = new Set([...glLineCodesInWeekly, ...glLineCodesInBudget]);
   const orderedGl = [...allGl].sort(comparePriority);
 
@@ -646,15 +656,19 @@ export async function GET(request) {
   // For the categories rollup below we retain the historical
   // behaviour (spent = every non-excluded row with this gl_line_code)
   // so category variance stays comparable to prior payloads.
+  //
+  // Kevin ruling 2026-09-17. `gl` is the canonical sub-line. Match on
+  // `code === gl OR code.startsWith(gl + '.')` so children (`3200.1.1`
+  // etc.) roll up. Dot check prevents `3200.1` swallowing `3200.12`.
   function spentForGl(gl) {
     let s = 0;
-    for (const r of weekly) if (r.gl_line_code === gl) s += Number(r.amount || 0);
+    for (const r of weekly) if (isDescendantOfLine(r.gl_line_code, gl)) s += Number(r.amount || 0);
     return Math.round(s * 100) / 100;
   }
   function billsOnlySpentForGl(gl) {
     let s = 0;
     for (const r of actuals) {
-      if (r.gl_line_code !== gl) continue;
+      if (!isDescendantOfLine(r.gl_line_code, gl)) continue;
       if (r.source !== "billcom") continue;
       s += Number(r.amount || 0);
     }
@@ -669,7 +683,7 @@ export async function GET(request) {
   function codedCardSpentForGl(gl) {
     let s = 0;
     for (const r of actuals) {
-      if (r.gl_line_code !== gl) continue;
+      if (!isDescendantOfLine(r.gl_line_code, gl)) continue;
       if (r.source !== "rippling_spend") continue;
       s += Number(r.amount || 0);
     }
