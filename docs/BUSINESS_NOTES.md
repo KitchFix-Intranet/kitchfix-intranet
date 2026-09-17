@@ -115,6 +115,21 @@ Beyond `billing_model`, two orthogonal booleans on `accounts` gate the schedule 
 - **Discovered:** 2026-09-17 during the R-114 independent audit against `pnl_actuals`. What initially looked like six periods of missing 3400.1 data on TBJ - FL was this mapping difference. Only P9's $150 was genuinely absent (loaded in the R-114 follow-up migration).
 - **Related:** R-61 (inventory adjustment math), R-74 (INVJE synthetic row rule).
 
+### Budget derivation · board derives, finance reads · $1-2 line-level drift
+
+- **What:** The board's period budgets on every line are derived at request time by dividing the annual budget by 13 and summing back over the periods in the range: `annual ÷ 13 × N_periods_in_range` with JS number precision. Finance's `pnl_actuals` carries whole-dollar figures per period, entered from the annual planning workbook. Summing pnl_actuals per line across P1-P9 gives whole dollars; the board's derivation gives whole dollars ± float error.
+- **How to read it:** Every line, every account, every range shows a period_budget that differs from the pnl_actuals P1-P9 sum by **$1-$2** consistently. Not a bug on either side. Finance's number is what the planning workbook holds; the board's number is the same annual budget re-projected through fractional arithmetic.
+- **Not chasing:** The drift is bounded, deterministic, and does not compound. On any given range the delta lands in the 5th-of-a-cent territory across the whole P&L. The alternatives - loading whole-dollar period budgets into `kpi_budgets` directly, or storing the derivation output rounded - both cost more than $1 per line of trust is worth.
+- **Discovered:** 2026-09-17 during the R-114 independent audit against `pnl_actuals`. Observed on every one of 176 audit rows.
+- **Related:** `docs/KPI_MASTER_SCOPE.md` R-73 (accrue-to-budget doctrine), `docs/RECONCILIATION.md` (index).
+
+### TXR - AZ 5002.5 equipment · client bill-back · settles next period
+
+- **What:** TXR - AZ P1-P9 shows `5002.5` (equipment) with pnl_actuals actual = $22,448.99 and the board's `also_tracked.5002.5.actual` = $4,505.69 - **$17,943 apart**. Not a data defect; the delta is a client bill-back that settles in the next period. The board records the actual spend; finance's P&L includes the accrued receivable.
+- **Once you know this, treat it as resolved:** the deltas will disappear as the receivable settles. Do not attempt to flag the difference or backfill on either side.
+- **Discovered:** 2026-09-17 during the R-114 independent audit. Initially triaged as a data-loader miss; Kevin's ruling 2026-09-17 identifies the pattern.
+- **Related:** `docs/ACCOUNT_MODEL_MATRIX.md` (TXR - AZ billing model), `docs/RECONCILIATION.md` (index).
+
 ---
 
 ## Period rules
