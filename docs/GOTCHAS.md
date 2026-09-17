@@ -9,6 +9,31 @@
 
 ## Incident record
 
+### 2026-09-17 · Rippling overwrites in place · reading `_latest` and applying it to a past week restates history
+
+**The general rule.** Rippling mutates records in place. When a worker's compensation changes (raise, title change, department move, etc.), Rippling updates the same record ID with the new values and a new `effective_date`. **The prior state is not preserved on their side.** Our nightly snapshots into `rippling_raw_*` are the only place the pre-change values survive - `rippling_raw_compensations` has both the 2026-08-19 pre-raise snapshot AND the 2026-09-08 post-raise snapshot for the same `rippling_id`, but the `_latest` view returns only the most recent one.
+
+Any loader that reads `_latest` and applies the returned rate/dept/title to a PAST week will restate history at the current value. The pattern:
+
+```
+loader reads _latest              → one record per rippling_id (current)
+loader applies to week W          → uses current rate even if W predates the change
+result on the board               → past weeks silently move to today's rate
+```
+
+**How it surfaced.** `derive_salary_actuals.mjs --window=fytd` after the Anna Hughes gate merged: TXR - AZ CY 3100.2 went from `$102,306.71` (pre-run) to `$109,038.60` (post-run). Expected `$95,575.93`. e.randall + a.lacy got 2026-09-07 raises; the RAW table has both snapshots (`2026-08-19 @ $66,680` and `2026-09-08 @ $85k / $72.5k`), but `annualInForceForWeek` was consulting only the `_latest` view. Every pre-raise week fell back to `list[0]` — the sole current record — and got restated at $85k/$72.5k. `+$13,463` off finance on CY, without a single line of Rippling data actually being new.
+
+**Blast radius pattern.** For any `--window=fytd` or backfill of any surface, the moment the loader reads `_latest` for a rate/dept/title lookup, the surface gets retroactively "as-of-today" values on every historical row it rewrites. Nightly `--window=trailing8` runs are safer only because they don't reach far enough back to hit the pre-change weeks — until a raise older than 8 weeks accumulates.
+
+**Rule for anyone touching Rippling-derived data:**
+
+1. If a loader picks a value that varies over time (comp rate, department, title, level, manager, work_location), read the **RAW** table, not the `_latest` view.
+2. Order by `salary_effective_date` / `title_effective_date` / equivalent; pick the latest whose effective date is `<= week_start`; fall back to earliest for pre-history weeks.
+3. If the raw table has no history for a worker (only one snapshot, only current rate), the fallback delivers the current rate to every historical week - **this is a known gap that only closes when a nightly sync captured a prior state**. `worker_dept_history` exists for the department case (manual seed for the same reason); consider whether a similar table is needed for the value in question.
+4. `_latest` views are safe for **CURRENT-state** lookups (does this worker exist? what is their current comp?). They are NOT safe for **historical** lookups.
+
+**The specific fix (Anna's follow-up, 2026-09-17):** `derive_salary_actuals.mjs` now reads `rippling_raw_compensations` (raw table) instead of `rippling_raw_compensations_latest`. `annualInForceForWeek` picks the snapshot with the latest `salary_effective_date <= W`, falls back to earliest. Standing probe `_probe_salary_restatement_effect.mjs` asserts the delta between what the loader wrote and what the raw-table simulation would produce is zero - any future `--window=fytd` regression re-lights this immediately.
+
 ### 2026-09-17 · Overview 500 on every range except Next period · FY2026 undefined
 
 **Symptom:** `/api/kpi/overview` returned 500 with `resolve_overview: FY2026 is not defined` on Current year / Last period / Current period for every account. Next period (which has no salary actuals to shape) returned 200. Duration ~10 minutes; hotfix in #1169.

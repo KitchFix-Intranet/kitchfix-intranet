@@ -144,7 +144,23 @@ const [workers, comps, deptMap] = await Promise.all([
   // 2026-08-27 - keyset on rippling_id for _latest views. See
   // src/lib/rippling/paginate.js for the incident rationale.
   fetchAllKeyset(supa, "rippling_raw_workers_latest",      "rippling_id, payload"),
-  fetchAllKeyset(supa, "rippling_raw_compensations_latest", "rippling_id, worker_id, payment_type, annual_value, salary_effective_date, currency"),
+  // Kevin ruling 2026-09-17 (raise restatement). Read the RAW comp
+  // table, not the _latest view. Rippling overwrites the comp record
+  // in place on a raise (same rippling_id, new annual_value, new
+  // salary_effective_date). Only our own snapshot cadence preserves
+  // the pre-raise values. The _latest view returns one record per
+  // worker (the current one), which means annualInForceForWeek could
+  // never see historical rates - --window=fytd then restated every
+  // pre-raise week at the current rate (TXR - AZ CY +$13,463 on
+  // 2026-09-17 after the Anna Hughes gate ran). Reading raw + picking
+  // by effective_date restores the correct per-week rate.
+  //
+  // Every row is loaded; the per-worker loop below picks the right
+  // snapshot per week via pickCompForWeek. Uses fetchAllOffset because
+  // the raw table has no single-key uniqueness that fetchAllKeyset
+  // needs; the table is small (a few thousand rows across all workers)
+  // so offset pagination is bounded and safe.
+  fetchAllOffset(supa, "rippling_raw_compensations", "rippling_id, worker_id, payment_type, annual_value, salary_effective_date, currency, fetched_at"),
   fetchAll("rippling_department_map",           "department_id, account_key, is_container"),
 ]);
 
@@ -286,9 +302,24 @@ function isActiveInWeek(workerPayload, weekStartISO) {
   return true;
 }
 
-// annual_in_force for a worker at a week_start: latest compensation
-// whose salary_effective_date <= week_start. If none <=, use the
-// earliest record and flag effective_from accordingly (spec S-2).
+// annual_in_force for a worker at a week_start.
+//
+// Kevin ruling 2026-09-17. The comp list per worker now contains ALL
+// raw snapshots (not the single latest record from the _latest view).
+// A worker with a raise has TWO or more snapshots with distinct
+// annual_value + salary_effective_date pairs; the RAW table preserved
+// both.
+//
+// Rule: for week W, pick the snapshot whose salary_effective_date is
+// the LATEST date <= W. Fall back to the EARLIEST snapshot if none
+// qualify (mid-week hires, workers whose first snapshot is dated after
+// the target week etc.). This picks pre-raise values for pre-raise
+// weeks and post-raise values for post-raise weeks.
+//
+// Duplicate snapshots (same annual_value AND same salary_effective_date,
+// distinct fetched_at) are equivalent for the amount calculation - the
+// sort above puts them adjacent and either instance produces the same
+// dollar figure. No dedup needed inside the pick.
 function annualInForceForWeek(workerId, weekStartISO) {
   const list = compsByWorker.get(workerId);
   if (!list || list.length === 0) return null;
