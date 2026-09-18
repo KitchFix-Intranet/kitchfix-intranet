@@ -23,6 +23,8 @@
 //   TEST_MODE=true nohup npm run dev > /tmp/kf-dev.log 2>&1 &
 //   node --env-file=.env.local scripts/probes/_probe_finance_close_no_double_count.mjs
 
+import { absorbFinanceCloseIntoSubLines, buildFinanceCloseRow } from "../../src/lib/kpi/shared/financeCloseAbsorb.js";
+
 const BASE = process.env.PROBE_BASE || "http://localhost:3000";
 const HEADERS = {};
 const TOL = 0.02;
@@ -142,6 +144,158 @@ function runSeededSelfTest() {
     results.push({ name: "R-98 hourly view (3100 allow-listed)", expect: "PASS", actual: fails.length === 0 ? "PASS" : "FAIL", detail: fails });
   }
 
+  // ─── R-126 additions ───────────────────────────────────────────────
+  // Case 7: absorb helper on a real scenario - proves the helper folds
+  // the adjustment onto the largest sub-line, drops the FIN_CLOSE row,
+  // and Guard J holds. Uses CIN - AZ P9 3200 shape.
+  {
+    const rows = [
+      { line_code: "3200", actual: 25416.87 },
+      { line_code: "3200.1", parent_line_code: "3200", actual: 24209.47, reported: true, budget_at_this_revenue: 20000, target_pct: 25, sources: ["purchasing_actuals"], flags: [] },
+      { line_code: "3200.2", parent_line_code: "3200", actual: 1000.00, reported: true, budget_at_this_revenue: 900, target_pct: 5, sources: ["purchasing_actuals"], flags: [] },
+      { line_code: "3200.INVJE", parent_line_code: "3200", actual: 1380.00, reported: true, flags: ["inventory_adjustment"], sources: ["inventory_adjustments"] },
+    ];
+    const financeClose = {
+      has_any_verified: true,
+      verified_periods: [9],
+      per_parent: new Map([["3200", { parent: "3200", adjustment: -172.60, by_period: [{ period_no: 9, amount: -172.60 }] }]]),
+    };
+    const { applied, fallbackRows } = absorbFinanceCloseIntoSubLines(rows, financeClose, { totalRevenue: 100000 });
+    const absorbedRow = rows.find(r => r.line_code === "3200.1");
+    const finCloseSurvivor = rows.filter(r => String(r.line_code).endsWith(".FIN_CLOSE"));
+    const okAbsorbed = absorbedRow && Math.abs(absorbedRow.actual - (24209.47 - 172.60)) < 0.02;
+    const okFlags = absorbedRow && Array.isArray(absorbedRow.flags) && absorbedRow.flags.includes("finance_close_absorbed");
+    const okNoFinClose = finCloseSurvivor.length === 0;
+    const okAppliedShape = applied.length === 1 && applied[0].absorber_line_code === "3200.1" && !applied[0].went_negative;
+    const okFallback = fallbackRows.length === 0;
+    const allOk = okAbsorbed && okFlags && okNoFinClose && okAppliedShape && okFallback;
+    results.push({ name: "R-126 absorb onto largest sub-line", expect: "PASS", actual: allOk ? "PASS" : "FAIL", detail: { okAbsorbed, okFlags, okNoFinClose, okAppliedShape, okFallback, absorbed: absorbedRow?.actual, applied } });
+  }
+
+  // Case 8: R-126 rule 5 backstop - no absorbable candidate under a
+  // parent (unreported-only sub-lines). Helper must emit a FIN_CLOSE
+  // row so Guard J holds and the fallback branch is proven reachable.
+  {
+    const rows = [
+      { line_code: "3500", actual: 735.60 },
+      { line_code: "3500.2", parent_line_code: "3500", actual: null, reported: false, sources: [], flags: [] },
+      { line_code: "3500.3", parent_line_code: "3500", actual: null, reported: false, sources: [], flags: [] },
+    ];
+    const financeClose = {
+      has_any_verified: true,
+      verified_periods: [9],
+      per_parent: new Map([["3500", { parent: "3500", adjustment: 100.00, by_period: [{ period_no: 9, amount: 100.00 }] }]]),
+    };
+    const { applied, fallbackRows } = absorbFinanceCloseIntoSubLines(rows, financeClose, { totalRevenue: 100000 });
+    const finCloseEmitted = rows.filter(r => String(r.line_code).endsWith(".FIN_CLOSE"));
+    const okFallback = fallbackRows.length === 1 && String(fallbackRows[0].line_code) === "3500.FIN_CLOSE" && Math.abs(fallbackRows[0].actual - 100.00) < 0.02;
+    const okAppliedEmpty = applied.length === 0;
+    const okRowPushed = finCloseEmitted.length === 1;
+    const allOk = okFallback && okAppliedEmpty && okRowPushed;
+    results.push({ name: "R-126 rule 5 backstop emits FIN_CLOSE", expect: "PASS", actual: allOk ? "PASS" : "FAIL", detail: { okFallback, okAppliedEmpty, okRowPushed, fallbackRows: fallbackRows.map(r => r.line_code) } });
+  }
+
+  // Case 9 (Kevin review 2026-09-18 · F3): parent with zero child rows
+  // must NOT emit a fallback FIN_CLOSE row and must NOT record a
+  // fallbackRow entry - the parent already carries the adjustment
+  // upstream and Guard J is vacuous with no children to sum.
+  {
+    const rows = [
+      // 3100 parent alone, no sub-rows at all (mimics R-98 hourly view
+      // on a verified period).
+      { line_code: "3100", actual: 42509.96 },
+      // Other parents present with sub-rows so the loop runs to completion.
+      { line_code: "3200", actual: 40497.84 },
+      { line_code: "3200.1", parent_line_code: "3200", actual: 40497.84, reported: true, sources: ["purchasing_actuals"], flags: [] },
+    ];
+    const financeClose = {
+      has_any_verified: true,
+      verified_periods: [9],
+      per_parent: new Map([
+        ["3100", { parent: "3100", adjustment: 2058.08, by_period: [{ period_no: 9, amount: 2058.08 }] }],
+        ["3200", { parent: "3200", adjustment: 0, by_period: [] }],
+      ]),
+    };
+    const { applied, fallbackRows } = absorbFinanceCloseIntoSubLines(rows, financeClose, { totalRevenue: 100000 });
+    const finCloseSurvivor = rows.filter(r => String(r.line_code).endsWith(".FIN_CLOSE"));
+    const okNoRow = finCloseSurvivor.length === 0;
+    const okNoFallback = fallbackRows.length === 0;
+    const okNoApplied3100 = !applied.some(a => a.parent === "3100");
+    results.push({
+      name: "R-126 vacuous parent (no sub-rows at all)",
+      expect: "PASS · no FIN_CLOSE row + empty fallback",
+      actual: (okNoRow && okNoFallback && okNoApplied3100) ? "PASS" : "FAIL",
+      detail: { okNoRow, okNoFallback, okNoApplied3100, fallbackRows: fallbackRows.map(r => r.line_code), applied },
+    });
+  }
+
+  // Case 10 (Kevin review 2026-09-18 · F2): variance_pct null must be
+  // preserved on rows where the resolver set it null deliberately
+  // (3100.1 / 3100.2 fixed-cost pattern). Recomputing would surface a
+  // percent verdict the design suppresses.
+  {
+    const rows = [
+      { line_code: "3100", actual: 40000 },
+      // Fixed-cost sub-line: variance_pct hardcoded null in the
+      // resolver, target_pct present.
+      { line_code: "3100.2", parent_line_code: "3100", actual: 15000, reported: true,
+        variance_pct: null, variance: 100, target_pct: 8.5, actual_pct: 7.5,
+        budget_at_this_revenue: 14900,
+        sources: ["labor_salary_actuals"], flags: ["not_applicable_target_pct"] },
+      // Also include a regular candidate so absorb picks the fixed-cost
+      // one via largest |actual|.
+      { line_code: "3100.1", parent_line_code: "3100", actual: 25000, reported: true,
+        variance_pct: 2.5, variance: 500, target_pct: 12, actual_pct: 14.5,
+        budget_at_this_revenue: 24500,
+        sources: ["labor_actuals"], flags: [] },
+    ];
+    const financeClose = {
+      has_any_verified: true,
+      verified_periods: [9],
+      per_parent: new Map([["3100", { parent: "3100", adjustment: -2000, by_period: [{ period_no: 9, amount: -2000 }] }]]),
+    };
+    absorbFinanceCloseIntoSubLines(rows, financeClose, { totalRevenue: 100000 });
+    // 3100.1 is the largest ($25k > $15k), so it absorbs. Its
+    // variance_pct WAS non-null, so it recomputes. 3100.2 is untouched.
+    const hourly = rows.find(r => r.line_code === "3100.1");
+    const salary = rows.find(r => r.line_code === "3100.2");
+    const okHourlyRecomputed = hourly.variance_pct != null;
+    const okSalaryUntouched = salary.variance_pct === null;
+    results.push({
+      name: "R-126 preserve deliberate variance_pct null",
+      expect: "PASS · null preserved on fixed-cost row",
+      actual: (okHourlyRecomputed && okSalaryUntouched) ? "PASS" : "FAIL",
+      detail: { hourly_variance_pct: hourly.variance_pct, salary_variance_pct: salary.variance_pct },
+    });
+  }
+
+  // Case 9 (numbered original): R-126 negative guard - top candidate would go negative;
+  // walk down to next candidate. Setup: 3400.1=$150 (largest by name
+  // but smaller by |actual|), 3400.2=$100, and a -$120 adjustment.
+  // Ranking by |actual| desc: [3400.1 ($150), 3400.2 ($100)]. Top is
+  // 3400.1; 150 - 120 = 30 >= 0, so 3400.1 absorbs. Not exercised.
+  // Real test: top=3400.1=$150 with adj=-$200. Top would go to -50;
+  // walk down to 3400.2=$100 which would go to -100 (also negative).
+  // No candidate stays non-negative; use top and set went_negative=true.
+  {
+    const rows = [
+      { line_code: "3400", actual: 1000 },
+      { line_code: "3400.1", parent_line_code: "3400", actual: 150, reported: true, sources: ["purchasing_actuals"], flags: [] },
+      { line_code: "3400.2", parent_line_code: "3400", actual: 100, reported: true, sources: ["purchasing_actuals"], flags: [] },
+      { line_code: "3400.INVJE", parent_line_code: "3400", actual: 50, reported: true, flags: ["inventory_adjustment"], sources: ["inventory_adjustments"] },
+    ];
+    const financeClose = {
+      has_any_verified: true,
+      verified_periods: [9],
+      per_parent: new Map([["3400", { parent: "3400", adjustment: -200, by_period: [{ period_no: 9, amount: -200 }] }]]),
+    };
+    const { applied } = absorbFinanceCloseIntoSubLines(rows, financeClose, { totalRevenue: 100000 });
+    const absorbed = rows.find(r => r.line_code === "3400.1");
+    const okAbsorbed = absorbed && Math.abs(absorbed.actual - (-50)) < 0.02;
+    const okFlagged = applied.length === 1 && applied[0].went_negative === true;
+    results.push({ name: "R-126 negative guard (top candidate)", expect: "PASS", actual: (okAbsorbed && okFlagged) ? "PASS" : "FAIL", detail: { absorbed: absorbed?.actual, applied } });
+  }
+
   return results;
 }
 
@@ -175,9 +329,20 @@ const CASES = [
 ];
 
 console.log("═══ Live Guard J · parent = sum(children) on every audit + non-audit account ═══");
+console.log("Each case runs twice: +salary (all four parents have sub-rows)");
+console.log("and hourly (R-98 allows 3100 to have zero sub-rows on verified).\n");
 let liveOk = true;
+// Kevin review F3 (2026-09-18): sweep BOTH toggle states. The +salary
+// pass exercises the absorb path on 3100.1/3100.2 rows; the hourly
+// pass exercises the vacuous-parent branch on 3100 (no sub-rows at
+// all under R-98) and asserts no FIN_CLOSE row surfaces.
+const CASE_PLANS = [];
 for (const c of CASES) {
-  const qs = new URLSearchParams({ account: c.account, start: c.start, end: c.end, include_salary: "1" });
+  CASE_PLANS.push({ ...c, include_salary: "1", allowNoChildrenOn: [], suffix: "+salary" });
+  CASE_PLANS.push({ ...c, include_salary: "0", allowNoChildrenOn: ["3100"], suffix: "hourly" });
+}
+for (const c of CASE_PLANS) {
+  const qs = new URLSearchParams({ account: c.account, start: c.start, end: c.end, include_salary: c.include_salary });
   const url = `${BASE}/api/kpi/overview?${qs.toString()}`;
   const res = await fetch(url, { headers: HEADERS });
   if (!res.ok) {
@@ -189,7 +354,7 @@ for (const c of CASES) {
   const rows = body.statement_rows || [];
   const fails = assertParentChildInvariant(rows, { allowNoChildrenOn: c.allowNoChildrenOn, label: `${c.name} · ` });
 
-  console.log(`\n─── ${c.name} · ${c.account} · ${c.start} to ${c.end} ─────`);
+  console.log(`\n─── ${c.name} · ${c.suffix} · ${c.account} · ${c.start} to ${c.end} ─────`);
   for (const parent of PARENTS) {
     const parentRow = rows.find(r => r.line_code === parent && !r.parent_line_code);
     const children = rows.filter(r => r.parent_line_code === parent);
@@ -215,6 +380,18 @@ for (const c of CASES) {
     const cogsDiff = Math.abs(hero - c.expected.cogs);
     console.log(`  cogs card hero_actual = $${hero.toFixed(2)} · expect $${c.expected.cogs.toFixed(2)} · diff=${cogsDiff.toFixed(2)}${cogsDiff < 0.02 ? " · OK" : " · FAIL"}`);
     if (cogsDiff >= 0.02) liveOk = false;
+  }
+
+  // R-126 · no `.FIN_CLOSE` row survives on any live payload. Rule 5
+  // backstop is the only path that would emit one; the probe asserts
+  // it does not fire in production. If it does, that account's parent
+  // has no absorbable sub-line and needs individual attention.
+  const finCloseSurvivors = rows.filter(r => String(r.line_code).endsWith(".FIN_CLOSE"));
+  if (finCloseSurvivors.length > 0) {
+    console.error(`  R-126 FAIL: ${finCloseSurvivors.length} .FIN_CLOSE row(s) surfaced on ${c.name}: ${finCloseSurvivors.map(r => r.line_code).join(", ")}`);
+    liveOk = false;
+  } else {
+    console.log(`  R-126 · no .FIN_CLOSE rows in payload · OK`);
   }
 }
 

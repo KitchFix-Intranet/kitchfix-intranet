@@ -117,7 +117,7 @@ import { composeFlags, isPackagingGapAccount, isSeededAccount } from "./flags.js
 import { periodOf, periodStartISO, periodEndISO, weekStartsInRange, endOfLastCompleteWeek } from "@/app/kpi/labor/lib/periods.js";
 import { PURCHASING_ENVELOPE_EXCLUSIONS } from "@/lib/accountModels.js";
 import { canonicalSubLine } from "@/lib/purchasing/glRollup.js";
-import { resolveFinanceCloseAdjustment, buildFinanceCloseRow } from "@/lib/kpi/shared/financeCloseAdjustment.js";
+import { resolveFinanceCloseAdjustment, absorbFinanceCloseIntoSubLines } from "@/lib/kpi/shared/financeCloseAdjustment.js";
 
 const FISCAL_YEAR = 2026;
 
@@ -1030,9 +1030,13 @@ export async function resolveOverview({
   // the four parent actuals to (feed_total + adjustment). Non-verified
   // periods pass through unchanged; the effect nets to zero.
   //
-  // The `.FIN_CLOSE` synthetic rows are pushed alongside sub-lines and
-  // INVJE further down (search for buildFinanceCloseRow), so the
-  // parent's group still sums (parent = sub-lines + INVJE + FIN_CLOSE).
+  // Kevin R-126 (2026-09-18): the .FIN_CLOSE display row is no longer
+  // emitted per parent. A single post-pass further down (search for
+  // absorbFinanceCloseIntoSubLines) folds the adjustment onto the
+  // largest existing sub-line so parent = sub-lines + INVJE without a
+  // synthetic row. Rule 5 backstop re-emits the row only when a parent
+  // has sub-rows but none are absorbable; probe asserts this stays at
+  // zero occurrences on real data.
   // Guard J: the parent is set ONCE here; no downstream consumer
   // re-derives the parent from children (enumerated in the pre-build
   // report; probe scripts/probes/_probe_finance_close_no_double_count.mjs
@@ -2980,20 +2984,10 @@ export async function resolveOverview({
       // PnlStatement.js update in the same PR removes that read.
       flags: ["not_applicable_target_pct"],
     });
-    // Kevin ruling 2026-09-18 · 3100.FIN_CLOSE sub-row (verified periods
-    // read finance). Only emitted when the salary toggle is on because
-    // that is when 3100 sub-rows render; on the hourly toggle the
-    // parent's actual already carries the adjustment and no sub-rows
-    // exist. Adjustment of exactly zero omits the row entirely.
-    const finClose3100 = financeClose.per_parent.get("3100");
-    if (finClose3100) {
-      const row = buildFinanceCloseRow({
-        parent: "3100",
-        adjustment: finClose3100.adjustment,
-        byPeriod: finClose3100.by_period,
-      });
-      if (row) statementRows.push(row);
-    }
+    // Kevin R-126 (2026-09-18) · the {parent}.FIN_CLOSE synthetic row is
+    // no longer emitted. Its dollars are absorbed into the largest
+    // existing sub-line by a single post-pass after all cost rows +
+    // sources back-fill land (search for absorbFinanceCloseIntoSubLines).
   }
   // 2026-09-01 polish PR (E16 + E17): tagging + verdict suppression
   // on cost-section statement rows.
@@ -3371,24 +3365,10 @@ export async function resolveOverview({
         flags: ["inventory_adjustment"],
       });
     }
-    // Kevin ruling 2026-09-18 · {parent}.FIN_CLOSE synthetic sub-row.
-    // Verified periods have their parent actual switched to pnl_actuals
-    // upstream (feedByParentPeriod block near line 1020); this row
-    // carries the reconciling amount so the group still sums to parent
-    // regardless of whether the parent is pass-through-suppressed.
-    // Guard J holds on pass-through accounts (STL - FL, CIN - OH,
-    // STL - MO) because Guard C keeps sub-lines whole and this row
-    // absorbs the finance-vs-feed difference. Omitted only when the
-    // adjustment is effectively zero.
-    const finCloseP = financeClose.per_parent.get(parent);
-    if (finCloseP) {
-      const row = buildFinanceCloseRow({
-        parent,
-        adjustment: finCloseP.adjustment,
-        byPeriod: finCloseP.by_period,
-      });
-      if (row) statementRows.push(row);
-    }
+    // Kevin R-126 (2026-09-18) · the {parent}.FIN_CLOSE row is no
+    // longer emitted per parent. A single post-pass below runs after
+    // the sources back-fill and folds the adjustment onto the largest
+    // existing sub-line (search for absorbFinanceCloseIntoSubLines).
   }
 
   // Kevin ruling 2026-09-18. A parent row whose actual was switched to
@@ -3405,6 +3385,19 @@ export async function resolveOverview({
       }
     }
   }
+
+  // Kevin R-126 (2026-09-18) · absorb the finance close adjustment onto
+  // the largest existing sub-line under each parent. Runs AFTER the
+  // sources back-fill so every parent + sub-row is in the array and
+  // the pass sees the whole set. Deletes the `.FIN_CLOSE` display; the
+  // parent's group still sums (Guard J) because a real sub-line has
+  // moved by the exact adjustment amount. Rule 5 backstop (no absorbable
+  // sub-line) re-emits the `.FIN_CLOSE` row for correctness; the
+  // Guard J probe asserts this branch stays at zero occurrences on real
+  // data.
+  absorbFinanceCloseIntoSubLines(statementRows, financeClose, {
+    totalRevenue, r2, pctOf,
+  });
 
   // Also-tracked rows
   // 2026-09-01 defect fix: the tracked lines (5002.1 / 5002.5 /
