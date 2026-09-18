@@ -16,6 +16,11 @@ function matches(row, filters) {
     else if (f.op === ">=") { if (String(row[f.col]) < String(f.val)) return false; }
     else if (f.op === "<=") { if (String(row[f.col]) > String(f.val)) return false; }
     else if (f.op === "in") { if (!f.val.includes(row[f.col])) return false; }
+    else if (f.op === "not_is") {
+      // .not(col, "is", null) -> SQL "col IS NOT NULL"
+      if (f.val === null) { if (row[f.col] == null) return false; }
+      else if (row[f.col] === f.val) return false;
+    }
     else if (f.op === "ilike") {
       const cell = String(row[f.col] || "").toLowerCase();
       // The mock does not implement % wildcards; every caller today
@@ -40,8 +45,18 @@ export function makeSupaMock({ tables = {} } = {}) {
       cols: "*",
       payload: null,
       updates: null,
-      orderCol: null,
-      orderAsc: true,
+      // 2026-09-18: orderList replaces single (orderCol, orderAsc).
+      // supabase-js accumulates multiple .order() calls into a
+      // primary-then-secondary sort. The prior single-slot mock
+      // silently dropped every non-final .order() - Cause C from
+      // the finalize-tests-fix brief. getSalariedManagerEmails
+      // called .order("is_site_leader", ...).order("display_name")
+      // and the site-leader ordering vanished under the mock,
+      // returning "Adam, Zoe" when production returns "Zoe, Adam".
+      // A test asserting on the mock's order would pin the wrong
+      // person as chase-email recipient (chasePersonName's
+      // first_salaried fallback takes index 0).
+      orderList: [],
       limit: null,
       single: false,
       maybeSingle: false,
@@ -76,12 +91,25 @@ export function makeSupaMock({ tables = {} } = {}) {
 
       // select
       let rows = store[tableName].filter((r) => matches(r, state.filters));
-      if (state.orderCol) {
+      if (state.orderList.length > 0) {
+        // Multi-column sort. Primary is the first .order() call,
+        // then secondary tiebreakers, matching supabase-js /
+        // PostgreSQL ORDER BY semantics. Also honors nullsFirst
+        // and the ascending default (production defaults asc=true
+        // when opts is omitted; the prior single-slot mock
+        // defaulted asc=false via !!opts?.ascending).
         rows.sort((a, b) => {
-          const av = a[state.orderCol], bv = b[state.orderCol];
-          if (av === bv) return 0;
-          const cmp = av > bv ? 1 : -1;
-          return state.orderAsc ? cmp : -cmp;
+          for (const o of state.orderList) {
+            const av = a[o.col], bv = b[o.col];
+            const aNull = av == null, bNull = bv == null;
+            if (aNull && bNull) continue;
+            if (aNull) return o.nullsFirst ? -1 : 1;
+            if (bNull) return o.nullsFirst ? 1 : -1;
+            if (av === bv) continue;
+            const cmp = av > bv ? 1 : -1;
+            return o.asc ? cmp : -cmp;
+          }
+          return 0;
         });
       }
       if (state.limit != null) rows = rows.slice(0, state.limit);
@@ -111,12 +139,22 @@ export function makeSupaMock({ tables = {} } = {}) {
       gte(col, val) { state.filters.push({ col, op: ">=", val }); return api; },
       lte(col, val) { state.filters.push({ col, op: "<=", val }); return api; },
       in(col, arr)  { state.filters.push({ col, op: "in", val: arr }); return api; },
+      not(col, op, val) { state.filters.push({ col, op: `not_${op}`, val }); return api; },
       // ilike: case-insensitive equality with SQL-style wildcards
       // stripped for the mock (no seed data uses %). Added 2026-09-09
       // so scWeekFinalize's contacts lookup (submitterName) is
       // exercised by the runFinalizeEffects tests.
       ilike(col, val) { state.filters.push({ col, op: "ilike", val: String(val || "") }); return api; },
-      order(col, opts) { state.orderCol = col; state.orderAsc = !!opts?.ascending; return api; },
+      order(col, opts) {
+        // supabase-js default: ascending=true when opts omitted.
+        // supabase-js default: nullsFirst=false unless explicitly set
+        // (PostgreSQL's own default varies by direction, but supabase-
+        // js normalises to nullsFirst=false).
+        const asc = opts == null || opts.ascending !== false;
+        const nullsFirst = !!opts?.nullsFirst;
+        state.orderList.push({ col, asc, nullsFirst });
+        return api;
+      },
       limit(n) { state.limit = n; return api; },
       single() { state.single = true; return exec(); },
       maybeSingle() { state.maybeSingle = true; return exec(); },
