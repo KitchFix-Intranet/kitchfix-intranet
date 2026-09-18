@@ -353,6 +353,52 @@ export function computeLineTargetPctByPeriod({ budgetPeriods, overviewBudgets, m
   return out;
 }
 
+// Kevin R-121 (2026-09-18) · merged labor target pct per period.
+//   merged_pct[p] = (hourly_budget[p] + salary_budget[p]) / revenue_budget[p]
+// Feeds attachWeeklyBasisToBoard's per-week batr under R-121:
+//   week_batr = week_revenue × merged_pct
+// which sums across the period's four weeks to the Overview 3100 batr's
+// `merged_pct × actual_revenue` figure by construction. Guard 1 holds
+// (Labor panel batr == Overview 3100 batr) on every range every account.
+//
+// R-111 SUPERSEDED. Prior rule was "per-week goal = revenue × hourly_pct
+// + salary/4" on the reasoning that a combined percent bakes a fixed
+// cost into a proportional calc. R-111 measured against an adjusted
+// figure that was itself hourly-scaled + static salary; R-121 rebases
+// adjusted to `merged_pct × revenue`, and the per-week composition
+// follows suit. Leave this note here so R-111 is not re-litigated from
+// the scope doc.
+export function computeMergedLineTargetPctByPeriod({ mergedBudgetPeriods, overviewBudgets, members, periods }) {
+  const out = new Map();
+  if (!Array.isArray(mergedBudgetPeriods)) return out;
+  if (!overviewBudgets) return out;
+  const byPeriodMergedLabor = new Map();
+  for (const bp of mergedBudgetPeriods) {
+    if (bp?.period_no != null && bp.amount != null) {
+      byPeriodMergedLabor.set(Number(bp.period_no), Number(bp.amount));
+    }
+  }
+  for (const p of periods) {
+    const mergedBud = byPeriodMergedLabor.get(p);
+    if (mergedBud == null) continue;
+    let revBud = 0;
+    let anyRev = false;
+    for (const line of REVENUE_LINE_CODES) {
+      const perLine = overviewBudgets.get(line);
+      if (!perLine) continue;
+      for (const m of members) {
+        const byAcct = perLine.get(m);
+        if (!byAcct) continue;
+        const v = byAcct.get(p);
+        if (v != null) { revBud += Number(v); anyRev = true; }
+      }
+    }
+    if (!anyRev || revBud === 0) continue;
+    out.set(p, mergedBud / revBud);
+  }
+  return out;
+}
+
 // Kevin item 6 - running week shows a fraction, not a variance. To
 // render "N days left" the client needs the count of days from today
 // through week_end (inclusive of today, exclusive of past days). Only
@@ -391,7 +437,7 @@ function daysLeftInRunningWeek(weekStartISO, todayISO) {
  * Weeks not present in weeklyBasisData (defensive - the loader is
  * called against the same range) get no attach.
  */
-export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null, verifiedPeriodTotals = null, salaryBudgetByPeriod = null, feeBudgetByPeriod = null }) {
+export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null, verifiedPeriodTotals = null, salaryBudgetByPeriod = null, feeBudgetByPeriod = null, mergedTargetPctByPeriod = null }) {
   if (!board || board.applies === false) return board;
   if (!Array.isArray(board.weeks)) return board;
   if (!weeklyBasisData || !Array.isArray(weeklyBasisData.data)) return board;
@@ -512,18 +558,40 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     // by Service Calendar shape - derived, not measured."
     w.week_revenue_derivation = derivation;
 
-    const pct = periodNo != null ? lineTargetPctByPeriod?.get?.(periodNo) : null;
-    if (pct != null) {
-      // Kevin ruling 2026-09-09 (salary as dollar target): when the
-      // caller passes salaryBudgetByPeriod, add per-week salary share
-      // (salary_period / 4) on top of the hourly-pct component. Sum
-      // of per-week batr across a period's 4 weeks then equals the
-      // Overview 3100 batr's `salary_$ + hourly_pct × actual_rev`
-      // formula by construction. Callers without salary opt-in keep
-      // the pre-fix pct-only behaviour.
-      const salaryPeriodBudget = salaryBudgetByPeriod?.get?.(periodNo);
-      const salaryShareThisWeek = salaryPeriodBudget != null ? Number(salaryPeriodBudget) / 4 : 0;
-      w.budget_at_this_week_revenue = revenueForWeek * Number(pct) + salaryShareThisWeek;
+    // Kevin R-121 (2026-09-18). Per-week batr = week_revenue × merged_pct
+    // when the caller supplies mergedTargetPctByPeriod. Sum across the
+    // four weeks then equals the Overview 3100 batr's merged_pct ×
+    // actual_revenue by construction (Guard 1 holds).
+    //
+    // R-111 (2026-09-15) SUPERSEDED. Its formula was
+    //   per_week_batr = week_revenue × hourly_pct + salary_period / 4
+    // on the reasoning that a combined percent bakes a fixed cost into a
+    // proportional calc. R-111 measured against an adjusted figure that
+    // was itself `hourly_pct × revenue + static salary`; R-121 rebases
+    // adjusted to `merged_pct × revenue`, and per-week follows.
+    //
+    // Kevin ruling item 1 (2026-09-18): keep the static salary at week
+    // grain via `week_salary_allowed = salary_period_budget / 4`, but do
+    // NOT add it into `budget_at_this_week_revenue`. The top-level batr
+    // is the TOTAL (`revenue × merged_pct`); `week_hourly_allowed` is
+    // the derived remainder. Consumers that want the split derive it
+    // from the two shipped fields.
+    //
+    // Callers without the merged map (probes, older code paths) fall
+    // back to the R-111 shape for backwards compatibility.
+    const mergedPct = periodNo != null ? mergedTargetPctByPeriod?.get?.(periodNo) : null;
+    const hourlyPct = periodNo != null ? lineTargetPctByPeriod?.get?.(periodNo) : null;
+    const salaryPeriodBudget = periodNo != null ? salaryBudgetByPeriod?.get?.(periodNo) : null;
+    const weekSalaryAllowed = salaryPeriodBudget != null ? Number(salaryPeriodBudget) / 4 : 0;
+    if (mergedPct != null) {
+      const weekTotal = revenueForWeek * Number(mergedPct);
+      w.budget_at_this_week_revenue = weekTotal;
+      w.week_salary_allowed = weekSalaryAllowed;
+      w.week_hourly_allowed = weekTotal - weekSalaryAllowed;
+    } else if (hourlyPct != null) {
+      // Fallback: R-111 shape. Only reached by callers that have not
+      // opted into R-121 yet.
+      w.budget_at_this_week_revenue = revenueForWeek * Number(hourlyPct) + weekSalaryAllowed;
     } else {
       w.budget_at_this_week_revenue = null;
     }
