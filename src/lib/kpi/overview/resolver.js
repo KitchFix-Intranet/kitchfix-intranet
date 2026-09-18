@@ -2561,37 +2561,58 @@ export async function resolveOverview({
     if (scAllWeeks <= 0 && feePeriod <= 0) return null;
     return r2(scAllWeeks + feePeriod);
   })();
-  const labor3100_hourly_batr_range = (() => {
+  // Kevin R-121 (2026-09-18) supersedes the old hourly-plus-static
+  // salary composition. Total labor allowed is the set labor percent
+  // (merged hourly + salary budget over revenue budget) times actual
+  // revenue - always. Salary holds its budget dollar; hourly is the
+  // remainder and absorbs the flex. R-111 said the opposite; R-121
+  // reverses it because R-111 measured against an adjusted figure
+  // that was itself hourly-scaled + static salary, and that adjusted
+  // is now merged_pct × revenue.
+  //
+  // The old variable name `labor3100_hourly_batr_range` is retained
+  // as an alias for downstream callers, but its value is now the
+  // MERGED total, not hourly-only. Hourly and salary sub-row batrs
+  // derive from it below (3100.1 = total - salary_$; 3100.2 = salary_$).
+  const labor3100_salary_bud_by_period = new Map();
+  for (const bp of salaryBudgetPeriodsArrForBatr) {
+    if (bp?.period_no != null) labor3100_salary_bud_by_period.set(Number(bp.period_no), Number(bp.amount || 0));
+  }
+  const labor3100_total_batr_range = (() => {
     if (!has_target) return null;
+    const mergedBudgetRange = r2(
+      labor3100_hourly_period_budget_range
+      + labor3100_salary_period_budget_range
+    );
     // Kevin R-101 (2026-09-09): CP + NP use `labor3100_revenue_for_
     // batr` instead of totalRevenue - see block above. Guard 1
     // (Labor panel == Overview 3100 batr) holds because Labor's
-    // per-week sum after item 3 also uses SC + fee/4 per week,
-    // summing to the same total.
+    // per-week batr sums via merged_pct × week_revenue (R-121 Option 2).
     if (labor3100RevenueForBatrApplies && labor3100_revenue_for_batr != null) {
-      // Preserve budgetAtThisRevenue's hasTarget/null guards while
-      // swapping the actualRevenue argument.
       return sharedBatr({
         actualRevenue: labor3100_revenue_for_batr,
-        lineBudget: labor3100_hourly_period_budget_range,
+        lineBudget: mergedBudgetRange,
         revenueBudgetFullPeriod: revenue_budget_full_period,
         hasTarget: has_target,
       });
     }
-    // Single-period range not covered by R-101 (LP): use range-
-    // level formula against totalRevenue. Same source R-98's 3100.1
-    // sub-row batr uses on LP, so parent + sub agree by
-    // construction.
+    // Single-period range not covered by R-101 (LP): use range-level
+    // formula against totalRevenue. Feeds through sharedBatr so the
+    // guards + rounding stay identical to today's shared helper.
     if (rng.kind === "period") {
-      return budgetAtThisRevenue(labor3100_hourly_period_budget_range);
+      return budgetAtThisRevenue(mergedBudgetRange);
     }
-    // Multi-period range: sum per-period (Method B) to match
-    // Labor's per-week × per-period pct sum by construction.
+    // Multi-period range: sum per-period (Method B) so per-period
+    // pcts land accurately and match Labor's per-week × per-period
+    // sum. Under R-121 the per-period line budget is MERGED
+    // (hourly + salary), not hourly-only.
     let sum = 0;
     let any = false;
     for (const p of periods) {
       const hBudP = labor3100_hourly_bud_by_period.get(p);
-      if (hBudP == null || hBudP <= 0) continue;
+      const sBudP = labor3100_salary_bud_by_period.get(p);
+      const mergedBudP = Number(hBudP || 0) + Number(sBudP || 0);
+      if (mergedBudP <= 0) continue;
       const pRev = perPeriodRevenue.get(p);
       if (!pRev) continue;
       let periodRevenueActual = 0;
@@ -2612,11 +2633,16 @@ export async function resolveOverview({
         }
       }
       if (periodRevBudget <= 0) continue;
-      sum += periodRevenueActual * (hBudP / periodRevBudget);
+      sum += periodRevenueActual * (mergedBudP / periodRevBudget);
       any = true;
     }
     return any ? r2(sum) : null;
   })();
+  // Backwards-compat alias: prior callers of `labor3100_hourly_batr_range`
+  // (the name predates R-121) now receive the merged total. Keep the
+  // binding rather than renaming call sites - the value is the same
+  // one all downstream 3100 batr consumers want.
+  const labor3100_hourly_batr_range = labor3100_total_batr_range;
   // Kevin CC prompt 2026-09-14 (Purchasing reskin prereq B). On
   // running ranges (CP + NP) the non-labor cost lines (3200 / 3400
   // / 3500) flex to the same 4-week SC + fee revenue basis labor
@@ -2742,10 +2768,19 @@ export async function resolveOverview({
     // labor3100_hourly_batr_range falls through to the totalRevenue-
     // based single/multi-period branches - Guard 1 EQ on those
     // ranges from #1097 is preserved byte-identical.
+    // Kevin R-121 (2026-09-18). `labor3100_hourly_batr_range` is now
+    // the MERGED total (see rename above). The +salary parent shows
+    // the total (merged_pct × AR). The hourly parent (R-98 swap on
+    // CP+NP hourly toggle) shows total - salary_$: the hourly
+    // allowance. Salary_$ is used internally to compute the hourly
+    // allowance but never ships as a distinct field on the hourly
+    // path (Guard D preserved - salary values do not reach a
+    // hourly-toggle payload; only the derived hourly allowance
+    // number does).
     const _batr = (has_target && labor3100_hourly_batr_range != null)
       ? (use_hourly
-          ? labor3100_hourly_batr_range
-          : r2(labor3100_hourly_batr_range + labor3100_salary_period_budget_range))
+          ? r2(labor3100_hourly_batr_range - labor3100_salary_period_budget_range)
+          : labor3100_hourly_batr_range)
       : null;
     statementRows.push({
       line_code: "3100",
@@ -2883,17 +2918,15 @@ export async function resolveOverview({
     // are unchanged by construction: on CY + LP the whole period is
     // elapsed, so BTD == PB and pctOf gives the same value either way.
     const hourlyTargetPct = has_target ? pctOf(hourlyPB, revenue_budget_full_period) : null;
-    // Kevin R-101 (2026-09-09) item 4. On CP + NP the 3100.1 sub-
-    // row batr uses labor3100_revenue_for_batr (4-week SC + fee) -
-    // same source as the 3100 parent's hourly component - so parent
-    // and sub agree by construction. On CY + LP the gate is false
-    // and hourlyBatr falls back to totalRevenue as before, so the
-    // #1097 EQ result on those ranges is preserved byte-identical.
-    const hourlyBatrRevenue = (labor3100RevenueForBatrApplies && labor3100_revenue_for_batr != null)
-      ? labor3100_revenue_for_batr
-      : totalRevenue;
-    const hourlyBatr = (has_target && hourlyBatrRevenue != null && hourlyTargetPct != null)
-      ? r2((hourlyTargetPct / 100) * hourlyBatrRevenue)
+    // Kevin R-121 (2026-09-18). Hourly is the remainder. The 3100.1
+    // batr = parent_total_batr - salary_period_budget_range. Sums
+    // to the parent by construction (parent shows total, 3100.1
+    // shows hourly, 3100.2 shows salary; 3100.1 + 3100.2 == parent).
+    // Revenue basis follows the parent (CP+NP use
+    // labor3100_revenue_for_batr; CY+LP use totalRevenue) because
+    // parent_total_batr already threads that gate above.
+    const hourlyBatr = (has_target && labor3100_total_batr_range != null)
+      ? r2(labor3100_total_batr_range - labor3100_salary_period_budget_range)
       : null;
     statementRows.push({
       line_code: "3100.1",

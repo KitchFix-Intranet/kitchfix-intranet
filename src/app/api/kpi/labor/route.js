@@ -41,7 +41,7 @@ import { loadOverviewBudgets, computeContractualAccrualByPeriod, sumPeriodRevenu
 import { resolveFinanceCloseAdjustment, applyFinanceCloseToLaborBoard } from "@/lib/kpi/shared/financeCloseAdjustment.js";
 import { periodOf as periodOfLabor, weekStartsInRange } from "@/app/kpi/labor/lib/periods.js";
 import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore, recomputeVerdictFromPanel, recomputePanelBatrFromPerWeek } from "@/lib/labor/labor-batr.js";
-import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
+import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, computeMergedLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
 // only consumed by paginateActuals / resolveMemberBudget /
 // buildPriorPeriodComparison; the loaders module owns those imports now.
@@ -1655,8 +1655,19 @@ export async function GET(request) {
       periods: rangePeriodsSingle,
       salaryBudgetByPeriod: salaryBudgetByPeriodMerged,
     });
+    // Kevin R-121 (2026-09-18). Merged pct per period feeds per-week
+    // batr under R-121's rule: week_batr = week_revenue × merged_pct.
+    // Panel batr sum then equals the Overview 3100 batr's merged_pct
+    // × actual_revenue by construction (Guard 1 on +salary toggle).
+    const mergedLineTargetPct = computeMergedLineTargetPctByPeriod({
+      mergedBudgetPeriods: bodySingle.budget_periods,
+      overviewBudgets: overviewBudgetsSingle?.data || new Map(),
+      members: [account],
+      periods: rangePeriodsSingle,
+    });
     attachWeeklyBasisToBoard(bodySingle.board, weeklyBasisSingle, {
       lineTargetPctByPeriod: lineTargetPctMerged,
+      mergedTargetPctByPeriod: mergedLineTargetPct,
       todayISO: today,
       contractualAccrualByPeriod: contractualAccrualSingle,
       verifiedPeriodTotals: verifiedPeriodTotalsSingle,
