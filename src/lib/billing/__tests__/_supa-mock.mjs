@@ -127,9 +127,22 @@ export function makeSupaMock({ tables = {} } = {}) {
     return api;
   }
 
+  // sc-48: RPC support for the invoice-number sequences. Returns a
+  // monotonically-increasing integer per RPC name. Tests can assert
+  // on the emitted KF/KFT strings by predicting the counter.
+  const rpcCounters = {};
+  function rpc(name, _args) {
+    const cur = (rpcCounters[name] || 0) + 1;
+    rpcCounters[name] = cur;
+    log.push({ op: "rpc", name, result: cur });
+    return Promise.resolve({ data: cur, error: null });
+  }
+
   return {
     from(tableName) { return chain(tableName); },
+    rpc(name, args) { return rpc(name, args); },
     _dump(tableName) { return [...(store[tableName] || [])]; },
     _log() { return [...log]; },
+    _rpcCounters() { return { ...rpcCounters }; },
   };
 }
