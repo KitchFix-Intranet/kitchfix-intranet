@@ -49,8 +49,13 @@ function baseCtx({ accountKey = "TXR - AZ", weekStart = "2026-07-27" } = {}) {
   };
 }
 
-function makeSeedTables({ map = TXR_MAP } = {}) {
+function makeSeedTables({ map = TXR_MAP, people = [] } = {}) {
   return {
+    // sc-46 (#1161): N1/chase recipients derive from `people`, not from
+    // sc_qbo_account_map.salaried_manager_emails. Tests that expect a
+    // non-empty salariedManagerEmails must seed rows here - seeding the
+    // dead map column proves nothing.
+    people,
     sc_qbo_account_map: [map],
     sc_qbo_service_map: [
       { service_id: "svc-1", account_key: map.account_key, qbo_item_id: "3338",
@@ -105,7 +110,9 @@ test("F4 shape: test-mode finalize on TXR - AZ fires N1 to Kevin only, subject [
   const result = await runFinalizeEffects(baseCtx(), deps);
   assert.equal(result.pushed, true, "test-mode post succeeded via injected fake");
   assert.equal(n1Args.qboMode, "test", "qboMode threaded through to fireN1");
-  assert.deepEqual(n1Args.accountMap, { salariedManagerEmails: [], rdoEmail: null });
+  assert.deepEqual(n1Args.accountMap, {
+    salariedManagerEmails: [], rdoEmail: null, notifyOperators: true,
+  });
   assert.deepEqual(result.n1.recipients.to, [KEVIN_EMAIL], "N1 to Kevin only in test mode");
   assert.match(result.n1.subject, /^\[TEST\] Invoice ready:/);
 });
@@ -254,7 +261,14 @@ test("live mode: qboMode='live' + accountMap threaded to postInvoiceDraft and fi
     salaried_manager_emails: ["l.ochoa@kitchfix.com"],
     rdo_email: "s.lynch@kitchfix.com",
   };
-  const supa = makeSupaMock({ tables: makeSeedTables({ map: liveMap }) });
+  const supa = makeSupaMock({ tables: makeSeedTables({
+    map: liveMap,
+    people: [{
+      account_key: "TXR - AZ", status: "ACTIVE", is_salaried: true,
+      work_email: "l.ochoa@kitchfix.com", display_name: "L Ochoa",
+      is_site_leader: true,
+    }],
+  }) });
 
   let postCtx = null;
   let n1Args = null;
@@ -290,6 +304,7 @@ test("live mode: qboMode='live' + accountMap threaded to postInvoiceDraft and fi
   assert.deepEqual(n1Args.accountMap, {
     salariedManagerEmails: ["l.ochoa@kitchfix.com"],
     rdoEmail: "s.lynch@kitchfix.com",
+    notifyOperators: true,   // sc-45: defaults true; pilots set it false explicitly
   });
   assert.doesNotMatch(n1Args.subject || result.n1.subject, /\[TEST\]/,
     "live-mode subject has no [TEST] prefix");
