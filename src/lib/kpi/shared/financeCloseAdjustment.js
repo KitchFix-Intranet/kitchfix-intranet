@@ -26,8 +26,21 @@
 
 import { isDescendantOfLine } from "@/lib/purchasing/glRollup.js";
 import { derivePeriodState } from "@/lib/kpi/overview/pnl-loader.js";
+import {
+  FINANCE_CLOSE_PARENT_LINES,
+  buildFinanceCloseRow,
+  absorbFinanceCloseIntoSubLines,
+} from "./financeCloseAbsorb.js";
 
-export const FINANCE_CLOSE_PARENT_LINES = ["3100", "3200", "3400", "3500"];
+// Kevin R-126 (2026-09-18): pure helpers moved to financeCloseAbsorb.js
+// so probes can import them under plain Node without pulling this
+// file's @/ alias chain. Re-exported here for backwards compatibility
+// with existing importers.
+export {
+  FINANCE_CLOSE_PARENT_LINES,
+  buildFinanceCloseRow,
+  absorbFinanceCloseIntoSubLines,
+};
 
 // Roll pnl_actuals sub-lines to a parent for one (account_key, period_no).
 // Input `pnlMap` matches the resolver's shape:
@@ -177,39 +190,5 @@ export function applyFinanceCloseToLaborBoard(board, financeClose) {
   return board;
 }
 
-// Build the emitted `.FIN_CLOSE` statement_row for a parent. Returns null
-// when adjustment is effectively zero (Guard: omit entirely, per prompt).
-export function buildFinanceCloseRow({ parent, adjustment, byPeriod, section = "cogs" }) {
-  if (adjustment == null || Math.abs(adjustment) < 0.005) return null;
-  const periodsList = (byPeriod || [])
-    .filter(b => Math.abs(b.amount) >= 0.005)
-    .map(b => b.period_no)
-    .sort((a, b) => a - b);
-  const periodLabel = periodsList.length === 0
-    ? "verified"
-    : periodsList.length === 1
-      ? `P${periodsList[0]} verified`
-      : `P${periodsList[0]}-P${periodsList[periodsList.length - 1]} verified`;
-  return {
-    line_code: `${parent}.FIN_CLOSE`,
-    section,
-    parent_line_code: parent,
-    label: "Finance close adjustment",
-    reported: true,
-    actual: adjustment,
-    budget_to_date: null,
-    period_budget: null,
-    variance: null,
-    variance_pct: null,
-    actual_pct: null,
-    target_pct: null,
-    budget_at_this_revenue: null,
-    envelope_delta: null,
-    sources: ["pnl_actuals"],
-    flags: ["synthetic", "finance_close_adjustment"],
-    finance_close: {
-      periods_verified: periodsList,
-      period_label: periodLabel,
-    },
-  };
-}
+// buildFinanceCloseRow + absorbFinanceCloseIntoSubLines now live in
+// financeCloseAbsorb.js and are re-exported at the top of this file.
