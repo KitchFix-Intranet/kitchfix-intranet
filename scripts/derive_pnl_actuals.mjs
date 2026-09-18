@@ -75,6 +75,19 @@ import ExcelJS from "exceljs";
 import path from "node:path";
 import os from "node:os";
 import { existsSync } from "node:fs";
+// FIN-2027 W1 Stage 2 · shared load-core. See header of that file.
+import {
+  SGA_ROW_RANGE,
+  readNumeric,
+  round2,
+  parseLineCode,
+  classifySkippedLabel,
+  loadKpiLinesCatalog,
+  upsertPnlActualsInBatches,
+  updateKpiPeriodStatusVerified,
+  verifyPostLoadRowCount,
+  readKpiPeriodStatusVerified,
+} from "./lib/pnl_load_core.mjs";
 
 // ─── Constants ───────────────────────────────────────────────────────
 const DEFAULT_WORKBOOK_PATH = path.join(
@@ -109,8 +122,7 @@ const IGNORE_TABS = new Set(["P&L Across", "Kitchfix Total", "CORP"]);
 // Vehicle Insurance) - the loader parses the code from the label
 // so a per-tab variance still lands with the right line_code.
 const REV_COGS_ROWS = [21, 22, 25, 26, 29, 35, 36, 40, 41, 45, 46, 47, 51, 52, 53, 54];
-// SG&A block scans rows 60-97 and loads any label with a dot-suffix code.
-const SGA_ROW_RANGE = { first: 60, last: 97 };
+// SGA_ROW_RANGE (rows 60..97) imported from ./lib/pnl_load_core.mjs.
 
 // Band offsets (verified against CIN-AZ workbook; row 3 labels + row 4 sub-headers):
 //   Period n Budget col = 2  + (n-1)         for n=1..13 (simple period-budget cols)
@@ -195,50 +207,7 @@ const supa = createClient(
 console.log("");
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-function readNumeric(cell) {
-  if (!cell) return null;
-  const v = cell.value;
-  if (v == null) return null;
-  if (typeof v === "number") return v;
-  if (typeof v === "object") {
-    if (v.result != null) return typeof v.result === "number" ? v.result : Number(v.result) || 0;
-    if (v.formula) return null;                         // formula without cached result - treat as no value
-  }
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function round2(n) { return Math.round(n * 100) / 100; }
-
-// Parse a numbered line code out of a row-1 label. Returns {code, label}
-// or null if the label is not a numbered line.
-//
-// Numbered lines:      "2200 Catering Revenue", "    3200.1 General Food"
-// Group headers:       "5002 Repair & Maintenance", "3200 Food Costs"
-// Aggregation rows:    "Total Revenue", "  Total 3200 Food Costs"
-//
-// Rule (matches Kevin's spec "parse code from label prefix"):
-//   - Skip if trimmed label starts with "total" (case-insensitive).
-//   - Match leading 4-digit code, optionally with .digit suffix.
-//   - Additionally: SG&A group headers (5002, 5004, 5006, 5012, 5013,
-//     5016, 5017) look like "5002 Repair & Maintenance" - no dot -
-//     and we skip these. Revenue lines 2200/2300/2600 also have no
-//     dot but are legitimate numbered lines; we distinguish by row
-//     range (the SG&A block starts at row 60).
-function parseLineCode(rawLabel, rowNo) {
-  if (typeof rawLabel !== "string") return null;
-  const trimmed = rawLabel.trim();
-  if (trimmed.length === 0) return null;
-  if (/^total\b/i.test(trimmed)) return null;
-  const m = trimmed.match(/^(\d{4}(?:\.\d+)?)\s+/);
-  if (!m) return null;
-  const code = m[1];
-  // In the SG&A block (row >= 60), a plain 4-digit code is a group
-  // header (e.g. row 60 "5002 Repair & Maintenance") - skip it.
-  // Numbered SG&A lines always carry a dot suffix.
-  if (rowNo >= SGA_ROW_RANGE.first && !code.includes(".")) return null;
-  return { code, label: trimmed };
-}
+// readNumeric, round2, parseLineCode imported from ./lib/pnl_load_core.mjs.
 
 // ─── Load workbook ──────────────────────────────────────────────────
 const wb = new ExcelJS.Workbook();
@@ -278,11 +247,13 @@ console.log("");
 // load (the FK would catch it at write time, but the loader should
 // refuse to accept it - see PR #902 Fix 2 review).
 console.log("loading kpi_lines catalog for FK pre-validation...");
-const { data: catalogRows, error: catalogErr } = await supa
-  .from("kpi_lines")
-  .select("line_code");
-if (catalogErr) { console.error(`kpi_lines read failed: ${catalogErr.message}`); process.exit(1); }
-const kpiLinesCatalog = new Set(catalogRows.map((r) => r.line_code));
+let kpiLinesCatalog;
+try {
+  kpiLinesCatalog = await loadKpiLinesCatalog(supa);
+} catch (e) {
+  console.error(e.message);
+  process.exit(e.exitCode ?? 1);
+}
 console.log(`  kpi_lines catalog: ${kpiLinesCatalog.size} codes`);
 console.log("");
 
@@ -292,23 +263,9 @@ const skippedRows = [];                                 // parsed-but-not-loaded
 const emptyCells = [];                                  // named cells that were null on both actual + budget
 const unrecognizedCodes = [];                           // codes parsed but NOT in kpi_lines (LOUD STOP)
 
-// Classify a skipped row so the report distinguishes:
-//   - empty_row          truly blank cell in the SG&A range fill
-//   - total_row          "Total ..." aggregator
-//   - group_header_row   4-digit-no-dot SG&A group header (e.g. "5002 Repair & Maintenance")
-//   - unnumbered_row     any label with no leading numbered-code prefix
-//   - revcogs_row_unparsed  fixed REV_COGS row whose label did not parse (unexpected)
-function classifySkippedLabel(rawLabel, rowNo) {
-  const stringForm = typeof rawLabel === "string"
-    ? rawLabel.trim()
-    : (rawLabel == null ? "" : String(rawLabel));
-  if (stringForm.length === 0) return { kind: "empty_row", reason: "blank cell", label: "" };
-  if (/^total\b/i.test(stringForm)) return { kind: "total_row", reason: "Total aggregator (label starts 'Total')", label: stringForm };
-  if (rowNo >= SGA_ROW_RANGE.first && /^\d{4}\s+/.test(stringForm)) {
-    return { kind: "group_header_row", reason: "SG&A group header (4-digit no dot)", label: stringForm };
-  }
-  return { kind: "unnumbered_row", reason: "no leading numbered-code prefix", label: stringForm };
-}
+// classifySkippedLabel imported from ./lib/pnl_load_core.mjs.
+// (The 'revcogs_' prefix is applied by the fixed-row scan below on
+// misses in the REV_COGS_ROWS list.)
 
 for (const [tab, accountKey] of Object.entries(TAB_TO_ACCOUNT)) {
   const ws = wb.getWorksheet(tab);
@@ -599,21 +556,13 @@ if (args.dryRun) {
 
 // ─── Write pnl_actuals ──────────────────────────────────────────────
 console.log(`writing pnl_actuals (upsert on account_key,fiscal_year,period_no,line_code)...`);
-let written = 0;
-for (let i = 0; i < rows.length; i += BATCH) {
-  const chunk = rows.slice(i, i + BATCH);
-  const { error, count } = await supa
-    .from("pnl_actuals")
-    .upsert(chunk, {
-      onConflict: "account_key,fiscal_year,period_no,line_code",
-      count: "exact",
-    });
-  if (error) {
-    console.error(`pnl_actuals upsert failed at offset ${i}: ${error.message}`);
-    process.exit(3);
-  }
-  written += (count ?? chunk.length);
-  process.stdout.write(`  upserted ${written}/${rows.length}\r`);
+try {
+  await upsertPnlActualsInBatches(supa, rows, BATCH, (written, total) => {
+    process.stdout.write(`  upserted ${written}/${total}\r`);
+  });
+} catch (e) {
+  console.error(e.message);
+  process.exit(e.exitCode ?? 3);
 }
 process.stdout.write("\n");
 
@@ -627,29 +576,20 @@ process.stdout.write("\n");
 // closed yet.
 console.log(`updating kpi_period_status (verified_at=${args.verifiedAt}, source_ref=${path.basename(workbookPath)})...`);
 {
-  const nowIso = new Date().toISOString();
   let updatedCount = 0;
-  for (let p = periods.first; p <= periods.last; p += 1) {
-    const { data, error } = await supa
-      .from("kpi_period_status")
-      .update({
-        verified_at:  args.verifiedAt,
-        verified_by:  args.verifiedBy,
-        source_ref:   path.basename(workbookPath),
-        updated_at:   nowIso,
-      })
-      .eq("fiscal_year", FISCAL_YEAR)
-      .eq("period_no", p)
-      .select("period_no");
-    if (error) {
-      console.error(`kpi_period_status update failed at P${p}: ${error.message}`);
-      process.exit(3);
-    }
-    if (!data || data.length === 0) {
-      console.error(`kpi_period_status has no row for FY${FISCAL_YEAR} P${p} - migration seed missing`);
-      process.exit(3);
-    }
-    updatedCount += data.length;
+  try {
+    const res = await updateKpiPeriodStatusVerified(supa, {
+      fiscalYear: FISCAL_YEAR,
+      first:      periods.first,
+      last:       periods.last,
+      verifiedAt: args.verifiedAt,
+      verifiedBy: args.verifiedBy,
+      sourceRef:  path.basename(workbookPath),
+    });
+    updatedCount = res.updatedCount;
+  } catch (e) {
+    console.error(e.message);
+    process.exit(e.exitCode ?? 3);
   }
   console.log(`  updated ${updatedCount} kpi_period_status rows (verified_at + verified_by + source_ref + updated_at)`);
   console.log(`  closed_at NOT TOUCHED (migration owns calendar closes)`);
@@ -660,31 +600,32 @@ console.log("");
 console.log("─── post-load verification ───");
 
 // Row count in FY2026 for the loaded period range.
-const cnt = await supa
-  .from("pnl_actuals")
-  .select("*", { count: "exact", head: true })
-  .eq("fiscal_year", FISCAL_YEAR)
-  .gte("period_no", periods.first)
-  .lte("period_no", periods.last);
-if (cnt.error) { console.error(`post-load count failed: ${cnt.error.message}`); process.exit(3); }
-console.log(`  pnl_actuals rows in FY${FISCAL_YEAR} P${periods.first}..P${periods.last}: ${cnt.count}  (loader emitted ${rows.length})`);
-const rowMatch = cnt.count === rows.length;
+let cntCount;
+try {
+  const res = await verifyPostLoadRowCount(supa, FISCAL_YEAR, periods.first, periods.last);
+  cntCount = res.count;
+} catch (e) {
+  console.error(e.message);
+  process.exit(e.exitCode ?? 3);
+}
+console.log(`  pnl_actuals rows in FY${FISCAL_YEAR} P${periods.first}..P${periods.last}: ${cntCount}  (loader emitted ${rows.length})`);
+const rowMatch = cntCount === rows.length;
 console.log(`  row-count match: ${rowMatch ? "PASS" : "FAIL"}`);
 
 // kpi_period_status verified for the loaded periods.
-const ver = await supa
-  .from("kpi_period_status")
-  .select("period_no, verified_at, verified_by, source_ref")
-  .eq("fiscal_year", FISCAL_YEAR)
-  .gte("period_no", periods.first)
-  .lte("period_no", periods.last)
-  .order("period_no");
-if (ver.error) { console.error(`post-load status read failed: ${ver.error.message}`); process.exit(3); }
+let verRows;
+try {
+  const res = await readKpiPeriodStatusVerified(supa, FISCAL_YEAR, periods.first, periods.last);
+  verRows = res.data;
+} catch (e) {
+  console.error(e.message);
+  process.exit(e.exitCode ?? 3);
+}
 console.log(`  kpi_period_status verified rows for FY${FISCAL_YEAR} P${periods.first}..P${periods.last}:`);
-for (const r of (ver.data || [])) {
+for (const r of verRows) {
   console.log(`    P${r.period_no}  verified_at=${r.verified_at}  verified_by=${r.verified_by}  source_ref=${r.source_ref}`);
 }
-const versionCount = (ver.data || []).length;
+const versionCount = verRows.length;
 const statusMatch = versionCount === (periods.last - periods.first + 1);
 console.log(`  period-status match: ${statusMatch ? "PASS" : "FAIL"}`);
 

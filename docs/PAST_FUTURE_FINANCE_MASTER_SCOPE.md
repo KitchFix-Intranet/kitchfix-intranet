@@ -3,7 +3,7 @@
 > **The living alignment doc for the FIN-2027 program.** This is a current-state orientation doc: it points to detail, it does not contain it. Updated at the close of every working session (Chat-Claude drafts the delta, CC commits it, Kevin merges). If this file grows past ~3 screens, something belongs in a linked doc instead.
 
 **Program tag:** FIN-2027 (branch + PR prefix)
-**Last updated:** 2026-09-17c (W0 orientation audit landed on `audit/fin2027-orientation`; report at `docs/audits/FIN2027_ORIENTATION_2026-09-17.md` awaiting Kevin + Chat-Claude review)
+**Last updated:** 2026-09-17d (W1 loads landed: Stage 0 FY2026 P9 via existing loader; Stage 1 PR-A #1166 MERGED; Stage 2 PR-B #1167 DRAFT with pnl-3 + pnl-4 applied + FY2024 3,708 rows + FY2025 3,452 rows loaded; invented-zeros finding logged to `docs/backlog/pnl-actuals-invented-zeros.md`)
 **Seats:** Kevin (owner - merges, Studio migrations, all rulings) · Chat-Claude (architect - briefs, reviews, this doc) · CC (master coder + researcher - executes, reports, never merges) · Josh Katt (sponsor) · Joe Lessard (2027 budgets, closed financials) · Sebastian Castro (finance workbooks)
 
 ---
@@ -35,11 +35,11 @@ Scope notes: St. Louis (both sites) has essentially no history. The analysis cor
 
 | W | Name | Status | Next / gate |
 |---|---|---|---|
-| W0 | Orientation + technical review (read-only) | **REPORT LANDED 2026-09-17 - awaiting Kevin + Chat-Claude review** | Kevin + Chat-Claude scope W1 from the report; PR-1/PR-4 rulings on read-path fix vs history-table split |
-| W1 | FY2024-FY2025 closed P&L history + FY2026 P9 into PG (per year, per period, per account, read-only) | NOT STARTED | Gated on W0 report + rulings PR-1..PR-4 below |
-| W2 | Confirm the SC 2023-2025 historical upload (separate Claude + CC session) | IN FLIGHT ELSEWHERE | W0 detects whether any pre-2026 SC rows have landed; reconciliation scoped after |
+| W0 | Orientation + technical review (read-only) | **COMPLETE** - `docs/audits/FIN2027_ORIENTATION_2026-09-17.md`, PR #1163 merged | (closed) |
+| W1 | FY2024-FY2025 closed P&L history + FY2026 P9 into PG (per year, per period, per account, read-only) | **LOADS COMPLETE 2026-09-17** - Stage 0 FY2026 P9 (3,167 rows, 11/11 recon PASS); Stage 1 PR-A #1166 MERGED; Stage 2 PR-B #1167 DRAFT with FY2024 3,708 rows + FY2025 3,452 rows loaded. Audit doc `docs/audits/FIN2027_W1_LOAD_2026-09-17.md`. Invented-zeros finding logged to backlog. | Kevin + Chat-Claude review PR-B; merge; then W2 can start |
+| W2 | Confirm the SC 2023-2025 historical upload (separate Claude + CC session) + PR-7 (`sc_daily_revenue` view guard) | IN FLIGHT ELSEWHERE | W2's first act is PR-7 per W1 brief §5.5 |
 | W3 | Dissect Joe's 2027 budget scenarios (Full MLB + No MLB bookends) | **FILES RECEIVED 2026-09-17, Chat-Claude pre-read done** | Gated on W0 report + PR-5 (scenario architecture) |
-| W4 | Meeting-note-driven analysis (food $/meal, labor, P+S) + leadership review session | NOT STARTED | W1 + W3; target ~09-30 |
+| W4 | Meeting-note-driven analysis (food $/meal, labor, P+S) + leadership review session | NOT STARTED | W1 + W3; target ~09-30. **Design constraint (2026-09-17)**: cost-per-meal metrics exclude CIN - OH, STL - MO, STL - FL from both numerator and denominator (food is pass-through billed as reimbursement; $0 on 3200.1 is correct, not missing). |
 
 ## 3. Data inventory
 
@@ -96,7 +96,9 @@ Scope notes: St. Louis (both sites) has essentially no history. The analysis cor
 
 ## 6. Findings ledger
 
-W0 report landed 2026-09-17; 13 findings F-1..F-13 live in [`docs/audits/FIN2027_ORIENTATION_2026-09-17.md`](audits/FIN2027_ORIENTATION_2026-09-17.md) §2. One P0 (F-1: 8 unsafe KPI/labor SELECTs), four P1 (F-2..F-5), five P2 (F-6..F-10), three P3 (F-11..F-13). Format: ID · severity · finding · evidence · affected workstream.
+W0 report 2026-09-17 · 13 findings F-1..F-13 in [`docs/audits/FIN2027_ORIENTATION_2026-09-17.md`](audits/FIN2027_ORIENTATION_2026-09-17.md) §2. One P0 (F-1: 8 unsafe KPI/labor SELECTs, resolved by PR-A #1166), four P1 (F-2..F-5), five P2 (F-6..F-10), three P3 (F-11..F-13). F-6 fixed in Playbook §3.6 as part of PR-B.
+
+W1 close-out 2026-09-17 · one P0-class item: **loader writes actual = 0 on workbook cells with actual EMPTY and budget populated**, violating the pnl-1 absence contract. 2,037 rows across three years (FY2024: 1,110; FY2025: 88; FY2026 P1..P9: 839). Logged to [`docs/backlog/pnl-actuals-invented-zeros.md`](backlog/pnl-actuals-invented-zeros.md) with two fix options. Not implemented in W1 per Kevin ruling - the fix is a KPI-lane change (schema + reader audit) that cannot be made unilaterally. See [`docs/audits/FIN2027_W1_LOAD_2026-09-17.md`](audits/FIN2027_W1_LOAD_2026-09-17.md) for the finding writeup.
 
 ## 7. Standing gates (binding on every FIN-2027 session)
 
