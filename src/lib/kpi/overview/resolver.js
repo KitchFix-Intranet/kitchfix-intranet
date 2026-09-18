@@ -117,6 +117,7 @@ import { composeFlags, isPackagingGapAccount, isSeededAccount } from "./flags.js
 import { periodOf, periodStartISO, periodEndISO, weekStartsInRange, endOfLastCompleteWeek } from "@/app/kpi/labor/lib/periods.js";
 import { PURCHASING_ENVELOPE_EXCLUSIONS } from "@/lib/accountModels.js";
 import { canonicalSubLine } from "@/lib/purchasing/glRollup.js";
+import { resolveFinanceCloseAdjustment, buildFinanceCloseRow } from "@/lib/kpi/shared/financeCloseAdjustment.js";
 
 const FISCAL_YEAR = 2026;
 
@@ -991,7 +992,8 @@ export async function resolveOverview({
   //    Purchasing tracked (5002.1/5002.5/5017.3): purchBoard.tracked +
   //      purchBoard.totals.tracked_budget_to_date_days
 
-  const labor3100_actual = laborBoard?.applies ? r2(laborBoard.spent_to_date) : null;
+  let labor3100_actual = laborBoard?.applies ? r2(laborBoard.spent_to_date) : null;
+  const labor3100_actual_feed = labor3100_actual;
   const labor3100_budget = laborBoard?.applies ? (laborBoard.range_budget ?? null) : null;
   const labor3100_budget_to_date_days = laborBoard?.applies
     ? (laborBoard.budget_to_date_days?.amount ?? null)
@@ -1009,14 +1011,110 @@ export async function resolveOverview({
   const food_budget = purchBoard.buckets["3200"]?.budget ?? null;
   const packaging_actual_purchased = purchBoard.buckets["3400"]?.period_total ?? null;
   const packaging_budget = purchBoard.buckets["3400"]?.budget ?? null;
-  const vehicle_actual = purchBoard.buckets["3500"]?.period_total ?? null;
+  let vehicle_actual = purchBoard.buckets["3500"]?.period_total ?? null;
   const vehicle_budget = purchBoard.buckets["3500"]?.budget ?? null;
-  const food_actual = food_actual_purchased != null
+  let food_actual = food_actual_purchased != null
     ? r2(food_actual_purchased - foodInventoryJe)
     : null;
-  const packaging_actual = packaging_actual_purchased != null
+  let packaging_actual = packaging_actual_purchased != null
     ? r2(packaging_actual_purchased - packagingInventoryJe)
     : null;
+  const food_actual_feed = food_actual;
+  const packaging_actual_feed = packaging_actual;
+  const vehicle_actual_feed = vehicle_actual;
+
+  // Kevin ruling 2026-09-18 · verified periods read finance for cost.
+  // Build per-period feed maps per parent (feeds side = whatever the
+  // labor and purchasing engines aggregated over the period), call the
+  // shared helper to compute the finance-close adjustment, and reassign
+  // the four parent actuals to (feed_total + adjustment). Non-verified
+  // periods pass through unchanged; the effect nets to zero.
+  //
+  // The `.FIN_CLOSE` synthetic rows are pushed alongside sub-lines and
+  // INVJE further down (search for buildFinanceCloseRow), so the
+  // parent's group still sums (parent = sub-lines + INVJE + FIN_CLOSE).
+  // Guard J: the parent is set ONCE here; no downstream consumer
+  // re-derives the parent from children (enumerated in the pre-build
+  // report; probe scripts/probes/_probe_finance_close_no_double_count.mjs
+  // asserts the invariant).
+  const feedByParentPeriod = new Map([
+    ["3100", new Map()],
+    ["3200", new Map()],
+    ["3400", new Map()],
+    ["3500", new Map()],
+  ]);
+  {
+    // 3100 · labor + salary per period. Sum from mergedLaborActuals
+    // (hourly + shaped salary rows) by periodOf(week_start).
+    for (const r of (mergedLaborActuals || [])) {
+      const p = r.week_start ? periodOf(r.week_start) : null;
+      if (p == null) continue;
+      if (!periods.includes(p)) continue;
+      const m = feedByParentPeriod.get("3100");
+      m.set(p, (m.get(p) || 0) + Number(r.amount || 0));
+    }
+    // 3200/3400/3500 · purchases per period, from raw purchActuals.
+    for (const r of (purchActuals || [])) {
+      const gl = String(r.gl_line_code || "");
+      if (!gl) continue;
+      const parent = gl.startsWith("3200") ? "3200"
+                   : gl.startsWith("3400") ? "3400"
+                   : gl.startsWith("3500") ? "3500"
+                   : null;
+      if (!parent) continue;
+      const p = r.txn_date ? periodOf(r.txn_date) : null;
+      if (p == null) continue;
+      if (!periods.includes(p)) continue;
+      const m = feedByParentPeriod.get(parent);
+      m.set(p, (m.get(p) || 0) + Number(r.amount || 0));
+    }
+    // 3200/3400 · subtract inventory JE per period so per-period feed
+    // matches the post-JE range total (food_actual = purchases - JE).
+    // 3500 has no JE. Only finalised periods contribute JE, matching
+    // the resolver's sumInventoryJeForGl above.
+    for (const parent of ["3200", "3400"]) {
+      const m = feedByParentPeriod.get(parent);
+      for (const acct of members) {
+        const byPeriod = invAdjByAcct.get(acct);
+        if (!byPeriod) continue;
+        for (const p of finalisedPeriods) {
+          const byGl = byPeriod.get(p);
+          if (!byGl) continue;
+          const je = byGl.get(parent);
+          if (je != null && periods.includes(p)) {
+            m.set(p, (m.get(p) || 0) - Number(je));
+          }
+        }
+      }
+    }
+  }
+  const financeClose = resolveFinanceCloseAdjustment({
+    accountKeys: members,
+    periods,
+    periodStatus,
+    todayISO: today,
+    pnlMap: pnl,
+    feedByParentPeriod,
+  });
+  // Reassign the four parent actuals to feed_total + adjustment.
+  // On ranges with no verified periods, `after_actual` equals the feed
+  // total (adjustment = 0) so the assignments are byte-identical.
+  if (labor3100_actual != null) {
+    const info = financeClose.per_parent.get("3100");
+    if (info && info.adjustment !== 0) labor3100_actual = info.after_actual;
+  }
+  if (food_actual != null) {
+    const info = financeClose.per_parent.get("3200");
+    if (info && info.adjustment !== 0) food_actual = info.after_actual;
+  }
+  if (packaging_actual != null) {
+    const info = financeClose.per_parent.get("3400");
+    if (info && info.adjustment !== 0) packaging_actual = info.after_actual;
+  }
+  if (vehicle_actual != null) {
+    const info = financeClose.per_parent.get("3500");
+    if (info && info.adjustment !== 0) vehicle_actual = info.after_actual;
+  }
 
   // Budget-to-date-days for the buckets aggregate. purchBoard's
   // totals block ships buckets_budget_to_date_days as an aggregate;
@@ -2849,6 +2947,20 @@ export async function resolveOverview({
       // PnlStatement.js update in the same PR removes that read.
       flags: ["not_applicable_target_pct"],
     });
+    // Kevin ruling 2026-09-18 · 3100.FIN_CLOSE sub-row (verified periods
+    // read finance). Only emitted when the salary toggle is on because
+    // that is when 3100 sub-rows render; on the hourly toggle the
+    // parent's actual already carries the adjustment and no sub-rows
+    // exist. Adjustment of exactly zero omits the row entirely.
+    const finClose3100 = financeClose.per_parent.get("3100");
+    if (finClose3100) {
+      const row = buildFinanceCloseRow({
+        parent: "3100",
+        adjustment: finClose3100.adjustment,
+        byPeriod: finClose3100.by_period,
+      });
+      if (row) statementRows.push(row);
+    }
   }
   // 2026-09-01 polish PR (E16 + E17): tagging + verdict suppression
   // on cost-section statement rows.
@@ -3225,6 +3337,39 @@ export async function resolveOverview({
         sources: ["inventory_adjustments"],
         flags: ["inventory_adjustment"],
       });
+    }
+    // Kevin ruling 2026-09-18 · {parent}.FIN_CLOSE synthetic sub-row.
+    // Verified periods have their parent actual switched to pnl_actuals
+    // upstream (feedByParentPeriod block near line 1020); this row
+    // carries the reconciling amount so the group still sums to parent
+    // regardless of whether the parent is pass-through-suppressed.
+    // Guard J holds on pass-through accounts (STL - FL, CIN - OH,
+    // STL - MO) because Guard C keeps sub-lines whole and this row
+    // absorbs the finance-vs-feed difference. Omitted only when the
+    // adjustment is effectively zero.
+    const finCloseP = financeClose.per_parent.get(parent);
+    if (finCloseP) {
+      const row = buildFinanceCloseRow({
+        parent,
+        adjustment: finCloseP.adjustment,
+        byPeriod: finCloseP.by_period,
+      });
+      if (row) statementRows.push(row);
+    }
+  }
+
+  // Kevin ruling 2026-09-18. A parent row whose actual was switched to
+  // finance names pnl_actuals in its `sources`. Applied post-hoc so
+  // buildCostRow's signature stays clean. Only touches the 4 parents
+  // that participate in the finance-close switch.
+  for (const parent of ["3100", "3200", "3400", "3500"]) {
+    const info = financeClose.per_parent.get(parent);
+    if (!info || info.adjustment === 0) continue;
+    for (const row of statementRows) {
+      if (row.line_code !== parent) continue;
+      if (!row.parent_line_code && Array.isArray(row.sources) && !row.sources.includes("pnl_actuals")) {
+        row.sources = [...row.sources, "pnl_actuals"];
+      }
     }
   }
 
