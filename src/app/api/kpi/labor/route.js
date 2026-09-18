@@ -37,7 +37,9 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 // carry. Load pnl_actuals revenue + kpi_budgets revenue for the range,
 // then call the shared period-basis module. See
 // src/lib/kpi/shared/periodBasis.js for the R-77 invariant + rules.
-import { loadOverviewBudgets, computeContractualAccrualByPeriod, sumPeriodRevenue } from "@/lib/kpi/shared/periodBasis.js";
+import { loadOverviewBudgets, computeContractualAccrualByPeriod, sumPeriodRevenue, loadPnlActuals, loadPeriodStatus } from "@/lib/kpi/shared/periodBasis.js";
+import { resolveFinanceCloseAdjustment, applyFinanceCloseToLaborBoard } from "@/lib/kpi/shared/financeCloseAdjustment.js";
+import { periodOf as periodOfLabor, weekStartsInRange } from "@/app/kpi/labor/lib/periods.js";
 import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore, recomputeVerdictFromPanel, recomputePanelBatrFromPerWeek } from "@/lib/labor/labor-batr.js";
 import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
@@ -1142,6 +1144,44 @@ export async function GET(request) {
         salaryRows: actQ.rows,
         workerToEmail: d26WorkerToEmail,
       });
+      // Kevin ruling 2026-09-18 · verified periods read finance.
+      // D26 accounts (salary-only: TBJ - NY, CIN - KY) run the same
+      // switch. Compute rangePeriods locally since this branch returns
+      // before the single-account rangePeriodsSingle block.
+      const d26RangePeriods = [];
+      {
+        const weekStarts = weekStartsInRange(start, end);
+        const seen = new Set();
+        for (const w of weekStarts) {
+          const p = periodOfLabor(w);
+          if (p != null && !seen.has(p)) { seen.add(p); d26RangePeriods.push(p); }
+        }
+      }
+      const [d26Pnl, d26Status] = await Promise.all([
+        loadPnlActuals(supa, { members: [account], periods: d26RangePeriods, fiscalYear: 2026 }),
+        loadPeriodStatus(supa, 2026),
+      ]);
+      const d26PnlMap = d26Pnl?.data || new Map();
+      const d26StatusMap = d26Status?.data || new Map();
+      const d26Feed3100 = new Map();
+      for (const w of (bodyD26.board?.weeks || [])) {
+        if (!w.week_start || w.spent == null) continue;
+        const p = periodOfLabor(w.week_start);
+        if (p == null || !d26RangePeriods.includes(p)) continue;
+        d26Feed3100.set(p, (d26Feed3100.get(p) || 0) + Number(w.spent || 0));
+      }
+      const d26FinanceClose = resolveFinanceCloseAdjustment({
+        accountKeys: [account],
+        periods: d26RangePeriods,
+        periodStatus: d26StatusMap,
+        todayISO: today,
+        pnlMap: d26PnlMap,
+        feedByParentPeriod: new Map([
+          ["3100", d26Feed3100],
+          ["3200", new Map()], ["3400", new Map()], ["3500", new Map()],
+        ]),
+      });
+      applyFinanceCloseToLaborBoard(bodyD26.board, d26FinanceClose);
     }
     bodyD26.salary_available = salary_available;
     bodyD26.salary_included = includeSalary;  // R-68: disclosure flag, not merge flag
@@ -1393,12 +1433,52 @@ export async function GET(request) {
   // line_target_pct comes from the overviewBudgets Map (same read that
   // feeds the range-level batr, keyed per period this time). Ruling:
   // build the fallback (forecast) as the main path, not the exception.
-  const [weeklyBasisSingle, overviewBudgetsSingle] = await Promise.all([
+  const [weeklyBasisSingle, overviewBudgetsSingle, pnlResp, periodStatusResp] = await Promise.all([
     loadWeeklyRevenueBasis(supa, {
       members: [account], start, end, today,
     }),
     loadOverviewBudgets(supa, { members: [account] }),
+    // Kevin ruling 2026-09-18. Load pnl_actuals + kpi_period_status so
+    // the finance-close adjustment can be applied to board.spent_to_date
+    // on verified periods. Same shape the Overview resolver uses.
+    loadPnlActuals(supa, { members: [account], periods: rangePeriodsSingle, fiscalYear: 2026 }),
+    loadPeriodStatus(supa, 2026),
   ]);
+  const pnlMapSingle = pnlResp?.data || new Map();
+  const periodStatusMapSingle = periodStatusResp?.data || new Map();
+
+  // Helper: apply finance-close on a labor board. Called on both the
+  // hourly-only path (boardSingle) and the +salary path (bodySingle.
+  // board). The adjustment amount differs between the two paths because
+  // the feed side differs (hourly-only vs merged); calling twice with
+  // the appropriate feed per-period keeps both paths landing on
+  // finance's 3100 on verified periods (R-68: 3100 parent always
+  // renders the finance figure regardless of toggle state).
+  const applyFinanceCloseSingle = (b) => {
+    if (!b || b.applies === false) return null;
+    const feed3100 = new Map();
+    for (const w of (b.weeks || [])) {
+      if (!w.week_start || w.spent == null) continue;
+      const p = periodOfLabor(w.week_start);
+      if (p == null || !rangePeriodsSingle.includes(p)) continue;
+      feed3100.set(p, (feed3100.get(p) || 0) + Number(w.spent || 0));
+    }
+    const feedByParentPeriod = new Map([
+      ["3100", feed3100],
+      ["3200", new Map()], ["3400", new Map()], ["3500", new Map()],
+    ]);
+    const financeClose = resolveFinanceCloseAdjustment({
+      accountKeys: [account],
+      periods: rangePeriodsSingle,
+      periodStatus: periodStatusMapSingle,
+      todayISO: today,
+      pnlMap: pnlMapSingle,
+      feedByParentPeriod,
+    });
+    applyFinanceCloseToLaborBoard(b, financeClose);
+    return financeClose;
+  };
+
   const boardSingle = buildBoard({
     account, start, end, today,
     actuals: actuals.data,
@@ -1466,6 +1546,10 @@ export async function GET(request) {
   // Runs BEFORE recomputeVerdictFromPanel so verdict picks up the
   // corrected batr.
   recomputePanelBatrFromPerWeek(boardSingle);
+  // Kevin ruling 2026-09-18 · Guard L: finance-close adjustment lands
+  // BEFORE recomputeVerdictFromPanel so verdict picks up the adjusted
+  // spent. Zero-adjustment ranges are byte-identical.
+  applyFinanceCloseSingle(boardSingle);
   // Kevin post-1051 sweep item 1: verdict must use the panel-
   // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
   // week batr fallback has data.
@@ -1581,6 +1665,11 @@ export async function GET(request) {
     });
     // Post-1057 sweep item 2: R-86 per-period pct on the panel.
     recomputePanelBatrFromPerWeek(bodySingle.board);
+    // Kevin ruling 2026-09-18 · Guard L: finance-close adjustment on
+    // the merged path lands BEFORE recomputeVerdictFromPanel so the
+    // verdict sees the adjusted spent. Zero-adjustment ranges are
+    // byte-identical.
+    applyFinanceCloseSingle(bodySingle.board);
     // Post-1051 sweep item 1: verdict recompute against panel figure
     // after per-week batr lands.
     recomputeVerdictFromPanel(bodySingle.board);
