@@ -117,7 +117,7 @@ import { composeFlags, isPackagingGapAccount, isSeededAccount } from "./flags.js
 import { periodOf, periodStartISO, periodEndISO, weekStartsInRange, endOfLastCompleteWeek } from "@/app/kpi/labor/lib/periods.js";
 import { PURCHASING_ENVELOPE_EXCLUSIONS } from "@/lib/accountModels.js";
 import { canonicalSubLine } from "@/lib/purchasing/glRollup.js";
-import { resolveFinanceCloseAdjustment, buildFinanceCloseRow, absorbFinanceCloseIntoSubLines } from "@/lib/kpi/shared/financeCloseAdjustment.js";
+import { resolveFinanceCloseAdjustment, absorbFinanceCloseIntoSubLines } from "@/lib/kpi/shared/financeCloseAdjustment.js";
 
 const FISCAL_YEAR = 2026;
 
@@ -1030,9 +1030,13 @@ export async function resolveOverview({
   // the four parent actuals to (feed_total + adjustment). Non-verified
   // periods pass through unchanged; the effect nets to zero.
   //
-  // The `.FIN_CLOSE` synthetic rows are pushed alongside sub-lines and
-  // INVJE further down (search for buildFinanceCloseRow), so the
-  // parent's group still sums (parent = sub-lines + INVJE + FIN_CLOSE).
+  // Kevin R-126 (2026-09-18): the .FIN_CLOSE display row is no longer
+  // emitted per parent. A single post-pass further down (search for
+  // absorbFinanceCloseIntoSubLines) folds the adjustment onto the
+  // largest existing sub-line so parent = sub-lines + INVJE without a
+  // synthetic row. Rule 5 backstop re-emits the row only when a parent
+  // has sub-rows but none are absorbable; probe asserts this stays at
+  // zero occurrences on real data.
   // Guard J: the parent is set ONCE here; no downstream consumer
   // re-derives the parent from children (enumerated in the pre-build
   // report; probe scripts/probes/_probe_finance_close_no_double_count.mjs

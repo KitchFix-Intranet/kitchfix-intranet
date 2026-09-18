@@ -104,6 +104,20 @@ export function absorbFinanceCloseIntoSubLines(statementRows, financeClose, ctx 
     const adjustment = Number(info.adjustment || 0);
     if (Math.abs(adjustment) < 0.005) continue;
 
+    // F1 (Kevin review 2026-09-18): Guard J is VACUOUS when a parent
+    // has no sub-rows at all - not merely no absorbable ones. The R-98
+    // hourly view emits 3100 without any sub-rows on verified periods
+    // (the 3100.1 / 3100.2 push is gated behind `include_salary`), so
+    // an unconditional backstop would push 3100.FIN_CLOSE onto the
+    // default hourly payload of every verified account. The parent
+    // already carries the adjustment upstream; there is nothing to
+    // reconcile at the child level and no row to emit.
+    //
+    // The Rule 5 backstop below fires only when a parent HAS sub-rows
+    // but NONE are absorbable (e.g. every sub-line unreported).
+    const anyChildRows = statementRows.some(r => r.parent_line_code === parent);
+    if (!anyChildRows) continue;
+
     const kids = statementRows.filter(r =>
       r.parent_line_code === parent &&
       r.reported === true &&
@@ -143,15 +157,22 @@ export function absorbFinanceCloseIntoSubLines(statementRows, financeClose, ctx 
       wentNegative = true;
     }
 
+    // F2 (Kevin review 2026-09-18): preserve a deliberate null on
+    // variance_pct. resolver.js hardcodes `variance_pct: null` on both
+    // 3100.1 and 3100.2 (fixed-cost rows carry `not_applicable_target_pct`);
+    // recomputing here would surface a percent verdict the design
+    // suppresses. Recompute variance_pct only when the row already
+    // carried one before the absorb.
+    const hadVariancePct = picked.variance_pct != null;
     const newActual = r2(Number(picked.actual) + adjustment);
     picked.actual = newActual;
 
     picked.actual_pct = pctOf(newActual, totalRevenue);
     if (picked.budget_at_this_revenue != null) {
       picked.variance = r2(newActual - Number(picked.budget_at_this_revenue));
-      if (picked.target_pct != null && picked.actual_pct != null) {
-        picked.variance_pct = r2(Number(picked.actual_pct) - Number(picked.target_pct));
-      }
+    }
+    if (hadVariancePct && picked.target_pct != null && picked.actual_pct != null) {
+      picked.variance_pct = r2(Number(picked.actual_pct) - Number(picked.target_pct));
     }
 
     if (!Array.isArray(picked.sources)) picked.sources = [];
