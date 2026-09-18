@@ -71,8 +71,10 @@ test("F3 N1: static + salaried + submitter + RDO (all TO)", () => {
     submitterEmail: "site.leader@kitchfix.com",
     accountMap: LIVE_ACCOUNT_MAP,
   });
+  // #1164 (2026-09-17): Joe + Josh dropped from the hardcoded N1 list.
+  // They remain exported constants for other notification types.
   assert.deepEqual([...out.to].sort(), [
-    SEBASTIAN_EMAIL, KEVIN_EMAIL, JOE_EMAIL, JOSH_EMAIL,
+    SEBASTIAN_EMAIL, KEVIN_EMAIL,
     "l.ochoa@kitchfix.com", "chef2@kitchfix.com",
     "site.leader@kitchfix.com",
     "s.lynch@kitchfix.com",

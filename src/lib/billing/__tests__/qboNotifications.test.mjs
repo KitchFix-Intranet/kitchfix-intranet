@@ -85,8 +85,9 @@ test("fireN1 live mode: routes to §A6 matrix (static + salaried + submitter)", 
   const to = res.recipients.to;
   assert.ok(to.includes("sebastian@kitchfix.com"));
   assert.ok(to.includes(KEVIN_EMAIL));
-  assert.ok(to.includes("joe@kitchfix.com"));
-  assert.ok(to.includes("josh@kitchfix.com"));
+  // #1164 (2026-09-17): Joe + Josh no longer on the N1 list.
+  assert.ok(!to.includes("joe@kitchfix.com"));
+  assert.ok(!to.includes("josh@kitchfix.com"));
   assert.ok(to.includes("l.ochoa@kitchfix.com"));
   assert.ok(to.includes("leader@kitchfix.com"));
   assert.match(res.subject, /^Sent to billing: TXR - AZ,/);
