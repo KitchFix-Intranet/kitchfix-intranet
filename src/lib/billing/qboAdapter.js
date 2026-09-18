@@ -101,6 +101,43 @@
 // ?minorversion=75`. `composeInvoiceUrl` strips trailing slashes off
 // the base and URL-encodes the realm. Splitting them lets Josh
 // rotate proxy hosting without touching realm and vice versa.
+//
+// ─── SC-generated DocNumber (sc-48, Kevin ruling 2026-09-18) ──────
+//
+// Invoices posted by this adapter carry a DocNumber the SC owns:
+//   live mode -> KF000000001, KF000000002, ... from
+//                sc_invoice_number_seq (Postgres sequence).
+//   test mode -> KFT000000001, KFT000000002, ... from
+//                sc_invoice_test_number_seq. Distinct sequence so
+//                gaps caused by Kevin running tests never appear in
+//                the live audit trail.
+//
+// The reservation seam is deliberate: reserveInvoiceDocNumber is
+// called AFTER env validation and AFTER the customer-id fence,
+// IMMEDIATELY before the first doHttp POST. Every step upstream of
+// that seam is a step that can fail on non-QBO reasons (config bug,
+// missing env, validation error) - burning a live number on any of
+// those would create a gap the auditor cannot explain. Fence-
+// rejected rows continue to write qbo_doc_number=null.
+//
+// Once reserved, the KF number is burned. PostgreSQL sequence
+// semantics: nextval advances on rollback. That matches Kevin's
+// burn-on-failure ruling: an auditor accepts gaps caused by failed
+// pushes; auditors do not accept duplicate DocNumbers. Failed and
+// 2xx-non-JSON ledger rows now record the burned KF value so every
+// consumed number appears in exactly one ledger row with an outcome
+// attached.
+//
+// Echo assertion (Kevin ruling 2026-09-18): the QBO create response
+// echoes DocNumber back. If the echoed value differs from the value
+// we sent, that is a silent-override signal - either the tenant's
+// "Custom transaction numbers" preference is off (verified ON at
+// build time but could flip), or QBO's API rejected the sent value
+// for some other reason and defaulted. We halt on mismatch, write a
+// failed row with the burned KF number, and route through the
+// existing N2 notification path so Kevin sees it immediately. The
+// current code has no such check because it has never sent a
+// DocNumber to compare.
 
 import crypto from "node:crypto";
 import { getServiceClient } from "@/lib/supabase";
@@ -174,6 +211,25 @@ export class QboPostError extends Error {
     this.name = "QboPostError";
     this.status = status;
     this.body = body;
+  }
+}
+
+// sc-48: raised when the DocNumber the SC sent (KF000000042) differs
+// from the DocNumber QBO echoed back in the create response. That is
+// the only signal we have that QBO silently ignored our sent value -
+// either the tenant's Custom transaction numbers preference flipped
+// off, or the API rejected the value for some other reason and
+// defaulted its own. Halts the ledger write in the "created" shape
+// and routes through the existing failure path so N2 fires.
+export class DocNumberEchoMismatchError extends Error {
+  constructor(sent, echoed) {
+    super(
+      `qboAdapter: DocNumber echo mismatch. sent=${JSON.stringify(sent)} echoed=${JSON.stringify(echoed)}. ` +
+      "QBO silently overrode the sent value - check the tenant's Custom transaction numbers setting."
+    );
+    this.name = "DocNumberEchoMismatchError";
+    this.sent = sent;
+    this.echoed = echoed;
   }
 }
 
@@ -290,6 +346,38 @@ async function writeLedgerRow(supa, row) {
     .single();
   if (error) throw new Error(`sc_export_ledger insert: ${error.message}`);
   return data.id;
+}
+
+// sc-48: reserve the next SC-generated DocNumber from the appropriate
+// sequence (live vs test) and format it as the string that will land
+// in QBO and in sc_export_ledger.qbo_doc_number.
+//
+// PostgreSQL sequence semantics guarantee two properties:
+//   1. Uniqueness under concurrent callers - nextval() serialises
+//      across transactions without application-layer locking.
+//   2. Advances on rollback - a reserved number is burned regardless
+//      of whether the surrounding transaction commits. That is the
+//      whole point (Kevin ruling: burn on failure, not return).
+//
+// Two sequences (Kevin ruling 2026-09-18):
+//   isTest === false -> sc_invoice_number_seq          -> KF000000001
+//   isTest === true  -> sc_invoice_test_number_seq     -> KFT000000001
+// Distinct so a test row cannot be mistaken for a real invoice in
+// the ledger or in QuickBooks.
+//
+// Called EXACTLY ONCE per postInvoiceDraft attempt, from the
+// reservation seam between env validation and the first doHttp POST.
+// See the "SC-generated DocNumber" block in the file header for the
+// rationale on seam placement.
+export async function reserveInvoiceDocNumber(supa, isTest) {
+  const rpc = isTest ? "nextval_sc_invoice_test_number" : "nextval_sc_invoice_number";
+  const { data, error } = await supa.rpc(rpc);
+  if (error) throw new Error(`reserveInvoiceDocNumber(${rpc}): ${error.message}`);
+  if (data == null || !Number.isFinite(Number(data))) {
+    throw new Error(`reserveInvoiceDocNumber(${rpc}): non-numeric sequence value ${JSON.stringify(data)}`);
+  }
+  const prefix = isTest ? "KFT" : "KF";
+  return `${prefix}${String(Number(data)).padStart(9, "0")}`;
 }
 
 // Sum cents from the payload's Line[] Amount values. UnitPrice x Qty
@@ -469,8 +557,10 @@ export async function postInvoiceDraft(payload, ctx) {
   }
 
   // ─── Compute pre-post ledger snapshot ─────────────────────────
-  // hash + pretax both derived from `outgoing` (stripped, wire-shape).
-  const hash        = payloadHash(outgoing);
+  // pretaxCents + attempt are DocNumber-independent so they compute
+  // here; the payload_hash moves down to after the DocNumber inject
+  // so it fingerprints the actual wire bytes (which now include the
+  // KF/KFT DocNumber).
   const pretaxCents = sumPretaxCents(outgoing);
   const attempt     = (await readMaxAttempt(supa, {
     accountKey:  ctx.accountKey,
@@ -488,6 +578,22 @@ export async function postInvoiceDraft(payload, ctx) {
   if (!proxyBase) throw new Error("postInvoiceDraft: QBO_PROXY_BASE required");
   if (!realmId)   throw new Error("postInvoiceDraft: QBO_REALM_ID required");
   const url = composeInvoiceUrl(proxyBase, realmId);
+
+  // ─── sc-48: reserve DocNumber immediately before the POST ─────
+  // This is the reservation seam. Every upstream stage (arg
+  // validation, idempotency, test-marking, strip, fence, snapshot,
+  // env) can fail without burning a number. From here on, the
+  // number is consumed regardless of the POST outcome (Kevin
+  // ruling: burn on failure). The retry-on-5xx below reuses the
+  // SAME docNumber - a 5xx is a retry within one attempt, not a
+  // new attempt.
+  const docNumber = await reserveInvoiceDocNumber(supa, isTest);
+  outgoing.DocNumber = docNumber;
+
+  // Hash AFTER DocNumber injection so it fingerprints the actual
+  // wire bytes. The ledger's payload_hash then uniquely identifies
+  // each attempt (different DocNumber -> different hash).
+  const hash = payloadHash(outgoing);
 
   let attemptRes = await doHttp(url, apiKey, outgoing);
   const retriable =
@@ -507,7 +613,11 @@ export async function postInvoiceDraft(payload, ctx) {
       invoice_slot:       invoiceSlot,
       payload_hash:       hash,
       qbo_invoice_id:     null,
-      qbo_doc_number:     null,
+      // sc-48: KF number was reserved before this POST attempt, so
+      // it is burned regardless of the outcome. Record it here so
+      // the auditor can trace what happened to KF000000042 - it
+      // was attempted, QBO rejected/errored, invoice never issued.
+      qbo_doc_number:     docNumber,
       pretax_total_cents: pretaxCents,
       status:             "failed",
       attempt,
@@ -526,6 +636,9 @@ export async function postInvoiceDraft(payload, ctx) {
   catch (e) {
     // Body was 2xx but not JSON. Save as failed for safety (payment
     // may have posted; owner + Sebastian read the ledger to reconcile).
+    // sc-48: burned KF is recorded here too. See docs/backlog/
+    // sc-invoice-double-charge-reconciliation.md for the double-
+    // charge risk this class carries.
     const ledgerRowId = await writeLedgerRow(supa, {
       account_key:        ctx.accountKey,
       week_start:         ctx.weekStart,
@@ -534,7 +647,7 @@ export async function postInvoiceDraft(payload, ctx) {
       invoice_slot:       invoiceSlot,
       payload_hash:       hash,
       qbo_invoice_id:     null,
-      qbo_doc_number:     null,
+      qbo_doc_number:     docNumber,
       pretax_total_cents: pretaxCents,
       status:             "failed",
       attempt,
@@ -547,6 +660,35 @@ export async function postInvoiceDraft(payload, ctx) {
   const qboInvoiceId = parsed?.Invoice?.Id || parsed?.QueryResponse?.Invoice?.[0]?.Id;
   const qboDocNumber = parsed?.Invoice?.DocNumber || parsed?.QueryResponse?.Invoice?.[0]?.DocNumber;
 
+  // sc-48: echo assertion. QBO returns DocNumber in the create
+  // response; if it does not match what we sent, QBO silently
+  // overrode the sent value (Custom transaction numbers preference
+  // off, or the API rejected the value for some other reason and
+  // defaulted). Halt on mismatch, write a failed row with the
+  // burned KF value + explicit error text, and throw so the
+  // finalize caller fires N2.
+  if (qboDocNumber !== docNumber) {
+    const ledgerRowId = await writeLedgerRow(supa, {
+      account_key:        ctx.accountKey,
+      week_start:         ctx.weekStart,
+      week_end:           ctx.weekEnd,
+      cadence_unit:       ctx.cadenceUnit,
+      invoice_slot:       invoiceSlot,
+      payload_hash:       hash,
+      qbo_invoice_id:     qboInvoiceId || null,
+      qbo_doc_number:     docNumber,
+      pretax_total_cents: pretaxCents,
+      status:             "failed",
+      attempt,
+      error:              `docnumber_echo_mismatch: sent=${JSON.stringify(docNumber)} echoed=${JSON.stringify(qboDocNumber)}. QBO may have overridden the sent value silently; verify tenant Custom transaction numbers setting.`,
+      is_test:            isTest,
+      created_by:         ctx.createdBy,
+    });
+    const err = new DocNumberEchoMismatchError(docNumber, qboDocNumber);
+    err.ledgerRowId = ledgerRowId;
+    throw err;
+  }
+
   const ledgerRowId = await writeLedgerRow(supa, {
     account_key:        ctx.accountKey,
     week_start:         ctx.weekStart,
@@ -555,7 +697,7 @@ export async function postInvoiceDraft(payload, ctx) {
     invoice_slot:       invoiceSlot,
     payload_hash:       hash,
     qbo_invoice_id:     qboInvoiceId || null,
-    qbo_doc_number:     qboDocNumber || null,
+    qbo_doc_number:     qboDocNumber,   // sc-48: equals docNumber post-assertion
     pretax_total_cents: pretaxCents,
     status:             isTest ? "test" : "created",
     attempt,

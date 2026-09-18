@@ -9,6 +9,7 @@ import {
   postInvoiceDraft,
   NotAllowlistedError,
   QboPostError,
+  DocNumberEchoMismatchError,
   ALLOWED_CUSTOMER_IDS,
   TEST_CUSTOMER_ID,
   markPayloadAsTest,
@@ -17,9 +18,22 @@ import {
   composeInvoiceUrl,
   stripInternalMarkers,
   allowedCustomerIdsFor,
+  reserveInvoiceDocNumber,
   _internals,
 } from "../qboAdapter.js";
 import { makeSupaMock } from "./_supa-mock.mjs";
+
+// sc-48: real QBO echoes the sent DocNumber back in the create
+// response when Custom transaction numbers is on. Tests that go
+// through the success path must simulate that echo, or the new
+// echo-mismatch assertion halts the write. Use this helper.
+function okEcho(invoiceId, sentPayload) {
+  const echoed = sentPayload?.DocNumber || null;
+  return {
+    ok: true, status: 200,
+    body: JSON.stringify({ Invoice: { Id: invoiceId, DocNumber: echoed } }),
+  };
+}
 
 const TXR_MAP = {
   account_key: "TXR - AZ",
@@ -161,7 +175,7 @@ test("F7 fence: test mode CANNOT reach real customer id 19000", async () => {
   const fetchImpl = async (_url, _key, payload) => {
     // If the fence ever missed, this would fire with CustomerRef
     // holding 19000. Instead, test mode always sends 22463.
-    return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
+    return okEcho("X", payload);
   };
   let captured = null;
   const captureFetch = async (u, k, p) => { captured = p; return fetchImpl(u, k, p); };
@@ -300,10 +314,7 @@ test("C4: 5xx retries exactly once", async () => {
 
 test("qboMode='test': success writes status='test' + is_test=true", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
-  const fetchImpl = async () => ({
-    ok: true, status: 200,
-    body: JSON.stringify({ Invoice: { Id: "TEST-INV-1", DocNumber: "K300TEST01" } }),
-  });
+  const fetchImpl = async (_u, _k, payload) => okEcho("TEST-INV-1", payload);
 
   const result = await postInvoiceDraft(fakePayload({
     CustomerRef: { value: "19000", name: "Texas Rangers" },
@@ -315,9 +326,144 @@ test("qboMode='test': success writes status='test' + is_test=true", async () => 
 
   assert.equal(result.status, "test");
   assert.equal(result.qboInvoiceId, "TEST-INV-1");
+  // sc-48: test invoices get KFT-prefixed numbers from a distinct
+  // sequence. The mock's rpc counter starts at 1 within a test.
+  assert.equal(result.qboDocNumber, "KFT000000001");
   const row = supa._dump("sc_export_ledger")[0];
   assert.equal(row.status, "test");
   assert.equal(row.is_test, true);
+  assert.equal(row.qbo_doc_number, "KFT000000001");
+});
+
+// ─── sc-48: reservation + echo assertion ──────────────────────────
+
+test("sc-48 reservation: KF number injected on live push, KFT on test push", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let capturedLive = null, capturedTest = null;
+  const fetchLive = async (_u, _k, p) => { capturedLive = p; return okEcho("LIVE-1", p); };
+  const fetchTest = async (_u, _k, p) => { capturedTest = p; return okEcho("TEST-1", p); };
+
+  const liveRes = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live" },
+      qboMode: "live",
+      deps: { supa, fetchImpl: fetchLive },
+    }
+  );
+  const testRes = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountKey: "TXR - AZ",
+      accountMap: { ...TXR_MAP, qbo_mode: "test" },
+      qboMode: "test",
+      deps: { supa, fetchImpl: fetchTest },
+    }
+  );
+
+  assert.equal(liveRes.status, "created");
+  assert.equal(liveRes.qboDocNumber, "KF000000001");
+  assert.equal(capturedLive.DocNumber, "KF000000001");
+
+  assert.equal(testRes.status, "test");
+  assert.equal(testRes.qboDocNumber, "KFT000000001");
+  assert.equal(capturedTest.DocNumber, "KFT000000001");
+});
+
+test("sc-48 echo assertion: mismatch writes failed row + throws DocNumberEchoMismatchError", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  // Simulate QBO silently overriding: response echoes something else.
+  const fetchImpl = async (_u, _k, _p) => ({
+    ok: true, status: 200,
+    body: JSON.stringify({ Invoice: { Id: "MISMATCH-1", DocNumber: "K3OVERRIDE" } }),
+  });
+
+  await assert.rejects(
+    () => postInvoiceDraft(
+      fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+      {
+        ...BASE_CTX,
+        accountMap: { ...TXR_MAP, qbo_mode: "live" },
+        qboMode: "live",
+        deps: { supa, fetchImpl },
+      }
+    ),
+    (err) => {
+      assert.ok(err instanceof DocNumberEchoMismatchError);
+      assert.equal(err.sent,   "KF000000001");
+      assert.equal(err.echoed, "K3OVERRIDE");
+      return true;
+    },
+  );
+
+  const rows = supa._dump("sc_export_ledger");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "failed");
+  assert.equal(rows[0].qbo_doc_number, "KF000000001", "burned KF number recorded on echo-mismatch failure");
+  assert.equal(rows[0].qbo_invoice_id, "MISMATCH-1", "QBO invoice id captured for reconciliation");
+  assert.match(rows[0].error, /docnumber_echo_mismatch/);
+});
+
+test("sc-48 burn semantics: failed POST records burned KF number in ledger", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  const fetchImpl = async () => ({ ok: false, status: 500, body: "server error" });
+
+  await assert.rejects(
+    () => postInvoiceDraft(
+      fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+      {
+        ...BASE_CTX,
+        accountMap: { ...TXR_MAP, qbo_mode: "live" },
+        qboMode: "live",
+        deps: { supa, fetchImpl },
+      }
+    ),
+    QboPostError,
+  );
+
+  const rows = supa._dump("sc_export_ledger");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "failed");
+  assert.equal(rows[0].qbo_doc_number, "KF000000001", "burned KF number recorded on 5xx failure");
+});
+
+test("sc-48 fence rejection does NOT burn a number (pre-reservation)", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  const fetchImpl = async () => { throw new Error("must not reach network"); };
+
+  await assert.rejects(
+    () => postInvoiceDraft(
+      fakePayload({ CustomerRef: { value: "22463", name: "ZZ TEST" } }),
+      {
+        ...BASE_CTX,
+        accountMap: { ...TXR_MAP, qbo_mode: "live" },
+        qboMode: "live",
+        deps: { supa, fetchImpl },
+      }
+    ),
+    NotAllowlistedError,
+  );
+
+  const rows = supa._dump("sc_export_ledger");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "failed");
+  assert.equal(rows[0].qbo_doc_number, null, "fence rejection is a config bug pre-reservation - no number burned");
+  // Also verify no RPC was called (no sequence consumed).
+  assert.equal(supa._rpcCounters().nextval_sc_invoice_number || 0, 0);
+});
+
+test("sc-48 reserveInvoiceDocNumber: formats KF vs KFT with 9-digit zero pad", async () => {
+  const supa = makeSupaMock({ tables: {} });
+  const live1 = await reserveInvoiceDocNumber(supa, false);
+  const live2 = await reserveInvoiceDocNumber(supa, false);
+  const test1 = await reserveInvoiceDocNumber(supa, true);
+  const test2 = await reserveInvoiceDocNumber(supa, true);
+  assert.equal(live1, "KF000000001");
+  assert.equal(live2, "KF000000002");
+  assert.equal(test1, "KFT000000001");
+  assert.equal(test2, "KFT000000002");
 });
 
 // ─── URL composition (PR-C7 fixes) ────────────────────────────────
@@ -338,7 +484,7 @@ test("no key beginning with underscore survives into a posted payload", async ()
   let captured = null;
   const fetchImpl = async (_u, _k, p) => {
     captured = p;
-    return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
+    return okEcho("X", p);
   };
   await postInvoiceDraft(fakePayload({
     _slot: "main",
@@ -369,7 +515,7 @@ test("payload_hash is computed on the stripped (wire-shape) payload", async () =
   let captured = null;
   const fetchImpl = async (_u, _k, p) => {
     captured = p;
-    return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
+    return okEcho("X", p);
   };
   await postInvoiceDraft(fakePayload({
     _slot: "main", _preTaxSubtotal: 12345,
