@@ -88,22 +88,22 @@
   text-transform: uppercase;
   padding: 5px 12px;
   border-radius: 999px;
-  color: #fff;
-  background: var(--navy, #0A2548);
+  color: var(--n-0);
+  background: var(--navy);
 }
 .kpi-app .kpi-ov-cp-status-sub {
   font-size: 11.25px;
   font-weight: 700;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
 }
-.kpi-app .kpi-ov-cp-status-sub b { color: var(--n-900, #0A2548); }
+.kpi-app .kpi-ov-cp-status-sub b { color: var(--n-900); }
 .kpi-app .kpi-ov-cp-status-ml { margin-left: auto; }
 .kpi-app .kpi-ov-cp-seg {
   display: inline-flex;
   border: 1px solid var(--n-300, #E5E7EB);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--n-0);
 }
 .kpi-app .kpi-ov-cp-seg button {
   font-size: 10px;
@@ -112,13 +112,13 @@
   padding: 6px 13px;
   border: none;
   background: transparent;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   cursor: pointer;
   font-family: inherit;
 }
 .kpi-app .kpi-ov-cp-seg button.kpi-ov-cp-seg-on {
-  background: var(--navy, #0A2548);
-  color: #fff;
+  background: var(--navy);
+  color: var(--n-0);
 }
 /* Retained token class from R-109 - callers may still pass it; the new
    card visual is on the three background panels, not the card itself,
@@ -153,7 +153,7 @@
 .kpi-app .kpi-ov-cp-hbar {
   grid-column: 2 / -1;
   grid-row: 1;
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300);
   border-bottom: none;
   border-radius: 12px 12px 0 0;
@@ -164,7 +164,7 @@
 }
 .kpi-app .kpi-ov-cp-lbar {
   grid-column: 1;
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300);
   border-right: none;
   border-radius: 12px 0 0 12px;
@@ -175,7 +175,7 @@
 }
 .kpi-app .kpi-ov-cp-bpanel {
   grid-column: 2 / -1;
-  background: #fff;
+  background: var(--n-0);
   /* Kevin fix 2026-09-17 item 2: bpanel carries border ONLY on right
      and bottom. Its top edge sits under hbar (which has no bottom
      border) and its left edge sits against lbar (which has no right
@@ -212,15 +212,15 @@
   font-weight: 800;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 {
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 5px;
 }
-.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 b { color: var(--n-900); font-weight: 700; }
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-per .kpi-ov-cp-wk { color: var(--navy-700, #153968); }
 
 /* Header pills · A2. Current is the only saturated header colour;
@@ -235,11 +235,11 @@
   border-radius: 999px;
   white-space: nowrap;
 }
-.kpi-app .kpi-ov-cp-pill-closed   { background: var(--n-100, #F4F2EC); color: var(--n-600, #64748B); }
+.kpi-app .kpi-ov-cp-pill-closed   { background: var(--n-100, #F4F2EC); color: var(--n-600); }
 .kpi-app .kpi-ov-cp-pill-current  { background: #2FBF71; color: #053B20; box-shadow: 0 0 0 2px rgba(47, 191, 113, 0.28); }
 .kpi-app .kpi-ov-cp-pill-pending  { background: var(--amber-50, #FFF2E2); color: var(--amber-600, #B25800); }
-.kpi-app .kpi-ov-cp-pill-forecast { background: #fff; color: var(--n-600, #64748B); border: 1px dashed var(--n-300, #E5E7EB); }
-.kpi-app .kpi-ov-cp-pill-navy     { background: var(--navy, #0A2548); color: #fff; }
+.kpi-app .kpi-ov-cp-pill-forecast { background: var(--n-0); color: var(--n-600); border: 1px dashed var(--n-300, #E5E7EB); }
+.kpi-app .kpi-ov-cp-pill-navy     { background: var(--navy); color: var(--n-0); }
 
 /* ── row labels · A5 ────────────────────────────────────────────── */
 .kpi-app .kpi-ov-cp-rlab {
@@ -250,25 +250,25 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background: #fff;
+  background: var(--n-0);
   border-right: 1px solid var(--n-300, #E5E7EB);
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rn {
   font-size: 12px;
   font-weight: 800;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rn .kpi-ov-cp-glc {
   font-size: 9.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-right: 6px;
 }
 .kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rg {
   font-size: 9.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 3px;
 }
 /* ── data cells · A4 ────────────────────────────────────────────── */
@@ -396,14 +396,14 @@
 .kpi-app .kpi-ov-cp-liftbody {
   position: absolute;
   z-index: 11;
-  background: #fff;
+  background: var(--n-0);
   pointer-events: none;
 }
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now { z-index: 12; }
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now  { z-index: 12; }
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-wk,
-.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 { color: #fff; }
-.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 b { color: #fff; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 { color: var(--n-0); }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 b { color: var(--n-0); }
 
 /* Kevin fix 2026-09-17: the "you are here" overhang. Without these
    the hcell.now sits flush with hbar top and the last cell.now sits
@@ -444,13 +444,13 @@
   font-size: 19px;
   font-weight: 800;
   letter-spacing: -0.2px;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
   line-height: 1.15;
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-of {
   font-size: 10px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   white-space: nowrap;
 }
 /* .kpi-ov-cp-pre retained for RevCellBody's basis word ("confirmed"
@@ -459,16 +459,16 @@
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pre {
   font-size: 11px;
   font-weight: 700;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-right: 6px;
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub {
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 5px;
 }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub b { color: var(--n-900); font-weight: 700; }
 /* Kevin R-128 Part 3 item 1 (2026-09-19). Split line under the value
    showing `Hrly $X · Sal $Y` on the 3100 row when salary view is
    active and mode is PLAN. Rolling replaces the split with the
@@ -476,10 +476,10 @@
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp {
   font-size: 9.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 3px;
 }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp b { color: var(--n-900); font-weight: 700; }
 /* Kevin R-128 Part 3 items F + 9 (2026-09-19). `.kpi-ov-cp-fl` is the
    footer line that carries `$X left` on week cells and `X% used ·
    ▲ $Y over pace` on period cells. `.kpi-ov-cp-pc` is the bolder-
@@ -487,10 +487,10 @@
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl {
   font-size: 10px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 4px;
 }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl b { color: var(--n-900); font-weight: 700; }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pc { font-weight: 800; }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vd {
   font-size: 10px;
@@ -517,20 +517,20 @@
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 5px solid var(--navy, #0A2548);
+  border-top: 5px solid var(--navy);
   transform: translateX(-4px);
 }
 .kpi-app .kpi-ov-cp-good { color: var(--green-600, #008330); }
 .kpi-app .kpi-ov-cp-over { color: var(--red-600, #B9000C); }
-.kpi-app .kpi-ov-cp-mute { color: var(--n-600, #64748B); }
+.kpi-app .kpi-ov-cp-mute { color: var(--n-600); }
 .kpi-app .kpi-ov-cp-mute-strong { color: var(--n-700, #475569); }
 
 /* Empty state (payload not ready / error). */
 .kpi-app .kpi-ov-cp-empty {
   padding: 18px 20px;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   font-size: 12px;
-  background: #fff;
+  background: var(--n-0);
   border-radius: 12px;
   border: 0.5px solid var(--n-300, #E5E7EB);
   margin: 30px 0 12px;
@@ -560,7 +560,7 @@
   gap: 12px;
 }
 .kpi-app .kpi-ov-cp-rv-item {
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300, #E5E7EB);
   border-left: 3px solid var(--amber-600, #B25800);
   border-radius: 10.8px;
@@ -573,12 +573,12 @@
 .kpi-app .kpi-ov-cp-rv-item-t {
   font-size: 11.25px;
   font-weight: 800;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-rv-item-s {
   font-size: 9.9px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 2px;
 }
 .kpi-app .kpi-ov-cp-rv-go {
@@ -622,7 +622,7 @@
    dividers between columns. Navy left border so it reads as a
    sibling of the review cards with a different accent. */
 .kpi-app .kpi-ov-cp-rollcard {
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300, #E5E7EB);
   border-left: 3px solid var(--navy-700, #153968);
   border-radius: 10.8px;
@@ -641,11 +641,11 @@
 .kpi-app .kpi-ov-cp-rollcard-lead {
   font-size: 11.25px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-bottom: 10px;
   line-height: 1.6;
 }
-.kpi-app .kpi-ov-cp-rollcard-lead b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-rollcard-lead b { color: var(--n-900); font-weight: 700; }
 .kpi-app .kpi-ov-cp-rollcard-lines { display: grid; gap: 0; }
 .kpi-app .kpi-ov-cp-rollcard-ln {
   padding: 0 16px;
@@ -655,7 +655,7 @@
 .kpi-app .kpi-ov-cp-rollcard-ln-nm {
   font-size: 11.25px;
   font-weight: 800;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-rollcard-ln-v {
   font-size: 15px;
@@ -669,11 +669,11 @@
 .kpi-app .kpi-ov-cp-rollcard-ln-s {
   font-size: 9.9px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 3px;
   font-variant-numeric: tabular-nums;
 }
-.kpi-app .kpi-ov-cp-rollcard-ln-s b { color: var(--n-900, #0A2548); font-weight: 800; }
+.kpi-app .kpi-ov-cp-rollcard-ln-s b { color: var(--n-900); font-weight: 800; }
 /* ── R-110 · three small cards beneath the future-range table ──── */
 /* [Cost line · the period], [A week], [A service day]. Same navy
    left border as the review cards for family consistency, but the
@@ -686,7 +686,7 @@
   margin-top: 14px;
 }
 .kpi-app .kpi-ov-cp-perk-k {
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300, #E5E7EB);
   border-radius: 10.8px;
   padding: 13px 16px;
@@ -697,20 +697,20 @@
   font-weight: 800;
   letter-spacing: 0.81px;
   text-transform: uppercase;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
 }
 .kpi-app .kpi-ov-cp-perk-v {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.18px;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
   margin-top: 4px;
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-perk-s {
   font-size: 9.9px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 3px;
 }
 
@@ -721,7 +721,7 @@
   font-weight: 600;
   color: var(--n-700, #475569);
 }
-.kpi-app .kpi-ov-cp-rollcard-empty b { color: var(--n-900, #0A2548); }
+.kpi-app .kpi-ov-cp-rollcard-empty b { color: var(--n-900); }
 
 /* Kevin R-128 Part 3 item 8 (2026-09-19). Week-grid-shaped skeleton
    for the CP + NP surfaces. Matches CurrentPeriodTable's bounding
@@ -737,7 +737,7 @@
 .kpi-app .kpi-ov-cp-skel-grid {
   display: grid;
   grid-template-columns: 160px repeat(4, minmax(0, 1fr)) 204px;
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300);
   border-radius: 12px;
   box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
@@ -748,7 +748,7 @@
   min-height: 52px;
   border-right: 1px solid var(--n-300);
   border-bottom: 1px solid var(--n-300);
-  background: #fff;
+  background: var(--n-0);
 }
 .kpi-app .kpi-ov-cp-skel-hcell {
   padding: 15px 14px 14px;
@@ -770,7 +770,7 @@
   padding: 14px 14px 14px 18px;
   border-right: 1px solid var(--n-300);
   border-bottom: 1px solid var(--n-300);
-  background: #fff;
+  background: var(--n-0);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -789,7 +789,7 @@
   background: #FCFCFD;
 }
 .kpi-app .kpi-ov-cp-skel-cell.kpi-ov-cp-skel-per { background: var(--navy-50, #F4F7FC); }
-.kpi-app .kpi-ov-cp-skel-cell.kpi-ov-cp-skel-now { background: #fff; }
+.kpi-app .kpi-ov-cp-skel-cell.kpi-ov-cp-skel-now { background: var(--n-0); }
 .kpi-app .kpi-ov-cp-skel-grid > *:last-child,
 .kpi-app .kpi-ov-cp-skel-grid > .kpi-ov-cp-skel-cell:last-child,
 .kpi-app .kpi-ov-cp-skel-grid > .kpi-ov-cp-skel-rlab:last-of-type { border-bottom: none; }
