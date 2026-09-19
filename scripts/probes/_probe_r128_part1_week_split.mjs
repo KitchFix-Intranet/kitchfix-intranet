@@ -90,18 +90,27 @@ for (const c of CASES) {
       `${c.account.padEnd(16)} ${c.range.name.padEnd(13)} ${t.key.padEnd(9)} ${fmt(periodCell).padStart(15)} ${fmt(sumWeeks).padStart(15)} ${fmt(diff).padStart(10)} ${ok ? "OK" : "FAIL"}${missing > 0 ? ` (${missing} weeks missing ${field})` : ""}`
     );
 
-    // F1 Guard D assertion: on the hourly payload, `budget_at_this_
-    // week_revenue` must be ABSENT. Its presence alongside `week_
-    // hourly_allowed` lets any client compute `salary = total - hourly`
-    // on one subtraction.
+    // F1 Guard D assertion (Kevin review 2026-09-19). On the hourly
+    // payload, `budget_at_this_week_revenue` is now PRESENT but
+    // overwritten to equal `week_hourly_allowed`, so no operand pair
+    // exists to decompose salary. Two checks:
+    //   (a) `week_salary_allowed` must be absent.
+    //   (b) per-week `budget_at_this_week_revenue === week_hourly_allowed`.
     if (t.include_salary === "0") {
-      const leaked = lbWks.some(w => "budget_at_this_week_revenue" in w);
       const leakedSalary = lbWks.some(w => "week_salary_allowed" in w);
-      if (leaked || leakedSalary) {
-        console.error(`  Guard D FAIL: hourly payload leaks ${leaked ? "budget_at_this_week_revenue" : ""}${leaked && leakedSalary ? " + " : ""}${leakedSalary ? "week_salary_allowed" : ""}`);
+      const mismatched = lbWks.filter(w => {
+        const total = w.budget_at_this_week_revenue;
+        const hourly = w.week_hourly_allowed;
+        if (total == null && hourly == null) return false;
+        if (total == null || hourly == null) return true;
+        return Math.abs(Number(total) - Number(hourly)) > 0.005;
+      });
+      if (leakedSalary || mismatched.length > 0) {
+        if (leakedSalary) console.error(`  Guard D FAIL: hourly payload leaks week_salary_allowed`);
+        if (mismatched.length > 0) console.error(`  Guard D FAIL: hourly payload has ${mismatched.length} weeks where budget_at_this_week_revenue !== week_hourly_allowed`);
         anyFail = true;
       } else {
-        console.log(`  Guard D · hourly payload has neither budget_at_this_week_revenue nor week_salary_allowed · OK`);
+        console.log(`  Guard D · hourly payload: no week_salary_allowed, budget_at_this_week_revenue == week_hourly_allowed on every week · OK`);
       }
     }
   }

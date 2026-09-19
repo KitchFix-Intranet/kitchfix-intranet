@@ -1597,19 +1597,26 @@ export async function GET(request) {
   // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
   // week batr fallback has data.
   recomputeVerdictFromPanel(boardSingle);
-  // Kevin review 2026-09-19 · Guard D · R-98. The hourly-toggle
-  // payload shipping BOTH `budget_at_this_week_revenue` (merged total)
-  // and `week_hourly_allowed` is a leak: `salary = total - hourly` on
-  // one subtraction. Ship only the hourly allowance on this path so
-  // the payload has no operand pair the client can decompose. The
-  // salary components are still used INTERNALLY above (attach,
+  // Kevin review 2026-09-19 · Guard D · R-98. The hourly-toggle payload
+  // shipping BOTH `budget_at_this_week_revenue` (merged total) and
+  // `week_hourly_allowed` is a leak: `salary = total - hourly` on one
+  // subtraction. Ship only the hourly allowance on this path. Cannot
+  // delete `budget_at_this_week_revenue` outright - four Labor-page
+  // consumers depend on it (WeekTable.js:1074 vs-budget column,
+  // StoryBlock.js:182 anyWithBatr fallback + :197 adjusted-label gate,
+  // labor/page.js:513 field copy). Overwrite instead: on hourly the
+  // field carries the hourly allowance itself, mirroring resolver.js's
+  // period-level pattern where the parent's batr = merged - salary on
+  // the hourly toggle. One derived scalar, no operand pair.
+  //
+  // The salary components were still used INTERNALLY above (attach,
   // recomputePanelBatrFromPerWeek, recomputeVerdictFromPanel all read
-  // budget_at_this_week_revenue); the delete runs after the last
-  // internal read and before the payload serializes. Client's
-  // CurrentPeriodTable.js reads `week_hourly_allowed` on the hourly
-  // toggle, so nothing breaks client-side.
+  // the merged total); the overwrite runs after the last internal
+  // read and before the payload serializes.
   for (const w of (boardSingle.weeks || [])) {
-    if ("budget_at_this_week_revenue" in w) delete w.budget_at_this_week_revenue;
+    if (w.week_hourly_allowed != null) {
+      w.budget_at_this_week_revenue = w.week_hourly_allowed;
+    }
     if ("week_salary_allowed" in w) delete w.week_salary_allowed;
   }
 
