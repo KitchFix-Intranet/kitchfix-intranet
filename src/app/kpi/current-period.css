@@ -254,8 +254,6 @@
   color: var(--n-600, #64748B);
   margin-top: 3px;
 }
-.kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-rlab-rev { background: var(--green-50, #E9FDEC); }
-
 /* ── data cells · A4 ────────────────────────────────────────────── */
 /* min-height 108 - matches the natural height of a 4-line partial-
    week Revenue cell so cost rows expand to the same size and every

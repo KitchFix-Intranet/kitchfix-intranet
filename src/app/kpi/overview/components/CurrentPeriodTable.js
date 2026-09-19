@@ -438,7 +438,12 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
 
     const salaryPath = stmtByLine.get("3100.1") != null && stmtByLine.get("3100.2") != null;
     const laborPct = Number(stmtByLine.get("3100")?.target_pct || 0).toFixed(2);
-    const laborSub = salaryPath ? `labor · ${laborPct}% of revenue` : `hourly · ${laborPct}% of revenue`;
+    // Kevin R-128 Part 3 item 11 (2026-09-19). Drop the `labor · `
+    // prefix on the salary view - the row is already labelled
+    // "Kitchen labor" in the label column. Keep `hourly · ` on the
+    // hourly view: those figures are hourly-only and the prefix is
+    // the only thing on the row that says so.
+    const laborSub = salaryPath ? `${laborPct}% of revenue` : `hourly · ${laborPct}% of revenue`;
     // Row subtitles per Kevin's R-110 render. Labor / Purchasing get
     // planning-tone copy on future range ("schedule to this", "order
     // against this"). Kevin ruling 2026-09-16: on planned periods use
@@ -450,7 +455,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const goalPack   = goalFor("3400");
     const laborPctFuture = (goalHourly.effectivePct || 0).toFixed(2);
     const laborSubFuture = salaryPath
-      ? `labor · ${laborPct}% of revenue · schedule to this`
+      ? `${laborPct}% of revenue · schedule to this`
       : `hourly · ${laborPctFuture}% of week revenue · schedule to this`;
     const foodSub    = `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue`;
     const packSub    = `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue`;
@@ -461,7 +466,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
       { line: "3100", name: "Kitchen labor", sub: laborSub, isLabor: true },
       { line: "3200", name: "Food",      sub: foodSub },
-      { line: "3400", name: "Packaging", sub: packSub },
+      { line: "3400", name: "Pack. & Sup.", sub: packSub },
     ];
     const ROWS_LABOR = [
       { line: null, name: "Revenue", sub: "what each week earns", rev: true },
@@ -470,7 +475,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const ROWS_PURCHASING = [
       { line: null, name: "Revenue", sub: "what you are ordering for", rev: true },
       { line: "3200", name: "Food",      sub: isFuture ? foodSubP : foodSub },
-      { line: "3400", name: "Packaging", sub: isFuture ? packSubP : packSub },
+      { line: "3400", name: "Pack. & Sup.", sub: isFuture ? packSubP : packSub },
     ];
     const rows =
         rowSet === "labor"      ? ROWS_LABOR
@@ -698,7 +703,6 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
               <div
                 className={[
                   "kpi-ov-cp-rlab",
-                  isRev && "kpi-ov-cp-rlab-rev",
                   ri === 0 && "kpi-ov-cp-firstrow",
                   isLast && "kpi-ov-cp-lastrow",
                 ].filter(Boolean).join(" ")}
