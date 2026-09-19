@@ -1533,13 +1533,64 @@ export async function GET(request) {
     for (const [pn, amt] of byAcct) out.set(pn, Number(amt || 0));
     return out;
   })();
+  // Kevin R-128 Part 1 (2026-09-19). The R-121 per-week batr fields
+  // (`budget_at_this_week_revenue`, `week_hourly_allowed`) must ship
+  // on BOTH toggle states. R-121's original code attached the merged
+  // pct only on the +salary path, which left the hourly payload
+  // shipping the R-111 shape (`revenue × hourly_pct`) at week grain -
+  // the exact bug R-128 Part 1 was written to fix on the client.
+  // Load salary budgets internally on the hourly path too, compute
+  // merged pct, and pass. Guard D still holds because we DELETE
+  // `week_salary_allowed` from each week before the payload leaves
+  // this handler on the hourly path - only the derived total and
+  // the derived hourly allowance ship, both scalars with no salary
+  // decomposition visible.
+  const salaryBudgetByPeriodHourly = new Map();
+  {
+    const salaryBudResp = await load3100_2Budgets(supa, [account]);
+    if (!salaryBudResp.error) {
+      const byAcct = salaryBudResp.byAccount instanceof Map
+        ? salaryBudResp.byAccount.get(account)
+        : null;
+      if (byAcct) {
+        for (const [pn, amt] of byAcct) salaryBudgetByPeriodHourly.set(Number(pn), Number(amt || 0));
+      }
+    }
+  }
+  const mergedLineTargetPctHourly = computeMergedLineTargetPctByPeriod({
+    // Sum hourly + salary per period into a merged budget-periods array
+    // so the helper can compute merged/rev per period.
+    mergedBudgetPeriods: (() => {
+      const byP = new Map();
+      for (const bp of (budget_periods || [])) {
+        if (bp?.period_no != null) byP.set(Number(bp.period_no), Number(bp.amount || 0));
+      }
+      for (const [pn, s] of salaryBudgetByPeriodHourly) {
+        byP.set(pn, (byP.get(pn) || 0) + Number(s || 0));
+      }
+      return [...byP.entries()].sort((a, b) => a[0] - b[0]).map(([period_no, amount]) => ({ period_no, amount }));
+    })(),
+    overviewBudgets: overviewBudgetsSingle?.data || new Map(),
+    members: [account],
+    periods: rangePeriodsSingle,
+  });
   attachWeeklyBasisToBoard(boardSingle, weeklyBasisSingle, {
     lineTargetPctByPeriod: lineTargetPctSingle,
+    mergedTargetPctByPeriod: mergedLineTargetPctHourly,
     todayISO: today,
     contractualAccrualByPeriod: contractualAccrualSingle,
     verifiedPeriodTotals: verifiedPeriodTotalsSingle,
+    salaryBudgetByPeriod: salaryBudgetByPeriodHourly,
     feeBudgetByPeriod: feeBudgetByPeriodSingle,
   });
+  // Guard D · R-98. Salary values must not reach the hourly payload
+  // as distinct fields. `budget_at_this_week_revenue` and
+  // `week_hourly_allowed` are derived totals (already have salary
+  // absorbed into their scalar) and are permitted; `week_salary_
+  // allowed` decomposes the salary component and is not.
+  for (const w of (boardSingle.weeks || [])) {
+    if ("week_salary_allowed" in w) delete w.week_salary_allowed;
+  }
   // Kevin post-1057 sweep item 2 (2026-09-08). R-86 · a period's
   // target percent is its own, never the annual one. Sum per-week
   // batr and overwrite panel batr so it equals the table's total.

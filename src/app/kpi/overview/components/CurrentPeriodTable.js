@@ -321,16 +321,52 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const g = weeks.map(w => Number(w.week_revenue || 0) * ratio);
       const sub1 = stmtByLine.get("3100.1");
       const sub2 = stmtByLine.get("3100.2");
-      if (line === "3100" && sub1 && sub2) {
-        // R-111 · per-week goal for 3100 in the salary view is
-        // `week_revenue × 3100.1 target_pct + 3100.2 period_budget / 4`.
-        // On CP + NP alike (3100 batr is non-null on planned periods
-        // via labor's fixed-cost handling, so the FY hourly ratio +
-        // salary/4 does sum to batr exactly).
-        const hourlyRatio = Number(sub1.target_pct || 0) / 100;
-        const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
-        const gs = weeks.map(w => Number(w.week_revenue || 0) * hourlyRatio + salaryPerWeek);
-        return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+      // Kevin R-128 Part 1 (2026-09-19) · R-121 week split.
+      // The per-week 3100 goal comes from the labor board's own
+      // fields, not from a client-side re-derivation. R-111's formula
+      // (`week_revenue × hourly_target_pct + salary/4`) was
+      // superseded by R-121 (`week_revenue × merged_pct` with static
+      // salary/4 subtracted). The labor route already ships:
+      //   week.budget_at_this_week_revenue   total allowed this week
+      //   week.week_hourly_allowed           total minus static salary
+      //   week.week_salary_allowed           salary_period / 4
+      // Salary toggle takes the total; hourly toggle takes hourly.
+      // Match on week_start; if any week is missing from the labor
+      // board fall back to the legacy formula and log once.
+      if (line === "3100") {
+        const salaryToggleOn = sub1 != null && sub2 != null;
+        const lbWks = labor?.board?.weeks || [];
+        const byStart = new Map();
+        for (const w of lbWks) {
+          if (!w.week_start) continue;
+          byStart.set(w.week_start, {
+            total: Number(w.budget_at_this_week_revenue || 0),
+            hourly: Number(w.week_hourly_allowed || 0),
+          });
+        }
+        const allWeeksPresent = weeks.every(w => byStart.has(w.week_start));
+        if (allWeeksPresent) {
+          const gs = weeks.map(w => {
+            const rec = byStart.get(w.week_start);
+            return salaryToggleOn ? rec.total : rec.hourly;
+          });
+          return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+        }
+        // Fallback: log once, then legacy R-111 formula on the salary
+        // path; generic ratio on the hourly path. Preserves prior
+        // behaviour on the edge where labor.board is stale/absent.
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[CurrentPeriodTable] R-128: labor.board.weeks missing budget_at_this_week_revenue / week_hourly_allowed on one or more weeks; falling back to legacy 3100 goal formula."
+        );
+        if (salaryToggleOn) {
+          const hourlyRatio = Number(sub1.target_pct || 0) / 100;
+          const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
+          const gs = weeks.map(w => Number(w.week_revenue || 0) * hourlyRatio + salaryPerWeek);
+          return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+        }
+        // hourly toggle fallback: generic ratio × revenue
+        return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: ratio * 100 };
       }
       return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: ratio * 100 };
     };
