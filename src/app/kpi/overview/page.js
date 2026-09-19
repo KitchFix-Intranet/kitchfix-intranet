@@ -459,9 +459,25 @@ export default function KpiOverviewPage() {
   // driven by the URL account, since the landing_account isn't
   // known yet on the very first cold load.
   const skelIsPortfolio = PORTFOLIO_KEYS.includes(urlAccount || "");
+  // Kevin R-128 Part 3 item 8 (2026-09-19). Detect the CP / NP
+  // surface from the URL on cold load so the skeleton shape matches
+  // the loaded table. Heuristic: a specific range with dates spanning
+  // less than 60 days (a period is 28, plus buffer) is CP, NP or Last
+  // period - all render a period-shaped table. Whole-year and
+  // portfolio ranges fall through to the closed skeleton. When data
+  // has landed, useCpTable is definitive and takes precedence.
+  const urlIsPeriodRange = (() => {
+    if (!urlStart || !urlEnd) return false;
+    const s = new Date(urlStart + "T00:00:00Z").getTime();
+    const e = new Date(urlEnd + "T00:00:00Z").getTime();
+    const days = (e - s) / 86400000;
+    return days > 0 && days < 60;
+  })();
+  const skelStateCold = skelIsPortfolio ? "portfolio" : (urlIsPeriodRange ? "cp" : "closed");
+  const skelStateKnownCp = skelIsPortfolio ? "portfolio" : "cp";
 
   if (status === "loading" && !data) {
-    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
+    mainContent = <SkeletonBoard state={skelStateCold} />;
   } else if (loadState === "auth") {
     mainContent = authError === "expired"
       ? <StateSessionExpired />
@@ -471,14 +487,16 @@ export default function KpiOverviewPage() {
   } else if (data?.locked) {
     mainContent = <LockedPanel />;
   } else if (loadState === "loading" && !data) {
-    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
+    mainContent = <SkeletonBoard state={skelStateCold} />;
   } else if (!data || (!data.cards && !data.landing_account)) {
-    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
+    mainContent = <SkeletonBoard state={skelStateCold} />;
   } else if (useCpTable && (!cpLabor || !cpPurch) && !cpAuxError) {
     // Kevin fix 2026-09-17 item 1: on CP or NP the CurrentPeriodTable
     // depends on a second (labor+purchasing) fetch. Keep the board
     // skeleton up until that lands - no second loader text state.
-    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
+    // Kevin R-128 Part 3 item 8 (2026-09-19): definitive CP/NP state
+    // here (data has period_state), so state="cp" is authoritative.
+    mainContent = <SkeletonBoard state={skelStateKnownCp} />;
   } else if (data && data.cards) {
     const rangeMeta = { ...data.range, period_state: data.period_state };
     // Ghost the prior board at reduced opacity during warm refetch.
