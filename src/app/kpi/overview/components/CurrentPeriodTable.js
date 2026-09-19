@@ -470,20 +470,48 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const goalHourly = goalFor("3100.1");
     const goalFood   = goalFor("3200");
     const goalPack   = goalFor("3400");
+    const goalVeh    = goalFor("3500");
     const laborPctFuture = (goalHourly.effectivePct || 0).toFixed(2);
     const laborSubFuture = salaryPath
       ? `${laborPct}% of revenue · schedule to this`
       : `hourly · ${laborPctFuture}% of week revenue · schedule to this`;
     const foodSub    = `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue`;
     const packSub    = `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue`;
+    const vehSub     = `${(stmtByLine.get("3500")?.target_pct || 0).toFixed(2)}% of revenue`;
     const foodSubP   = `${(goalFood.effectivePct || 0).toFixed(2)}% of week revenue · order against this`;
     const packSubP   = `${(goalPack.effectivePct || 0).toFixed(2)}% of week revenue`;
+    // Kevin R-128 Part 3 trap 3B.2 (2026-09-19). Vehicle needs its
+    // own future-range sub so its % agrees with the period-exact
+    // ratio the other rows use on NP. Without vehSubP, Vehicle's sub
+    // would show the FY ratio while Food and Pack. & Sup. above show
+    // the period-exact - three rows in a column, two computed one
+    // way and one the other.
+    const vehSubP    = `${(goalVeh.effectivePct || 0).toFixed(2)}% of week revenue`;
+
+    // Kevin R-128 Part 3 items 5 + E, trap 3B.3 (2026-09-19). Vehicle
+    // (3500) is present on TBJ - FL and TBR - FL and absent on
+    // CIN - AZ and TXR - AZ. Suppress the row when both the period
+    // budget and the actual spend are zero, else the two AZ accounts
+    // render a row of zeros. ONE named expression - a later ruling
+    // (R-129) will add the same row to the Purchasing drill-down,
+    // and if the two copies drift, Overview and its own drill-down
+    // will disagree about whether the account has a Vehicle line.
+    // Same R-127 failure mode we already have open.
+    const vehRow = stmtByLine.get("3500");
+    const vehPeriodBudget = vehRow ? Number(vehRow.period_budget || 0) : 0;
+    const vehBatr         = vehRow ? Number(vehRow.budget_at_this_revenue || 0) : 0;
+    const vehActual       = (purch?.weekly || [])
+      .filter(r => String(r.gl_line_code || "").startsWith("3500"))
+      .reduce((s, r) => s + Number(r.amount || 0), 0);
+    const hasVehicleLine = vehRow != null
+      && (vehPeriodBudget > 0 || vehBatr > 0 || vehActual > 0);
 
     const ROWS_OVERVIEW = [
       { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
       { line: "3100", name: "Kitchen labor", sub: laborSub, isLabor: true },
       { line: "3200", name: "Food",      sub: foodSub },
       { line: "3400", name: "Pack. & Sup.", sub: packSub },
+      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: isFuture ? vehSubP : vehSub }] : []),
     ];
     const ROWS_LABOR = [
       { line: null, name: "Revenue", sub: "what each week earns", rev: true },
