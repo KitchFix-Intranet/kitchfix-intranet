@@ -1,0 +1,285 @@
+{
+  "original_bucket": {
+    "rows": 364,
+    "spend": 9994.88
+  },
+  "reclass_rules": [
+    {
+      "pattern": "/SAMBZON.*SORBET|SORBET|GELATO|ICE CREAM|FROZEN YOGURT/i",
+      "target_category": "dairy",
+      "reason": "frozen dessert"
+    },
+    {
+      "pattern": "/HOT SAUCE|KETCHUP|MUSTARD|MAYO|VINEGAR|SOY SAUCE|WORCESTER|BBQ SAUCE|MARINADE|DRESSING|SALSA/i",
+      "target_category": "dry_goods",
+      "reason": "condiment / sauce"
+    },
+    {
+      "pattern": "/SPICE|SEASONING|SALT|PEPPER|OIL|VANILLA|EXTRACT|BROTH|STOCK|BOUILLON/i",
+      "target_category": "dry_goods",
+      "reason": "seasoning / oil / broth"
+    },
+    {
+      "pattern": "/FEE|CHARGE|SURCHARGE|CREDIT|MISC|MATERIAL/i",
+      "target_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "pattern": "/BAG|CUP|BOWL|LID|GLOVE|APRON|TOWEL|NAPKIN|WIPE|PAN FOIL|WRAP|LINER|PLATE/i",
+      "target_category": "non_food",
+      "reason": "supply / packaging"
+    }
+  ],
+  "reclassified_groups": [
+    {
+      "vendor": "Sysco",
+      "description": "CHGS FOR FUEL SURCHARGE",
+      "rows": 105,
+      "spend": 1056.03,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "vendor": "Cheney Brothers",
+      "description": "DRESSING FAT FREE",
+      "rows": 1,
+      "spend": 556.34,
+      "from_category": "other",
+      "to_category": "dry_goods",
+      "reason": "condiment / sauce"
+    },
+    {
+      "vendor": "Auto-Chlor",
+      "description": "Machine Service Charge - D2-001 D05742",
+      "rows": 1,
+      "spend": 366.72,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "vendor": "Sysco",
+      "description": "SAMBZON SORBET BERRY ACAI ORGANIC 1841100055",
+      "rows": 2,
+      "spend": 310.35,
+      "from_category": "other",
+      "to_category": "dairy",
+      "reason": "frozen dessert"
+    },
+    {
+      "vendor": "Sysco",
+      "description": "SAMBAZON SORBET BERRY ACAI ORGANIC 1841100055",
+      "rows": 1,
+      "spend": 206.9,
+      "from_category": "other",
+      "to_category": "dairy",
+      "reason": "frozen dessert"
+    },
+    {
+      "vendor": "Gordon Food Service",
+      "description": "TOSTONES PLANTAIN CUP",
+      "rows": 2,
+      "spend": 152.64,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "supply / packaging"
+    },
+    {
+      "vendor": "Sysco",
+      "description": "AREZCLS OIL OLIVE POMACE PET",
+      "rows": 1,
+      "spend": 151.56,
+      "from_category": "other",
+      "to_category": "dry_goods",
+      "reason": "seasoning / oil / broth"
+    },
+    {
+      "vendor": "Alsco Uniforms",
+      "description": "Service Charge",
+      "rows": 11,
+      "spend": 143.11,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "vendor": "Vestis",
+      "description": "SERVICE CHARGE - PCT",
+      "rows": 5,
+      "spend": 105.51,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "vendor": "Vestis",
+      "description": "SERVICE CHARGE - PCT EASYCARE",
+      "rows": 3,
+      "spend": 96.23,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "vendor": "Vestis",
+      "description": "ENERGY SURCHARGE",
+      "rows": 8,
+      "spend": 88.6,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "vendor": "Sysco",
+      "description": "SYSCO CLASSIC APPLE SEED OIL",
+      "rows": 1,
+      "spend": 80.19,
+      "from_category": "other",
+      "to_category": "dry_goods",
+      "reason": "seasoning / oil / broth"
+    },
+    {
+      "vendor": "Vestis",
+      "description": "APRON BIB NO PKT SPUN",
+      "rows": 3,
+      "spend": 79.2,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "supply / packaging"
+    },
+    {
+      "vendor": "Sysco",
+      "description": "ITILSOFT SALSA PICO DE GALLO",
+      "rows": 1,
+      "spend": 63.96,
+      "from_category": "other",
+      "to_category": "dry_goods",
+      "reason": "condiment / sauce"
+    },
+    {
+      "vendor": "Samuels Seafood Co",
+      "description": "DELIVERY CHARGE",
+      "rows": 17,
+      "spend": 58.14,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    },
+    {
+      "vendor": "Sysco",
+      "description": "Charge Freight",
+      "rows": 3,
+      "spend": 56.83,
+      "from_category": "other",
+      "to_category": "non_food",
+      "reason": "fee / non-food line"
+    }
+  ],
+  "remaining_after": {
+    "rows": 199,
+    "spend": 6422.57
+  },
+  "top_remaining": [
+    {
+      "description": "PROPANE INDEX",
+      "rows": 3,
+      "spend": 666.76
+    },
+    {
+      "description": "MINIMUM INVOICE AMOUNT",
+      "rows": 8,
+      "spend": 460.56
+    },
+    {
+      "description": "Labor (4 hrs)",
+      "rows": 1,
+      "spend": 400
+    },
+    {
+      "description": "AREPA CORN W MOZZARELLA",
+      "rows": 2,
+      "spend": 330.12
+    },
+    {
+      "description": "PROPANE",
+      "rows": 1,
+      "spend": 225.44
+    },
+    {
+      "description": "VIA SESSD CON JUSTE - CHR CONVERT: LER MARGRET SISCONAT",
+      "rows": 2,
+      "spend": 211.89
+    },
+    {
+      "description": "SAUCE BBQ HER ORIGINAL SWEET BOTTLE PLASTIC",
+      "rows": 1,
+      "spend": 200.52
+    },
+    {
+      "description": "Labor (2hr)",
+      "rows": 1,
+      "spend": 200
+    },
+    {
+      "description": "EASYCARE",
+      "rows": 5,
+      "spend": 194.95
+    },
+    {
+      "description": "CT PASQUIR CAKE ASST PETITS FOURS BLK WH",
+      "rows": 1,
+      "spend": 185.9
+    },
+    {
+      "description": "Cockroach/Rodent Program",
+      "rows": 1,
+      "spend": 185
+    },
+    {
+      "description": "MRS T PIEROGI POT/CHS CHDR 1.5 OZ",
+      "rows": 1,
+      "spend": 147.9
+    },
+    {
+      "description": "DEFROSTER",
+      "rows": 1,
+      "spend": 136.51
+    },
+    {
+      "description": "OLDFASH PIEROGI POT/CHS",
+      "rows": 1,
+      "spend": 131.9
+    },
+    {
+      "description": "EGG ROLL VEGETABLE",
+      "rows": 1,
+      "spend": 124.32
+    },
+    {
+      "description": "KR-PCS KNIFE SERVICE",
+      "rows": 2,
+      "spend": 114
+    },
+    {
+      "description": "SAUCE DEMI GLACE CONC 748267830651L",
+      "rows": 2,
+      "spend": 107.98
+    },
+    {
+      "description": "LAMB POTATO SWEET TATER PUFF",
+      "rows": 1,
+      "spend": 104.78
+    },
+    {
+      "description": "TEQUENOS CHEESE ST",
+      "rows": 1,
+      "spend": 101.68
+    },
+    {
+      "description": "Jarod",
+      "rows": 1,
+      "spend": 100
+    }
+  ]
+}

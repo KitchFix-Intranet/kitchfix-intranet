@@ -1,0 +1,109 @@
+{
+  "produce": {
+    "n": 920,
+    "q1": 0.8,
+    "q3": 3.51,
+    "iqr": 2.71,
+    "band_multiplier": 1,
+    "band_low": 0,
+    "band_high": 6.21,
+    "median": 1.6,
+    "method": "[max(0, Q1 - 1*IQR), Q3 + 1*IQR] from 920 WEIGHT SET rows"
+  },
+  "dairy": {
+    "n": 363,
+    "q1": 1.43,
+    "q3": 3,
+    "iqr": 1.57,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 5.36,
+    "median": 2.23,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 363 WEIGHT SET rows"
+  },
+  "protein": {
+    "n": 611,
+    "q1": 2.04,
+    "q3": 8.16,
+    "iqr": 6.12,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 17.34,
+    "median": 4.73,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 611 WEIGHT SET rows"
+  },
+  "dry_goods": {
+    "n": 583,
+    "q1": 1.3,
+    "q3": 9.71,
+    "iqr": 8.41,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 22.32,
+    "median": 3.05,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 583 WEIGHT SET rows"
+  },
+  "poultry": {
+    "n": 4,
+    "note": "insufficient_data (<5 rows)"
+  },
+  "beverage": {
+    "n": 189,
+    "q1": 1,
+    "q3": 18.81,
+    "iqr": 17.82,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 45.54,
+    "median": 1.9,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 189 WEIGHT SET rows"
+  },
+  "packaging": {
+    "n": 40,
+    "q1": 2.78,
+    "q3": 106.43,
+    "iqr": 103.65,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 261.9,
+    "median": 40.09,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 40 WEIGHT SET rows"
+  },
+  "cleaning": {
+    "n": 40,
+    "q1": 0.9,
+    "q3": 5.77,
+    "iqr": 4.87,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 13.07,
+    "median": 2.88,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 40 WEIGHT SET rows"
+  },
+  "other": {
+    "n": 5,
+    "q1": 6.14,
+    "q3": 462.74,
+    "iqr": 456.61,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 1147.65,
+    "median": 9,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 5 WEIGHT SET rows"
+  },
+  "supplies": {
+    "n": 16,
+    "q1": 1,
+    "q3": 2.83,
+    "iqr": 1.83,
+    "band_multiplier": 1.5,
+    "band_low": 0,
+    "band_high": 5.57,
+    "median": 2.17,
+    "method": "[max(0, Q1 - 1.5*IQR), Q3 + 1.5*IQR] from 16 WEIGHT SET rows"
+  },
+  "smallwares": {
+    "n": 3,
+    "note": "insufficient_data (<5 rows)"
+  }
+}
