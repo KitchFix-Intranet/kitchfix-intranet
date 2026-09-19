@@ -574,25 +574,48 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       : rowSet === "purchasing" ? ROWS_PURCHASING
       :                           ROWS_OVERVIEW;
 
-    // Kevin R-128 Part 3 item 6 (2026-09-19). Total cost of goods row.
-    // Overview only - Labor's single 3100 cost row is already a
-    // one-row column, and Kevin's DO NOT list keeps a total off
-    // Purchasing (R-129 covers Purchasing's own version). The row's
-    // per-week/period values are the on-screen sum of the four cost
-    // rows in that column, so `sum of the four cells` equals the
-    // total cell to the cent by construction - the R-121 defect
-    // above was exactly this invariant breaking.
+    // Kevin R-128 Part 3 item 6 (2026-09-19, review-fix 2026-09-19).
+    // Total cost of goods row. Overview only - Labor's single 3100
+    // cost row is already a one-row column, and Kevin's DO NOT list
+    // keeps a total off Purchasing (R-129 covers Purchasing's own
+    // version). Per Kevin's item 6 brief: "each cell is the sum of
+    // the four cost rows AS DISPLAYED in that same column, so the
+    // column adds up on screen."
+    //
+    // Round-then-sum: each contributing row's value is rounded to
+    // whole dollars BEFORE the sum, so the total cell equals the sum
+    // of the on-screen values in its column to the cent. The prior
+    // sum-unrounded-then-round-once shape drifted by ~$1 per cell
+    // (TBJ - FL P10 +salary WK1 total showed $18,831 while its
+    // column summed to $18,830; total period cell showed $73,330
+    // while its own four weeks summed to $73,331).
     if (rowSet === "overview") {
       const costOnly = rows.filter(r => !r.rev);
       const totalGoal = weeks.map((_, wi) =>
-        costOnly.reduce((s, r) => s + Number(goalFor(r.line).goal[wi] || 0), 0)
+        costOnly.reduce((s, r) => s + Math.round(Number(goalFor(r.line).goal[wi] || 0)), 0)
       );
       const totalLanded = weeks.map((_, wi) =>
-        costOnly.reduce((s, r) => s + Number(landedFor(r.line)[wi] || 0), 0)
+        costOnly.reduce((s, r) => s + Math.round(Number(landedFor(r.line)[wi] || 0)), 0)
       );
       const totalBatr = costOnly.reduce(
-        (s, r) => s + Number(goalFor(r.line).batr || 0), 0
+        (s, r) => s + Math.round(Number(goalFor(r.line).batr || 0)), 0
       );
+      // Period-cell landed for the total row. PerCostCellBody
+      // displays big = dollar0(G - L) so `left` on screen for each
+      // cost row is Math.round(rowBatr - rowActual). For the total
+      // row's period big to equal Σ (per-row rounded left), we set L
+      // such that (totalBatr - L) equals that column sum exactly.
+      // This is per Kevin's item 6 brief - "each cell is the sum of
+      // the four cost rows as displayed in that same column." Rounding
+      // envelope and actual separately then subtracting drifts by up
+      // to $1 (e.g. hourly TBJ P10: 43,728 vs 43,729 column sum);
+      // deriving landed from the target left sum makes it exact.
+      const totalPeriodLeftSum = costOnly.reduce((s, r) => {
+        const rowBatr = Number(goalFor(r.line).batr || 0);
+        const rowActual = landedFor(r.line).reduce((a, v) => a + Number(v || 0), 0);
+        return s + Math.round(rowBatr - rowActual);
+      }, 0);
+      const totalActualForPeriod = totalBatr - totalPeriodLeftSum;
       const totalFyPct = costOnly.reduce(
         (s, r) => s + Number(stmtByLine.get(r.line)?.target_pct || 0), 0
       );
@@ -610,6 +633,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         _goal: totalGoal,
         _landed: totalLanded,
         _batr: totalBatr,
+        _actualForPeriod: totalActualForPeriod,
       });
     }
 
@@ -713,23 +737,22 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         isLabor: row.isLabor,
       });
     }
-    // Kevin R-128 Part 3 item 6 (2026-09-19). Aggregate total row's
-    // rolling data by summing per-line plan/rolling/landed across the
-    // four cost lines. Keyed by "__TOT__" so the render loop can look
-    // it up the same way as any other row. Delta for a week = total_
-    // rolling - total_plan (which equals Σ per-line deltas). C1/C2/C3
-    // flags are false on the aggregate - the summary card still keys
-    // its C1/C2 tone off the first cost line, not the total.
+    // Kevin R-128 Part 3 item 6 (2026-09-19, review-fix 2026-09-19).
+    // Aggregate total row's rolling data by summing per-line
+    // plan/rolling/landed across the four cost lines. Round each
+    // contribution to whole dollars BEFORE the sum (matches item 6's
+    // "adds up on screen" invariant applied to the rolling delta
+    // line and value display).
     const totRow = derived.rows.find(r => r.tot);
     if (totRow && perLine.size > 0) {
       const totalPlan = weeks.map((_, wi) =>
-        [...perLine.values()].reduce((s, pl) => s + Number(pl.plan[wi] || 0), 0)
+        [...perLine.values()].reduce((s, pl) => s + Math.round(Number(pl.plan[wi] || 0)), 0)
       );
       const totalRolling = weeks.map((_, wi) =>
-        [...perLine.values()].reduce((s, pl) => s + Number(pl.rolling[wi] || 0), 0)
+        [...perLine.values()].reduce((s, pl) => s + Math.round(Number(pl.rolling[wi] || 0)), 0)
       );
       const totalLandedRoll = weeks.map((_, wi) =>
-        [...perLine.values()].reduce((s, pl) => s + Number(pl.landed[wi] || 0), 0)
+        [...perLine.values()].reduce((s, pl) => s + Math.round(Number(pl.landed[wi] || 0)), 0)
       );
       perLine.set("__TOT__", {
         plan: totalPlan,
@@ -890,7 +913,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
           const landed  = isRev
             ? null
             : (isTot ? row._landed : derived.landedFor(row.line));
-          const actual  = isRev ? 0 : landed.reduce((s, v) => s + v, 0);
+          // Total row's period landed uses row._actualForPeriod
+          // (Σ per-row Math.round(rowActual)) so the period cell
+          // reads the round-then-sum invariant that the WK1..WK4
+          // cells enforce. Non-total rows sum their own week landed.
+          const actual  = isRev
+            ? 0
+            : (isTot ? row._actualForPeriod : landed.reduce((s, v) => s + v, 0));
           return (
             <Fragment key={row.line || (isTot ? "tot" : "rev")}>
               {/* Separators before this row's rlab/cells. Kevin
