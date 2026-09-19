@@ -1583,14 +1583,6 @@ export async function GET(request) {
     salaryBudgetByPeriod: salaryBudgetByPeriodHourly,
     feeBudgetByPeriod: feeBudgetByPeriodSingle,
   });
-  // Guard D · R-98. Salary values must not reach the hourly payload
-  // as distinct fields. `budget_at_this_week_revenue` and
-  // `week_hourly_allowed` are derived totals (already have salary
-  // absorbed into their scalar) and are permitted; `week_salary_
-  // allowed` decomposes the salary component and is not.
-  for (const w of (boardSingle.weeks || [])) {
-    if ("week_salary_allowed" in w) delete w.week_salary_allowed;
-  }
   // Kevin post-1057 sweep item 2 (2026-09-08). R-86 · a period's
   // target percent is its own, never the annual one. Sum per-week
   // batr and overwrite panel batr so it equals the table's total.
@@ -1605,6 +1597,21 @@ export async function GET(request) {
   // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
   // week batr fallback has data.
   recomputeVerdictFromPanel(boardSingle);
+  // Kevin review 2026-09-19 · Guard D · R-98. The hourly-toggle
+  // payload shipping BOTH `budget_at_this_week_revenue` (merged total)
+  // and `week_hourly_allowed` is a leak: `salary = total - hourly` on
+  // one subtraction. Ship only the hourly allowance on this path so
+  // the payload has no operand pair the client can decompose. The
+  // salary components are still used INTERNALLY above (attach,
+  // recomputePanelBatrFromPerWeek, recomputeVerdictFromPanel all read
+  // budget_at_this_week_revenue); the delete runs after the last
+  // internal read and before the payload serializes. Client's
+  // CurrentPeriodTable.js reads `week_hourly_allowed` on the hourly
+  // toggle, so nothing breaks client-side.
+  for (const w of (boardSingle.weeks || [])) {
+    if ("budget_at_this_week_revenue" in w) delete w.budget_at_this_week_revenue;
+    if ("week_salary_allowed" in w) delete w.week_salary_allowed;
+  }
 
   let bodySingle = {
     ok: true,

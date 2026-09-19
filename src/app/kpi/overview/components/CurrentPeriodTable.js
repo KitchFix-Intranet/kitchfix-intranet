@@ -324,41 +324,39 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       // Kevin R-128 Part 1 (2026-09-19) · R-121 week split.
       // The per-week 3100 goal comes from the labor board's own
       // fields, not from a client-side re-derivation. R-111's formula
-      // (`week_revenue × hourly_target_pct + salary/4`) was
-      // superseded by R-121 (`week_revenue × merged_pct` with static
-      // salary/4 subtracted). The labor route already ships:
-      //   week.budget_at_this_week_revenue   total allowed this week
-      //   week.week_hourly_allowed           total minus static salary
-      //   week.week_salary_allowed           salary_period / 4
-      // Salary toggle takes the total; hourly toggle takes hourly.
-      // Match on week_start; if any week is missing from the labor
-      // board fall back to the legacy formula and log once.
+      // (`week_revenue × hourly_target_pct + salary/4`) was superseded
+      // by R-121 (`week_revenue × merged_pct` with static salary/4
+      // subtracted). Salary toggle reads `budget_at_this_week_revenue`
+      // (merged total); hourly toggle reads `week_hourly_allowed`
+      // (total - static salary/4). Server-side, Guard D deletes the
+      // hourly payload's `budget_at_this_week_revenue` so the client
+      // cannot decompose salary via subtraction on hourly.
+      //
+      // Fallback (Kevin review 2026-09-19 F2): check the FIELD for the
+      // active toggle, not the week's mere presence. `has(week_start)`
+      // succeeds for any week with a start date; the field can be
+      // absent while the week is not. `null` and `undefined` both
+      // trigger fallback; a real zero (never observed in production
+      // but plausible on a $0-budget line) survives.
       if (line === "3100") {
         const salaryToggleOn = sub1 != null && sub2 != null;
         const lbWks = labor?.board?.weeks || [];
-        const byStart = new Map();
-        for (const w of lbWks) {
-          if (!w.week_start) continue;
-          byStart.set(w.week_start, {
-            total: Number(w.budget_at_this_week_revenue || 0),
-            hourly: Number(w.week_hourly_allowed || 0),
-          });
-        }
-        const allWeeksPresent = weeks.every(w => byStart.has(w.week_start));
-        if (allWeeksPresent) {
-          const gs = weeks.map(w => {
-            const rec = byStart.get(w.week_start);
-            return salaryToggleOn ? rec.total : rec.hourly;
-          });
+        const byStart = new Map(lbWks.filter(w => w.week_start).map(w => [w.week_start, w]));
+        const activeField = salaryToggleOn ? "budget_at_this_week_revenue" : "week_hourly_allowed";
+        const allFieldsPresent = weeks.every(w => {
+          const lw = byStart.get(w.week_start);
+          return lw != null && lw[activeField] != null;
+        });
+        if (allFieldsPresent) {
+          const gs = weeks.map(w => Number(byStart.get(w.week_start)[activeField]));
           return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
         }
-        // Fallback: log once, then legacy R-111 formula on the salary
-        // path; generic ratio on the hourly path. Preserves prior
-        // behaviour on the edge where labor.board is stale/absent.
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[CurrentPeriodTable] R-128: labor.board.weeks missing budget_at_this_week_revenue / week_hourly_allowed on one or more weeks; falling back to legacy 3100 goal formula."
-        );
+        // Fallback: legacy R-111 formula on the salary path; generic
+        // ratio on the hourly path. Preserves prior behaviour when
+        // labor.board is stale/absent. No warn (Kevin review F3: the
+        // three goalFor("3100") call sites in the render body fire
+        // the same warn three times per render). Probe covers the
+        // detection assertion.
         if (salaryToggleOn) {
           const hourlyRatio = Number(sub1.target_pct || 0) / 100;
           const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
