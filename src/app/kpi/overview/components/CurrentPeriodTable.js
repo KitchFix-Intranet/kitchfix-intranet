@@ -86,33 +86,49 @@ function RevCellBody({ w, amount, labor, i, isFuture }) {
   );
 }
 
-// A4 · Cost cell body. Weeks not yet started: `to spend $X`. Started
-// weeks: `spent $L of $G` on one line, then the bar, then the verdict
-// line. "running hot" is gone - the red bar carries the verdict.
-//
-// Section B additions (Kevin § B, Kevin § C):
-//   - `goalRolling` is the rolling budget for THIS week (differs from
-//     `goal` when mode === "rolling" AND week is open); shown in the
-//     "of $G" position on open weeks so the cell figure changes with
-//     the toggle.
-//   - `dlt` is the per-week delta (rolling[i] - plan[i]); rendered
-//     as a fourth line "▼ $X less than plan" (trim red) or "▲ $Y
-//     more than plan" (cushion green) on open weeks only, mode ===
-//     "rolling" only.
-//   - C3 (envelope exceeded, isC3): open weeks read "$0 to spend ·
-//     already over" in red; plan-mode display is unchanged.
-function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }) {
+// Kevin R-128 Part 3 items 1 + A + F (2026-09-19). Cell body
+// restructures:
+//   - Item A. `.v` flex row baseline-aligned right, `.of` small text
+//     LEFT of `.big` (so every value ends on the same edge).
+//   - Item F. `spent` and `to spend` prefixes gone. Pending and
+//     forecast show the value alone; closed and current show `of $G`
+//     as the left-side hint.
+//   - Item 1. `splitHrly` / `splitSal` render a `Hrly $X · Sal $Y`
+//     line under the value on salary view + PLAN. Rolling replaces
+//     the split with the delta line (Part 4: salary is fixed, so a
+//     re-spread budget has no meaningful split; row height must hold).
+//     Hourly view never renders the split.
+//   - Verdict unifies to `$X left · mute` for every non-over case,
+//     matching the render. The prior `▼ $X under · green` branch for
+//     closed labor is gone: colour rule (Kevin item 9 side): red is
+//     over, grey is under, green is only revenue running ahead.
+//   - `goalRolling` still switches the effective goal on open weeks
+//     in rolling; `dlt` still shows on open weeks in rolling.
+//   - C3 (envelope exceeded, isC3): open weeks read `$0 · already
+//     over` per Part 4 ("C3 keeps its current shape") plus item F
+//     ("to spend" gone).
+function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal, isTotal }) {
   const isFuture = w.state === "not_started";
   const isClosed = w.state === "closed";
-  const isNow = w.state === "in_progress";
   const l = Number(landed || 0);
   const gEffective = mode === "rolling" && !isClosed ? Number(goalRolling || 0) : Number(goal || 0);
+  const isRolling = mode === "rolling";
+  const showSplit = splitHrly != null && splitSal != null && !isRolling;
+  const showDelta = isRolling && !isClosed && dlt != null && Math.abs(dlt) > 0;
+  const splitLine = showSplit ? (
+    <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
+  ) : null;
+  const deltaLine = showDelta ? (
+    <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
+      {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
+    </div>
+  ) : null;
   // C3 · open weeks clamp to $0 in Rolling; cell shows "already over".
-  if (mode === "rolling" && isC3 && !isClosed) {
+  if (isRolling && isC3 && !isClosed) {
     return (
       <>
-        <div className="kpi-ov-cp-big kpi-ov-cp-over">
-          <span className="kpi-ov-cp-pre">to spend</span>{dollar0(0)}
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big kpi-ov-cp-over">{dollar0(0)}</span>
         </div>
         <div className="kpi-ov-cp-vd kpi-ov-cp-over">already over</div>
       </>
@@ -121,53 +137,67 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }
   if (isFuture) {
     return (
       <>
-        <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">to spend</span>{dollar0(gEffective)}</div>
-        {mode === "rolling" && dlt != null && Math.abs(dlt) > 0 && (
-          <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
-            {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
-          </div>
-        )}
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big">{dollar0(gEffective)}</span>
+        </div>
+        {splitLine}
+        {deltaLine}
       </>
     );
   }
   const g = gEffective;
   const over = l > g && g > 0;
   const pctBar = g > 0 ? Math.min(100, (l / g) * 100) : 0;
-  const barColor = over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
-  let verdictText, verdictClass;
-  if (over) { verdictText = `▲ ${dollar0(l - g)} over`; verdictClass = "kpi-ov-cp-over"; }
-  else if (isNow) { verdictText = `${dollar0(g - l)} left this week`; verdictClass = "kpi-ov-cp-good"; }
-  else if (isClosed && !isLabor) { verdictText = `${dollar0(g - l)} left · still landing`; verdictClass = "kpi-ov-cp-mute"; }
-  else { verdictText = `▼ ${dollar0(g - l)} under`; verdictClass = "kpi-ov-cp-good"; }
+  // Kevin R-128 Part 3 item 6 (2026-09-19). Total row's week bar
+  // paints navy regardless of over/under - the per-row bars already
+  // carry over/under signaling; the total bar's role is "share of
+  // the total envelope used", so it stays a neutral scan of the
+  // combined position.
+  const barColor = isTotal
+    ? "var(--navy-700, #153968)"
+    : (over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
+  const verdictText = over ? `▲ ${dollar0(l - g)} over` : `${dollar0(g - l)} left`;
+  const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
   return (
     <>
-      <div className="kpi-ov-cp-big">
-        <span className="kpi-ov-cp-pre">spent</span>{dollar0(l)}<small>of {dollar0(g)}</small>
+      <div className="kpi-ov-cp-v">
+        <span className="kpi-ov-cp-of">of {dollar0(g)}</span>
+        <span className="kpi-ov-cp-big">{dollar0(l)}</span>
       </div>
+      {splitLine}
       <div className="kpi-ov-cp-bar" style={{ marginBottom: 4 }}>
         <i style={{ width: `${pctBar}%`, background: barColor }} />
       </div>
       <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
-      {mode === "rolling" && !isClosed && dlt != null && Math.abs(dlt) > 0 && (
-        <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
-          {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
-        </div>
-      )}
+      {deltaLine}
     </>
   );
 }
 
-// Period-column body · revenue (A4). On future range (R-110) the
-// projection == the plan (sum of week rev) and there is no confirmed
-// figure yet; period column reads "planned revenue" + weekly/daily
-// rate on the third line.
+// Kevin R-128 Part 3 items C + 9 (2026-09-19). Revenue period cell
+// answers its own header. The column pill says "What is left" - the
+// big value now reads `left to earn $X` where X = projection -
+// confirmed, matching every cost row's `left of $G` shape. Footer
+// reads `$confirmed of $projection · ▲ $delta ahead of pace` so a
+// chef reading the column sees "how much is left" and "am I on pace
+// for it" on the same row.
+//
+// Pace: delta = confirmed - projection × dayFrac. Positive is ahead,
+// negative is behind. Green when ahead, mute when behind (Kevin
+// colour rule: green is only revenue running ahead; red is over on
+// cost; grey is under everywhere).
+//
+// Future range branch unchanged - no confirmed yet, no pace to
+// compute, so keep the `$X planned revenue + per-week/per-day` shape.
 function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays }) {
   if (isFuture) {
     const perWeek = projection / 4;
     const perDay  = serviceDays > 0 ? projection / serviceDays : 0;
     return (
       <>
-        <div className="kpi-ov-cp-big">{dollar0(projection)}</div>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
+        </div>
         <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">planned revenue</div>
         <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
           <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
@@ -176,22 +206,42 @@ function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays 
     );
   }
   const p = projection > 0 ? Math.min(100, (confirmed / projection) * 100) : 0;
+  const onPace = projection * dayFrac;
+  const paceDelta = confirmed - onPace;
+  const ahead = paceDelta >= 0;
+  const paceText = ahead
+    ? `▲ ${dollar0(paceDelta)} ahead of pace`
+    : `▼ ${dollar0(-paceDelta)} behind pace`;
+  const paceClass = ahead ? "kpi-ov-cp-good" : "kpi-ov-cp-mute";
   return (
     <>
-      <div className="kpi-ov-cp-big">{dollar0(projection)}<small>projecting</small></div>
+      <div className="kpi-ov-cp-v">
+        <span className="kpi-ov-cp-of">left to earn</span>
+        <span className="kpi-ov-cp-big">{dollar0(Math.max(0, projection - confirmed))}</span>
+      </div>
       <div className="kpi-ov-cp-bar">
         <i style={{ width: `${p}%`, background: "var(--green-600, #008330)" }} />
         <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
       </div>
-      <div className="kpi-ov-cp-sub"><b>{dollar0(confirmed)}</b> confirmed · {Math.round(p)}% of period</div>
+      <div className="kpi-ov-cp-fl">
+        <b>{dollar0(confirmed)}</b> of {dollar0(projection)} · <span className={`kpi-ov-cp-pc ${paceClass}`}>{paceText}</span>
+      </div>
     </>
   );
 }
 
-// Period-column body · cost (A4). On future range: `$X` big, then
-// `to spend` sub, then `$X/week · $Y/day` rate. No bar (no landed to
-// pace against).
-function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays }) {
+// Kevin R-128 Part 3 items A + 1 + 9 (2026-09-19). Period-column
+// body for cost rows. Item A moves the small text left of the big
+// value. Item 1 renders the salary/hourly period split under the
+// value on the 3100 row when salary view is active AND mode is
+// PLAN. Item 9 wires pace into the footer (see caller).
+//
+// Future range branch unchanged in structure (still `$X + to spend
+// (dropped) + per-week/per-day`) - future ranges have no landed to
+// pace against and no split to show, per Part 4 ("Next period has
+// only two states; the Plan/Rolling toggle does not render on a
+// future range").
+function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays, splitHrly, splitSal, paceText, paceClass, isTotal }) {
   const G = Number(envelope || 0);
   const L = Number(landed || 0);
   if (isFuture) {
@@ -199,7 +249,9 @@ function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays }) {
     const perDay  = serviceDays > 0 ? G / serviceDays : 0;
     return (
       <>
-        <div className="kpi-ov-cp-big">{dollar0(G)}</div>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big">{dollar0(G)}</span>
+        </div>
         <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">to spend</div>
         <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
           <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
@@ -209,17 +261,29 @@ function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays }) {
   }
   const usedPct = G > 0 ? Math.round(Math.min(100, (L / G) * 100)) : 0;
   const hot = G > 0 && (L / G) > (dayFrac + 0.005);
-  const barColor = hot ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
+  const barColor = isTotal
+    ? "var(--navy-700, #153968)"
+    : (hot ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
+  const splitLine = (splitHrly != null && splitSal != null) ? (
+    <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
+  ) : null;
   return (
     <>
-      <div className={`kpi-ov-cp-big${hot ? " kpi-ov-cp-over" : ""}`}>
-        {dollar0(G - L)}<small>left of {dollar0(G)}</small>
+      <div className="kpi-ov-cp-v">
+        <span className="kpi-ov-cp-of">left of {dollar0(G)}</span>
+        <span className="kpi-ov-cp-big">{dollar0(G - L)}</span>
       </div>
+      {splitLine}
       <div className="kpi-ov-cp-bar">
         <i style={{ width: `${usedPct}%`, background: barColor }} />
         <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
       </div>
-      <div className={`kpi-ov-cp-sub${hot ? " kpi-ov-cp-over" : ""}`}>{usedPct}% used · <b>{dollar0(L)}</b> landed</div>
+      <div className="kpi-ov-cp-fl">
+        {usedPct}% used
+        {paceText && (
+          <> · <span className={`kpi-ov-cp-pc ${paceClass || "kpi-ov-cp-mute"}`}>{paceText}</span></>
+        )}
+      </div>
     </>
   );
 }
@@ -438,7 +502,12 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
 
     const salaryPath = stmtByLine.get("3100.1") != null && stmtByLine.get("3100.2") != null;
     const laborPct = Number(stmtByLine.get("3100")?.target_pct || 0).toFixed(2);
-    const laborSub = salaryPath ? `labor · ${laborPct}% of revenue` : `hourly · ${laborPct}% of revenue`;
+    // Kevin R-128 Part 3 item 11 (2026-09-19). Drop the `labor · `
+    // prefix on the salary view - the row is already labelled
+    // "Kitchen labor" in the label column. Keep `hourly · ` on the
+    // hourly view: those figures are hourly-only and the prefix is
+    // the only thing on the row that says so.
+    const laborSub = salaryPath ? `${laborPct}% of revenue` : `hourly · ${laborPct}% of revenue`;
     // Row subtitles per Kevin's R-110 render. Labor / Purchasing get
     // planning-tone copy on future range ("schedule to this", "order
     // against this"). Kevin ruling 2026-09-16: on planned periods use
@@ -448,20 +517,48 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const goalHourly = goalFor("3100.1");
     const goalFood   = goalFor("3200");
     const goalPack   = goalFor("3400");
+    const goalVeh    = goalFor("3500");
     const laborPctFuture = (goalHourly.effectivePct || 0).toFixed(2);
     const laborSubFuture = salaryPath
-      ? `labor · ${laborPct}% of revenue · schedule to this`
+      ? `${laborPct}% of revenue · schedule to this`
       : `hourly · ${laborPctFuture}% of week revenue · schedule to this`;
     const foodSub    = `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue`;
     const packSub    = `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue`;
+    const vehSub     = `${(stmtByLine.get("3500")?.target_pct || 0).toFixed(2)}% of revenue`;
     const foodSubP   = `${(goalFood.effectivePct || 0).toFixed(2)}% of week revenue · order against this`;
     const packSubP   = `${(goalPack.effectivePct || 0).toFixed(2)}% of week revenue`;
+    // Kevin R-128 Part 3 trap 3B.2 (2026-09-19). Vehicle needs its
+    // own future-range sub so its % agrees with the period-exact
+    // ratio the other rows use on NP. Without vehSubP, Vehicle's sub
+    // would show the FY ratio while Food and Pack. & Sup. above show
+    // the period-exact - three rows in a column, two computed one
+    // way and one the other.
+    const vehSubP    = `${(goalVeh.effectivePct || 0).toFixed(2)}% of week revenue`;
+
+    // Kevin R-128 Part 3 items 5 + E, trap 3B.3 (2026-09-19). Vehicle
+    // (3500) is present on TBJ - FL and TBR - FL and absent on
+    // CIN - AZ and TXR - AZ. Suppress the row when both the period
+    // budget and the actual spend are zero, else the two AZ accounts
+    // render a row of zeros. ONE named expression - a later ruling
+    // (R-129) will add the same row to the Purchasing drill-down,
+    // and if the two copies drift, Overview and its own drill-down
+    // will disagree about whether the account has a Vehicle line.
+    // Same R-127 failure mode we already have open.
+    const vehRow = stmtByLine.get("3500");
+    const vehPeriodBudget = vehRow ? Number(vehRow.period_budget || 0) : 0;
+    const vehBatr         = vehRow ? Number(vehRow.budget_at_this_revenue || 0) : 0;
+    const vehActual       = (purch?.weekly || [])
+      .filter(r => String(r.gl_line_code || "").startsWith("3500"))
+      .reduce((s, r) => s + Number(r.amount || 0), 0);
+    const hasVehicleLine = vehRow != null
+      && (vehPeriodBudget > 0 || vehBatr > 0 || vehActual > 0);
 
     const ROWS_OVERVIEW = [
       { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
       { line: "3100", name: "Kitchen labor", sub: laborSub, isLabor: true },
       { line: "3200", name: "Food",      sub: foodSub },
-      { line: "3400", name: "Packaging", sub: packSub },
+      { line: "3400", name: "Pack. & Sup.", sub: packSub },
+      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: isFuture ? vehSubP : vehSub }] : []),
     ];
     const ROWS_LABOR = [
       { line: null, name: "Revenue", sub: "what each week earns", rev: true },
@@ -470,14 +567,79 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const ROWS_PURCHASING = [
       { line: null, name: "Revenue", sub: "what you are ordering for", rev: true },
       { line: "3200", name: "Food",      sub: isFuture ? foodSubP : foodSub },
-      { line: "3400", name: "Packaging", sub: isFuture ? packSubP : packSub },
+      { line: "3400", name: "Pack. & Sup.", sub: isFuture ? packSubP : packSub },
     ];
     const rows =
         rowSet === "labor"      ? ROWS_LABOR
       : rowSet === "purchasing" ? ROWS_PURCHASING
       :                           ROWS_OVERVIEW;
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor };
+    // Kevin R-128 Part 3 item 6 (2026-09-19). Total cost of goods row.
+    // Overview only - Labor's single 3100 cost row is already a
+    // one-row column, and Kevin's DO NOT list keeps a total off
+    // Purchasing (R-129 covers Purchasing's own version). The row's
+    // per-week/period values are the on-screen sum of the four cost
+    // rows in that column, so `sum of the four cells` equals the
+    // total cell to the cent by construction - the R-121 defect
+    // above was exactly this invariant breaking.
+    if (rowSet === "overview") {
+      const costOnly = rows.filter(r => !r.rev);
+      const totalGoal = weeks.map((_, wi) =>
+        costOnly.reduce((s, r) => s + Number(goalFor(r.line).goal[wi] || 0), 0)
+      );
+      const totalLanded = weeks.map((_, wi) =>
+        costOnly.reduce((s, r) => s + Number(landedFor(r.line)[wi] || 0), 0)
+      );
+      const totalBatr = costOnly.reduce(
+        (s, r) => s + Number(goalFor(r.line).batr || 0), 0
+      );
+      const totalFyPct = costOnly.reduce(
+        (s, r) => s + Number(stmtByLine.get(r.line)?.target_pct || 0), 0
+      );
+      const totalEffPct = costOnly.reduce(
+        (s, r) => s + Number(goalFor(r.line).effectivePct || 0), 0
+      );
+      const totSub = isFuture
+        ? `${totalEffPct.toFixed(2)}% of week revenue`
+        : `${totalFyPct.toFixed(2)}% of revenue`;
+      rows.push({
+        line: null,
+        name: "Total cost of goods",
+        sub: totSub,
+        tot: true,
+        _goal: totalGoal,
+        _landed: totalLanded,
+        _batr: totalBatr,
+      });
+    }
+
+    // Kevin R-128 Part 3 item 1 (2026-09-19). Per-week + period
+    // salary/hourly split for the 3100 row. Reads week_hourly_allowed
+    // and week_salary_allowed straight off the labor board, matching
+    // the R-121 shape Part 1 shipped. Guard D deletes week_salary_
+    // allowed on the hourly payload, so this returns null on the
+    // hourly view - the split does not render there anyway (Kevin
+    // Part 4 rule matrix). Rolling mode also suppresses the split
+    // in CostCellBody so a re-spread budget does not stack alongside
+    // the delta line, keeping row height flat.
+    const splitFor3100 = (() => {
+      if (!salaryPath) return null;
+      const lbWks = labor?.board?.weeks || [];
+      const byStart = new Map(lbWks.filter(w => w.week_start).map(w => [w.week_start, w]));
+      const per = weeks.map(w => {
+        const lw = byStart.get(w.week_start);
+        return {
+          hrly: (lw && lw.week_hourly_allowed != null) ? Number(lw.week_hourly_allowed) : null,
+          sal:  (lw && lw.week_salary_allowed  != null) ? Number(lw.week_salary_allowed)  : null,
+        };
+      });
+      if (per.some(x => x.hrly == null || x.sal == null)) return null;
+      const hrlyTotal = per.reduce((s, x) => s + x.hrly, 0);
+      const salTotal  = per.reduce((s, x) => s + x.sal,  0);
+      return { per, hrlyTotal, salTotal };
+    })();
+
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100 };
   }, [payload, weeks, labor, purch, rowSet, isFuture]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -530,7 +692,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const perLine = new Map();
   if (!isFuture) {
     for (const row of derived.rows) {
-      if (row.rev) continue;
+      if (row.rev || row.tot) continue;  // total handled separately below
       const gi = derived.goalFor(row.line);
       const landed = derived.landedFor(row.line);
       const rr = rollingOf(gi.goal, landed, gi.batr, closedFlags, derived.rev);
@@ -549,6 +711,35 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         trim: sm.trim,
         name: row.name,
         isLabor: row.isLabor,
+      });
+    }
+    // Kevin R-128 Part 3 item 6 (2026-09-19). Aggregate total row's
+    // rolling data by summing per-line plan/rolling/landed across the
+    // four cost lines. Keyed by "__TOT__" so the render loop can look
+    // it up the same way as any other row. Delta for a week = total_
+    // rolling - total_plan (which equals Σ per-line deltas). C1/C2/C3
+    // flags are false on the aggregate - the summary card still keys
+    // its C1/C2 tone off the first cost line, not the total.
+    const totRow = derived.rows.find(r => r.tot);
+    if (totRow && perLine.size > 0) {
+      const totalPlan = weeks.map((_, wi) =>
+        [...perLine.values()].reduce((s, pl) => s + Number(pl.plan[wi] || 0), 0)
+      );
+      const totalRolling = weeks.map((_, wi) =>
+        [...perLine.values()].reduce((s, pl) => s + Number(pl.rolling[wi] || 0), 0)
+      );
+      const totalLandedRoll = weeks.map((_, wi) =>
+        [...perLine.values()].reduce((s, pl) => s + Number(pl.landed[wi] || 0), 0)
+      );
+      perLine.set("__TOT__", {
+        plan: totalPlan,
+        rolling: totalRolling,
+        landed: totalLandedRoll,
+        envelope: totRow._batr,
+        actual: totalLandedRoll.reduce((s, v) => s + v, 0),
+        isC1: false, isC2: false, isC3: false,
+        totalDelta: 0, thisWeekDelta: 0, trim: false,
+        name: totRow.name, isLabor: false,
       });
     }
   }
@@ -582,7 +773,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   // lines (Overview: 3100+3200+3400; Labor: 3100; Purchasing:
   // 3200+3400) for the total; per-week = /4; per-service-day uses the
   // real count from labor.board.weeks[].service_days.
-  const costRowsForCards = derived.rows.filter(r => !r.rev);
+  // Kevin R-128 Part 3 Trap 3B.1 (2026-09-19). Item 6 adds a total
+  // row to derived.rows with `tot: true`. costTotal feeds the three
+  // future-period cards below; without the `!r.tot` guard, once the
+  // total row is in place the sum doubles and the cards read exactly
+  // 2x the truth. Guarded here rather than left to depend on the total
+  // row's shape (whose `line: null` incidentally yields batr:0 today).
+  const costRowsForCards = derived.rows.filter(r => !r.rev && !r.tot);
   const costTotal = costRowsForCards.reduce((s, r) => {
     const gi = derived.goalFor(r.line);
     return s + Number(gi.batr || 0);
@@ -677,24 +874,58 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             because the label column has no separator above row 1). */}
         {derived.rows.map((row, ri) => {
           const isRev = ri === 0;
+          const isTot = !!row.tot;
           const isLast = ri === derived.rows.length - 1;
           const rlabGr = 3 + 2 * ri;
           const sepGr = rlabGr - 1;
-          const goalInfo = isRev ? null : derived.goalFor(row.line);
-          const landed  = isRev ? null : derived.landedFor(row.line);
+          // Kevin R-128 Part 3 item 6 (2026-09-19). Total row's goal /
+          // landed come from row._goal / row._landed (pre-summed in
+          // useMemo across the four cost rows) rather than goalFor /
+          // landedFor, which return zeros for line:null.
+          const goalInfo = isRev
+            ? null
+            : (isTot
+              ? { goal: row._goal, batr: row._batr }
+              : derived.goalFor(row.line));
+          const landed  = isRev
+            ? null
+            : (isTot ? row._landed : derived.landedFor(row.line));
           const actual  = isRev ? 0 : landed.reduce((s, v) => s + v, 0);
           return (
-            <Fragment key={row.line || "rev"}>
-              {/* Separators before this row's rlab/cells. */}
-              <div className="kpi-ov-cp-rowline" style={{ gridRow: sepGr }} />
-              {!isRev && <div className="kpi-ov-cp-lline" style={{ gridRow: sepGr }} />}
+            <Fragment key={row.line || (isTot ? "tot" : "rev")}>
+              {/* Separators before this row's rlab/cells. Kevin
+                  R-128 Part 3 item D: the separator between Revenue
+                  (ri=0) and the first cost row (ri=1) reads at
+                  --n-400 so the layout parses as revenue / costs /
+                  total, not one flat list. */}
+              <div
+                className={`kpi-ov-cp-rowline${ri === 1 ? " kpi-ov-cp-rowline-sect" : ""}${row.tot ? " kpi-ov-cp-rowline-tot" : ""}`}
+                style={{ gridRow: sepGr }}
+              />
+              {!isRev && (
+                <div
+                  className={`kpi-ov-cp-lline${ri === 1 ? " kpi-ov-cp-lline-sect" : ""}${row.tot ? " kpi-ov-cp-lline-tot" : ""}`}
+                  style={{ gridRow: sepGr }}
+                />
+              )}
+              {/* Kevin R-128 Part 3 item 7 (2026-09-19). Lift-line
+                  segment inside the current-week column. Only when a
+                  current week exists (isFuture=false, currentIdx>=0).
+                  Sits at z-12, above the liftbody (z-11) and level
+                  with hcell.now / cell.now (z-12). */}
+              {!isFuture && currentIdx >= 0 && (
+                <div
+                  className={`kpi-ov-cp-liftline${ri === 1 ? " kpi-ov-cp-liftline-sect" : ""}${row.tot ? " kpi-ov-cp-liftline-tot" : ""}`}
+                  style={{ gridColumn: currentIdx + 2, gridRow: sepGr }}
+                />
+              )}
               {/* Row label (col 1). */}
               <div
                 className={[
                   "kpi-ov-cp-rlab",
-                  isRev && "kpi-ov-cp-rlab-rev",
                   ri === 0 && "kpi-ov-cp-firstrow",
                   isLast && "kpi-ov-cp-lastrow",
+                  isTot && "kpi-ov-cp-tot",
                 ].filter(Boolean).join(" ")}
                 style={{ gridRow: rlabGr }}
               >
@@ -716,6 +947,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   isNow && "kpi-ov-cp-now",
                   i > 0 && "kpi-ov-cp-vline",
                   isLast && "kpi-ov-cp-lastrow",
+                  isTot && "kpi-ov-cp-tot",
                 ].filter(Boolean).join(" ")
                 // On future range every week is state="not_started"
                 // - CostCellBody's isFuture branch already renders
@@ -723,12 +955,17 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 // what R-110 wants. No rolling data on NP.
                 const wForCell = isFuture ? { ...w, state: "not_started" } : w;
                 return (
-                  <div key={`c-${row.line || "rev"}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
+                  <div key={`c-${row.line || (isTot ? "tot" : "rev")}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
                     {isRev
                       ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} isFuture={isFuture} />
                       : (() => {
-                          const pl = perLine.get(row.line);
+                          // Kevin R-128 Part 3 item 6: total row's rolling
+                          // data lives at perLine.get("__TOT__").
+                          const pl = isTot ? perLine.get("__TOT__") : perLine.get(row.line);
                           const dlt = pl ? (pl.rolling[i] - pl.plan[i]) : 0;
+                          const sp = (row.line === "3100" && derived.splitFor3100)
+                            ? derived.splitFor3100.per[i]
+                            : null;
                           return (
                             <CostCellBody
                               w={wForCell}
@@ -739,6 +976,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               mode={isFuture ? "plan" : mode}
                               dlt={dlt}
                               isC3={pl ? pl.isC3 : false}
+                              splitHrly={sp ? sp.hrly : null}
+                              splitSal={sp ? sp.sal : null}
+                              isTotal={isTot}
                             />
                           );
                         })()}
@@ -752,12 +992,48 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   "kpi-ov-cp-per",
                   "kpi-ov-cp-vline",
                   isLast && "kpi-ov-cp-lastrow",
+                  isTot && "kpi-ov-cp-tot",
                 ].filter(Boolean).join(" ")}
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
                   ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />
-                  : <PerCostCellBody envelope={goalInfo.batr} landed={actual} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />}
+                  : (() => {
+                      // Kevin R-128 Part 3 item 9 (2026-09-19). Pace on
+                      // period cost cells. delta = landed - envelope × dayFrac.
+                      // Over pace = red (over-spending relative to time in
+                      // period). Under pace = mute (under-spending is grey
+                      // for every cost row per the colour rule; invoice lag
+                      // on non-labor + genuine savings on labor both grey).
+                      // Skipped on future range (no landed, no pace).
+                      const G = Number(goalInfo.batr || 0);
+                      const L = Number(actual || 0);
+                      let paceText = null, paceClass = null;
+                      if (!isFuture && G > 0) {
+                        const onPace = G * dayFrac;
+                        const delta = L - onPace;
+                        if (Math.abs(delta) >= 1) {
+                          paceText = delta > 0
+                            ? `▲ ${dollar0(delta)} over pace`
+                            : `▼ ${dollar0(-delta)} under pace`;
+                          paceClass = delta > 0 ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
+                        }
+                      }
+                      return (
+                        <PerCostCellBody
+                          envelope={goalInfo.batr}
+                          landed={actual}
+                          dayFrac={dayFrac}
+                          isFuture={isFuture}
+                          serviceDays={serviceDaysTotal}
+                          splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
+                          splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
+                          paceText={paceText}
+                          paceClass={paceClass}
+                          isTotal={isTot}
+                        />
+                      );
+                    })()}
               </div>
             </Fragment>
           );

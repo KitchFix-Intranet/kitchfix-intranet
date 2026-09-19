@@ -23,6 +23,23 @@
    not copy.
    ───────────────────────────────────────────────────────────────── */
 
+/* Kevin R-128 Part 3 items 6 + 7 (2026-09-19). CP surface-specific
+   colour tokens. Scoped custom properties for row-line variants that
+   overlay the lifted current-week column plus the total row's tinted
+   backgrounds. All lighter than the design-system palette because
+   they paint on either a white liftbody over a navy lift, or under
+   the total row's summary content. Kept as CSS variables (not
+   tokens.css entries) so item 12's raw-hex sweep does not have to
+   reason about surface-specific colours - these are one-off per
+   surface, not design-system tokens. */
+.kpi-app {
+  --cp-lift-line: #EDF0F4;
+  --cp-lift-line-sect: #DDE3EC;
+  --cp-lift-line-tot: #C6D0DE;
+  --cp-tot-bg: #FAFBFD;
+  --cp-tot-per-bg: #EDF2FA;
+}
+
 /* Card + spacing. margin-top holds the lift's upward protrusion clear
    of the command bar; padding-bottom holds the downward protrusion.
    `z-index: 0` establishes a stacking context BELOW `.kpi-cmd`'s
@@ -71,22 +88,22 @@
   text-transform: uppercase;
   padding: 5px 12px;
   border-radius: 999px;
-  color: #fff;
-  background: var(--navy, #0A2548);
+  color: var(--n-0);
+  background: var(--navy);
 }
 .kpi-app .kpi-ov-cp-status-sub {
   font-size: 11.25px;
   font-weight: 700;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
 }
-.kpi-app .kpi-ov-cp-status-sub b { color: var(--n-900, #0A2548); }
+.kpi-app .kpi-ov-cp-status-sub b { color: var(--n-900); }
 .kpi-app .kpi-ov-cp-status-ml { margin-left: auto; }
 .kpi-app .kpi-ov-cp-seg {
   display: inline-flex;
   border: 1px solid var(--n-300, #E5E7EB);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--n-0);
 }
 .kpi-app .kpi-ov-cp-seg button {
   font-size: 10px;
@@ -95,13 +112,13 @@
   padding: 6px 13px;
   border: none;
   background: transparent;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   cursor: pointer;
   font-family: inherit;
 }
 .kpi-app .kpi-ov-cp-seg button.kpi-ov-cp-seg-on {
-  background: var(--navy, #0A2548);
-  color: #fff;
+  background: var(--navy);
+  color: var(--n-0);
 }
 /* Retained token class from R-109 - callers may still pass it; the new
    card visual is on the three background panels, not the card itself,
@@ -136,7 +153,7 @@
 .kpi-app .kpi-ov-cp-hbar {
   grid-column: 2 / -1;
   grid-row: 1;
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300);
   border-bottom: none;
   border-radius: 12px 12px 0 0;
@@ -147,7 +164,7 @@
 }
 .kpi-app .kpi-ov-cp-lbar {
   grid-column: 1;
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300);
   border-right: none;
   border-radius: 12px 0 0 12px;
@@ -158,7 +175,7 @@
 }
 .kpi-app .kpi-ov-cp-bpanel {
   grid-column: 2 / -1;
-  background: #fff;
+  background: var(--n-0);
   /* Kevin fix 2026-09-17 item 2: bpanel carries border ONLY on right
      and bottom. Its top edge sits under hbar (which has no bottom
      border) and its left edge sits against lbar (which has no right
@@ -195,15 +212,15 @@
   font-weight: 800;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 {
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 5px;
 }
-.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-hcell .kpi-ov-cp-hcl2 b { color: var(--n-900); font-weight: 700; }
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-per .kpi-ov-cp-wk { color: var(--navy-700, #153968); }
 
 /* Header pills · A2. Current is the only saturated header colour;
@@ -218,11 +235,11 @@
   border-radius: 999px;
   white-space: nowrap;
 }
-.kpi-app .kpi-ov-cp-pill-closed   { background: var(--n-100, #F4F2EC); color: var(--n-600, #64748B); }
+.kpi-app .kpi-ov-cp-pill-closed   { background: var(--n-100, #F4F2EC); color: var(--n-600); }
 .kpi-app .kpi-ov-cp-pill-current  { background: #2FBF71; color: #053B20; box-shadow: 0 0 0 2px rgba(47, 191, 113, 0.28); }
 .kpi-app .kpi-ov-cp-pill-pending  { background: var(--amber-50, #FFF2E2); color: var(--amber-600, #B25800); }
-.kpi-app .kpi-ov-cp-pill-forecast { background: #fff; color: var(--n-600, #64748B); border: 1px dashed var(--n-300, #E5E7EB); }
-.kpi-app .kpi-ov-cp-pill-navy     { background: var(--navy, #0A2548); color: #fff; }
+.kpi-app .kpi-ov-cp-pill-forecast { background: var(--n-0); color: var(--n-600); border: 1px dashed var(--n-300, #E5E7EB); }
+.kpi-app .kpi-ov-cp-pill-navy     { background: var(--navy); color: var(--n-0); }
 
 /* ── row labels · A5 ────────────────────────────────────────────── */
 .kpi-app .kpi-ov-cp-rlab {
@@ -233,42 +250,44 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background: #fff;
+  background: var(--n-0);
   border-right: 1px solid var(--n-300, #E5E7EB);
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rn {
   font-size: 12px;
   font-weight: 800;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rn .kpi-ov-cp-glc {
   font-size: 9.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-right: 6px;
 }
 .kpi-app .kpi-ov-cp-rlab .kpi-ov-cp-rg {
   font-size: 9.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 3px;
 }
-.kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-rlab-rev { background: var(--green-50, #E9FDEC); }
-
 /* ── data cells · A4 ────────────────────────────────────────────── */
-/* min-height 108 - matches the natural height of a 4-line partial-
-   week Revenue cell so cost rows expand to the same size and every
-   row settles to a single height. Kevin fix 2026-09-16: even them. */
+/* Kevin R-128 Part 3 (2026-09-19). Padding 11px 14px + min-height 88
+   match the approved render. The old 14px 14px + 109px was sized for
+   a 4-line partial-week Revenue cell before item A collapsed the
+   value line and item F dropped the `spent` / `to spend` prefixes.
+   Under the new structure (v · sp · bar · fl) rows settle uniformly
+   at the shorter height; Kevin's Part 4 rule "no cell taller than
+   the render" holds. */
 .kpi-app .kpi-ov-cp-cell {
   position: relative;
   z-index: 3;
-  padding: 14px;
+  padding: 11px 14px;
   text-align: right;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 109px;
+  min-height: 88px;
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-past  { background: #FBFBFC; }
@@ -320,6 +339,50 @@
   z-index: 4;
   padding: 0;
 }
+/* Kevin R-128 Part 3 item D (2026-09-19). Revenue / costs section
+   break. The row separator between Revenue and the first cost row
+   reads at --n-400 so the layout parses as three sections rather
+   than one flat list. The total row's 2px navy rule (item 6) mirrors
+   this from the bottom. */
+.kpi-app .kpi-ov-cp-rowline-sect,
+.kpi-app .kpi-ov-cp-lline-sect { background: var(--n-400, #D3CFC4); }
+
+/* Kevin R-128 Part 3 item 6 (2026-09-19). Total-row 2px --navy-700
+   rule above, mirroring item D's --n-400 section break from the
+   top of the costs section. Applies to both the label-column line
+   (lline) and the body-panel line (rowline). */
+.kpi-app .kpi-ov-cp-rowline-tot,
+.kpi-app .kpi-ov-cp-lline-tot {
+  height: 2px;
+  background: var(--navy-700, #153968);
+}
+
+/* Kevin R-128 Part 3 item 6 (2026-09-19). Total row tint. `.tot` on
+   cell + rlab gets --cp-tot-bg; the period cell overrides to
+   --cp-tot-per-bg so the total row's period cell stays visually
+   distinct from its own week cells (matches the render). */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-tot,
+.kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-tot { background: var(--cp-tot-bg); }
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-tot.kpi-ov-cp-per { background: var(--cp-tot-per-bg); }
+
+/* Kevin R-128 Part 3 item 7 (2026-09-19). Row-line segments inside
+   the lifted current-week column. The base rowlines (grid-column
+   2/-1, z-4) do span the lift column too, but the liftbody paints on
+   top at z-11 so the row context vanishes inside the current week.
+   These segments paint at z-12 (above the liftbody, same as the now
+   cells) at a lighter contrast that reads on white. Kevin fix
+   2026-09-19: "keep the lift - it is good at answering where am I
+   now." */
+.kpi-app .kpi-ov-cp-liftline {
+  height: 1px;
+  background: var(--cp-lift-line);
+  z-index: 12;
+  position: relative;
+  padding: 0;
+  pointer-events: none;
+}
+.kpi-app .kpi-ov-cp-liftline-sect { background: var(--cp-lift-line-sect); }
+.kpi-app .kpi-ov-cp-liftline-tot  { height: 2px; background: var(--cp-lift-line-tot); }
 
 /* ── lifted current-week column · A3 ────────────────────────────── */
 .kpi-app .kpi-ov-cp-lift {
@@ -333,14 +396,14 @@
 .kpi-app .kpi-ov-cp-liftbody {
   position: absolute;
   z-index: 11;
-  background: #fff;
+  background: var(--n-0);
   pointer-events: none;
 }
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now { z-index: 12; }
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-now  { z-index: 12; }
 .kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-wk,
-.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 { color: #fff; }
-.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 b { color: #fff; }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 { color: var(--n-0); }
+.kpi-app .kpi-ov-cp-hcell.kpi-ov-cp-now .kpi-ov-cp-hcl2 b { color: var(--n-0); }
 
 /* Kevin fix 2026-09-17: the "you are here" overhang. Without these
    the hcell.now sits flush with hbar top and the last cell.now sits
@@ -366,33 +429,69 @@
 }
 
 /* ── numbers · A4 typography ────────────────────────────────────── */
+/* Kevin R-128 Part 3 item A (2026-09-19). `.kpi-ov-cp-v` is the flex
+   row that carries the value + optional small hint. baseline
+   alignment keeps them typographically bonded; flex-end pushes the
+   value to the right edge so every value column-aligns. gap 7px
+   between `.of` (small left text) and `.big` (value). */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-v {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 7px;
+}
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big {
   font-size: 19px;
   font-weight: 800;
   letter-spacing: -0.2px;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
   line-height: 1.15;
 }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big small {
-  font-size: 11px;
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-of {
+  font-size: 10px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
-  letter-spacing: 0;
-  margin-left: 5px;
+  color: var(--n-600);
+  white-space: nowrap;
 }
+/* .kpi-ov-cp-pre retained for RevCellBody's basis word ("confirmed"
+   / "partial" / "forecast") which still leads the big value. Cost
+   cells no longer use it (item F dropped `spent` / `to spend`). */
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pre {
   font-size: 11px;
   font-weight: 700;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-right: 6px;
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub {
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 5px;
 }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub b { color: var(--n-900); font-weight: 700; }
+/* Kevin R-128 Part 3 item 1 (2026-09-19). Split line under the value
+   showing `Hrly $X · Sal $Y` on the 3100 row when salary view is
+   active and mode is PLAN. Rolling replaces the split with the
+   delta line (kpi-ov-cp-dlt) in CostCellBody so row height holds. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--n-600);
+  margin-top: 3px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp b { color: var(--n-900); font-weight: 700; }
+/* Kevin R-128 Part 3 items F + 9 (2026-09-19). `.kpi-ov-cp-fl` is the
+   footer line that carries `$X left` on week cells and `X% used ·
+   ▲ $Y over pace` on period cells. `.kpi-ov-cp-pc` is the bolder-
+   weight modifier for the pace span itself. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--n-600);
+  margin-top: 4px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl b { color: var(--n-900); font-weight: 700; }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pc { font-weight: 800; }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vd {
   font-size: 10px;
   font-weight: 800;
@@ -418,20 +517,20 @@
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 5px solid var(--navy, #0A2548);
+  border-top: 5px solid var(--navy);
   transform: translateX(-4px);
 }
 .kpi-app .kpi-ov-cp-good { color: var(--green-600, #008330); }
 .kpi-app .kpi-ov-cp-over { color: var(--red-600, #B9000C); }
-.kpi-app .kpi-ov-cp-mute { color: var(--n-600, #64748B); }
+.kpi-app .kpi-ov-cp-mute { color: var(--n-600); }
 .kpi-app .kpi-ov-cp-mute-strong { color: var(--n-700, #475569); }
 
 /* Empty state (payload not ready / error). */
 .kpi-app .kpi-ov-cp-empty {
   padding: 18px 20px;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   font-size: 12px;
-  background: #fff;
+  background: var(--n-0);
   border-radius: 12px;
   border: 0.5px solid var(--n-300, #E5E7EB);
   margin: 30px 0 12px;
@@ -461,7 +560,7 @@
   gap: 12px;
 }
 .kpi-app .kpi-ov-cp-rv-item {
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300, #E5E7EB);
   border-left: 3px solid var(--amber-600, #B25800);
   border-radius: 10.8px;
@@ -474,12 +573,12 @@
 .kpi-app .kpi-ov-cp-rv-item-t {
   font-size: 11.25px;
   font-weight: 800;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-rv-item-s {
   font-size: 9.9px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 2px;
 }
 .kpi-app .kpi-ov-cp-rv-go {
@@ -523,7 +622,7 @@
    dividers between columns. Navy left border so it reads as a
    sibling of the review cards with a different accent. */
 .kpi-app .kpi-ov-cp-rollcard {
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300, #E5E7EB);
   border-left: 3px solid var(--navy-700, #153968);
   border-radius: 10.8px;
@@ -542,11 +641,11 @@
 .kpi-app .kpi-ov-cp-rollcard-lead {
   font-size: 11.25px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-bottom: 10px;
   line-height: 1.6;
 }
-.kpi-app .kpi-ov-cp-rollcard-lead b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-rollcard-lead b { color: var(--n-900); font-weight: 700; }
 .kpi-app .kpi-ov-cp-rollcard-lines { display: grid; gap: 0; }
 .kpi-app .kpi-ov-cp-rollcard-ln {
   padding: 0 16px;
@@ -556,7 +655,7 @@
 .kpi-app .kpi-ov-cp-rollcard-ln-nm {
   font-size: 11.25px;
   font-weight: 800;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-rollcard-ln-v {
   font-size: 15px;
@@ -570,11 +669,11 @@
 .kpi-app .kpi-ov-cp-rollcard-ln-s {
   font-size: 9.9px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 3px;
   font-variant-numeric: tabular-nums;
 }
-.kpi-app .kpi-ov-cp-rollcard-ln-s b { color: var(--n-900, #0A2548); font-weight: 800; }
+.kpi-app .kpi-ov-cp-rollcard-ln-s b { color: var(--n-900); font-weight: 800; }
 /* ── R-110 · three small cards beneath the future-range table ──── */
 /* [Cost line · the period], [A week], [A service day]. Same navy
    left border as the review cards for family consistency, but the
@@ -587,7 +686,7 @@
   margin-top: 14px;
 }
 .kpi-app .kpi-ov-cp-perk-k {
-  background: #fff;
+  background: var(--n-0);
   border: 0.5px solid var(--n-300, #E5E7EB);
   border-radius: 10.8px;
   padding: 13px 16px;
@@ -598,20 +697,20 @@
   font-weight: 800;
   letter-spacing: 0.81px;
   text-transform: uppercase;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
 }
 .kpi-app .kpi-ov-cp-perk-v {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.18px;
-  color: var(--n-900, #0A2548);
+  color: var(--n-900);
   margin-top: 4px;
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-perk-s {
   font-size: 9.9px;
   font-weight: 600;
-  color: var(--n-600, #64748B);
+  color: var(--n-600);
   margin-top: 3px;
 }
 
@@ -622,4 +721,75 @@
   font-weight: 600;
   color: var(--n-700, #475569);
 }
-.kpi-app .kpi-ov-cp-rollcard-empty b { color: var(--n-900, #0A2548); }
+.kpi-app .kpi-ov-cp-rollcard-empty b { color: var(--n-900); }
+
+/* Kevin R-128 Part 3 item 8 (2026-09-19). Week-grid-shaped skeleton
+   for the CP + NP surfaces. Matches CurrentPeriodTable's bounding
+   boxes (6-col grid, one header row + six data rows) so the page
+   does not visibly reflow when data arrives. Reuses .kpi-ov-skel-bar
+   (defined in overview.css) for the pulsing placeholder bars. */
+.kpi-app .kpi-ov-cp-skel-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 2px 14px;
+}
+.kpi-app .kpi-ov-cp-skel-grid {
+  display: grid;
+  grid-template-columns: 160px repeat(4, minmax(0, 1fr)) 204px;
+  background: var(--n-0);
+  border: 0.5px solid var(--n-300);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+  overflow: hidden;
+  min-height: 620px;
+}
+.kpi-app .kpi-ov-cp-skel-corner {
+  min-height: 52px;
+  border-right: 1px solid var(--n-300);
+  border-bottom: 1px solid var(--n-300);
+  background: var(--n-0);
+}
+.kpi-app .kpi-ov-cp-skel-hcell {
+  padding: 15px 14px 14px;
+  border-bottom: 1px solid var(--n-300);
+  border-left: 1px solid var(--n-300);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  min-height: 52px;
+}
+.kpi-app .kpi-ov-cp-skel-hcell.kpi-ov-cp-skel-per { background: var(--navy-50, #F4F7FC); }
+.kpi-app .kpi-ov-cp-skel-hcell.kpi-ov-cp-skel-now {
+  background: #24508C;
+  border-radius: 8px 8px 0 0;
+}
+.kpi-app .kpi-ov-cp-skel-hcell.kpi-ov-cp-skel-now .kpi-ov-skel-bar { background: rgba(255, 255, 255, 0.28); }
+.kpi-app .kpi-ov-cp-skel-rlab {
+  padding: 14px 14px 14px 18px;
+  border-right: 1px solid var(--n-300);
+  border-bottom: 1px solid var(--n-300);
+  background: var(--n-0);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 88px;
+}
+.kpi-app .kpi-ov-cp-skel-cell {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--n-300);
+  border-left: 1px solid var(--n-300);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  min-height: 88px;
+  background: #FCFCFD;
+}
+.kpi-app .kpi-ov-cp-skel-cell.kpi-ov-cp-skel-per { background: var(--navy-50, #F4F7FC); }
+.kpi-app .kpi-ov-cp-skel-cell.kpi-ov-cp-skel-now { background: var(--n-0); }
+.kpi-app .kpi-ov-cp-skel-grid > *:last-child,
+.kpi-app .kpi-ov-cp-skel-grid > .kpi-ov-cp-skel-cell:last-child,
+.kpi-app .kpi-ov-cp-skel-grid > .kpi-ov-cp-skel-rlab:last-of-type { border-bottom: none; }
