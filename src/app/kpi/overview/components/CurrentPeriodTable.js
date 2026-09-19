@@ -167,17 +167,30 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
   );
 }
 
-// Period-column body · revenue (A4). On future range (R-110) the
-// projection == the plan (sum of week rev) and there is no confirmed
-// figure yet; period column reads "planned revenue" + weekly/daily
-// rate on the third line.
+// Kevin R-128 Part 3 items C + 9 (2026-09-19). Revenue period cell
+// answers its own header. The column pill says "What is left" - the
+// big value now reads `left to earn $X` where X = projection -
+// confirmed, matching every cost row's `left of $G` shape. Footer
+// reads `$confirmed of $projection · ▲ $delta ahead of pace` so a
+// chef reading the column sees "how much is left" and "am I on pace
+// for it" on the same row.
+//
+// Pace: delta = confirmed - projection × dayFrac. Positive is ahead,
+// negative is behind. Green when ahead, mute when behind (Kevin
+// colour rule: green is only revenue running ahead; red is over on
+// cost; grey is under everywhere).
+//
+// Future range branch unchanged - no confirmed yet, no pace to
+// compute, so keep the `$X planned revenue + per-week/per-day` shape.
 function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays }) {
   if (isFuture) {
     const perWeek = projection / 4;
     const perDay  = serviceDays > 0 ? projection / serviceDays : 0;
     return (
       <>
-        <div className="kpi-ov-cp-big">{dollar0(projection)}</div>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
+        </div>
         <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">planned revenue</div>
         <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
           <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
@@ -186,14 +199,26 @@ function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays 
     );
   }
   const p = projection > 0 ? Math.min(100, (confirmed / projection) * 100) : 0;
+  const onPace = projection * dayFrac;
+  const paceDelta = confirmed - onPace;
+  const ahead = paceDelta >= 0;
+  const paceText = ahead
+    ? `▲ ${dollar0(paceDelta)} ahead of pace`
+    : `▼ ${dollar0(-paceDelta)} behind pace`;
+  const paceClass = ahead ? "kpi-ov-cp-good" : "kpi-ov-cp-mute";
   return (
     <>
-      <div className="kpi-ov-cp-big">{dollar0(projection)}<small>projecting</small></div>
+      <div className="kpi-ov-cp-v">
+        <span className="kpi-ov-cp-of">left to earn</span>
+        <span className="kpi-ov-cp-big">{dollar0(Math.max(0, projection - confirmed))}</span>
+      </div>
       <div className="kpi-ov-cp-bar">
         <i style={{ width: `${p}%`, background: "var(--green-600, #008330)" }} />
         <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
       </div>
-      <div className="kpi-ov-cp-sub"><b>{dollar0(confirmed)}</b> confirmed · {Math.round(p)}% of period</div>
+      <div className="kpi-ov-cp-fl">
+        <b>{dollar0(confirmed)}</b> of {dollar0(projection)} · <span className={`kpi-ov-cp-pc ${paceClass}`}>{paceText}</span>
+      </div>
     </>
   );
 }
@@ -881,15 +906,41 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
               >
                 {isRev
                   ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />
-                  : <PerCostCellBody
-                      envelope={goalInfo.batr}
-                      landed={actual}
-                      dayFrac={dayFrac}
-                      isFuture={isFuture}
-                      serviceDays={serviceDaysTotal}
-                      splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
-                      splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
-                    />}
+                  : (() => {
+                      // Kevin R-128 Part 3 item 9 (2026-09-19). Pace on
+                      // period cost cells. delta = landed - envelope × dayFrac.
+                      // Over pace = red (over-spending relative to time in
+                      // period). Under pace = mute (under-spending is grey
+                      // for every cost row per the colour rule; invoice lag
+                      // on non-labor + genuine savings on labor both grey).
+                      // Skipped on future range (no landed, no pace).
+                      const G = Number(goalInfo.batr || 0);
+                      const L = Number(actual || 0);
+                      let paceText = null, paceClass = null;
+                      if (!isFuture && G > 0) {
+                        const onPace = G * dayFrac;
+                        const delta = L - onPace;
+                        if (Math.abs(delta) >= 1) {
+                          paceText = delta > 0
+                            ? `▲ ${dollar0(delta)} over pace`
+                            : `▼ ${dollar0(-delta)} under pace`;
+                          paceClass = delta > 0 ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
+                        }
+                      }
+                      return (
+                        <PerCostCellBody
+                          envelope={goalInfo.batr}
+                          landed={actual}
+                          dayFrac={dayFrac}
+                          isFuture={isFuture}
+                          serviceDays={serviceDaysTotal}
+                          splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
+                          splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
+                          paceText={paceText}
+                          paceClass={paceClass}
+                        />
+                      );
+                    })()}
               </div>
             </Fragment>
           );
