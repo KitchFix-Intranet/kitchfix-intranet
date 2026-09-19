@@ -459,19 +459,23 @@ export default function KpiOverviewPage() {
   // driven by the URL account, since the landing_account isn't
   // known yet on the very first cold load.
   const skelIsPortfolio = PORTFOLIO_KEYS.includes(urlAccount || "");
-  // Kevin R-128 Part 3 item 8 (2026-09-19). Detect the CP / NP
-  // surface from the URL on cold load so the skeleton shape matches
-  // the loaded table. Heuristic: a specific range with dates spanning
-  // less than 60 days (a period is 28, plus buffer) is CP, NP or Last
-  // period - all render a period-shaped table. Whole-year and
-  // portfolio ranges fall through to the closed skeleton. When data
-  // has landed, useCpTable is definitive and takes precedence.
+  // Kevin R-128 Part 3 item 8 (2026-09-19, review-fix 2026-09-19).
+  // Detect the CP / NP surface from the URL on cold load so the
+  // skeleton shape matches the loaded table. Heuristic: a specific
+  // range with dates spanning less than 60 days AND ending on or
+  // after today is either CP (running) or NP (planned) - the two
+  // surfaces that use CurrentPeriodTable. Finalized periods (Last
+  // period, P1 / P5 / P9 signed off 2026-09-18) also span 28 days
+  // but end in the past; they render the closed board, not the
+  // period grid, so the span check alone would flash the wrong
+  // skeleton then reflow. `urlEnd >= today` gates them out. When
+  // data has landed, useCpTable is definitive and takes precedence.
   const urlIsPeriodRange = (() => {
     if (!urlStart || !urlEnd) return false;
     const s = new Date(urlStart + "T00:00:00Z").getTime();
     const e = new Date(urlEnd + "T00:00:00Z").getTime();
     const days = (e - s) / 86400000;
-    return days > 0 && days < 60;
+    return days > 0 && days < 60 && urlEnd >= today;
   })();
   const skelStateCold = skelIsPortfolio ? "portfolio" : (urlIsPeriodRange ? "cp" : "closed");
   const skelStateKnownCp = skelIsPortfolio ? "portfolio" : "cp";
