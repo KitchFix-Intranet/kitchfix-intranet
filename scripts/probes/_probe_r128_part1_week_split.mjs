@@ -90,6 +90,23 @@ for (const c of CASES) {
       `${c.account.padEnd(16)} ${c.range.name.padEnd(13)} ${t.key.padEnd(9)} ${fmt(periodCell).padStart(15)} ${fmt(sumWeeks).padStart(15)} ${fmt(diff).padStart(10)} ${ok ? "OK" : "FAIL"}${missing > 0 ? ` (${missing} weeks missing ${field})` : ""}`
     );
 
+    // Kevin R-128 Part 1 review 2026-09-19 · Panel-vs-weeks assertion.
+    // `recomputePanelBatrFromPerWeek` sums w.budget_at_this_week_revenue
+    // into board.budget_at_this_revenue and persists it. The panel
+    // figure must therefore equal the sum of the four week goals on
+    // both toggles. Regression the original probe missed: on the hourly
+    // path the panel kept the pre-overwrite merged total ($41,055 on
+    // TBJ - FL P10) while the four weeks read the hourly allowance
+    // ($24,668), a $16,386 gap = salary budget. Fix moved the overwrite
+    // above recomputePanelBatrFromPerWeek; this assertion locks it in.
+    const panelBatr = labor?.board?.budget_at_this_revenue;
+    const panelDiff = panelBatr != null ? Math.round((sumWeeks - Number(panelBatr)) * 100) / 100 : null;
+    const panelOk = panelBatr != null && panelDiff != null && Math.abs(panelDiff) < TOL_DOLLAR && missing === 0;
+    if (!panelOk) anyFail = true;
+    console.log(
+      `  panel batr · ${t.key.trim()}: board.budget_at_this_revenue=${fmt(panelBatr)} vs Σ ${field}=${fmt(sumWeeks)} · diff ${fmt(panelDiff)} · ${panelOk ? "OK" : "FAIL"}`
+    );
+
     // F1 Guard D assertion (Kevin review 2026-09-19). On the hourly
     // payload, `budget_at_this_week_revenue` is now PRESENT but
     // overwritten to equal `week_hourly_allowed`, so no operand pair

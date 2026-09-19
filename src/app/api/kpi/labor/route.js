@@ -1583,6 +1583,33 @@ export async function GET(request) {
     salaryBudgetByPeriod: salaryBudgetByPeriodHourly,
     feeBudgetByPeriod: feeBudgetByPeriodSingle,
   });
+  // Kevin review 2026-09-19 · Guard D · R-98. The hourly-toggle payload
+  // shipping BOTH `budget_at_this_week_revenue` (merged total) and
+  // `week_hourly_allowed` is a leak: `salary = total - hourly` on one
+  // subtraction. Ship only the hourly allowance on this path. Cannot
+  // delete `budget_at_this_week_revenue` outright - four Labor-page
+  // consumers depend on it (WeekTable.js:1074 vs-budget column,
+  // StoryBlock.js:182 anyWithBatr fallback + :197 adjusted-label gate,
+  // labor/page.js:513 field copy). Overwrite instead: on hourly the
+  // field carries the hourly allowance itself, mirroring resolver.js's
+  // period-level pattern where the parent's batr = merged - salary on
+  // the hourly toggle. One derived scalar, no operand pair.
+  //
+  // Runs immediately after attachWeeklyBasisToBoard - the sole writer
+  // of the merged total + salary component - and BEFORE
+  // recomputePanelBatrFromPerWeek, which sums w.budget_at_this_week_
+  // revenue into board.budget_at_this_revenue and persists it. On the
+  // hourly path the panel figure must equal Σ(week_hourly_allowed);
+  // reading before this overwrite would freeze the merged total into
+  // board.budget_at_this_revenue and diverge the panel from the four
+  // weeks by the salary budget. recomputeVerdictFromPanel then reads
+  // the corrected panel figure by construction.
+  for (const w of (boardSingle.weeks || [])) {
+    if (w.week_hourly_allowed != null) {
+      w.budget_at_this_week_revenue = w.week_hourly_allowed;
+    }
+    if ("week_salary_allowed" in w) delete w.week_salary_allowed;
+  }
   // Kevin post-1057 sweep item 2 (2026-09-08). R-86 · a period's
   // target percent is its own, never the annual one. Sum per-week
   // batr and overwrite panel batr so it equals the table's total.
@@ -1597,28 +1624,6 @@ export async function GET(request) {
   // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
   // week batr fallback has data.
   recomputeVerdictFromPanel(boardSingle);
-  // Kevin review 2026-09-19 · Guard D · R-98. The hourly-toggle payload
-  // shipping BOTH `budget_at_this_week_revenue` (merged total) and
-  // `week_hourly_allowed` is a leak: `salary = total - hourly` on one
-  // subtraction. Ship only the hourly allowance on this path. Cannot
-  // delete `budget_at_this_week_revenue` outright - four Labor-page
-  // consumers depend on it (WeekTable.js:1074 vs-budget column,
-  // StoryBlock.js:182 anyWithBatr fallback + :197 adjusted-label gate,
-  // labor/page.js:513 field copy). Overwrite instead: on hourly the
-  // field carries the hourly allowance itself, mirroring resolver.js's
-  // period-level pattern where the parent's batr = merged - salary on
-  // the hourly toggle. One derived scalar, no operand pair.
-  //
-  // The salary components were still used INTERNALLY above (attach,
-  // recomputePanelBatrFromPerWeek, recomputeVerdictFromPanel all read
-  // the merged total); the overwrite runs after the last internal
-  // read and before the payload serializes.
-  for (const w of (boardSingle.weeks || [])) {
-    if (w.week_hourly_allowed != null) {
-      w.budget_at_this_week_revenue = w.week_hourly_allowed;
-    }
-    if ("week_salary_allowed" in w) delete w.week_salary_allowed;
-  }
 
   let bodySingle = {
     ok: true,
