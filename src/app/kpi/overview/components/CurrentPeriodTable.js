@@ -321,16 +321,50 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const g = weeks.map(w => Number(w.week_revenue || 0) * ratio);
       const sub1 = stmtByLine.get("3100.1");
       const sub2 = stmtByLine.get("3100.2");
-      if (line === "3100" && sub1 && sub2) {
-        // R-111 · per-week goal for 3100 in the salary view is
-        // `week_revenue × 3100.1 target_pct + 3100.2 period_budget / 4`.
-        // On CP + NP alike (3100 batr is non-null on planned periods
-        // via labor's fixed-cost handling, so the FY hourly ratio +
-        // salary/4 does sum to batr exactly).
-        const hourlyRatio = Number(sub1.target_pct || 0) / 100;
-        const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
-        const gs = weeks.map(w => Number(w.week_revenue || 0) * hourlyRatio + salaryPerWeek);
-        return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+      // Kevin R-128 Part 1 (2026-09-19) · R-121 week split.
+      // The per-week 3100 goal comes from the labor board's own
+      // fields, not from a client-side re-derivation. R-111's formula
+      // (`week_revenue × hourly_target_pct + salary/4`) was superseded
+      // by R-121 (`week_revenue × merged_pct` with static salary/4
+      // subtracted). Salary toggle reads `budget_at_this_week_revenue`
+      // (merged total); hourly toggle reads `week_hourly_allowed`
+      // (total - static salary/4). Server-side, Guard D deletes the
+      // hourly payload's `budget_at_this_week_revenue` so the client
+      // cannot decompose salary via subtraction on hourly.
+      //
+      // Fallback (Kevin review 2026-09-19 F2): check the FIELD for the
+      // active toggle, not the week's mere presence. `has(week_start)`
+      // succeeds for any week with a start date; the field can be
+      // absent while the week is not. `null` and `undefined` both
+      // trigger fallback; a real zero (never observed in production
+      // but plausible on a $0-budget line) survives.
+      if (line === "3100") {
+        const salaryToggleOn = sub1 != null && sub2 != null;
+        const lbWks = labor?.board?.weeks || [];
+        const byStart = new Map(lbWks.filter(w => w.week_start).map(w => [w.week_start, w]));
+        const activeField = salaryToggleOn ? "budget_at_this_week_revenue" : "week_hourly_allowed";
+        const allFieldsPresent = weeks.every(w => {
+          const lw = byStart.get(w.week_start);
+          return lw != null && lw[activeField] != null;
+        });
+        if (allFieldsPresent) {
+          const gs = weeks.map(w => Number(byStart.get(w.week_start)[activeField]));
+          return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+        }
+        // Fallback: legacy R-111 formula on the salary path; generic
+        // ratio on the hourly path. Preserves prior behaviour when
+        // labor.board is stale/absent. No warn (Kevin review F3: the
+        // three goalFor("3100") call sites in the render body fire
+        // the same warn three times per render). Probe covers the
+        // detection assertion.
+        if (salaryToggleOn) {
+          const hourlyRatio = Number(sub1.target_pct || 0) / 100;
+          const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
+          const gs = weeks.map(w => Number(w.week_revenue || 0) * hourlyRatio + salaryPerWeek);
+          return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+        }
+        // hourly toggle fallback: generic ratio × revenue
+        return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: ratio * 100 };
       }
       return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: ratio * 100 };
     };
