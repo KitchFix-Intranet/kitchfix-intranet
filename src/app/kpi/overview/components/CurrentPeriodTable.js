@@ -86,44 +86,49 @@ function RevCellBody({ w, amount, labor, i, isFuture }) {
   );
 }
 
-// A4 · Cost cell body. Weeks not yet started: `to spend $X`. Started
-// weeks: `spent $L of $G` on one line, then the bar, then the verdict
-// line. "running hot" is gone - the red bar carries the verdict.
-//
-// Section B additions (Kevin § B, Kevin § C):
-//   - `goalRolling` is the rolling budget for THIS week (differs from
-//     `goal` when mode === "rolling" AND week is open); shown in the
-//     "of $G" position on open weeks so the cell figure changes with
-//     the toggle.
-//   - `dlt` is the per-week delta (rolling[i] - plan[i]); rendered
-//     as a fourth line "▼ $X less than plan" (trim red) or "▲ $Y
-//     more than plan" (cushion green) on open weeks only, mode ===
-//     "rolling" only.
-//   - C3 (envelope exceeded, isC3): open weeks read "$0 to spend ·
-//     already over" in red; plan-mode display is unchanged.
-function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }) {
+// Kevin R-128 Part 3 items 1 + A + F (2026-09-19). Cell body
+// restructures:
+//   - Item A. `.v` flex row baseline-aligned right, `.of` small text
+//     LEFT of `.big` (so every value ends on the same edge).
+//   - Item F. `spent` and `to spend` prefixes gone. Pending and
+//     forecast show the value alone; closed and current show `of $G`
+//     as the left-side hint.
+//   - Item 1. `splitHrly` / `splitSal` render a `Hrly $X · Sal $Y`
+//     line under the value on salary view + PLAN. Rolling replaces
+//     the split with the delta line (Part 4: salary is fixed, so a
+//     re-spread budget has no meaningful split; row height must hold).
+//     Hourly view never renders the split.
+//   - Verdict unifies to `$X left · mute` for every non-over case,
+//     matching the render. The prior `▼ $X under · green` branch for
+//     closed labor is gone: colour rule (Kevin item 9 side): red is
+//     over, grey is under, green is only revenue running ahead.
+//   - `goalRolling` still switches the effective goal on open weeks
+//     in rolling; `dlt` still shows on open weeks in rolling.
+//   - C3 (envelope exceeded, isC3): open weeks read `$0 · already
+//     over` per Part 4 ("C3 keeps its current shape") plus item F
+//     ("to spend" gone).
+function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal }) {
   const isFuture = w.state === "not_started";
   const isClosed = w.state === "closed";
-  const isNow = w.state === "in_progress";
   const l = Number(landed || 0);
   const gEffective = mode === "rolling" && !isClosed ? Number(goalRolling || 0) : Number(goal || 0);
-  // Kevin R-128 Part 3 item F (2026-09-19). Drop `spent` and
-  // `to spend` prefixes from the big value - the Closed / Current /
-  // Pending / Forecast pills already carry that framing. Pending and
-  // forecast show the value alone; closed and current keep the
-  // `of $G` suffix (item A moves it to the left).
-  //
-  // Verdict unifies to `$X left` for both isNow and isClosed non-labor
-  // (was `$X left this week` and `$X left · still landing`). isClosed
-  // labor keeps `▼ $X under` because labor spent lands immediately and
-  // finality is real. Non-labor "left" is neutral, not green, per the
-  // colour rule: under-spend on purchasing is invoice lag, not saving.
+  const isRolling = mode === "rolling";
+  const showSplit = splitHrly != null && splitSal != null && !isRolling;
+  const showDelta = isRolling && !isClosed && dlt != null && Math.abs(dlt) > 0;
+  const splitLine = showSplit ? (
+    <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
+  ) : null;
+  const deltaLine = showDelta ? (
+    <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
+      {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
+    </div>
+  ) : null;
   // C3 · open weeks clamp to $0 in Rolling; cell shows "already over".
-  if (mode === "rolling" && isC3 && !isClosed) {
+  if (isRolling && isC3 && !isClosed) {
     return (
       <>
-        <div className="kpi-ov-cp-big kpi-ov-cp-over">
-          {dollar0(0)}
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big kpi-ov-cp-over">{dollar0(0)}</span>
         </div>
         <div className="kpi-ov-cp-vd kpi-ov-cp-over">already over</div>
       </>
@@ -132,12 +137,11 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }
   if (isFuture) {
     return (
       <>
-        <div className="kpi-ov-cp-big">{dollar0(gEffective)}</div>
-        {mode === "rolling" && dlt != null && Math.abs(dlt) > 0 && (
-          <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
-            {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
-          </div>
-        )}
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big">{dollar0(gEffective)}</span>
+        </div>
+        {splitLine}
+        {deltaLine}
       </>
     );
   }
@@ -145,31 +149,20 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }
   const over = l > g && g > 0;
   const pctBar = g > 0 ? Math.min(100, (l / g) * 100) : 0;
   const barColor = over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
-  let verdictText, verdictClass;
-  if (over) {
-    verdictText = `▲ ${dollar0(l - g)} over`;
-    verdictClass = "kpi-ov-cp-over";
-  } else if (isClosed && isLabor) {
-    verdictText = `▼ ${dollar0(g - l)} under`;
-    verdictClass = "kpi-ov-cp-good";
-  } else {
-    verdictText = `${dollar0(g - l)} left`;
-    verdictClass = isLabor ? "kpi-ov-cp-good" : "kpi-ov-cp-mute";
-  }
+  const verdictText = over ? `▲ ${dollar0(l - g)} over` : `${dollar0(g - l)} left`;
+  const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
   return (
     <>
-      <div className="kpi-ov-cp-big">
-        {dollar0(l)}<small>of {dollar0(g)}</small>
+      <div className="kpi-ov-cp-v">
+        <span className="kpi-ov-cp-of">of {dollar0(g)}</span>
+        <span className="kpi-ov-cp-big">{dollar0(l)}</span>
       </div>
+      {splitLine}
       <div className="kpi-ov-cp-bar" style={{ marginBottom: 4 }}>
         <i style={{ width: `${pctBar}%`, background: barColor }} />
       </div>
       <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
-      {mode === "rolling" && !isClosed && dlt != null && Math.abs(dlt) > 0 && (
-        <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
-          {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
-        </div>
-      )}
+      {deltaLine}
     </>
   );
 }
@@ -205,10 +198,18 @@ function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays 
   );
 }
 
-// Period-column body · cost (A4). On future range: `$X` big, then
-// `to spend` sub, then `$X/week · $Y/day` rate. No bar (no landed to
-// pace against).
-function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays }) {
+// Kevin R-128 Part 3 items A + 1 + 9 (2026-09-19). Period-column
+// body for cost rows. Item A moves the small text left of the big
+// value. Item 1 renders the salary/hourly period split under the
+// value on the 3100 row when salary view is active AND mode is
+// PLAN. Item 9 wires pace into the footer (see caller).
+//
+// Future range branch unchanged in structure (still `$X + to spend
+// (dropped) + per-week/per-day`) - future ranges have no landed to
+// pace against and no split to show, per Part 4 ("Next period has
+// only two states; the Plan/Rolling toggle does not render on a
+// future range").
+function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays, splitHrly, splitSal, paceText, paceClass, isTotal }) {
   const G = Number(envelope || 0);
   const L = Number(landed || 0);
   if (isFuture) {
@@ -216,7 +217,9 @@ function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays }) {
     const perDay  = serviceDays > 0 ? G / serviceDays : 0;
     return (
       <>
-        <div className="kpi-ov-cp-big">{dollar0(G)}</div>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big">{dollar0(G)}</span>
+        </div>
         <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">to spend</div>
         <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
           <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
@@ -226,17 +229,29 @@ function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays }) {
   }
   const usedPct = G > 0 ? Math.round(Math.min(100, (L / G) * 100)) : 0;
   const hot = G > 0 && (L / G) > (dayFrac + 0.005);
-  const barColor = hot ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
+  const barColor = isTotal
+    ? "var(--navy-700, #153968)"
+    : (hot ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
+  const splitLine = (splitHrly != null && splitSal != null) ? (
+    <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
+  ) : null;
   return (
     <>
-      <div className={`kpi-ov-cp-big${hot ? " kpi-ov-cp-over" : ""}`}>
-        {dollar0(G - L)}<small>left of {dollar0(G)}</small>
+      <div className="kpi-ov-cp-v">
+        <span className="kpi-ov-cp-of">left of {dollar0(G)}</span>
+        <span className="kpi-ov-cp-big">{dollar0(G - L)}</span>
       </div>
+      {splitLine}
       <div className="kpi-ov-cp-bar">
         <i style={{ width: `${usedPct}%`, background: barColor }} />
         <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
       </div>
-      <div className={`kpi-ov-cp-sub${hot ? " kpi-ov-cp-over" : ""}`}>{usedPct}% used · <b>{dollar0(L)}</b> landed</div>
+      <div className="kpi-ov-cp-fl">
+        {usedPct}% used
+        {paceText && (
+          <> · <span className={`kpi-ov-cp-pc ${paceClass || "kpi-ov-cp-mute"}`}>{paceText}</span></>
+        )}
+      </div>
     </>
   );
 }
@@ -527,7 +542,33 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       : rowSet === "purchasing" ? ROWS_PURCHASING
       :                           ROWS_OVERVIEW;
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor };
+    // Kevin R-128 Part 3 item 1 (2026-09-19). Per-week + period
+    // salary/hourly split for the 3100 row. Reads week_hourly_allowed
+    // and week_salary_allowed straight off the labor board, matching
+    // the R-121 shape Part 1 shipped. Guard D deletes week_salary_
+    // allowed on the hourly payload, so this returns null on the
+    // hourly view - the split does not render there anyway (Kevin
+    // Part 4 rule matrix). Rolling mode also suppresses the split
+    // in CostCellBody so a re-spread budget does not stack alongside
+    // the delta line, keeping row height flat.
+    const splitFor3100 = (() => {
+      if (!salaryPath) return null;
+      const lbWks = labor?.board?.weeks || [];
+      const byStart = new Map(lbWks.filter(w => w.week_start).map(w => [w.week_start, w]));
+      const per = weeks.map(w => {
+        const lw = byStart.get(w.week_start);
+        return {
+          hrly: (lw && lw.week_hourly_allowed != null) ? Number(lw.week_hourly_allowed) : null,
+          sal:  (lw && lw.week_salary_allowed  != null) ? Number(lw.week_salary_allowed)  : null,
+        };
+      });
+      if (per.some(x => x.hrly == null || x.sal == null)) return null;
+      const hrlyTotal = per.reduce((s, x) => s + x.hrly, 0);
+      const salTotal  = per.reduce((s, x) => s + x.sal,  0);
+      return { per, hrlyTotal, salTotal };
+    })();
+
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100 };
   }, [payload, weeks, labor, purch, rowSet, isFuture]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -807,6 +848,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                       : (() => {
                           const pl = perLine.get(row.line);
                           const dlt = pl ? (pl.rolling[i] - pl.plan[i]) : 0;
+                          const sp = (row.line === "3100" && derived.splitFor3100)
+                            ? derived.splitFor3100.per[i]
+                            : null;
                           return (
                             <CostCellBody
                               w={wForCell}
@@ -817,6 +861,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               mode={isFuture ? "plan" : mode}
                               dlt={dlt}
                               isC3={pl ? pl.isC3 : false}
+                              splitHrly={sp ? sp.hrly : null}
+                              splitSal={sp ? sp.sal : null}
                             />
                           );
                         })()}
@@ -835,7 +881,15 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
               >
                 {isRev
                   ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />
-                  : <PerCostCellBody envelope={goalInfo.batr} landed={actual} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />}
+                  : <PerCostCellBody
+                      envelope={goalInfo.batr}
+                      landed={actual}
+                      dayFrac={dayFrac}
+                      isFuture={isFuture}
+                      serviceDays={serviceDaysTotal}
+                      splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
+                      splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
+                    />}
               </div>
             </Fragment>
           );

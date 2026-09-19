@@ -269,18 +269,22 @@
   margin-top: 3px;
 }
 /* ── data cells · A4 ────────────────────────────────────────────── */
-/* min-height 108 - matches the natural height of a 4-line partial-
-   week Revenue cell so cost rows expand to the same size and every
-   row settles to a single height. Kevin fix 2026-09-16: even them. */
+/* Kevin R-128 Part 3 (2026-09-19). Padding 11px 14px + min-height 88
+   match the approved render. The old 14px 14px + 109px was sized for
+   a 4-line partial-week Revenue cell before item A collapsed the
+   value line and item F dropped the `spent` / `to spend` prefixes.
+   Under the new structure (v · sp · bar · fl) rows settle uniformly
+   at the shorter height; Kevin's Part 4 rule "no cell taller than
+   the render" holds. */
 .kpi-app .kpi-ov-cp-cell {
   position: relative;
   z-index: 3;
-  padding: 14px;
+  padding: 11px 14px;
   text-align: right;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 109px;
+  min-height: 88px;
   font-variant-numeric: tabular-nums;
 }
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-past  { background: #FBFBFC; }
@@ -404,6 +408,17 @@
 }
 
 /* ── numbers · A4 typography ────────────────────────────────────── */
+/* Kevin R-128 Part 3 item A (2026-09-19). `.kpi-ov-cp-v` is the flex
+   row that carries the value + optional small hint. baseline
+   alignment keeps them typographically bonded; flex-end pushes the
+   value to the right edge so every value column-aligns. gap 7px
+   between `.of` (small left text) and `.big` (value). */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-v {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 7px;
+}
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big {
   font-size: 19px;
   font-weight: 800;
@@ -411,13 +426,15 @@
   color: var(--n-900, #0A2548);
   line-height: 1.15;
 }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big small {
-  font-size: 11px;
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-of {
+  font-size: 10px;
   font-weight: 600;
   color: var(--n-600, #64748B);
-  letter-spacing: 0;
-  margin-left: 5px;
+  white-space: nowrap;
 }
+/* .kpi-ov-cp-pre retained for RevCellBody's basis word ("confirmed"
+   / "partial" / "forecast") which still leads the big value. Cost
+   cells no longer use it (item F dropped `spent` / `to spend`). */
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pre {
   font-size: 11px;
   font-weight: 700;
@@ -431,6 +448,29 @@
   margin-top: 5px;
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sub b { color: var(--n-900, #0A2548); font-weight: 700; }
+/* Kevin R-128 Part 3 item 1 (2026-09-19). Split line under the value
+   showing `Hrly $X · Sal $Y` on the 3100 row when salary view is
+   active and mode is PLAN. Rolling replaces the split with the
+   delta line (kpi-ov-cp-dlt) in CostCellBody so row height holds. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
+  margin-top: 3px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp b { color: var(--n-900, #0A2548); font-weight: 700; }
+/* Kevin R-128 Part 3 items F + 9 (2026-09-19). `.kpi-ov-cp-fl` is the
+   footer line that carries `$X left` on week cells and `X% used ·
+   ▲ $Y over pace` on period cells. `.kpi-ov-cp-pc` is the bolder-
+   weight modifier for the pace span itself. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--n-600, #64748B);
+  margin-top: 4px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl b { color: var(--n-900, #0A2548); font-weight: 700; }
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pc { font-weight: 800; }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vd {
   font-size: 10px;
   font-weight: 800;
