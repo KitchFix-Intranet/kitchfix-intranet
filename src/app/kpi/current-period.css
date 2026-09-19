@@ -23,6 +23,20 @@
    not copy.
    ───────────────────────────────────────────────────────────────── */
 
+/* Kevin R-128 Part 3 item 7 (2026-09-19). CP lift-line colour tokens.
+   Scoped custom properties for the three row-line variants that
+   overlay the lifted current-week column. Lighter than the standard
+   --n-300 / --n-400 palette because they paint on a white liftbody
+   over a navy lift and need to read as separators without fighting
+   the lift's own visual weight. Kept as CSS variables so item 12's
+   raw-hex sweep does not have to reason about surface-specific
+   colours - these are one-off per surface, not design-system tokens. */
+.kpi-app {
+  --cp-lift-line: #EDF0F4;
+  --cp-lift-line-sect: #DDE3EC;
+  --cp-lift-line-tot: #C6D0DE;
+}
+
 /* Card + spacing. margin-top holds the lift's upward protrusion clear
    of the command bar; padding-bottom holds the downward protrusion.
    `z-index: 0` establishes a stacking context BELOW `.kpi-cmd`'s
@@ -325,6 +339,25 @@
    this from the bottom. */
 .kpi-app .kpi-ov-cp-rowline-sect,
 .kpi-app .kpi-ov-cp-lline-sect { background: var(--n-400, #D3CFC4); }
+
+/* Kevin R-128 Part 3 item 7 (2026-09-19). Row-line segments inside
+   the lifted current-week column. The base rowlines (grid-column
+   2/-1, z-4) do span the lift column too, but the liftbody paints on
+   top at z-11 so the row context vanishes inside the current week.
+   These segments paint at z-12 (above the liftbody, same as the now
+   cells) at a lighter contrast that reads on white. Kevin fix
+   2026-09-19: "keep the lift - it is good at answering where am I
+   now." */
+.kpi-app .kpi-ov-cp-liftline {
+  height: 1px;
+  background: var(--cp-lift-line);
+  z-index: 12;
+  position: relative;
+  padding: 0;
+  pointer-events: none;
+}
+.kpi-app .kpi-ov-cp-liftline-sect { background: var(--cp-lift-line-sect); }
+.kpi-app .kpi-ov-cp-liftline-tot  { height: 2px; background: var(--cp-lift-line-tot); }
 
 /* ── lifted current-week column · A3 ────────────────────────────── */
 .kpi-app .kpi-ov-cp-lift {

@@ -747,13 +747,24 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   --n-400 so the layout parses as revenue / costs /
                   total, not one flat list. */}
               <div
-                className={`kpi-ov-cp-rowline${ri === 1 ? " kpi-ov-cp-rowline-sect" : ""}`}
+                className={`kpi-ov-cp-rowline${ri === 1 ? " kpi-ov-cp-rowline-sect" : ""}${row.tot ? " kpi-ov-cp-rowline-tot" : ""}`}
                 style={{ gridRow: sepGr }}
               />
               {!isRev && (
                 <div
-                  className={`kpi-ov-cp-lline${ri === 1 ? " kpi-ov-cp-lline-sect" : ""}`}
+                  className={`kpi-ov-cp-lline${ri === 1 ? " kpi-ov-cp-lline-sect" : ""}${row.tot ? " kpi-ov-cp-lline-tot" : ""}`}
                   style={{ gridRow: sepGr }}
+                />
+              )}
+              {/* Kevin R-128 Part 3 item 7 (2026-09-19). Lift-line
+                  segment inside the current-week column. Only when a
+                  current week exists (isFuture=false, currentIdx>=0).
+                  Sits at z-12, above the liftbody (z-11) and level
+                  with hcell.now / cell.now (z-12). */}
+              {!isFuture && currentIdx >= 0 && (
+                <div
+                  className={`kpi-ov-cp-liftline${ri === 1 ? " kpi-ov-cp-liftline-sect" : ""}${row.tot ? " kpi-ov-cp-liftline-tot" : ""}`}
+                  style={{ gridColumn: currentIdx + 2, gridRow: sepGr }}
                 />
               )}
               {/* Row label (col 1). */}
