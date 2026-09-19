@@ -582,7 +582,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   // lines (Overview: 3100+3200+3400; Labor: 3100; Purchasing:
   // 3200+3400) for the total; per-week = /4; per-service-day uses the
   // real count from labor.board.weeks[].service_days.
-  const costRowsForCards = derived.rows.filter(r => !r.rev);
+  // Kevin R-128 Part 3 Trap 3B.1 (2026-09-19). Item 6 adds a total
+  // row to derived.rows with `tot: true`. costTotal feeds the three
+  // future-period cards below; without the `!r.tot` guard, once the
+  // total row is in place the sum doubles and the cards read exactly
+  // 2x the truth. Guarded here rather than left to depend on the total
+  // row's shape (whose `line: null` incidentally yields batr:0 today).
+  const costRowsForCards = derived.rows.filter(r => !r.rev && !r.tot);
   const costTotal = costRowsForCards.reduce((s, r) => {
     const gi = derived.goalFor(r.line);
     return s + Number(gi.batr || 0);
