@@ -107,7 +107,7 @@ function RevCellBody({ w, amount, labor, i, isFuture }) {
 //   - C3 (envelope exceeded, isC3): open weeks read `$0 · already
 //     over` per Part 4 ("C3 keeps its current shape") plus item F
 //     ("to spend" gone).
-function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal }) {
+function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal, isTotal }) {
   const isFuture = w.state === "not_started";
   const isClosed = w.state === "closed";
   const l = Number(landed || 0);
@@ -148,7 +148,14 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
   const g = gEffective;
   const over = l > g && g > 0;
   const pctBar = g > 0 ? Math.min(100, (l / g) * 100) : 0;
-  const barColor = over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
+  // Kevin R-128 Part 3 item 6 (2026-09-19). Total row's week bar
+  // paints navy regardless of over/under - the per-row bars already
+  // carry over/under signaling; the total bar's role is "share of
+  // the total envelope used", so it stays a neutral scan of the
+  // combined position.
+  const barColor = isTotal
+    ? "var(--navy-700, #153968)"
+    : (over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
   const verdictText = over ? `▲ ${dollar0(l - g)} over` : `${dollar0(g - l)} left`;
   const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
   return (
@@ -567,6 +574,45 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       : rowSet === "purchasing" ? ROWS_PURCHASING
       :                           ROWS_OVERVIEW;
 
+    // Kevin R-128 Part 3 item 6 (2026-09-19). Total cost of goods row.
+    // Overview only - Labor's single 3100 cost row is already a
+    // one-row column, and Kevin's DO NOT list keeps a total off
+    // Purchasing (R-129 covers Purchasing's own version). The row's
+    // per-week/period values are the on-screen sum of the four cost
+    // rows in that column, so `sum of the four cells` equals the
+    // total cell to the cent by construction - the R-121 defect
+    // above was exactly this invariant breaking.
+    if (rowSet === "overview") {
+      const costOnly = rows.filter(r => !r.rev);
+      const totalGoal = weeks.map((_, wi) =>
+        costOnly.reduce((s, r) => s + Number(goalFor(r.line).goal[wi] || 0), 0)
+      );
+      const totalLanded = weeks.map((_, wi) =>
+        costOnly.reduce((s, r) => s + Number(landedFor(r.line)[wi] || 0), 0)
+      );
+      const totalBatr = costOnly.reduce(
+        (s, r) => s + Number(goalFor(r.line).batr || 0), 0
+      );
+      const totalFyPct = costOnly.reduce(
+        (s, r) => s + Number(stmtByLine.get(r.line)?.target_pct || 0), 0
+      );
+      const totalEffPct = costOnly.reduce(
+        (s, r) => s + Number(goalFor(r.line).effectivePct || 0), 0
+      );
+      const totSub = isFuture
+        ? `${totalEffPct.toFixed(2)}% of week revenue`
+        : `${totalFyPct.toFixed(2)}% of revenue`;
+      rows.push({
+        line: null,
+        name: "Total cost of goods",
+        sub: totSub,
+        tot: true,
+        _goal: totalGoal,
+        _landed: totalLanded,
+        _batr: totalBatr,
+      });
+    }
+
     // Kevin R-128 Part 3 item 1 (2026-09-19). Per-week + period
     // salary/hourly split for the 3100 row. Reads week_hourly_allowed
     // and week_salary_allowed straight off the labor board, matching
@@ -646,7 +692,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const perLine = new Map();
   if (!isFuture) {
     for (const row of derived.rows) {
-      if (row.rev) continue;
+      if (row.rev || row.tot) continue;  // total handled separately below
       const gi = derived.goalFor(row.line);
       const landed = derived.landedFor(row.line);
       const rr = rollingOf(gi.goal, landed, gi.batr, closedFlags, derived.rev);
@@ -665,6 +711,35 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         trim: sm.trim,
         name: row.name,
         isLabor: row.isLabor,
+      });
+    }
+    // Kevin R-128 Part 3 item 6 (2026-09-19). Aggregate total row's
+    // rolling data by summing per-line plan/rolling/landed across the
+    // four cost lines. Keyed by "__TOT__" so the render loop can look
+    // it up the same way as any other row. Delta for a week = total_
+    // rolling - total_plan (which equals Σ per-line deltas). C1/C2/C3
+    // flags are false on the aggregate - the summary card still keys
+    // its C1/C2 tone off the first cost line, not the total.
+    const totRow = derived.rows.find(r => r.tot);
+    if (totRow && perLine.size > 0) {
+      const totalPlan = weeks.map((_, wi) =>
+        [...perLine.values()].reduce((s, pl) => s + Number(pl.plan[wi] || 0), 0)
+      );
+      const totalRolling = weeks.map((_, wi) =>
+        [...perLine.values()].reduce((s, pl) => s + Number(pl.rolling[wi] || 0), 0)
+      );
+      const totalLandedRoll = weeks.map((_, wi) =>
+        [...perLine.values()].reduce((s, pl) => s + Number(pl.landed[wi] || 0), 0)
+      );
+      perLine.set("__TOT__", {
+        plan: totalPlan,
+        rolling: totalRolling,
+        landed: totalLandedRoll,
+        envelope: totRow._batr,
+        actual: totalLandedRoll.reduce((s, v) => s + v, 0),
+        isC1: false, isC2: false, isC3: false,
+        totalDelta: 0, thisWeekDelta: 0, trim: false,
+        name: totRow.name, isLabor: false,
       });
     }
   }
@@ -799,14 +874,25 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             because the label column has no separator above row 1). */}
         {derived.rows.map((row, ri) => {
           const isRev = ri === 0;
+          const isTot = !!row.tot;
           const isLast = ri === derived.rows.length - 1;
           const rlabGr = 3 + 2 * ri;
           const sepGr = rlabGr - 1;
-          const goalInfo = isRev ? null : derived.goalFor(row.line);
-          const landed  = isRev ? null : derived.landedFor(row.line);
+          // Kevin R-128 Part 3 item 6 (2026-09-19). Total row's goal /
+          // landed come from row._goal / row._landed (pre-summed in
+          // useMemo across the four cost rows) rather than goalFor /
+          // landedFor, which return zeros for line:null.
+          const goalInfo = isRev
+            ? null
+            : (isTot
+              ? { goal: row._goal, batr: row._batr }
+              : derived.goalFor(row.line));
+          const landed  = isRev
+            ? null
+            : (isTot ? row._landed : derived.landedFor(row.line));
           const actual  = isRev ? 0 : landed.reduce((s, v) => s + v, 0);
           return (
-            <Fragment key={row.line || "rev"}>
+            <Fragment key={row.line || (isTot ? "tot" : "rev")}>
               {/* Separators before this row's rlab/cells. Kevin
                   R-128 Part 3 item D: the separator between Revenue
                   (ri=0) and the first cost row (ri=1) reads at
@@ -839,6 +925,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   "kpi-ov-cp-rlab",
                   ri === 0 && "kpi-ov-cp-firstrow",
                   isLast && "kpi-ov-cp-lastrow",
+                  isTot && "kpi-ov-cp-tot",
                 ].filter(Boolean).join(" ")}
                 style={{ gridRow: rlabGr }}
               >
@@ -860,6 +947,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   isNow && "kpi-ov-cp-now",
                   i > 0 && "kpi-ov-cp-vline",
                   isLast && "kpi-ov-cp-lastrow",
+                  isTot && "kpi-ov-cp-tot",
                 ].filter(Boolean).join(" ")
                 // On future range every week is state="not_started"
                 // - CostCellBody's isFuture branch already renders
@@ -867,11 +955,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 // what R-110 wants. No rolling data on NP.
                 const wForCell = isFuture ? { ...w, state: "not_started" } : w;
                 return (
-                  <div key={`c-${row.line || "rev"}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
+                  <div key={`c-${row.line || (isTot ? "tot" : "rev")}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
                     {isRev
                       ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} isFuture={isFuture} />
                       : (() => {
-                          const pl = perLine.get(row.line);
+                          // Kevin R-128 Part 3 item 6: total row's rolling
+                          // data lives at perLine.get("__TOT__").
+                          const pl = isTot ? perLine.get("__TOT__") : perLine.get(row.line);
                           const dlt = pl ? (pl.rolling[i] - pl.plan[i]) : 0;
                           const sp = (row.line === "3100" && derived.splitFor3100)
                             ? derived.splitFor3100.per[i]
@@ -888,6 +978,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               isC3={pl ? pl.isC3 : false}
                               splitHrly={sp ? sp.hrly : null}
                               splitSal={sp ? sp.sal : null}
+                              isTotal={isTot}
                             />
                           );
                         })()}
@@ -901,6 +992,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                   "kpi-ov-cp-per",
                   "kpi-ov-cp-vline",
                   isLast && "kpi-ov-cp-lastrow",
+                  isTot && "kpi-ov-cp-tot",
                 ].filter(Boolean).join(" ")}
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
@@ -938,6 +1030,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
                           paceText={paceText}
                           paceClass={paceClass}
+                          isTotal={isTot}
                         />
                       );
                     })()}

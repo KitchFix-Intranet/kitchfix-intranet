@@ -23,18 +23,21 @@
    not copy.
    ───────────────────────────────────────────────────────────────── */
 
-/* Kevin R-128 Part 3 item 7 (2026-09-19). CP lift-line colour tokens.
-   Scoped custom properties for the three row-line variants that
-   overlay the lifted current-week column. Lighter than the standard
-   --n-300 / --n-400 palette because they paint on a white liftbody
-   over a navy lift and need to read as separators without fighting
-   the lift's own visual weight. Kept as CSS variables so item 12's
-   raw-hex sweep does not have to reason about surface-specific
-   colours - these are one-off per surface, not design-system tokens. */
+/* Kevin R-128 Part 3 items 6 + 7 (2026-09-19). CP surface-specific
+   colour tokens. Scoped custom properties for row-line variants that
+   overlay the lifted current-week column plus the total row's tinted
+   backgrounds. All lighter than the design-system palette because
+   they paint on either a white liftbody over a navy lift, or under
+   the total row's summary content. Kept as CSS variables (not
+   tokens.css entries) so item 12's raw-hex sweep does not have to
+   reason about surface-specific colours - these are one-off per
+   surface, not design-system tokens. */
 .kpi-app {
   --cp-lift-line: #EDF0F4;
   --cp-lift-line-sect: #DDE3EC;
   --cp-lift-line-tot: #C6D0DE;
+  --cp-tot-bg: #FAFBFD;
+  --cp-tot-per-bg: #EDF2FA;
 }
 
 /* Card + spacing. margin-top holds the lift's upward protrusion clear
@@ -343,6 +346,24 @@
    this from the bottom. */
 .kpi-app .kpi-ov-cp-rowline-sect,
 .kpi-app .kpi-ov-cp-lline-sect { background: var(--n-400, #D3CFC4); }
+
+/* Kevin R-128 Part 3 item 6 (2026-09-19). Total-row 2px --navy-700
+   rule above, mirroring item D's --n-400 section break from the
+   top of the costs section. Applies to both the label-column line
+   (lline) and the body-panel line (rowline). */
+.kpi-app .kpi-ov-cp-rowline-tot,
+.kpi-app .kpi-ov-cp-lline-tot {
+  height: 2px;
+  background: var(--navy-700, #153968);
+}
+
+/* Kevin R-128 Part 3 item 6 (2026-09-19). Total row tint. `.tot` on
+   cell + rlab gets --cp-tot-bg; the period cell overrides to
+   --cp-tot-per-bg so the total row's period cell stays visually
+   distinct from its own week cells (matches the render). */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-tot,
+.kpi-app .kpi-ov-cp-rlab.kpi-ov-cp-tot { background: var(--cp-tot-bg); }
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-tot.kpi-ov-cp-per { background: var(--cp-tot-per-bg); }
 
 /* Kevin R-128 Part 3 item 7 (2026-09-19). Row-line segments inside
    the lifted current-week column. The base rowlines (grid-column
