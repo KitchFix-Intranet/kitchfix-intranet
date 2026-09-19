@@ -107,12 +107,23 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }
   const isNow = w.state === "in_progress";
   const l = Number(landed || 0);
   const gEffective = mode === "rolling" && !isClosed ? Number(goalRolling || 0) : Number(goal || 0);
+  // Kevin R-128 Part 3 item F (2026-09-19). Drop `spent` and
+  // `to spend` prefixes from the big value - the Closed / Current /
+  // Pending / Forecast pills already carry that framing. Pending and
+  // forecast show the value alone; closed and current keep the
+  // `of $G` suffix (item A moves it to the left).
+  //
+  // Verdict unifies to `$X left` for both isNow and isClosed non-labor
+  // (was `$X left this week` and `$X left · still landing`). isClosed
+  // labor keeps `▼ $X under` because labor spent lands immediately and
+  // finality is real. Non-labor "left" is neutral, not green, per the
+  // colour rule: under-spend on purchasing is invoice lag, not saving.
   // C3 · open weeks clamp to $0 in Rolling; cell shows "already over".
   if (mode === "rolling" && isC3 && !isClosed) {
     return (
       <>
         <div className="kpi-ov-cp-big kpi-ov-cp-over">
-          <span className="kpi-ov-cp-pre">to spend</span>{dollar0(0)}
+          {dollar0(0)}
         </div>
         <div className="kpi-ov-cp-vd kpi-ov-cp-over">already over</div>
       </>
@@ -121,7 +132,7 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }
   if (isFuture) {
     return (
       <>
-        <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">to spend</span>{dollar0(gEffective)}</div>
+        <div className="kpi-ov-cp-big">{dollar0(gEffective)}</div>
         {mode === "rolling" && dlt != null && Math.abs(dlt) > 0 && (
           <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
             {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
@@ -135,14 +146,20 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3 }
   const pctBar = g > 0 ? Math.min(100, (l / g) * 100) : 0;
   const barColor = over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)";
   let verdictText, verdictClass;
-  if (over) { verdictText = `▲ ${dollar0(l - g)} over`; verdictClass = "kpi-ov-cp-over"; }
-  else if (isNow) { verdictText = `${dollar0(g - l)} left this week`; verdictClass = "kpi-ov-cp-good"; }
-  else if (isClosed && !isLabor) { verdictText = `${dollar0(g - l)} left · still landing`; verdictClass = "kpi-ov-cp-mute"; }
-  else { verdictText = `▼ ${dollar0(g - l)} under`; verdictClass = "kpi-ov-cp-good"; }
+  if (over) {
+    verdictText = `▲ ${dollar0(l - g)} over`;
+    verdictClass = "kpi-ov-cp-over";
+  } else if (isClosed && isLabor) {
+    verdictText = `▼ ${dollar0(g - l)} under`;
+    verdictClass = "kpi-ov-cp-good";
+  } else {
+    verdictText = `${dollar0(g - l)} left`;
+    verdictClass = isLabor ? "kpi-ov-cp-good" : "kpi-ov-cp-mute";
+  }
   return (
     <>
       <div className="kpi-ov-cp-big">
-        <span className="kpi-ov-cp-pre">spent</span>{dollar0(l)}<small>of {dollar0(g)}</small>
+        {dollar0(l)}<small>of {dollar0(g)}</small>
       </div>
       <div className="kpi-ov-cp-bar" style={{ marginBottom: 4 }}>
         <i style={{ width: `${pctBar}%`, background: barColor }} />
@@ -696,9 +713,21 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
           const actual  = isRev ? 0 : landed.reduce((s, v) => s + v, 0);
           return (
             <Fragment key={row.line || "rev"}>
-              {/* Separators before this row's rlab/cells. */}
-              <div className="kpi-ov-cp-rowline" style={{ gridRow: sepGr }} />
-              {!isRev && <div className="kpi-ov-cp-lline" style={{ gridRow: sepGr }} />}
+              {/* Separators before this row's rlab/cells. Kevin
+                  R-128 Part 3 item D: the separator between Revenue
+                  (ri=0) and the first cost row (ri=1) reads at
+                  --n-400 so the layout parses as revenue / costs /
+                  total, not one flat list. */}
+              <div
+                className={`kpi-ov-cp-rowline${ri === 1 ? " kpi-ov-cp-rowline-sect" : ""}`}
+                style={{ gridRow: sepGr }}
+              />
+              {!isRev && (
+                <div
+                  className={`kpi-ov-cp-lline${ri === 1 ? " kpi-ov-cp-lline-sect" : ""}`}
+                  style={{ gridRow: sepGr }}
+                />
+              )}
               {/* Row label (col 1). */}
               <div
                 className={[

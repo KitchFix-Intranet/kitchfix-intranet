@@ -318,6 +318,13 @@
   z-index: 4;
   padding: 0;
 }
+/* Kevin R-128 Part 3 item D (2026-09-19). Revenue / costs section
+   break. The row separator between Revenue and the first cost row
+   reads at --n-400 so the layout parses as three sections rather
+   than one flat list. The total row's 2px navy rule (item 6) mirrors
+   this from the bottom. */
+.kpi-app .kpi-ov-cp-rowline-sect,
+.kpi-app .kpi-ov-cp-lline-sect { background: var(--n-400, #D3CFC4); }
 
 /* ── lifted current-week column · A3 ────────────────────────────── */
 .kpi-app .kpi-ov-cp-lift {
