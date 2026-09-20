@@ -330,7 +330,7 @@ function useLift(ready) {
   return { box, gridRef };
 }
 
-export default function CurrentPeriodTable({ payload, labor, purch, error, rowSet = "overview" }) {
+export default function CurrentPeriodTable({ payload, labor, purch, error, rowSet = "overview", isClosedRange = false }) {
   // R-110 (2026-09-16). Future range gate. `labor.is_future_range` is
   // the reliable flag - Overview ships `period_state: "planned"` but
   // NOT `is_future_range` on planned periods (asymmetry noted so it
@@ -338,11 +338,25 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   // render), fall back to overview's period_state.
   const isFuture = (labor?.is_future_range === true)
                 || (payload?.period_state === "planned");
-  // Weeks · CP reads Overview's week_rail; NP reads Labor's board.
-  // weeks (Overview's week_rail is null on planned periods).
-  const weeks = isFuture
-    ? (labor?.board?.weeks || [])
-    : (payload?.week_rail?.weeks || []);
+  // Kevin R-133 step 1 (2026-09-20). Tri-state: `phase` replaces the
+  // running/future boolean. `isClosedRange` comes from the parent
+  // (labor/page.js gates on `board.kind === "single_period_closed"`;
+  // purchasing/page.js gates on `data.fiscal.weeks_in_range ===
+  // closed_weeks_in_range && period_no != null`, per Kevin's ruling
+  // to consume the server flag rather than derive from dates). No
+  // parent passes `isClosedRange` until step 2, so phase is only ever
+  // "running" or "future" today and every existing render path stays
+  // byte-identical. `isFuture` kept as-is so the ~20 downstream call
+  // sites do not churn in this PR - only the branches that need the
+  // closed case flip to `phase === ...`.
+  const phase = isFuture ? "future" : (isClosedRange ? "closed" : "running");
+  // Weeks · running reads Overview's week_rail (partial-week revenue
+  // basis, ongoing figures); future + closed both read Labor's board
+  // (week_rail is null on planned AND closed periods, gated in
+  // resolver.js at `isRunningSinglePeriod`).
+  const weeks = phase === "running"
+    ? (payload?.week_rail?.weeks || [])
+    : (labor?.board?.weeks || []);
 
   const derived = useMemo(() => {
     if (weeks.length !== 4) return null;
@@ -737,7 +751,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const closedFlags = weeks.map(w => (w.state || "") === "closed");
   const currentIdx = weeks.findIndex(w => (w.state || "") === "in_progress");
   const perLine = new Map();
-  if (!isFuture) {
+  if (phase === "running") {
     for (const row of derived.rows) {
       if (row.rev || row.tot) continue;  // total handled separately below
       const gi = derived.goalFor(row.line);
@@ -849,7 +863,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         <span className="kpi-ov-cp-stpill">{statusPill}</span>
         <span className="kpi-ov-cp-status-sub">{statusSub.map((s, i) => <Fragment key={i}>{s}</Fragment>)}</span>
         <span className="kpi-ov-cp-status-ml" />
-        {!isFuture && (
+        {phase === "running" && (
           <span className="kpi-ov-cp-seg" role="group" aria-label="Budget mode">
             <button
               type="button"
@@ -966,10 +980,12 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
               )}
               {/* Kevin R-128 Part 3 item 7 (2026-09-19). Lift-line
                   segment inside the current-week column. Only when a
-                  current week exists (isFuture=false, currentIdx>=0).
+                  current week exists (phase === "running", currentIdx>=0).
                   Sits at z-12, above the liftbody (z-11) and level
-                  with hcell.now / cell.now (z-12). */}
-              {!isFuture && currentIdx >= 0 && (
+                  with hcell.now / cell.now (z-12). Kevin R-133 (2026-
+                  09-20): explicit phase check rather than !isFuture so
+                  the closed range cannot accidentally paint a lift. */}
+              {phase === "running" && currentIdx >= 0 && (
                 <div
                   className={`kpi-ov-cp-liftline${ri === 1 ? " kpi-ov-cp-liftline-sect" : ""}${row.tot ? " kpi-ov-cp-liftline-tot" : ""}`}
                   style={{ gridColumn: currentIdx + 2, gridRow: sepGr }}
@@ -1061,11 +1077,15 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                       // period). Under pace = mute (under-spending is grey
                       // for every cost row per the colour rule; invoice lag
                       // on non-labor + genuine savings on labor both grey).
-                      // Skipped on future range (no landed, no pace).
+                      // Skipped on future range (no landed, no pace). Kevin
+                      // R-133 (2026-09-20): also skipped on closed range -
+                      // dayFrac = 1 on a finished period so "on pace"
+                      // collapses to the full budget, and the delta becomes
+                      // the variance the closed footer already shows.
                       const G = Number(goalInfo.batr || 0);
                       const L = Number(actual || 0);
                       let paceText = null, paceClass = null;
-                      if (!isFuture && G > 0) {
+                      if (phase === "running" && G > 0) {
                         const onPace = G * dayFrac;
                         const delta = L - onPace;
                         if (Math.abs(delta) >= 1) {
@@ -1099,8 +1119,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             the top edge overhangs the header by 12px and the bottom
             edge overhangs the last row by 12px. Sits behind the .now
             cells (z-index 10/11 vs 12). On future range there is no
-            "now" week - no lift renders. */}
-        {!isFuture && liftBox && (
+            "now" week - no lift renders. Kevin R-133 (2026-09-20):
+            closed range also has no lift - explicit phase check. */}
+        {phase === "running" && liftBox && (
           <>
             <div
               className="kpi-ov-cp-lift"
@@ -1140,8 +1161,12 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         </div>
       </div>
     )}
-    {/* Section B · summary card. Rolling mode only. */}
-    {!isFuture && mode === "rolling" && perLine.size > 0 && (
+    {/* Section B · summary card. Rolling mode only. Kevin R-133 (2026-
+        09-20): explicit `phase === "running"` gate - the toggle does
+        not render on future or closed, so mode is fixed at "plan"
+        there, but a stale mode value cannot accidentally re-open the
+        card. */}
+    {phase === "running" && mode === "rolling" && perLine.size > 0 && (
       <div className="kpi-ov-cp-rollcard">
         <div className="kpi-ov-cp-rollcard-t">To land the period on budget</div>
         <div className="kpi-ov-cp-rollcard-lead">
