@@ -560,14 +560,30 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       { line: "3400", name: "Pack. & Sup.", sub: packSub },
       ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: isFuture ? vehSubP : vehSub }] : []),
     ];
+    // Kevin R-129 change 2.1 (2026-09-19). Labor row name follows the
+    // salary toggle. Salary on merges hourly + salary into one row -
+    // "Kitchen labor" matches the Overview's name for the same line
+    // so the drill-down and the page above it agree. Salary off keeps
+    // "Hourly labor" because the row IS hourly-only in that view (the
+    // sub still carries the `hourly ·` prefix per Part 3 item 11).
+    // Without this, salary-on rendered a row named "Hourly labor"
+    // whose value was the merged total - a wrong number on the page.
     const ROWS_LABOR = [
       { line: null, name: "Revenue", sub: "what each week earns", rev: true },
-      { line: "3100", name: "Hourly labor", sub: isFuture ? laborSubFuture : laborSub, isLabor: true },
+      { line: "3100", name: salaryPath ? "Kitchen labor" : "Hourly labor",
+        sub: isFuture ? laborSubFuture : laborSub, isLabor: true },
     ];
+    // Kevin R-129 change 2.2 (2026-09-19). Purchasing gains the
+    // Vehicle row via the same `hasVehicleLine` predicate ROWS_OVERVIEW
+    // uses at line 561 - same conditional row, same predicate, so
+    // Overview and Purchasing agree on whether the account has a
+    // Vehicle line for a given day. A second predicate here would
+    // reproduce the R-127 drill-down-disagrees-with-parent failure.
     const ROWS_PURCHASING = [
       { line: null, name: "Revenue", sub: "what you are ordering for", rev: true },
       { line: "3200", name: "Food",      sub: isFuture ? foodSubP : foodSub },
       { line: "3400", name: "Pack. & Sup.", sub: isFuture ? packSubP : packSub },
+      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: isFuture ? vehSubP : vehSub }] : []),
     ];
     const rows =
         rowSet === "labor"      ? ROWS_LABOR
@@ -575,12 +591,18 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       :                           ROWS_OVERVIEW;
 
     // Kevin R-128 Part 3 item 6 (2026-09-19, review-fix 2026-09-19).
-    // Total cost of goods row. Overview only - Labor's single 3100
-    // cost row is already a one-row column, and Kevin's DO NOT list
-    // keeps a total off Purchasing (R-129 covers Purchasing's own
-    // version). Per Kevin's item 6 brief: "each cell is the sum of
-    // the four cost rows AS DISPLAYED in that same column, so the
-    // column adds up on screen."
+    // Total row. Kevin's item 6 brief: "each cell is the sum of the
+    // four cost rows AS DISPLAYED in that same column, so the column
+    // adds up on screen."
+    //
+    // R-129 (2026-09-19). Gate generalized from `rowSet === "overview"`
+    // to `costOnly.length >= 2`. Overview and Purchasing both earn the
+    // row (Overview: 3-4 cost lines; Purchasing: 2-3). Labor stays
+    // one cost line and skips the total by construction - a total of
+    // one row is noise and the board must not grow vertically. Naming
+    // is by row set: `Total purchases` on purchasing (matches the
+    // page's job of "what am I allowed to order"), `Total cost of
+    // goods` everywhere else.
     //
     // Round-then-sum: each contributing row's value is rounded to
     // whole dollars BEFORE the sum, so the total cell equals the sum
@@ -589,8 +611,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // (TBJ - FL P10 +salary WK1 total showed $18,831 while its
     // column summed to $18,830; total period cell showed $73,330
     // while its own four weeks summed to $73,331).
-    if (rowSet === "overview") {
-      const costOnly = rows.filter(r => !r.rev);
+    const costOnly = rows.filter(r => !r.rev);
+    if (costOnly.length >= 2) {
       const totalGoal = weeks.map((_, wi) =>
         costOnly.reduce((s, r) => s + Math.round(Number(goalFor(r.line).goal[wi] || 0)), 0)
       );
@@ -625,9 +647,10 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const totSub = isFuture
         ? `${totalEffPct.toFixed(2)}% of week revenue`
         : `${totalFyPct.toFixed(2)}% of revenue`;
+      const totName = rowSet === "purchasing" ? "Total purchases" : "Total cost of goods";
       rows.push({
         line: null,
-        name: "Total cost of goods",
+        name: totName,
         sub: totSub,
         tot: true,
         _goal: totalGoal,
@@ -663,7 +686,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100 };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath };
   }, [payload, weeks, labor, purch, rowSet, isFuture]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -808,9 +831,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     return s + Number(gi.batr || 0);
   }, 0);
   const revenueTotal = derived.rev.reduce((s, v) => s + v, 0);
-  const cardsLabel = rowSet === "labor" ? "Hourly labor"
+  // Kevin R-129 change 2.1 (2026-09-19). Labor's future-period card
+  // label ("Kitchen labor · the period" on NP) follows the salary
+  // toggle the same way ROWS_LABOR does. `salaryPath` returned from
+  // the useMemo above so this reads it rather than recomputing.
+  const cardsLabel = rowSet === "labor"      ? (derived.salaryPath ? "Kitchen labor" : "Hourly labor")
                    : rowSet === "purchasing" ? "Purchases"
-                   : "Cost of goods";
+                   :                           "Cost of goods";
 
   return (
     <>
