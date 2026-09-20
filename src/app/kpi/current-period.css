@@ -89,7 +89,7 @@
   padding: 5px 12px;
   border-radius: 999px;
   color: var(--n-0);
-  background: var(--navy);
+  background: var(--n-900);
 }
 .kpi-app .kpi-ov-cp-status-sub {
   font-size: 11.25px;
@@ -117,7 +117,7 @@
   font-family: inherit;
 }
 .kpi-app .kpi-ov-cp-seg button.kpi-ov-cp-seg-on {
-  background: var(--navy);
+  background: var(--n-900);
   color: var(--n-0);
 }
 /* Retained token class from R-109 - callers may still pass it; the new
@@ -239,7 +239,7 @@
 .kpi-app .kpi-ov-cp-pill-current  { background: #2FBF71; color: #053B20; box-shadow: 0 0 0 2px rgba(47, 191, 113, 0.28); }
 .kpi-app .kpi-ov-cp-pill-pending  { background: var(--amber-50, #FFF2E2); color: var(--amber-600, #B25800); }
 .kpi-app .kpi-ov-cp-pill-forecast { background: var(--n-0); color: var(--n-600); border: 1px dashed var(--n-300, #E5E7EB); }
-.kpi-app .kpi-ov-cp-pill-navy     { background: var(--navy); color: var(--n-0); }
+.kpi-app .kpi-ov-cp-pill-navy     { background: var(--n-900); color: var(--n-0); }
 
 /* ── row labels · A5 ────────────────────────────────────────────── */
 .kpi-app .kpi-ov-cp-rlab {
@@ -517,7 +517,7 @@
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 5px solid var(--navy);
+  border-top: 5px solid var(--n-900);
   transform: translateX(-4px);
 }
 .kpi-app .kpi-ov-cp-good { color: var(--green-600, #008330); }
