@@ -832,20 +832,24 @@ export default function KpiPurchasingPage() {
   //   P5        period_no=5  · weeks=4 · closed_weeks=4 · CLOSED
   //   CY        period_no=null                          · excluded
   //
-  // `laborUsable` is a defensive R-133 review-fix (Option B). On
-  // closed ranges CurrentPeriodTable sources its week structure from
+  // `laborUsable` is load-bearing (Option B). On closed ranges
+  // CurrentPeriodTable sources its week structure from
   // `cpLabor.board.weeks` because Overview's week_rail is null on
-  // verified periods. A labor board without revenue (kind=
-  // "no_budget") could not produce a revenue-weighted per-week
-  // budget - the ratio branch in goalFor would fail the revSum>0
-  // guard, per-week goals would go to zero, and the board would
-  // render as four zeros. Surveyed all 11 real accounts against P9
-  // and P10; the only non-standard case is `kind: "not_applicable"`
-  // on the two non-labor accounts (both correctly caught here by
-  // the same laborUsable check). `no_budget` did not appear on any
-  // real account, but the guard costs two lines and fails safe -
-  // if a future account ever lands in that state, Purchasing keeps
-  // its existing PeriodCard + WIG surface rather than blanking.
+  // verified periods. Two of the 11 real accounts (CIN - KY and
+  // TBJ - NY) are salaried-only sites - `salaried: true` in
+  // accounts_directory - so labor is `not_applicable` and the
+  // payload ships zero weeks. Without this gate the component's
+  // `weeks.length !== 4` guard returns null and the entire
+  // purchasing board disappears on those two accounts on closed
+  // ranges, despite real spend (P9: CIN - KY $11,884 vs $11,861
+  // budget, 11 vendors; TBJ - NY $8,557 vs $7,725, 8 vendors).
+  //
+  // Proposed R-134 · out of scope here. Real fix is sourcing week
+  // revenue independently of the labor board so salaried-only sites
+  // get the redesign too. Needs a server change (a revenue payload
+  // that carries the four-week structure with revenue-weighting on
+  // closed ranges, not gated on `isRunningSinglePeriod` like
+  // week_rail is).
   //
   // `closedPending` holds useCpTable true while cpLabor is loading
   // on a fiscally-closed range, so the SkeletonBoard branch below
