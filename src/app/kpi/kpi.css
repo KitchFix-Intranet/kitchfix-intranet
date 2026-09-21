@@ -2820,6 +2820,17 @@
 .kpi-axisC-d {
   font-size: var(--kpi-t-label); font-weight: 700; margin-top: 1px;
 }
+/* Kevin R-141 (2026-09-21). Explains the seam between per-period
+   bars (each measured against its own budget rate, R-59) and the
+   range header (measured against the annual budget percent). Muted
+   caption, one line, sits under the period axis. */
+.kpi-axisC-note {
+  font-size: var(--kpi-t-label);
+  color: var(--n-600);
+  margin-top: var(--kpi-sp-3);
+  line-height: 1.45;
+  max-width: 62ch;
+}
 
 /* Signal row (V29-15..V29-19). Three cards on a 1fr 1fr 2fr grid: the
    Hours card is double-width. Every card uses the SAME four fixed

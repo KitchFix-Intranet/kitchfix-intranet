@@ -37,7 +37,7 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 // carry. Load pnl_actuals revenue + kpi_budgets revenue for the range,
 // then call the shared period-basis module. See
 // src/lib/kpi/shared/periodBasis.js for the R-77 invariant + rules.
-import { loadOverviewBudgets, computeContractualAccrualByPeriod, sumPeriodRevenue, loadPnlActuals, loadPeriodStatus } from "@/lib/kpi/shared/periodBasis.js";
+import { loadOverviewBudgets, computeContractualAccrualByPeriod, sumPeriodRevenue, loadPnlActuals, loadPeriodStatus, budgetAtThisRevenue } from "@/lib/kpi/shared/periodBasis.js";
 import { resolveFinanceCloseAdjustment, applyFinanceCloseToLaborBoard } from "@/lib/kpi/shared/financeCloseAdjustment.js";
 import { periodOf as periodOfLabor, weekStartsInRange } from "@/app/kpi/labor/lib/periods.js";
 import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore, recomputeVerdictFromPanel, recomputePanelBatrFromPerWeek } from "@/lib/labor/labor-batr.js";
@@ -1615,7 +1615,44 @@ export async function GET(request) {
   // batr and overwrite panel batr so it equals the table's total.
   // Runs BEFORE recomputeVerdictFromPanel so verdict picks up the
   // corrected batr.
+  // Kevin R-141 (2026-09-21). No-op on multi-period ranges - see
+  // labor-batr.js. Single-period ranges continue to sum, matching
+  // the range formula by construction.
   recomputePanelBatrFromPerWeek(boardSingle);
+  // Kevin R-141 (2026-09-21). Multi-period + hourly toggle: panel
+  // batr must equal Overview 3100.1 batr = merged_batr - salary
+  // range budget, NOT sharedBatr(rev, hourly_only, revBudget). The
+  // two diverge by salary × (rev_budget - rev) / rev_budget - on
+  // TXR - AZ P1-P9 that is $4,039. attachBatrToBoard above landed
+  // on the hourly-only figure ($213,668 on TXR - AZ P1-P9); this
+  // block replaces it with the remainder ($217,707) so the Labor
+  // top card ties to Overview 3100.1 across all 11 accounts, both
+  // toggles. Uses the salary map that R-121 already loads on the
+  // hourly path (line 1548 above), so no new server load.
+  if (boardSingle && boardSingle.kind === "multi_period"
+      && boardSingle.applies !== false
+      && revenueBasisSingle
+      && Array.isArray(closedPeriodsSingle) && closedPeriodsSingle.length > 0) {
+    const closedSalarySum = [...salaryBudgetByPeriodHourly.entries()]
+      .filter(([p]) => closedPeriodsSingle.includes(p))
+      .reduce((s, [, amt]) => s + Number(amt || 0), 0);
+    const mergedRangeBudget = Number(closedLaborBudgetSingle || 0) + closedSalarySum;
+    const mergedBatr = budgetAtThisRevenue({
+      actualRevenue: revenueBasisSingle.totalRevenue,
+      lineBudget: mergedRangeBudget,
+      revenueBudgetFullPeriod: revenueBasisSingle.revenueBudgetFullPeriod,
+      hasTarget: true,
+    });
+    if (mergedBatr != null) {
+      const remainder = Math.round((mergedBatr - closedSalarySum) * 100) / 100;
+      boardSingle.budget_at_this_revenue = remainder;
+      if (boardSingle.closed_spent_to_date != null) {
+        boardSingle.closed_variance = Math.round(
+          (Number(boardSingle.closed_spent_to_date) - remainder) * 100
+        ) / 100;
+      }
+    }
+  }
   // Kevin ruling 2026-09-18 · Guard L: finance-close adjustment lands
   // BEFORE recomputeVerdictFromPanel so verdict picks up the adjusted
   // spent. Zero-adjustment ranges are byte-identical.

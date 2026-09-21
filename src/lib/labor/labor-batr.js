@@ -216,18 +216,25 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
 export function recomputePanelBatrFromPerWeek(board) {
   if (!board || board.applies === false) return board;
   if (!Array.isArray(board.weeks) || board.weeks.length === 0) return board;
-  // Multi-period ranges (This year, FYTD, N-period spans): sum CLOSED
-  // weeks only so panel batr matches the closed-only spent it's
-  // compared against (R-63 / R-78 running-period exclusion). Single-
-  // period ranges (Last period, This period): sum every week - a
-  // running-period card compares full-period forecast batr against
-  // to-date spend, and a closed-period card sums all four closed
-  // weeks. Both branches yield "sum of per-period batr for periods
-  // contributing to the comparison".
-  const isMultiPeriod = board.kind === "multi_period";
-  const contributingWeeks = isMultiPeriod
-    ? board.weeks.filter(w => w.state === "closed")
-    : board.weeks;
+  // Kevin R-141 (2026-09-21). Multi-period ranges no longer use
+  // the per-week sum for panel batr. The per-week sum is the twin
+  // of the resolver's Method B loop - both diverge from the KPI
+  // (26.46% of adjusted revenue on TXR - AZ) because they sum
+  // per-period flexes across periods whose labor rates swing
+  // (77% P1 vs 19% P3). attachBatrToBoard already set
+  // board.budget_at_this_revenue via sharedBatr - the R-141 range
+  // formula - so returning here preserves it. Per-week batr fields
+  // stay per-period; they feed the TierCStrip period bars which
+  // still measure each period against its own budget rate.
+  //
+  // Single-period ranges continue to use the per-week sum. On a
+  // single period the per-week sum equals the range formula by
+  // construction (one merged_pct applied to weekly revenue slices),
+  // so nothing changes numerically. The loop is retained for its
+  // closed_variance recompute + panel_batr_from_per_week flag that
+  // downstream readers key on.
+  if (board.kind === "multi_period") return board;
+  const contributingWeeks = board.weeks;
   let sum = 0;
   let anyPerWeek = false;
   for (const w of contributingWeeks) {

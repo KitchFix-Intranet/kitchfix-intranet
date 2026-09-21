@@ -1431,6 +1431,16 @@ function TierCStrip({ board, budgetPeriods }) {
           );
         })}
       </div>
+      {/* Kevin R-141 (2026-09-21). Nine period bars each measure
+          their period against its OWN budget rate (R-59 · Kevin
+          ruling 2026-09-07); the header measures the range against
+          the ANNUAL budget percent (R-141). Two correct answers to
+          two different questions - one line of copy so the seam
+          stops surprising the reader. */}
+      <div className="kpi-axisC-note">
+        Period targets use each period&rsquo;s own budget rate. The year target uses your
+        annual budget percent, so the two do not add up to each other.
+      </div>
     </div>
   );
 }
