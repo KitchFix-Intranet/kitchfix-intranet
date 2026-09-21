@@ -1,0 +1,540 @@
+{
+  "summary": {
+    "total": 30,
+    "pass": 20,
+    "ambig_match": 7,
+    "fail": 0,
+    "unresolved": 0,
+    "pass_rate_pct": 90,
+    "unique_resolution_pct": 66.7
+  },
+  "detail": [
+    {
+      "vendor": "Sysco",
+      "item": "5134733",
+      "description": "WHLFIMP EGG WHOLE W/CITRIC AC 34730-64458-00",
+      "pack": "220 LB",
+      "kevin_raw": "2/20lb=40lb",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "2/20 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7309544",
+      "description": "BHB/NPM STEAK RIBEYE BNLS 1TL CH CAH",
+      "pack": "1412 OZ",
+      "kevin_raw": "14/12oz=10.5lb",
+      "kevin_lb": 10.5,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 10.5,
+      "resolver_split": "14/12 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "2952014",
+      "description": "NATALIE JUICE ORANGE FRESH 120001",
+      "pack": "1212 OZ",
+      "kevin_raw": "12ea/12oz bottles",
+      "kevin_lb": 9,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 9,
+      "resolver_split": "12/12 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "0269720",
+      "description": "ZEPHYHL WATER SPRING 11479631",
+      "pack": "2420 OZ",
+      "kevin_raw": "24ea/20oz bottles",
+      "kevin_lb": 30,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 30,
+      "resolver_split": "24/20 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7557301",
+      "description": "HORMEL BACON LAYOUT APPLEWOOD 13/17 55253",
+      "pack": "115 LB",
+      "kevin_raw": "1/15lb=15lbs",
+      "kevin_lb": 15,
+      "resolver_status": "ambiguous",
+      "resolver_per_case_lb": null,
+      "resolver_split": null,
+      "resolver_source": null,
+      "resolver_reason": "both_splits_plausible",
+      "resolver_ambig_options": {
+        "one_two": {
+          "split": "1/15 LB",
+          "per_case_lb": 15,
+          "in_bounds": true
+        },
+        "two_one": {
+          "split": "11/5 LB",
+          "per_case_lb": 55,
+          "in_bounds": true
+        }
+      },
+      "match": "ambiguous_but_option_matches"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "0269720",
+      "description": "ZEPHYHL WATER SPRING",
+      "pack": "2420 OZ",
+      "kevin_raw": "24ea/20oz bottles",
+      "kevin_lb": 30,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 30,
+      "resolver_split": "24/20 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "6050116",
+      "description": "CGRVIMP JUICE APPLE 100% ASEPTIC 2812",
+      "pack": "1246 OZ",
+      "kevin_raw": "12/46oz",
+      "kevin_lb": 34.5,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 34.5,
+      "resolver_split": "12/46 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "20-00025",
+      "description": "CABBHNF STEAK SKIRT INSIDE FLATND",
+      "pack": "3210 OZ",
+      "kevin_raw": "32 ea @10oz",
+      "kevin_lb": null,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 20,
+      "resolver_split": "32/10 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": "no_kevin_number_to_compare"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "1462643",
+      "description": "CABBHNP STEAK SKIRT INSIDE FLATND",
+      "pack": "3210 OZ",
+      "kevin_raw": "32 ea @10oz",
+      "kevin_lb": null,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 20,
+      "resolver_split": "32/10 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": "no_kevin_number_to_compare"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7792187",
+      "description": "SYS CLS CHICKEN CVP THIGH BNLS SKLS 14301",
+      "pack": "410 LB",
+      "kevin_raw": "4/10lb=40lb",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "4/10 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7203474",
+      "description": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO 4754",
+      "pack": "410 LB",
+      "kevin_raw": "4/10lb=40lb",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "4/10 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "5216221",
+      "description": "DAILYS BACON LAYFLAT C/C 10/14 APL GF",
+      "pack": "115LB",
+      "kevin_raw": "1/15lb=15lbs",
+      "kevin_lb": 15,
+      "resolver_status": "ambiguous",
+      "resolver_per_case_lb": null,
+      "resolver_split": null,
+      "resolver_source": null,
+      "resolver_reason": "both_splits_plausible",
+      "resolver_ambig_options": {
+        "one_two": {
+          "split": "1/15 LB",
+          "per_case_lb": 15,
+          "in_bounds": true
+        },
+        "two_one": {
+          "split": "11/5 LB",
+          "per_case_lb": 55,
+          "in_bounds": true
+        }
+      },
+      "match": "ambiguous_but_option_matches"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "6050173",
+      "description": "CGRVCLS JUICE CRNBRY 27% CCKTL ASEPTIC 2816",
+      "pack": "1246 OZ",
+      "kevin_raw": "12ea/46oz",
+      "kevin_lb": 34.5,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 34.5,
+      "resolver_split": "12/46 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "1495019",
+      "description": "HORMEL BACON SLAB C/C 9/13 SMK BLK GF 49337",
+      "pack": "115 LB",
+      "kevin_raw": "1/15lb=15lbs",
+      "kevin_lb": 15,
+      "resolver_status": "ambiguous",
+      "resolver_per_case_lb": null,
+      "resolver_split": null,
+      "resolver_source": null,
+      "resolver_reason": "both_splits_plausible",
+      "resolver_ambig_options": {
+        "one_two": {
+          "split": "1/15 LB",
+          "per_case_lb": 15,
+          "in_bounds": true
+        },
+        "two_one": {
+          "split": "11/5 LB",
+          "per_case_lb": 55,
+          "in_bounds": true
+        }
+      },
+      "match": "ambiguous_but_option_matches"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "5001346",
+      "description": "SYS CLS CHICKEN CVP THGH B/I SM HAL 5001346",
+      "pack": "410 LB",
+      "kevin_raw": "4/10lb=40lb",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "4/10 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7200653",
+      "description": "WHLFCLS EGG LIQ SCRAMBLED MIX 89356-09749-00",
+      "pack": "152 LB",
+      "kevin_raw": "15ea / 2lb cartons",
+      "kevin_lb": 30,
+      "resolver_status": "ambiguous",
+      "resolver_per_case_lb": null,
+      "resolver_split": null,
+      "resolver_source": null,
+      "resolver_reason": "both_splits_plausible",
+      "resolver_ambig_options": {
+        "one_two": {
+          "split": "1/52 LB",
+          "per_case_lb": 52,
+          "in_bounds": true
+        },
+        "two_one": {
+          "split": "15/2 LB",
+          "per_case_lb": 30,
+          "in_bounds": true
+        }
+      },
+      "match": "ambiguous_but_option_matches"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "2047951",
+      "description": "SAUSAMY SAUSAGE CHICKEN LNK APPLE MAPL",
+      "pack": "101 LB",
+      "kevin_raw": "10/ 1lb packs",
+      "kevin_lb": 10,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 10,
+      "resolver_split": "10/1 LB",
+      "resolver_source": "fused_slash_rule_3d_2plus1",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7278782",
+      "description": "CALIFIA MILK OAT BARISTA BLEND 420697CA",
+      "pack": "1232 OZ",
+      "kevin_raw": "12/ 32oz bottles",
+      "kevin_lb": 24,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 24,
+      "resolver_split": "12/32 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7792187",
+      "description": "SYS CLS CHICKEN CVP THIGH BNLS SKLS 44581",
+      "pack": "410 LB",
+      "kevin_raw": "4/10lb=40lb",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "4/10 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7203474",
+      "description": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO",
+      "pack": "410 LB",
+      "kevin_raw": "4/10lb=40lb",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "4/10 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "5848072",
+      "description": "JDMTCLS RICE 103 LONG GRAIN B1JM50560",
+      "pack": "150 LB",
+      "kevin_raw": "1 ea 50lb bag",
+      "kevin_lb": 50,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 50,
+      "resolver_split": "1/50 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "1079383",
+      "description": "PROPACK BANANA FRESH GREEN TIP",
+      "pack": "110LB",
+      "kevin_raw": "1 ea 10lb cs",
+      "kevin_lb": 10,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 10,
+      "resolver_split": "1/10 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "6438545",
+      "description": "RNCHGRL BACON LAYFLAT RANDOM SMK 10139862895",
+      "pack": "115LB",
+      "kevin_raw": "1/15lb=15lbs",
+      "kevin_lb": 15,
+      "resolver_status": "ambiguous",
+      "resolver_per_case_lb": null,
+      "resolver_split": null,
+      "resolver_source": null,
+      "resolver_reason": "both_splits_plausible",
+      "resolver_ambig_options": {
+        "one_two": {
+          "split": "1/15 LB",
+          "per_case_lb": 15,
+          "in_bounds": true
+        },
+        "two_one": {
+          "split": "11/5 LB",
+          "per_case_lb": 55,
+          "in_bounds": true
+        }
+      },
+      "match": "ambiguous_but_option_matches"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "7557301",
+      "description": "HORMEL BACON LAYOUT APPLEWOOD 13/17",
+      "pack": "115 LB",
+      "kevin_raw": "1/15lb=15lbs",
+      "kevin_lb": 15,
+      "resolver_status": "ambiguous",
+      "resolver_per_case_lb": null,
+      "resolver_split": null,
+      "resolver_source": null,
+      "resolver_reason": "both_splits_plausible",
+      "resolver_ambig_options": {
+        "one_two": {
+          "split": "1/15 LB",
+          "per_case_lb": 15,
+          "in_bounds": true
+        },
+        "two_one": {
+          "split": "11/5 LB",
+          "per_case_lb": 55,
+          "in_bounds": true
+        }
+      },
+      "match": "ambiguous_but_option_matches"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "4418752",
+      "description": "PROPACK ASPARAGUS FRESH STANDARD",
+      "pack": "111 LB",
+      "kevin_raw": "1 ea 11lb cs",
+      "kevin_lb": 11,
+      "resolver_status": "ambiguous",
+      "resolver_per_case_lb": null,
+      "resolver_split": null,
+      "resolver_source": null,
+      "resolver_reason": "both_splits_plausible",
+      "resolver_ambig_options": {
+        "one_two": {
+          "split": "1/11 LB",
+          "per_case_lb": 11,
+          "in_bounds": true
+        },
+        "two_one": {
+          "split": "11/1 LB",
+          "per_case_lb": 11,
+          "in_bounds": true
+        }
+      },
+      "match": "ambiguous_but_option_matches"
+    },
+    {
+      "vendor": "Sysco",
+      "item": "1158542",
+      "description": "PROPACK BANANA FRESH GREEN TIP",
+      "pack": "140LB",
+      "kevin_raw": "1 ea 40lb cs",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "1/40 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "5001346",
+      "description": "SYS CLS CHICKEN CVP THGH B/I SM HAL",
+      "pack": "410 LB",
+      "kevin_raw": "4/10lb=40lb",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "4/10 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "52J4733",
+      "description": "WELFIMP EGG WHOLE W/CITRIC AC 34730-44458-00",
+      "pack": "120 LB",
+      "kevin_raw": "1ea 20lb cs",
+      "kevin_lb": 20,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 20,
+      "resolver_split": "1/20 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "2334732",
+      "description": "SYS CLS CHICKEN CVP DRUMSTICKS JMBO 14200",
+      "pack": "140 LB",
+      "kevin_raw": "1ea 40lb cs",
+      "kevin_lb": 40,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 40,
+      "resolver_split": "1/40 LB",
+      "resolver_source": "fused_slash_rule_3d_1plus2",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": true
+    },
+    {
+      "vendor": "Sysco",
+      "item": "6481909",
+      "description": "BHB/NPM STEAK RIBEYE BNLS 1TL CH FZ 80-00060",
+      "pack": "1612 OZ",
+      "kevin_raw": "16ea /12oz steaks",
+      "kevin_lb": null,
+      "resolver_status": "resolved",
+      "resolver_per_case_lb": 12,
+      "resolver_split": "16/12 OZ",
+      "resolver_source": "fused_slash_rule_4d_oz_to_lb",
+      "resolver_reason": null,
+      "resolver_ambig_options": null,
+      "match": "no_kevin_number_to_compare"
+    }
+  ]
+}
