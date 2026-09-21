@@ -75,6 +75,10 @@ import { PeriodCard } from "./components/PeriodCard";
 // strip folded into the review-card items so it isn't shipped twice).
 import CurrentPeriodTable from "@/app/kpi/overview/components/CurrentPeriodTable";
 import CurrentPeriodReview from "@/app/kpi/overview/components/CurrentPeriodReview";
+// Kevin R-133 step 5 (2026-09-20). Vendor-grouped ledger replaces
+// the two-table `Every purchase` + `Also purchased` shape on CP +
+// closed single periods. This year keeps the two-table shape.
+import PurchasingLedger from "@/app/kpi/overview/components/PurchasingLedger";
 // Kevin 2026-09-14 reskin PR 1: BucketCard import dropped - the two
 // duplicate charts (food + packaging mini-charts) are gone. The
 // LedgerCard + CardPurchases + CardCompliance imports remain because
@@ -810,8 +814,6 @@ export default function KpiPurchasingPage() {
   const cpGateActive = resolvedPreset === "this_period" && !isFutureRange;
   // R-110 (2026-09-16). NP gate on Purchasing.
   const npGateActive = isFutureRange === true;
-  const useCpTable = cpGateActive || npGateActive;
-
   // R-109 PR 3 · fetch Overview payload on CP only. CurrentPeriodTable
   // needs Overview's week_rail + statement_rows + cards + todayISO for
   // the Revenue row; Purchasing's own board.weekly feeds the 3200/3400
@@ -821,8 +823,61 @@ export default function KpiPurchasingPage() {
   const [cpOverview, setCpOverview] = useState(null);
   const [cpLabor, setCpLabor] = useState(null);
   const [cpAuxError, setCpAuxError] = useState(null);
+
+  // Kevin R-133 step 4 (2026-09-20). Closed single-period gate. Uses
+  // the server-side `data.fiscal` snapshot so this page consumes the
+  // same server flag Overview uses (the purchasing page's own rule:
+  // "consume the same server flag; do not build a parallel one").
+  //
+  // Fiscal fields (verified on prod TBJ - FL 2026-09-19):
+  //   CP  P10  period_no=10 · weeks=4 · closed_weeks=1 · not closed
+  //   NP  P11  period_no=11 · weeks=4 · closed_weeks=0 · not closed
+  //   P9        period_no=9  · weeks=4 · closed_weeks=4 · CLOSED
+  //   P5        period_no=5  · weeks=4 · closed_weeks=4 · CLOSED
+  //   CY        period_no=null                          · excluded
+  //
+  // `laborUsable` is load-bearing (Option B). On closed ranges
+  // CurrentPeriodTable sources its week structure from
+  // `cpLabor.board.weeks` because Overview's week_rail is null on
+  // verified periods. Two of the 11 real accounts (CIN - KY and
+  // TBJ - NY) are salaried-only sites - `salaried: true` in
+  // accounts_directory - so labor is `not_applicable` and the
+  // payload ships zero weeks. Without this gate the component's
+  // `weeks.length !== 4` guard returns null and the entire
+  // purchasing board disappears on those two accounts on closed
+  // ranges, despite real spend (P9: CIN - KY $11,884 vs $11,861
+  // budget, 11 vendors; TBJ - NY $8,557 vs $7,725, 8 vendors).
+  //
+  // Proposed R-134 · out of scope here. Real fix is sourcing week
+  // revenue independently of the labor board so salaried-only sites
+  // get the redesign too. Needs a server change (a revenue payload
+  // that carries the four-week structure with revenue-weighting on
+  // closed ranges, not gated on `isRunningSinglePeriod` like
+  // week_rail is).
+  //
+  // `closedPending` holds useCpTable true while cpLabor is loading
+  // on a fiscally-closed range, so the SkeletonBoard branch below
+  // holds the paint - otherwise the old PeriodCard + WIG surface
+  // would flash for the ~600ms of the aux fetch and swap to
+  // CurrentPeriodTable. When cpLabor lands: laborUsable=true takes
+  // the new board; laborUsable=false falls out to the old surface
+  // in one paint.
+  //
+  // `fetchAux` triggers the aux fetch (cpOverview + cpLabor). Fires
+  // on closedRangeFiscal because we need cpLabor loaded to answer
+  // `laborUsable`, whether or not the closed board ultimately
+  // mounts. Non-CP / non-closed ranges stay a single-fetch page as
+  // before.
+  const f = data?.fiscal;
+  const closedRangeFiscal = f?.period_no != null
+    && f.weeks_in_range === f.closed_weeks_in_range;
+  const laborUsable = cpLabor?.board?.kind === "single_period_closed";
+  const closedGateActive = closedRangeFiscal && laborUsable;
+  const closedPending = closedRangeFiscal && !laborUsable && !cpLabor && !cpAuxError;
+  const useCpTable = cpGateActive || npGateActive || closedGateActive || closedPending;
+  const fetchAux = cpGateActive || npGateActive || closedRangeFiscal;
   useEffect(() => {
-    if (!useCpTable) {
+    if (!fetchAux) {
       setCpOverview(null);
       setCpLabor(null);
       setCpAuxError(null);
@@ -849,7 +904,7 @@ export default function KpiPurchasingPage() {
       if (!cancelled) { setCpOverview(ov); setCpLabor(lb); setCpAuxError(null); }
     }).catch(e => { if (!cancelled) setCpAuxError(String(e?.message || e)); });
     return () => { cancelled = true; };
-  }, [useCpTable, account, start, end, searchParams]);
+  }, [fetchAux, account, start, end, searchParams]);
 
   // Projected close.
   const projClose = useMemo(() => {
@@ -1318,6 +1373,7 @@ export default function KpiPurchasingPage() {
             labor={cpLabor}
             purch={data}
             error={cpAuxError}
+            isClosedRange={closedGateActive}
           />
           {cpGateActive && (
             <CurrentPeriodReview
@@ -1325,97 +1381,23 @@ export default function KpiPurchasingPage() {
               purchasing={data}
             />
           )}
-          {cpGateActive && cpUncodedCount > 0 && (
-            <div className="kpi-p-cp-uncoded" role="status">
-              These {cpUncodedCount} {cpUncodedCount === 1 ? "charge" : "charges"} count toward Food until someone codes them.
-              <br />Code them and they land where they belong.
-            </div>
-          )}
-          {cpGateActive && (
-            <div className="kpi-p-card kpi-p-sl" data-card="spend-list">
-              <div className="kpi-p-sl-head">
-                <span className="kpi-p-cardtitle">Every purchase</span>
-                <span className="kpi-p-sl-note">{cpMainRows.length} · invoice and card, newest first</span>
-              </div>
-              {cpMainRows.length === 0 ? (
-                <div className="kpi-p-sl-empty">No purchases in this range.</div>
-              ) : (
-                <div className="kpi-p-sl-scroll">
-                  <table className="kpi-p-sl-tbl">
-                    <thead>
-                      <tr>
-                        <th className="kpi-p-sl-l">Date</th>
-                        <th className="kpi-p-sl-l">Vendor</th>
-                        <th className="kpi-p-sl-l">GL</th>
-                        <th className="kpi-p-sl-l">Bucket</th>
-                        <th className="kpi-p-sl-l">Source</th>
-                        <th className="kpi-p-sl-r">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cpMainRows.map((r, i) => (
-                        <tr key={r.id || `cpm-${i}`}>
-                          <td className="kpi-p-sl-l kpi-p-sl-muted">{cpShortDate(r.txn_date)}</td>
-                          <td className="kpi-p-sl-l">
-                            <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
-                            {r.vendor || "—"}
-                          </td>
-                          <td className="kpi-p-sl-l kpi-p-sl-muted">{r.gl_line_code || "—"}</td>
-                          <td className="kpi-p-sl-l">
-                            <span className={`kpi-p-bkt kpi-p-bkt-${CP_BUCKET_LABEL(r.gl_line_code).toLowerCase().replace(/[^a-z]/g, "")}`}>{CP_BUCKET_LABEL(r.gl_line_code)}</span>
-                          </td>
-                          <td className="kpi-p-sl-l kpi-p-sl-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
-                          <td className="kpi-p-sl-r">{fmt$(r.amount)}</td>
-                        </tr>
-                      ))}
-                      <tr className="kpi-p-sl-tot">
-                        <td className="kpi-p-sl-l" colSpan="5">{cpMainRows.length} purchases</td>
-                        <td className="kpi-p-sl-r">{fmt$(cpMainTotal)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-          {cpGateActive && cpReimbRows.length > 0 && (
-            <div className="kpi-p-card kpi-p-rt" data-card="reimbursables-table">
-              <div className="kpi-p-rt-head">
-                <span className="kpi-p-cardtitle">Also purchased · billed back to the club</span>
-                <span className="kpi-p-rt-note">{cpReimbRows.length} lines · not part of the budget above</span>
-              </div>
-              <div className="kpi-p-rt-scroll">
-                <table className="kpi-p-rt-tbl">
-                  <thead>
-                    <tr>
-                      <th className="kpi-p-rt-l">Date</th>
-                      <th className="kpi-p-rt-l">Vendor</th>
-                      <th className="kpi-p-rt-l">GL</th>
-                      <th className="kpi-p-rt-l">Source</th>
-                      <th className="kpi-p-rt-r">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cpReimbRows.map((r, i) => (
-                      <tr key={r.id || `cpr-${i}`}>
-                        <td className="kpi-p-rt-l kpi-p-rt-muted">{cpShortDate(r.txn_date)}</td>
-                        <td className="kpi-p-rt-l">
-                          <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
-                          {r.vendor || "—"}
-                        </td>
-                        <td className="kpi-p-rt-l kpi-p-rt-muted">{r.gl_line_code || "—"}</td>
-                        <td className="kpi-p-rt-l kpi-p-rt-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
-                        <td className="kpi-p-rt-r">{fmt$(r.amount)}</td>
-                      </tr>
-                    ))}
-                    <tr className="kpi-p-rt-tot">
-                      <td className="kpi-p-rt-l" colSpan="4">All {cpReimbRows.length} reimbursable lines</td>
-                      <td className="kpi-p-rt-r">{fmt$(cpReimbTotal)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {/* Kevin R-133 step 5 (2026-09-20). Ledger replaces both the
+              CP `Every purchase` (kpi-p-sl) block and the CP
+              `Also purchased · billed back to the club` (kpi-p-rt)
+              block. Renders on CP + closed single periods. NOT on NP
+              (nothing to buy yet). Uncoded-strip copy also moves into
+              the ledger (its own kpi-ov-cp-led-warn); the redundant
+              kpi-p-cp-uncoded block is gone. `periodLabel` mirrors the
+              status pill the board above shows (e.g. "P9"). */}
+          {(cpGateActive || closedGateActive) && (
+            <PurchasingLedger
+              actuals={data?.actuals}
+              cardCharges={data?.card_charges?.rows}
+              vendorRollup={data?.vendor_rollup}
+              rangeStart={start}
+              rangeEnd={end}
+              periodLabel={rangePeriodNo != null ? `P${rangePeriodNo}` : null}
+            />
           )}
         </div>
       );

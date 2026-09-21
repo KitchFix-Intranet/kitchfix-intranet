@@ -793,3 +793,173 @@
 .kpi-app .kpi-ov-cp-skel-grid > *:last-child,
 .kpi-app .kpi-ov-cp-skel-grid > .kpi-ov-cp-skel-cell:last-child,
 .kpi-app .kpi-ov-cp-skel-grid > .kpi-ov-cp-skel-rlab:last-of-type { border-bottom: none; }
+
+/* Kevin R-133 step 5 (2026-09-20). PurchasingLedger. Replaces the
+   two-table `Every purchase` + `Also purchased` shape on CP + closed
+   single periods with a vendor-grouped table where each row sums
+   across food / pack / vehicle / billed-back and the footer ties to
+   the board above. Wrapper matches the standard card shadow (same
+   as .kpi-ov-cp-rv-item and the CP panels). Filter chip pattern
+   mirrors the PLAN / ROLLING seg control - navy-on-white when on,
+   grey-on-white when off. Footer inherits the R-128 Part 3 item 6
+   total-row treatment (--cp-tot-bg + 2px navy rule) for visual
+   consistency with the board's total row. */
+.kpi-app .kpi-ov-cp-led-card {
+  background: var(--n-0);
+  border: 0.5px solid var(--n-300);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+  margin-top: 14px;
+  overflow: hidden;
+}
+.kpi-app .kpi-ov-cp-led-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px 11px;
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-ov-cp-led-t {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-cp-led-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-cp-led-seg {
+  display: inline-flex;
+  border: 1px solid var(--n-300);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-left: auto;
+}
+.kpi-app .kpi-ov-cp-led-seg button {
+  appearance: none;
+  border: 0;
+  background: var(--n-0);
+  color: var(--n-700);
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.kpi-app .kpi-ov-cp-led-seg button.kpi-ov-cp-led-seg-on {
+  background: var(--navy);
+  color: var(--n-0);
+}
+.kpi-app .kpi-ov-cp-led-warn {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--amber-600);
+  background: var(--amber-50);
+  border-bottom: 1px solid var(--n-300);
+}
+.kpi-app .kpi-ov-cp-led-scroll {
+  max-height: 620px;
+  overflow-y: auto;
+}
+.kpi-app .kpi-ov-cp-led-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-cp-led-tbl th {
+  font-size: 8.8px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--n-600);
+  text-align: right;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--n-300);
+  border-top: 1px solid var(--n-300);
+  background: #FBFBFC;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.kpi-app .kpi-ov-cp-led-tbl th.kpi-ov-cp-led-l {
+  text-align: left;
+  padding-left: 18px;
+}
+.kpi-app .kpi-ov-cp-led-tbl td {
+  padding: 8px 14px;
+  text-align: right;
+  border-bottom: 1px solid var(--n-200);
+}
+.kpi-app .kpi-ov-cp-led-tbl td.kpi-ov-cp-led-l {
+  text-align: left;
+  padding-left: 18px;
+  font-weight: 700;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-cp-led-vrow { cursor: pointer; }
+.kpi-app .kpi-ov-cp-led-vrow:hover td { background: var(--n-100); }
+.kpi-app .kpi-ov-cp-led-vrow-open td { background: var(--n-100); }
+.kpi-app .kpi-ov-cp-led-lrow td {
+  background: #FCFCFD;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--n-700);
+  padding: 5px 14px;
+}
+.kpi-app .kpi-ov-cp-led-lrow td.kpi-ov-cp-led-l {
+  padding-left: 34px;
+  font-weight: 600;
+  color: var(--n-700);
+}
+.kpi-app .kpi-ov-cp-led-mute { color: var(--n-600); font-weight: 600; }
+.kpi-app .kpi-ov-cp-led-dim { color: var(--n-400); }
+.kpi-app .kpi-ov-cp-led-bb { color: var(--n-600); }
+.kpi-app .kpi-ov-cp-led-cx {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--n-600);
+  margin-left: 6px;
+}
+.kpi-app .kpi-ov-cp-led-src {
+  display: inline-block;
+  font-size: 8.2px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 1.5px 6px;
+  border-radius: 999px;
+  background: var(--n-100);
+  color: var(--n-600);
+  margin-left: 6px;
+}
+.kpi-app .kpi-ov-cp-led-src-card {
+  background: var(--amber-50);
+  color: var(--amber-600);
+}
+.kpi-app .kpi-ov-cp-led-src-mixed {
+  background: var(--navy-50);
+  color: var(--navy-700);
+}
+.kpi-app .kpi-ov-cp-led-foot td {
+  font-weight: 800;
+  background: var(--cp-tot-bg);
+  border-top: 2px solid var(--navy-700);
+  border-bottom: none;
+  padding-top: 10px;
+  padding-bottom: 11px;
+}
+.kpi-app .kpi-ov-cp-led-footnote {
+  padding: 10px 18px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--n-600);
+  border-top: 1px solid var(--n-200);
+}

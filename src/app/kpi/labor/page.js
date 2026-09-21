@@ -320,7 +320,17 @@ export default function KpiLaborPage() {
   // future period. Same shared table renders in both branches; the
   // component checks isFuture and adjusts.
   const npGateActive = data?.is_future_range === true;
-  const useCpTable = cpGateActive || npGateActive;
+  // Kevin R-133 step 2 (2026-09-20). Closed single-period gate. Kind
+  // is set at src/app/kpi/labor/lib/board.js:529 (`pEnd < today ?
+  // "single_period_closed" : "single_period_in_progress"`), so the
+  // closed case already has a name and mirrors the current-period
+  // gate's shape. multi_period is deliberately NOT in this list -
+  // This year keeps StoryBlock. The aux fetch (cpOverview + cpPurch)
+  // is gated on useCpTable, so widening the gate widens the fetch
+  // automatically. `CurrentPeriodReview` still gates on `cpGateActive`
+  // alone - there is nothing to review on a finished period.
+  const closedGateActive = data?.board?.kind === "single_period_closed";
+  const useCpTable = cpGateActive || npGateActive || closedGateActive;
   useEffect(() => {
     if (!useCpTable) {
       setCpOverview(null);
@@ -1264,6 +1274,7 @@ export default function KpiLaborPage() {
                       labor={data}
                       purch={cpPurch}
                       error={cpAuxError}
+                      isClosedRange={closedGateActive}
                     />
                     {cpGateActive && (
                       <CurrentPeriodReview
