@@ -75,6 +75,10 @@ import { PeriodCard } from "./components/PeriodCard";
 // strip folded into the review-card items so it isn't shipped twice).
 import CurrentPeriodTable from "@/app/kpi/overview/components/CurrentPeriodTable";
 import CurrentPeriodReview from "@/app/kpi/overview/components/CurrentPeriodReview";
+// Kevin R-133 step 5 (2026-09-20). Vendor-grouped ledger replaces
+// the two-table `Every purchase` + `Also purchased` shape on CP +
+// closed single periods. This year keeps the two-table shape.
+import PurchasingLedger from "@/app/kpi/overview/components/PurchasingLedger";
 // Kevin 2026-09-14 reskin PR 1: BucketCard import dropped - the two
 // duplicate charts (food + packaging mini-charts) are gone. The
 // LedgerCard + CardPurchases + CardCompliance imports remain because
@@ -1377,97 +1381,20 @@ export default function KpiPurchasingPage() {
               purchasing={data}
             />
           )}
-          {cpGateActive && cpUncodedCount > 0 && (
-            <div className="kpi-p-cp-uncoded" role="status">
-              These {cpUncodedCount} {cpUncodedCount === 1 ? "charge" : "charges"} count toward Food until someone codes them.
-              <br />Code them and they land where they belong.
-            </div>
-          )}
-          {cpGateActive && (
-            <div className="kpi-p-card kpi-p-sl" data-card="spend-list">
-              <div className="kpi-p-sl-head">
-                <span className="kpi-p-cardtitle">Every purchase</span>
-                <span className="kpi-p-sl-note">{cpMainRows.length} · invoice and card, newest first</span>
-              </div>
-              {cpMainRows.length === 0 ? (
-                <div className="kpi-p-sl-empty">No purchases in this range.</div>
-              ) : (
-                <div className="kpi-p-sl-scroll">
-                  <table className="kpi-p-sl-tbl">
-                    <thead>
-                      <tr>
-                        <th className="kpi-p-sl-l">Date</th>
-                        <th className="kpi-p-sl-l">Vendor</th>
-                        <th className="kpi-p-sl-l">GL</th>
-                        <th className="kpi-p-sl-l">Bucket</th>
-                        <th className="kpi-p-sl-l">Source</th>
-                        <th className="kpi-p-sl-r">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cpMainRows.map((r, i) => (
-                        <tr key={r.id || `cpm-${i}`}>
-                          <td className="kpi-p-sl-l kpi-p-sl-muted">{cpShortDate(r.txn_date)}</td>
-                          <td className="kpi-p-sl-l">
-                            <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
-                            {r.vendor || "—"}
-                          </td>
-                          <td className="kpi-p-sl-l kpi-p-sl-muted">{r.gl_line_code || "—"}</td>
-                          <td className="kpi-p-sl-l">
-                            <span className={`kpi-p-bkt kpi-p-bkt-${CP_BUCKET_LABEL(r.gl_line_code).toLowerCase().replace(/[^a-z]/g, "")}`}>{CP_BUCKET_LABEL(r.gl_line_code)}</span>
-                          </td>
-                          <td className="kpi-p-sl-l kpi-p-sl-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
-                          <td className="kpi-p-sl-r">{fmt$(r.amount)}</td>
-                        </tr>
-                      ))}
-                      <tr className="kpi-p-sl-tot">
-                        <td className="kpi-p-sl-l" colSpan="5">{cpMainRows.length} purchases</td>
-                        <td className="kpi-p-sl-r">{fmt$(cpMainTotal)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-          {cpGateActive && cpReimbRows.length > 0 && (
-            <div className="kpi-p-card kpi-p-rt" data-card="reimbursables-table">
-              <div className="kpi-p-rt-head">
-                <span className="kpi-p-cardtitle">Also purchased · billed back to the club</span>
-                <span className="kpi-p-rt-note">{cpReimbRows.length} lines · not part of the budget above</span>
-              </div>
-              <div className="kpi-p-rt-scroll">
-                <table className="kpi-p-rt-tbl">
-                  <thead>
-                    <tr>
-                      <th className="kpi-p-rt-l">Date</th>
-                      <th className="kpi-p-rt-l">Vendor</th>
-                      <th className="kpi-p-rt-l">GL</th>
-                      <th className="kpi-p-rt-l">Source</th>
-                      <th className="kpi-p-rt-r">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cpReimbRows.map((r, i) => (
-                      <tr key={r.id || `cpr-${i}`}>
-                        <td className="kpi-p-rt-l kpi-p-rt-muted">{cpShortDate(r.txn_date)}</td>
-                        <td className="kpi-p-rt-l">
-                          <span className={`kpi-p-srcdot ${r.source === "rippling_spend" ? "kpi-p-srcdot-card" : "kpi-p-srcdot-bill"}`} aria-hidden="true" />
-                          {r.vendor || "—"}
-                        </td>
-                        <td className="kpi-p-rt-l kpi-p-rt-muted">{r.gl_line_code || "—"}</td>
-                        <td className="kpi-p-rt-l kpi-p-rt-muted">{r.source === "rippling_spend" ? "card" : "bill.com"}</td>
-                        <td className="kpi-p-rt-r">{fmt$(r.amount)}</td>
-                      </tr>
-                    ))}
-                    <tr className="kpi-p-rt-tot">
-                      <td className="kpi-p-rt-l" colSpan="4">All {cpReimbRows.length} reimbursable lines</td>
-                      <td className="kpi-p-rt-r">{fmt$(cpReimbTotal)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {/* Kevin R-133 step 5 (2026-09-20). Ledger replaces both the
+              CP `Every purchase` (kpi-p-sl) block and the CP
+              `Also purchased · billed back to the club` (kpi-p-rt)
+              block. Renders on CP + closed single periods. NOT on NP
+              (nothing to buy yet). Uncoded-strip copy also moves into
+              the ledger (its own kpi-ov-cp-led-warn); the redundant
+              kpi-p-cp-uncoded block is gone. `periodLabel` mirrors the
+              status pill the board above shows (e.g. "P9"). */}
+          {(cpGateActive || closedGateActive) && (
+            <PurchasingLedger
+              actuals={data?.actuals}
+              vendorRollup={data?.vendor_rollup}
+              periodLabel={rangePeriodNo != null ? `P${rangePeriodNo}` : null}
+            />
           )}
         </div>
       );
