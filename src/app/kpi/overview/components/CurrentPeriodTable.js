@@ -118,7 +118,7 @@ function RevCellBody({ w, amount, labor, i, phase }) {
 //   - C3 (envelope exceeded, isC3): open weeks read `$0 · already
 //     over` per Part 4 ("C3 keeps its current shape") plus item F
 //     ("to spend" gone).
-function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal, isTotal, phase }) {
+function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal, isTotal, phase, dashRow }) {
   const isFuture = w.state === "not_started";
   const isClosed = w.state === "closed";
   const l = Number(landed || 0);
@@ -154,10 +154,15 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
     );
   }
   if (isFuture) {
+    // Kevin R-136 hotfix ruling 2026-09-21. Dash placeholder when
+    // the row has no active week and a positive envelope. Distinct
+    // from a genuine $0 week beside a positive sibling (kept as $0).
     return (
       <>
         <div className="kpi-ov-cp-v">
-          <span className="kpi-ov-cp-big">{dollar0(gEffective)}</span>
+          <span className={`kpi-ov-cp-big${dashRow ? " kpi-ov-cp-dash" : ""}`}>
+            {dashRow ? "—" : dollar0(gEffective)}
+          </span>
         </div>
         {splitLine}
         {deltaLine}
@@ -519,25 +524,43 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const allocateWeeks = (raw, target) => {
       if (!Array.isArray(raw) || raw.length === 0) return raw;
       const n = raw.length;
-      const floors = raw.map(v => Math.floor(Number(v || 0)));
+      // Kevin R-136 hotfix 2026-09-21. Allocate only over weeks whose
+      // raw goal is > 0. Zero-raw weeks stay at zero and are excluded
+      // from remainder distribution entirely.
+      //
+      // The old rule (allocate across all n weeks) pushed a clamped
+      // week negative when raw was [X,X,X,0] and the envelope was
+      // less than 3X. TBJ - FL P12 hourly raw [3476,3476,3476,0]
+      // against $8,260 envelope: rem = -$2,168, base = -$542,
+      // out[3] = 0 + (-$542) = -$542. Production rendered that
+      // number in week 4.
+      //
+      // Why zero-raw exists: on the hourly toggle,
+      // week_hourly_allowed = merged - salary/4. A week with zero
+      // revenue is negative; step 6a clamps it to 0. Those weeks
+      // carry no hourly dollars and must not receive remainder
+      // distribution.
+      //
+      // Excludes: raw <= 0 (clamp puts them at exactly 0). Active:
+      // raw > 0.
+      const activeIdx = [];
+      for (let i = 0; i < n; i += 1) if (Number(raw[i] || 0) > 0) activeIdx.push(i);
+      if (activeIdx.length === 0) return raw.map(() => 0);
+      const activeN = activeIdx.length;
+      const floors = raw.map(v => Number(v || 0) > 0 ? Math.floor(Number(v)) : 0);
       const targetInt = Math.round(Number(target || 0));
       const rem = targetInt - floors.reduce((s, v) => s + v, 0);
-      // Equal share to every week first; modulus by largest fraction.
-      // Math.trunc + %-preserves sign so a negative rem clamps down.
-      const base = Math.trunc(rem / n);
-      let modulus = rem - base * n;
-      const out = floors.map(v => v + base);
+      const base = Math.trunc(rem / activeN);
+      let modulus = rem - base * activeN;
+      const out = raw.map((v, i) => Number(v || 0) > 0 ? floors[i] + base : 0);
       if (modulus === 0) return out;
-      const order = raw
-        .map((v, i) => ({ i, frac: Number(v || 0) - Math.floor(Number(v || 0)) }))
+      const order = activeIdx
+        .map(i => ({ i, frac: Number(raw[i] || 0) - Math.floor(Number(raw[i] || 0)) }))
         .sort((a, b) => b.frac - a.frac || a.i - b.i);
-      // Positive modulus: hand +1 to the largest-fraction cells.
-      // Negative modulus: take -1 from the smallest-fraction cells
-      // (equivalently: iterate the sorted list from the end).
       let k = 0;
-      while (modulus > 0 && k < n) { out[order[k].i] += 1; modulus -= 1; k += 1; }
+      while (modulus > 0 && k < activeN) { out[order[k].i] += 1; modulus -= 1; k += 1; }
       k = 0;
-      while (modulus < 0 && k < n) { out[order[n - 1 - k].i] -= 1; modulus += 1; k += 1; }
+      while (modulus < 0 && k < activeN) { out[order[activeN - 1 - k].i] -= 1; modulus += 1; k += 1; }
       return out;
     };
 
@@ -547,14 +570,35 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // array untouched. `sum` reported as the reduce of the packed
     // array so callers reading `sum` on future see the exact integer
     // total.
+    //
+    // Kevin R-136 hotfix ruling 2026-09-21. `allDash` marks a row
+    // that has no active week (every raw goal <= 0) AND a positive
+    // period envelope. Two distinct real-world states hit this: a
+    // budgeted-dark period where every weekly field is null (season
+    // ends, salary keeps flowing - CIN - OH, STL - MO, TXR - TX - H,
+    // TXR - TX - V, CIN - KY in P11/P12/P13 and P1/P2/P3), and a
+    // pipeline defect where a Service Calendar has projected meals
+    // but the payload reports $0 revenue (STL - FL P11). Both render
+    // as dashes in the week cells; the period cell keeps the real
+    // envelope. Nothing claims to sum, so the tie rule is not
+    // violated. Revenue rows never satisfy the criterion because
+    // Revenue's envelope on future = Σ raw revenue - if raw are all
+    // zero, envelope is zero, so no dashes. Future phase only.
     const packGoal = (goal, envelope) => {
       const packed = phase === "future" ? allocateWeeks(goal, envelope) : goal;
-      return { goal: packed, sum: packed.reduce((s, v) => s + Number(v || 0), 0) };
+      const allDash = phase === "future"
+        && goal.every(v => Number(v || 0) <= 0)
+        && Number(envelope || 0) > 0;
+      return {
+        goal: packed,
+        sum: packed.reduce((s, v) => s + Number(v || 0), 0),
+        allDash,
+      };
     };
 
     const goalFor = (line) => {
       const row = stmtByLine.get(line);
-      if (!row) return { goal: [null, null, null, null], sum: 0, batr: 0, effectivePct: 0 };
+      if (!row) return { goal: [null, null, null, null], sum: 0, batr: 0, effectivePct: 0, allDash: false };
       const pb = Number(row.period_budget || 0);
       const batr = Number(row.budget_at_this_revenue || 0);
       const envelope = batr > 0 ? batr : pb;
@@ -621,7 +665,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             return phase === "future" ? Math.max(0, v) : v;
           });
           const packed = packGoal(gs, envelope);
-          return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
+          return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope), allDash: packed.allDash };
         }
         // Fallback: legacy R-111 formula on the salary path; generic
         // ratio on the hourly path. Preserves prior behaviour when
@@ -634,14 +678,14 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
           const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
           const gs = weeks.map(w => Number(w.week_revenue || 0) * hourlyRatio + salaryPerWeek);
           const packed = packGoal(gs, envelope);
-          return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
+          return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope), allDash: packed.allDash };
         }
         // hourly toggle fallback: generic ratio × revenue
         const packedHrly = packGoal(g, envelope);
-        return { goal: packedHrly.goal, sum: packedHrly.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
+        return { goal: packedHrly.goal, sum: packedHrly.sum, batr: envelope, effectivePct: pctOfRev(envelope), allDash: packedHrly.allDash };
       }
       const packed = packGoal(g, envelope);
-      return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
+      return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope), allDash: packed.allDash };
     };
 
     const landedFor = (line) => {
@@ -993,6 +1037,15 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         ? `${totalEffPct.toFixed(2)}% of revenue`
         : `${totalFyPct.toFixed(2)}% of revenue`;
       const totName = rowSet === "purchasing" ? "Total purchases" : "Total cost of goods";
+      // Kevin R-136 hotfix ruling 2026-09-21. Total row applies the
+      // same <=0 test to its own goal array: envelope > 0 and every
+      // week sum <= 0. On the real data that fires whenever every
+      // contributing row is dashed (STL - FL P11 across 3100+3200,
+      // dark-period accounts across 3100), so the total dashes with
+      // its contributors and never claims a number that isn't there.
+      const _allDashTotal = phase === "future"
+        && totalBatr > 0
+        && totalGoal.every(v => Number(v || 0) <= 0);
       rows.push({
         line: null,
         name: totName,
@@ -1002,6 +1055,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         _landed: totalLanded,
         _batr: totalBatr,
         _actualForPeriod: totalActualForPeriod,
+        _allDash: _allDashTotal,
       });
     }
 
@@ -1414,6 +1468,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               splitSal={sp ? sp.sal : null}
                               isTotal={isTot}
                               phase={phase}
+                              dashRow={isTot ? !!row._allDash : !!goalInfo.allDash}
                             />
                           );
                         })()}

@@ -524,6 +524,13 @@
 .kpi-app .kpi-ov-cp-over { color: var(--red-600, #B9000C); }
 .kpi-app .kpi-ov-cp-mute { color: var(--n-600); }
 .kpi-app .kpi-ov-cp-mute-strong { color: var(--n-700, #475569); }
+/* Kevin R-136 hotfix (2026-09-21). Absent-value placeholder on the
+   future phase when a row has no active week (every raw goal <= 0)
+   and a positive period envelope. Renders "—" in the week cell.
+   Design system has no --n-500 utility class, so this is the one
+   place it lives; kept in current-period.css alongside the other
+   surface-specific styling rather than a new file. */
+.kpi-app .kpi-ov-cp-dash { color: var(--n-500); font-weight: 600; }
 
 /* Empty state (payload not ready / error). */
 .kpi-app .kpi-ov-cp-empty {
