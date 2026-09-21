@@ -11,9 +11,9 @@
 // ~291 in purchasing/page.js: `rangeSelectionEarly?.kind === "period"`
 // → drill=lines), so `data.actuals` is populated on CP, NP, LP AND
 // any specific closed period. Verified 2026-09-20 against TBJ - FL
-// P9: 188 rows, 100% vendor coverage, per-bucket totals match
-// `weekly` to the cent on food ($35,081.17), packaging ($3,419.15),
-// vehicle ($735.60) and reimbursable ($20,336.89).
+// P9 + P10: per-bucket footer totals match the board's landedFor()
+// output to the cent on food, packaging, vehicle and reimbursable
+// (see the "board-tie" comment on the Food computation below).
 //
 // Why not vendor_rollup? Kevin's reconciliation 2026-09-20: vr is
 // $1,185.40 short on TBJ - FL P9. It drops uncoded card charges
@@ -72,7 +72,7 @@ function matchesFilter(src, filter) {
   return false;
 }
 
-export default function PurchasingLedger({ actuals, vendorRollup, periodLabel }) {
+export default function PurchasingLedger({ actuals, cardCharges, vendorRollup, rangeStart, rangeEnd, periodLabel }) {
   const [filter, setFilter] = useState("all");
   const [openVendor, setOpenVendor] = useState(null);
 
@@ -89,6 +89,7 @@ export default function PurchasingLedger({ actuals, vendorRollup, periodLabel })
 
   const derived = useMemo(() => {
     const rows = Array.isArray(actuals) ? actuals : [];
+    const cc = Array.isArray(cardCharges) ? cardCharges : [];
 
     // Uncoded strip (always computed from unfiltered rows so the
     // strip's count and total do not change when the filter chip
@@ -96,65 +97,130 @@ export default function PurchasingLedger({ actuals, vendorRollup, periodLabel })
     const uncoded = rows.filter(r => !String(r.gl_line_code || "").trim());
     const uncodedTotal = uncoded.reduce((s, r) => s + Number(r.amount || 0), 0);
 
-    // Filtered universe for the table. Kevin R-133 step 5 rules
-    // (2026-09-20):
-    //   - Uncoded rows (empty gl_line_code) → warn strip only, never
-    //     the vendor grouping. Keeps the footer's Food column tied to
-    //     the board.
-    //   - Out-of-scope rows (5000/5002.1/5002.5/5017.3 → "other"
-    //     bucket = Equipment/R&M/SGA) → excluded here too so vendors
-    //     like Webstaurant Store (1 line, gl=5002.5, amount -$849.85
-    //     on TXR - AZ P9) do not appear as an all-blank-columns row
-    //     with a mysterious Total. Their money surfaces as the muted
-    //     "Equipment and repairs" line under the table so nothing
-    //     silently vanishes.
-    //   - Filter the LINE POPULATION, not vendors after the fact
-    //     (Kevin's exact instruction). Vendors that have no in-scope
-    //     lines at all legitimately do not appear in the table or in
-    //     the "All other vendors" aggregate.
-    const filtered = rows
+    // Kevin R-133 step 5 board-tie fix (2026-09-20). CurrentPeriodTable's
+    // landedFor("3200") builds Food from `weekly` 3200-prefix rows PLUS
+    // `purch.card_charges.rows` whose txn_date falls inside the range's
+    // four weeks (ungated by phase - runs on running AND closed). Weekly
+    // 3200-prefix corresponds to CODED 3200 lines in actuals; card_
+    // charges is the uncoded-card + report-only-pending set the loader
+    // publishes (loaders.js:618 filters `source=rippling_spend AND
+    // gl_line_code IS NULL` and merges report-only pending).
+    //
+    // To tie to the board on every phase the ledger's Food therefore
+    // must include: coded actuals with gl~"3200" AND every card_
+    // charges row whose txn_date is in [rangeStart, rangeEnd].
+    //
+    // The uncoded rippling_spend actuals rows and the "api"-labeled
+    // card_charges rows are the SAME rows underneath (both filter
+    // source=rippling_spend AND gl_line_code IS NULL AND txn_date in
+    // range), so we exclude uncoded actuals from the ledger's actuals
+    // pipeline and route them in via card_charges to avoid a double
+    // count. Report-only pending rows only appear in card_charges
+    // (they have not landed in purchasing_actuals yet); they enter
+    // Food only via this pipeline.
+    //
+    // Filter rules Kevin ruled on 2026-09-20:
+    //   - Out-of-scope actuals (5000/5002.1/5002.5/5017.3 → "other"
+    //     bucket = SGA) excluded. Money surfaces as the muted
+    //     "Equipment and repairs" line under the table.
+    //   - Filter the LINE POPULATION, not vendors after the fact.
+    //     Vendors with no in-scope lines legitimately do not appear.
+    const inRange = (dateStr) => {
+      if (!rangeStart || !rangeEnd) return true;
+      const t = String(dateStr || "");
+      return t >= rangeStart && t <= rangeEnd;
+    };
+    const filteredActuals = rows
       .filter(r => isInScope(r.gl_line_code))
       .filter(r => matchesFilter(r.source, filter));
+    // Card_charges rows that pass the filter chip. "Cards" chip matches
+    // (natural home). "bill.com" chip does not - card charges are
+    // never bill invoices. "All" includes them.
+    const ccMatchesFilter = filter === "all" || filter === "cards";
+    const filteredCC = ccMatchesFilter
+      ? cc.filter(r => inRange(r.txn_date))
+      : [];
 
-    // Excluded (out-of-scope + uncoded already broken out above).
-    // Reported as the muted line under the table.
+    // Excluded (SGA population, reported as the muted line under the
+    // table). Uncoded strip lives on its own.
     const excludedTotal = rows
       .filter(r => bucketOf(r.gl_line_code) === "other")
       .reduce((s, r) => s + Number(r.amount || 0), 0);
 
-    // Vendor aggregation. `displayVendor` unifies billcom_credit's raw
-    // ID with the resolved bill-side name so Sysco is one row not two.
-    // Unresolved billcom vendor IDs get a human-readable placeholder
-    // (Kevin ruling 2026-09-20: "Unknown vendor (bill.com)"). One row
-    // per unresolved ID - never merge different IDs under one label.
+    // Vendor aggregation. Two feeds merged:
+    //
+    //   filteredActuals · in-scope coded rows from purchasing_actuals
+    //     (bills + coded card lines + upload/finance). `displayVendor`
+    //     unifies billcom_credit's raw ID with its bill-side resolved
+    //     name so Sysco is one row not two. Unresolved billcom IDs get
+    //     "Unknown vendor (bill.com)" per Kevin 2026-09-20 (one row
+    //     per unresolved ID, never merged).
+    //
+    //   filteredCC · card_charges rows in-range. Bucketed to Food
+    //     because that is where landedFor routes them (Kevin's rule:
+    //     "count toward Food until someone codes them"). Grouped by
+    //     `merchant` (fallback "Unknown vendor (card)" if missing).
+    //
+    //   Both feeds share the same byVendor map, so a merchant that
+    //   appears as both a coded actual and an uncoded card charge
+    //   groups under one row (e.g. Sam's Club with a coded Food bill
+    //   and an uncoded card charge would sit on one line).
     const byVendor = new Map();
-    for (const r of filtered) {
-      const raw = r.vendor || "";
-      const resolved = nameById.get(raw);
-      // Bill.com IDs match the shape 001-prefix + alnum; unresolved
-      // rows keep the raw ID here so different IDs stay distinct in
-      // the map but render as "Unknown vendor (bill.com)" in the row.
-      const looksLikeBillcomId = !resolved
-        && (r.source === "billcom" || r.source === "billcom_credit")
-        && /^[0-9a-zA-Z]{15,}$/.test(raw);
-      const displayVendor = resolved || raw || "(no vendor)";
-      const isUnknownBillcom = !resolved && looksLikeBillcomId;
-      const groupKey = displayVendor; // unresolved IDs stay distinct by key
-      const b = bucketOf(r.gl_line_code);
-      const amt = Number(r.amount || 0);
-      const entry = byVendor.get(groupKey) || {
-        name: isUnknownBillcom ? "Unknown vendor (bill.com)" : displayVendor,
-        rawId: isUnknownBillcom ? raw : null,
+    const addEntry = (key, name, rawId, bucket, amt, sourceGroup, lineRow) => {
+      const entry = byVendor.get(key) || {
+        name, rawId,
         food: 0, packaging: 0, vehicle: 0, reimbursable: 0, other: 0,
         lineCount: 0,
         lines: [],
         sources: new Set(),
       };
-      entry[b] += amt;
+      entry[bucket] += amt;
       entry.lineCount += 1;
-      entry.sources.add(sourceGroupOf(r.source));
-      entry.lines.push(r);
-      byVendor.set(groupKey, entry);
+      entry.sources.add(sourceGroup);
+      entry.lines.push(lineRow);
+      byVendor.set(key, entry);
+    };
+    for (const r of filteredActuals) {
+      const raw = r.vendor || "";
+      const resolved = nameById.get(raw);
+      const looksLikeBillcomId = !resolved
+        && (r.source === "billcom" || r.source === "billcom_credit")
+        && /^[0-9a-zA-Z]{15,}$/.test(raw);
+      const displayVendor = resolved || raw || "(no vendor)";
+      const isUnknownBillcom = !resolved && looksLikeBillcomId;
+      const groupKey = displayVendor;
+      addEntry(
+        groupKey,
+        isUnknownBillcom ? "Unknown vendor (bill.com)" : displayVendor,
+        isUnknownBillcom ? raw : null,
+        bucketOf(r.gl_line_code),
+        Number(r.amount || 0),
+        sourceGroupOf(r.source),
+        r,
+      );
+    }
+    for (const c of filteredCC) {
+      const merchant = String(c.merchant || "").trim();
+      const displayVendor = merchant || "Unknown vendor (card)";
+      const groupKey = displayVendor;
+      addEntry(
+        groupKey,
+        displayVendor,
+        null,
+        "food", // landedFor's rule: card_charges all go to Food
+        Number(c.amount || 0),
+        "card",
+        // Synthesize a line-row shape so the expand renders consistently.
+        // `source: "uncoded_card"` distinguishes from a coded card line
+        // in the expand label; caller downstream reads it in the source
+        // label switch.
+        {
+          txn_date: c.txn_date,
+          gl_line_code: c.gl_line_code || "",
+          amount: c.amount,
+          source: c.source === "report_only" ? "report_only" : "uncoded_card",
+        },
+      );
     }
     // Sort by absolute net total desc so credit-heavy vendors surface.
     const vendorList = [...byVendor.values()].map(v => {
@@ -190,26 +256,39 @@ export default function PurchasingLedger({ actuals, vendorRollup, periodLabel })
       display = [...top, restAgg];
     }
 
-    // Footer sums directly from `filtered` so it is invariant against
-    // the vendor cap and matches per-bucket sums to the cent. Note
-    // filtered has already dropped uncoded AND out-of-scope rows;
-    // sums here only cover in-scope coded lines, which is what
-    // Kevin's Part 5 verification requires ("first three are
-    // identical to the board's period column directly above" - TBJ
-    // P9 Food $35,081.17). Lines counter reports the count of the
-    // in-scope population (Kevin ruling 2026-09-20: "State the line
-    // count from the in-scope population, not actuals.length").
-    const foot = { food: 0, packaging: 0, vehicle: 0, reimbursable: 0, lines: filtered.length };
-    for (const r of filtered) foot[bucketOf(r.gl_line_code)] += Number(r.amount || 0);
+    // Footer sums direct from the two filtered feeds so they are
+    // invariant against the vendor cap. Coded actuals drive Food/Pack/
+    // Veh/Billed; card_charges in-range add to Food (Kevin 2026-09-20
+    // "same date test, same source" - mirrors landedFor by construction
+    // so it ties on every phase). Line count is the in-scope population
+    // (coded actuals + in-range card_charges), matching the sub above.
+    const foot = { food: 0, packaging: 0, vehicle: 0, reimbursable: 0, lines: 0 };
+    for (const r of filteredActuals) {
+      foot[bucketOf(r.gl_line_code)] += Number(r.amount || 0);
+      foot.lines += 1;
+    }
+    for (const c of filteredCC) {
+      foot.food += Number(c.amount || 0);
+      foot.lines += 1;
+    }
+
+    // Line count reported in the sub. Uses the ALL-filter population
+    // so the sub is a stable "how many transactions this period"
+    // signal that does not shift with the filter chip.
+    const inScopeCountAll =
+      rows.filter(r => isInScope(r.gl_line_code)).length +
+      cc.filter(r => inRange(r.txn_date)).length;
 
     return {
       display, foot, uncoded, uncodedTotal,
       excludedTotal,
-      inScopeCount: rows.filter(r => isInScope(r.gl_line_code)).length,
+      inScopeCount: inScopeCountAll,
     };
-  }, [actuals, nameById, filter]);
+  }, [actuals, cardCharges, nameById, filter, rangeStart, rangeEnd]);
 
-  if (!Array.isArray(actuals) || actuals.length === 0) return null;
+  const hasActuals = Array.isArray(actuals) && actuals.length > 0;
+  const hasCards   = Array.isArray(cardCharges) && cardCharges.length > 0;
+  if (!hasActuals && !hasCards) return null;
 
   const short = (iso) => (iso || "").slice(5);          // MM-DD
   const cellDollar = (n) => n === 0
@@ -290,7 +369,12 @@ export default function PurchasingLedger({ actuals, vendorRollup, periodLabel })
                     <tr key={`ln-${v.name}-${li}`} className="kpi-ov-cp-led-lrow">
                       <td className="kpi-ov-cp-led-l">{short(r.txn_date)} · {r.gl_line_code || "not coded"}</td>
                       <td colSpan="4" className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">
-                        {r.source === "rippling_spend" ? "card" : r.source === "billcom_credit" ? "credit" : r.source === "upload" ? "upload" : "bill.com"}
+                        {r.source === "rippling_spend" ? "card"
+                          : r.source === "billcom_credit" ? "credit"
+                          : r.source === "upload" ? "upload"
+                          : r.source === "uncoded_card" ? "card · not yet coded"
+                          : r.source === "report_only" ? "card · report-only pending"
+                          : "bill.com"}
                       </td>
                       <td></td>
                       <td>{dollar0(r.amount)}</td>

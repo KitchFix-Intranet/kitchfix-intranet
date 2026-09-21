@@ -1392,7 +1392,10 @@ export default function KpiPurchasingPage() {
           {(cpGateActive || closedGateActive) && (
             <PurchasingLedger
               actuals={data?.actuals}
+              cardCharges={data?.card_charges?.rows}
               vendorRollup={data?.vendor_rollup}
+              rangeStart={start}
+              rangeEnd={end}
               periodLabel={rangePeriodNo != null ? `P${rangePeriodNo}` : null}
             />
           )}
