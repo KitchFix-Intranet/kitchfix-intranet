@@ -2600,47 +2600,20 @@ export async function resolveOverview({
         hasTarget: has_target,
       });
     }
-    // Single-period range not covered by R-101 (LP): use range-level
-    // formula against totalRevenue. Feeds through sharedBatr so the
-    // guards + rounding stay identical to today's shared helper.
-    if (rng.kind === "period") {
-      return budgetAtThisRevenue(mergedBudgetRange);
-    }
-    // Multi-period range: sum per-period (Method B) so per-period
-    // pcts land accurately and match Labor's per-week × per-period
-    // sum. Under R-121 the per-period line budget is MERGED
-    // (hourly + salary), not hourly-only.
-    let sum = 0;
-    let any = false;
-    for (const p of periods) {
-      const hBudP = labor3100_hourly_bud_by_period.get(p);
-      const sBudP = labor3100_salary_bud_by_period.get(p);
-      const mergedBudP = Number(hBudP || 0) + Number(sBudP || 0);
-      if (mergedBudP <= 0) continue;
-      const pRev = perPeriodRevenue.get(p);
-      if (!pRev) continue;
-      let periodRevenueActual = 0;
-      for (const line of REVENUE_LINE_CODES) {
-        const rec = pRev[line];
-        if (rec?.reported && rec.amount != null) periodRevenueActual += Number(rec.amount);
-      }
-      if (periodRevenueActual <= 0) continue;
-      let periodRevBudget = 0;
-      for (const rline of REVENUE_LINE_CODES) {
-        const perR = overviewBudgets.get(rline);
-        if (!perR) continue;
-        for (const m of members) {
-          const byAcct = perR.get(m);
-          if (!byAcct) continue;
-          const v = byAcct.get(p);
-          if (v != null) periodRevBudget += Number(v);
-        }
-      }
-      if (periodRevBudget <= 0) continue;
-      sum += periodRevenueActual * (mergedBudP / periodRevBudget);
-      any = true;
-    }
-    return any ? r2(sum) : null;
+    // Kevin R-141 (2026-09-21). All non-R-101 ranges take the range
+    // formula: parent 3100 adjusted = merged budget % × range actual
+    // revenue. The prior multi-period branch summed per-period
+    // flexes (Method B) so single-period and multi-period ranges
+    // computed different figures for the same account. Labor was
+    // the only line that showed the divergence because its rate
+    // swings across periods while salary stays flat - food and
+    // packaging never diverged. TXR - AZ P1-P9 Method B: $383,286.
+    // Range formula: $367,162. Kevin's KPI is 26.46% of adjusted
+    // revenue - $367,162 - so the range formula is the truth and
+    // the multi-period branch is deleted. 3100.1 (remainder) and
+    // 3100.2 (static salary) follow by construction; Guard J holds
+    // (parent = 3100.1 + 3100.2 to the cent).
+    return budgetAtThisRevenue(mergedBudgetRange);
   })();
   // Backwards-compat alias: prior callers of `labor3100_hourly_batr_range`
   // (the name predates R-121) now receive the merged total. Keep the
