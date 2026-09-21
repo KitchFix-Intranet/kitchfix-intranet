@@ -136,6 +136,8 @@ Activation is fiscal-year keyed. A change in circumstance is a row for the next 
 
 `2400.1 (Home)` and `2400.2 (Away)` are **chef-centric, not team-centric.** "Home" means revenue at the home stadium from the operating clubhouse's perspective. TXR-V earns at Globe Life Field for visiting clubs, hence `2400.2`.
 
+**Tab-name naming trap (FIN-2027 W0 F-6):** the workbook tabs `REDS` and `CINN` are ambiguous by name alone and easy to swap. `REDS` = Cincinnati Reds at **Goodyear, AZ** = account_key `CIN - AZ`. `CINN` = Cincinnati Reds at **Cincinnati, OH** = account_key `CIN - OH`. Both are Reds affiliates; the disambiguator is the row-1 city, never the tab name. A historical loader keyed on tab name alone will invert the two accounts and cross-post their P&L. TBR's row-1 city also drifts across years (Englewood / Engelwood / Port Charlotte); match on team + state, not exact city string. `scripts/load_pnl_history.mjs` resolves tabs by parsing the row-1 title and mapping to `account_key`.
+
 ### 3.7 Same-code collisions
 
 STL-MO `3200.2` = Supplies · STL-FL `3200.1` = Resale Food · STL-MO `3200.3` = Linen · TXR-AZ `3200.1.1` / `3200.1.2` sub-codes. Plus the reimbursables reroute (§5.2). `code_remap (account_key, source_code, pnl_line)` is a hard prerequisite for any cost rollup.

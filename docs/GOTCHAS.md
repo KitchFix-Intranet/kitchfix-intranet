@@ -48,6 +48,16 @@ result on the board               → past weeks silently move to today's rate
 
 **Lesson:** the "Nav matrix" name creates a false sense of coverage. Green on it means the SC navigation state machine works with stubbed APIs. It does not mean any other route is even loadable. When adding a smoke check for a load-bearing route, model it on preview-smoke (a real HTTP call against the preview URL) not nav-matrix (stubbed Playwright). A single `curl` against `/api/kpi/overview?account=<known>&range=period:<N>` in preview smoke would have caught this in 3 seconds.
 
+**The rule (Guard 1 · symbol-removal check):** reviewing a diff cannot catch this class - the deletion is visible, the surviving reference sits on an unchanged line and never appears in the patch. The check must run against the resulting tree, not the patch. For every identifier a PR removes or renames (const, function, export, variable):
+
+```
+grep -rn "\b<SYMBOL>\b" src/ scripts/ --include=*.js --include=*.mjs
+```
+
+Expected: zero hits outside the PR's own new definition. Any other hit inside the same lexical scope (same file for a file-local const; anywhere in the tree for an export) is a break. A green `npm run build` is NOT evidence that removed symbols are unreferenced - a bare identifier reference is a runtime `ReferenceError`, not a compile error. The year-safety probe is also blind to this because it scans `.from()` call sites, not identifier survival. Run it per symbol, paste the command and output in the PR body under "Symbol removal check." If the PR removes nothing, state "no symbols removed" explicitly.
+
+The standing script is `scripts/_probe_fin2027_dangling_refs.mjs`: takes `<file>:<symbol>` pairs and greps the tree, exits non-zero on any surviving reference in code (comments and JSX/string literals are filtered by default). Use `--tree` for exported symbols; the default is file-local scope, which is the right choice for module-local `const`.
+
 ---
 
 ## Debugging method
