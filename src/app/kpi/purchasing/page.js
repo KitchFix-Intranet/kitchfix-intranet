@@ -810,8 +810,6 @@ export default function KpiPurchasingPage() {
   const cpGateActive = resolvedPreset === "this_period" && !isFutureRange;
   // R-110 (2026-09-16). NP gate on Purchasing.
   const npGateActive = isFutureRange === true;
-  const useCpTable = cpGateActive || npGateActive;
-
   // R-109 PR 3 · fetch Overview payload on CP only. CurrentPeriodTable
   // needs Overview's week_rail + statement_rows + cards + todayISO for
   // the Revenue row; Purchasing's own board.weekly feeds the 3200/3400
@@ -821,8 +819,57 @@ export default function KpiPurchasingPage() {
   const [cpOverview, setCpOverview] = useState(null);
   const [cpLabor, setCpLabor] = useState(null);
   const [cpAuxError, setCpAuxError] = useState(null);
+
+  // Kevin R-133 step 4 (2026-09-20). Closed single-period gate. Uses
+  // the server-side `data.fiscal` snapshot so this page consumes the
+  // same server flag Overview uses (the purchasing page's own rule:
+  // "consume the same server flag; do not build a parallel one").
+  //
+  // Fiscal fields (verified on prod TBJ - FL 2026-09-19):
+  //   CP  P10  period_no=10 · weeks=4 · closed_weeks=1 · not closed
+  //   NP  P11  period_no=11 · weeks=4 · closed_weeks=0 · not closed
+  //   P9        period_no=9  · weeks=4 · closed_weeks=4 · CLOSED
+  //   P5        period_no=5  · weeks=4 · closed_weeks=4 · CLOSED
+  //   CY        period_no=null                          · excluded
+  //
+  // `laborUsable` is a defensive R-133 review-fix (Option B). On
+  // closed ranges CurrentPeriodTable sources its week structure from
+  // `cpLabor.board.weeks` because Overview's week_rail is null on
+  // verified periods. A labor board without revenue (kind=
+  // "no_budget") could not produce a revenue-weighted per-week
+  // budget - the ratio branch in goalFor would fail the revSum>0
+  // guard, per-week goals would go to zero, and the board would
+  // render as four zeros. Surveyed all 11 real accounts against P9
+  // and P10; the only non-standard case is `kind: "not_applicable"`
+  // on the two non-labor accounts (both correctly caught here by
+  // the same laborUsable check). `no_budget` did not appear on any
+  // real account, but the guard costs two lines and fails safe -
+  // if a future account ever lands in that state, Purchasing keeps
+  // its existing PeriodCard + WIG surface rather than blanking.
+  //
+  // `closedPending` holds useCpTable true while cpLabor is loading
+  // on a fiscally-closed range, so the SkeletonBoard branch below
+  // holds the paint - otherwise the old PeriodCard + WIG surface
+  // would flash for the ~600ms of the aux fetch and swap to
+  // CurrentPeriodTable. When cpLabor lands: laborUsable=true takes
+  // the new board; laborUsable=false falls out to the old surface
+  // in one paint.
+  //
+  // `fetchAux` triggers the aux fetch (cpOverview + cpLabor). Fires
+  // on closedRangeFiscal because we need cpLabor loaded to answer
+  // `laborUsable`, whether or not the closed board ultimately
+  // mounts. Non-CP / non-closed ranges stay a single-fetch page as
+  // before.
+  const f = data?.fiscal;
+  const closedRangeFiscal = f?.period_no != null
+    && f.weeks_in_range === f.closed_weeks_in_range;
+  const laborUsable = cpLabor?.board?.kind === "single_period_closed";
+  const closedGateActive = closedRangeFiscal && laborUsable;
+  const closedPending = closedRangeFiscal && !laborUsable && !cpLabor && !cpAuxError;
+  const useCpTable = cpGateActive || npGateActive || closedGateActive || closedPending;
+  const fetchAux = cpGateActive || npGateActive || closedRangeFiscal;
   useEffect(() => {
-    if (!useCpTable) {
+    if (!fetchAux) {
       setCpOverview(null);
       setCpLabor(null);
       setCpAuxError(null);
@@ -849,7 +896,7 @@ export default function KpiPurchasingPage() {
       if (!cancelled) { setCpOverview(ov); setCpLabor(lb); setCpAuxError(null); }
     }).catch(e => { if (!cancelled) setCpAuxError(String(e?.message || e)); });
     return () => { cancelled = true; };
-  }, [useCpTable, account, start, end, searchParams]);
+  }, [fetchAux, account, start, end, searchParams]);
 
   // Projected close.
   const projClose = useMemo(() => {
@@ -1318,6 +1365,7 @@ export default function KpiPurchasingPage() {
             labor={cpLabor}
             purch={data}
             error={cpAuxError}
+            isClosedRange={closedGateActive}
           />
           {cpGateActive && (
             <CurrentPeriodReview
