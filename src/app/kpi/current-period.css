@@ -531,6 +531,39 @@
    place it lives; kept in current-period.css alongside the other
    surface-specific styling rather than a new file. */
 .kpi-app .kpi-ov-cp-dash { color: var(--n-500); font-weight: 600; }
+/* Kevin R-137 step 4 (2026-09-21). Off-season block replaces the
+   week grid when phase is future and no revenue is budgeted or
+   forecast. Reuses the .kpi-ov-cp-perk card grid family for the
+   three figure cards; the .offseason wrapper carries the copy. */
+.kpi-app .kpi-ov-cp-offseason {
+  background: var(--n-0);
+  border: 0.5px solid var(--n-300, #E5E7EB);
+  border-radius: 10.8px;
+  padding: 26px 22px;
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.06), 0 4px 12px rgba(10, 37, 72, 0.07);
+}
+.kpi-app .kpi-ov-cp-offseason .kpi-ov-cp-perk {
+  margin-top: 18px;
+}
+/* Kevin ruling 2026-09-21. Hourly view of off-season renders two
+   cards (no salary card). Modifier drops the fixed third column so
+   the two cards fill the width without a phantom empty tile. */
+.kpi-app .kpi-ov-cp-offseason .kpi-ov-cp-perk.kpi-ov-cp-perk--2col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.kpi-app .kpi-ov-cp-osline {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--n-900);
+  margin: 0 0 6px;
+}
+.kpi-app .kpi-ov-cp-ossub {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--n-600);
+  margin: 0;
+  max-width: 62ch;
+}
 
 /* Empty state (payload not ready / error). */
 .kpi-app .kpi-ov-cp-empty {

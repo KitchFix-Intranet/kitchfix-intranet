@@ -3081,7 +3081,24 @@ export async function resolveOverview({
     // budgetAtThisRevenueForCogsRow; CY / LP use totalRevenue as
     // before (helper falls back). See helper comment for the
     // "flex wholly with revenue" reasoning.
-    const _batr = (suppress || btd == null) ? null : budgetAtThisRevenueForCogsRow(budget);
+    //
+    // Kevin R-137 step 2 (2026-09-21). PR-2's btd==null clause exists
+    // to catch a proration failure - a state where budget_to_date
+    // came back null on a range where time HAS elapsed. On a planned
+    // single period btd is null by design (no time has elapsed) and
+    // that must not null out batr, or the client's envelopeOf falls
+    // back to a flat period_budget and non-labor cost rows stop
+    // flexing with the SC forecast. `rng.kind === "period"` clause
+    // is load-bearing and must not be simplified away: fytd and
+    // explicit ranges set displayPeriodNo to the LAST period in the
+    // range, so a year range ending on a future period would derive
+    // "planned" here too - that clause is what keeps CY out of the
+    // exemption and protects the 88 fingerprints.
+    const btdIsExpectedNull =
+      rng.kind === "period" && displayPeriodState === "planned";
+    const _batr = (suppress || (btd == null && !btdIsExpectedNull))
+      ? null
+      : budgetAtThisRevenueForCogsRow(budget);
     return {
       line_code,
       section: "cogs",
