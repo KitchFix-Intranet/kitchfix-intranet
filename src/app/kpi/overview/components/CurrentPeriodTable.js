@@ -68,14 +68,25 @@ function stateClass(w) {
 // footer prints "N of X services" when present. On future range (R-
 // 110) the basis word is always `forecast` and the two subs stay if
 // the underlying labor weekly basis carries them.
-function RevCellBody({ w, amount, labor, i, isFuture }) {
-  const basis = isFuture ? "forecast" : (w.revenue_basis || "");
+//
+// Kevin R-133 step 3 (2026-09-20). On closed the basis word is
+// always `verified` (payload check: labor.board.weeks[i].revenue_
+// basis reads `confirmed` even on verified periods, so overriding
+// via phase is the reliable path). SC + fee subs hide because labor
+// board weeks lack meal_revenue and fee_prorate - the `meals > 0`
+// and `fee > 0` guards suppress them automatically.
+function RevCellBody({ w, amount, labor, i, phase }) {
+  const isFuture = phase === "future";
+  const isClosed = phase === "closed";
+  const basis = isFuture ? "forecast"
+              : isClosed ? "verified"
+              : (w.revenue_basis || "");
   const lbWk = (labor?.board?.weeks || [])[i] || null;
   const meals = Number(lbWk?.meal_revenue ?? w.meal_revenue ?? 0);
   const fee   = Number(lbWk?.fee_prorate  ?? w.fee_prorate  ?? 0);
   const conf  = Number(lbWk?.confirmed_services || 0);
   const totl  = Number(lbWk?.total_services || 0);
-  const noteText = (!isFuture && basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
+  const noteText = (phase === "running" && basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
   return (
     <>
       <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">{basis}</span>{dollar0(amount)}</div>
@@ -107,13 +118,21 @@ function RevCellBody({ w, amount, labor, i, isFuture }) {
 //   - C3 (envelope exceeded, isC3): open weeks read `$0 · already
 //     over` per Part 4 ("C3 keeps its current shape") plus item F
 //     ("to spend" gone).
-function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal, isTotal }) {
+function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal, isTotal, phase }) {
   const isFuture = w.state === "not_started";
   const isClosed = w.state === "closed";
   const l = Number(landed || 0);
   const gEffective = mode === "rolling" && !isClosed ? Number(goalRolling || 0) : Number(goal || 0);
   const isRolling = mode === "rolling";
-  const showSplit = splitHrly != null && splitSal != null && !isRolling;
+  // Kevin R-133 step 3 (2026-09-20). `phaseClosed` = the RANGE is a
+  // closed single period. Distinct from `isClosed` (this WEEK's state
+  // === "closed"), which also fires for closed weeks inside a running
+  // range. On phaseClosed every week is closed and the cell renders
+  // the verdict pair (▲ over / ▼ under) rather than the running
+  // shape's `$X left` / `▲ over` split. No bar per the approved
+  // render (period cell keeps its bar; week cells lose it).
+  const phaseClosed = phase === "closed";
+  const showSplit = splitHrly != null && splitSal != null && !isRolling && !phaseClosed;
   const showDelta = isRolling && !isClosed && dlt != null && Math.abs(dlt) > 0;
   const splitLine = showSplit ? (
     <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
@@ -147,6 +166,26 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
   }
   const g = gEffective;
   const over = l > g && g > 0;
+  // Kevin R-133 step 3 (2026-09-20). Closed-phase week cells: verdict
+  // pair ▲ over / ▼ under per the approved render, red / grey per
+  // R-128 Part 3 colour rule ("red is over, grey is under, green is
+  // only revenue running ahead"). No bar on closed week cells - the
+  // period column keeps its bar as a period-level scan. Running-phase
+  // week cells keep the R-128 Part 3 item F shape (`$X left · mute`
+  // for non-over) unchanged.
+  if (phaseClosed) {
+    const verdictText = over ? `▲ ${dollar0(l - g)} over` : `▼ ${dollar0(g - l)} under`;
+    const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
+    return (
+      <>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-of">of {dollar0(g)}</span>
+          <span className="kpi-ov-cp-big">{dollar0(l)}</span>
+        </div>
+        <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
+      </>
+    );
+  }
   const pctBar = g > 0 ? Math.min(100, (l / g) * 100) : 0;
   // Kevin R-128 Part 3 item 6 (2026-09-19). Total row's week bar
   // paints navy regardless of over/under - the per-row bars already
@@ -189,7 +228,25 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
 //
 // Future range branch unchanged - no confirmed yet, no pace to
 // compute, so keep the `$X planned revenue + per-week/per-day` shape.
-function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays }) {
+// Kevin R-133 step 3 (2026-09-20). Takes `phase` (not `isFuture`) so
+// closed can be its own branch. Closed: `earned $X` big + `the
+// period, as closed` sub. No bar, no pace clock, no confirmed
+// comparison - the period is over. `projection` on closed is Σ week
+// revenue = the actual earned amount (revProj sourced from the same
+// sum upstream).
+function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays }) {
+  const isFuture = phase === "future";
+  if (phase === "closed") {
+    return (
+      <>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-of">earned</span>
+          <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
+        </div>
+        <div className="kpi-ov-cp-fl kpi-ov-cp-mute">the period, as closed</div>
+      </>
+    );
+  }
   if (isFuture) {
     const perWeek = projection / 4;
     const perDay  = serviceDays > 0 ? projection / serviceDays : 0;
@@ -241,7 +298,19 @@ function PerRevCellBody({ projection, confirmed, dayFrac, isFuture, serviceDays 
 // pace against and no split to show, per Part 4 ("Next period has
 // only two states; the Plan/Rolling toggle does not render on a
 // future range").
-function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays, splitHrly, splitSal, paceText, paceClass, isTotal }) {
+// Kevin R-133 step 3 (2026-09-20). Takes `phase` (not `isFuture`) so
+// closed can be its own branch. Closed period column:
+//   big:  `of $B $L` (of-hint + spent)
+//   bar:  keeps the bar for period-level scan; navy on total row,
+//         else red if over-envelope / green otherwise. NO pace clock.
+//   foot: `X% used · verdict` where verdict is `▲ $Y over` (red) or
+//         `▼ $Y under` (grey per R-128 colour rule; render's `good`
+//         tag is a rendering artifact - prompt wins).
+// No split line (item 1 running-only), no pace text (dayFrac = 1 on
+// closed collapses on_pace to full budget).
+function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitHrly, splitSal, paceText, paceClass, isTotal }) {
+  const isFuture = phase === "future";
+  const isClosed = phase === "closed";
   const G = Number(envelope || 0);
   const L = Number(landed || 0);
   if (isFuture) {
@@ -260,6 +329,28 @@ function PerCostCellBody({ envelope, landed, dayFrac, isFuture, serviceDays, spl
     );
   }
   const usedPct = G > 0 ? Math.round(Math.min(100, (L / G) * 100)) : 0;
+  if (isClosed) {
+    const over = L > G && G > 0;
+    const barColor = isTotal
+      ? "var(--navy-700, #153968)"
+      : (over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
+    const verdictText = over ? `▲ ${dollar0(L - G)} over` : `▼ ${dollar0(G - L)} under`;
+    const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
+    return (
+      <>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-of">of {dollar0(G)}</span>
+          <span className="kpi-ov-cp-big">{dollar0(L)}</span>
+        </div>
+        <div className="kpi-ov-cp-bar">
+          <i style={{ width: `${usedPct}%`, background: barColor }} />
+        </div>
+        <div className="kpi-ov-cp-fl">
+          {usedPct}% used · <span className={`kpi-ov-cp-pc ${verdictClass}`}>{verdictText}</span>
+        </div>
+      </>
+    );
+  }
   const hot = G > 0 && (L / G) > (dayFrac + 0.005);
   const barColor = isTotal
     ? "var(--navy-700, #153968)"
@@ -374,14 +465,17 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return Number(row.period_budget || 0);
     };
 
-    // Kevin ruling 2026-09-16 (R-110 clarification): on planned
-    // periods some accounts' `target_pct` (the FY ratio) diverges
-    // from the period-specific ratio `period_budget / sum(week_rev)`
-    // by tenths of a percent - e.g. TBR 3200 P11 FY is 22.34% but the
-    // P11-specific exact ratio is 22.20%. Applying the FY ratio breaks
-    // Invariant 1 by $127. Use the period-exact ratio for goals AND
-    // for the row-sub display on future range only, so the sub and
-    // the goal numbers agree.
+    // Kevin ruling 2026-09-16 (R-110 clarification), R-133 step 3
+    // extension (2026-09-20). On planned AND closed periods some
+    // accounts' `target_pct` (the FY ratio) diverges from the period-
+    // specific ratio `envelope / sum(week_rev)` by tenths of a percent
+    // on future (TBR 3200 P11 FY 22.34% vs P11-exact 22.20%; breaks
+    // Invariant 1 by $127) and by thousands on closed (TBJ P9 3200 FY
+    // 22.99% × rev $132,079 = $30,366 vs period budget $24,139 - a
+    // $6,227 gap). Use the period-exact ratio for goals AND row-sub
+    // display on both non-running phases so Σ week goals = period
+    // budget by construction. On running CP keep FY target_pct
+    // (R-105).
     const revSum = weeks.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
 
     const goalFor = (line) => {
@@ -390,10 +484,11 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const pb = Number(row.period_budget || 0);
       const batr = Number(row.budget_at_this_revenue || 0);
       const envelope = batr > 0 ? batr : pb;
-      // On future range: use period-exact ratio (envelope / revSum).
-      // On CP: use FY target_pct (R-105). Preserves both invariants.
+      // On future OR closed: use period-exact ratio (envelope / revSum).
+      // On running CP: use FY target_pct (R-105). Preserves both
+      // invariants across all three phases.
       const fyRatio = Number(row.target_pct || 0) / 100;
-      const ratio = isFuture && revSum > 0 && envelope > 0
+      const ratio = phase !== "running" && revSum > 0 && envelope > 0
         ? envelope / revSum
         : fyRatio;
       const g = weeks.map(w => Number(w.week_revenue || 0) * ratio);
@@ -417,7 +512,19 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       // trigger fallback; a real zero (never observed in production
       // but plausible on a $0-budget line) survives.
       if (line === "3100") {
-        const salaryToggleOn = sub1 != null && sub2 != null;
+        // Kevin R-133 step 3 (2026-09-20). Salary-toggle detection.
+        // On CP + NP the Overview resolver ships 3100.1/3100.2 sub
+        // rows when include_salary=1 (sub1/sub2 non-null), and that
+        // is the R-128 signal. On closed periods the resolver does
+        // NOT ship the sub rows even when include_salary=1, so this
+        // check would return false and the 3100 row would render as
+        // hourly-only on the closed salary toggle - Part 5.2 wrong
+        // by the salary/4 wedge. Fall back to `labor.salary_included`,
+        // the authoritative per-toggle flag from the labor route.
+        // On CP running with salary on, both branches are true, so
+        // this is byte-identical there.
+        const salaryToggleOn = labor?.salary_included === true
+          || (sub1 != null && sub2 != null);
         const lbWks = labor?.board?.weeks || [];
         const byStart = new Map(lbWks.filter(w => w.week_start).map(w => [w.week_start, w]));
         const activeField = salaryToggleOn ? "budget_at_this_week_revenue" : "week_hourly_allowed";
@@ -507,15 +614,51 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // "the period reads the labor weekly sum" - not overview.cards[0].
     // budget_full_period, which is $15 off on TBJ P11 and a chef will
     // add up the four cells and see the mismatch.
-    const revProj = isFuture
+    //
+    // Kevin R-133 step 3 (2026-09-20). Same rule extended to closed:
+    // `projected_period_revenue` is undefined on verified periods
+    // (payload check TBJ P9 · include_salary=1). `hero_actual` is
+    // defined and equals Σ week_revenue to the cent, so the sum path
+    // gives the identical figure the "earned $X" render calls for
+    // ($132,079 on TBJ P9). revConf is not shown on closed - PerRev
+    // CellBody's closed branch renders "earned $X · the period, as
+    // closed" without a confirmed comparison - so its value is inert.
+    const revProj = phase !== "running"
       ? rev.reduce((s, v) => s + v, 0)
       : Number(revCard?.projected_period_revenue || 0);
-    const revConf = isFuture
+    const revConf = phase !== "running"
       ? 0
       : Number(revCard?.hero_actual || 0);
 
-    const salaryPath = stmtByLine.get("3100.1") != null && stmtByLine.get("3100.2") != null;
-    const laborPct = Number(stmtByLine.get("3100")?.target_pct || 0).toFixed(2);
+    // Kevin R-133 step 3 (2026-09-20). Salary-path detection. On
+    // running CP and NP the Overview resolver ships 3100.1/3100.2 as
+    // proof of salary-on (R-128 shape). On closed periods those sub
+    // rows are absent regardless of include_salary, so fall back to
+    // `labor.salary_included` - the authoritative per-toggle flag.
+    // Union: both true on running salary, labor-only true on closed
+    // salary, both false on hourly everywhere. Feeds ROWS_LABOR name
+    // (R-129), cardsLabel (R-129), and splitFor3100.
+    const salaryPath = labor?.salary_included === true
+      || (stmtByLine.get("3100.1") != null && stmtByLine.get("3100.2") != null);
+    // Labor sub % (R-128 shape): use Overview 3100 target_pct on
+    // running (resolver already splits per toggle: 33.29% salary,
+    // 18.20% hourly on TBJ P10). On closed the resolver does NOT
+    // split per toggle - 3100 target_pct = 33.81% on both toggles.
+    // Derive the effective ratio from labor board weeks:
+    // `budget_at_this_week_revenue` = merged on salary and =
+    // `week_hourly_allowed` on hourly (Guard D), so
+    // `Σ budget_at_this_week_revenue / Σ week_revenue` yields
+    // 33.81% (salary) or 21.40% (hourly) on TBJ P9. Kept as one
+    // expression so future/running paths continue reading the
+    // resolver-split target_pct verbatim.
+    const laborPctFromStmt = Number(stmtByLine.get("3100")?.target_pct || 0);
+    const laborPctFromBoard = (() => {
+      const lbWks = labor?.board?.weeks || [];
+      const boardRev = lbWks.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
+      const boardBud = lbWks.reduce((s, w) => s + Number(w.budget_at_this_week_revenue || 0), 0);
+      return boardRev > 0 ? (boardBud / boardRev) * 100 : 0;
+    })();
+    const laborPct = (phase === "closed" ? laborPctFromBoard : laborPctFromStmt).toFixed(2);
     // Kevin R-128 Part 3 item 11 (2026-09-19). Drop the `labor · `
     // prefix on the salary view - the row is already labelled
     // "Kitchen labor" in the label column. Keep `hourly · ` on the
@@ -536,6 +679,17 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const laborSubFuture = salaryPath
       ? `${laborPct}% of revenue · schedule to this`
       : `hourly · ${laborPctFuture}% of week revenue · schedule to this`;
+    // Kevin R-133 step 3 (2026-09-20). Labor sub on closed. Shape
+    // mirrors running (`% of revenue`, no "schedule to this" or
+    // "of week revenue") but the percent comes from `laborPct` which
+    // is phase-aware: on closed it derives from the labor board so
+    // salary reads 33.81% and hourly reads 21.40% on TBJ P9. Without
+    // this, closed hourly would inherit 33.81% (the merged fy the
+    // Overview ships on both toggles on closed) and the row label
+    // would contradict its own cells by ~12 percentage points.
+    const laborSubClosed = salaryPath
+      ? `${laborPct}% of revenue`
+      : `hourly · ${laborPct}% of revenue`;
     const foodSub    = `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue`;
     const packSub    = `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue`;
     const vehSub     = `${(stmtByLine.get("3500")?.target_pct || 0).toFixed(2)}% of revenue`;
@@ -548,6 +702,14 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // the period-exact - three rows in a column, two computed one
     // way and one the other.
     const vehSubP    = `${(goalVeh.effectivePct || 0).toFixed(2)}% of week revenue`;
+    // Kevin R-133 step 3 (2026-09-20). Non-labor closed subs. Shape
+    // matches running (`% of revenue`) but the percent is period-
+    // exact (via goalFor.effectivePct, which under step 3's ratio
+    // change returns envelope/revSum on closed). TBJ P9 renders 3200
+    // 18.28%, 3400 1.96%, 3500 0.57%, matching the approved render.
+    const foodSubClosed = `${(goalFood.effectivePct || 0).toFixed(2)}% of revenue`;
+    const packSubClosed = `${(goalPack.effectivePct || 0).toFixed(2)}% of revenue`;
+    const vehSubClosed  = `${(goalVeh.effectivePct  || 0).toFixed(2)}% of revenue`;
 
     // Kevin R-128 Part 3 items 5 + E, trap 3B.3 (2026-09-19). Vehicle
     // (3500) is present on TBJ - FL and TBR - FL and absent on
@@ -567,12 +729,18 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const hasVehicleLine = vehRow != null
       && (vehPeriodBudget > 0 || vehBatr > 0 || vehActual > 0);
 
+    // Kevin R-133 step 3 (2026-09-20). Sub picker by phase. Running
+    // uses `xxxSub` (FY target_pct). Future uses `xxxSubP` (period-
+    // exact, planning-tone copy). Closed uses `xxxSubClosed` (period-
+    // exact, running-shape copy - the render's approved shape).
+    const subFor = (running, future, closed) =>
+      phase === "future" ? future : phase === "closed" ? closed : running;
     const ROWS_OVERVIEW = [
       { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
       { line: "3100", name: "Kitchen labor", sub: laborSub, isLabor: true },
-      { line: "3200", name: "Food",      sub: foodSub },
-      { line: "3400", name: "Pack. & Sup.", sub: packSub },
-      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: isFuture ? vehSubP : vehSub }] : []),
+      { line: "3200", name: "Food",      sub: subFor(foodSub, foodSub, foodSubClosed) },
+      { line: "3400", name: "Pack. & Sup.", sub: subFor(packSub, packSub, packSubClosed) },
+      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: subFor(vehSub, vehSubP, vehSubClosed) }] : []),
     ];
     // Kevin R-129 change 2.1 (2026-09-19). Labor row name follows the
     // salary toggle. Salary on merges hourly + salary into one row -
@@ -585,7 +753,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const ROWS_LABOR = [
       { line: null, name: "Revenue", sub: "what each week earns", rev: true },
       { line: "3100", name: salaryPath ? "Kitchen labor" : "Hourly labor",
-        sub: isFuture ? laborSubFuture : laborSub, isLabor: true },
+        sub: subFor(laborSub, laborSubFuture, laborSubClosed), isLabor: true },
     ];
     // Kevin R-129 change 2.2 (2026-09-19). Purchasing gains the
     // Vehicle row via the same `hasVehicleLine` predicate ROWS_OVERVIEW
@@ -595,9 +763,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // reproduce the R-127 drill-down-disagrees-with-parent failure.
     const ROWS_PURCHASING = [
       { line: null, name: "Revenue", sub: "what you are ordering for", rev: true },
-      { line: "3200", name: "Food",      sub: isFuture ? foodSubP : foodSub },
-      { line: "3400", name: "Pack. & Sup.", sub: isFuture ? packSubP : packSub },
-      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: isFuture ? vehSubP : vehSub }] : []),
+      { line: "3200", name: "Food",      sub: subFor(foodSub, foodSubP, foodSubClosed) },
+      { line: "3400", name: "Pack. & Sup.", sub: subFor(packSub, packSubP, packSubClosed) },
+      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: subFor(vehSub, vehSubP, vehSubClosed) }] : []),
     ];
     const rows =
         rowSet === "labor"      ? ROWS_LABOR
@@ -658,8 +826,19 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const totalEffPct = costOnly.reduce(
         (s, r) => s + Number(goalFor(r.line).effectivePct || 0), 0
       );
-      const totSub = isFuture
+      // Kevin R-133 step 3 (2026-09-20). Total row sub. Running uses
+      // FY target_pct sum (matches the FY-shape sub on each cost row).
+      // Future uses period-exact (planning-tone "of week revenue"
+      // matches R-129 change). Closed uses period-exact but with the
+      // running-shape "of revenue" copy - matches the per-row closed
+      // subs which are also period-exact with "of revenue" wording.
+      // TBJ P9 Purchasing: 18.28 + 1.96 + 0.57 = 20.81% (matches
+      // approved render). Would have been 26.18% (FY sum) under the
+      // pre-R-133 isFuture-only branch.
+      const totSub = phase === "future"
         ? `${totalEffPct.toFixed(2)}% of week revenue`
+        : phase === "closed"
+        ? `${totalEffPct.toFixed(2)}% of revenue`
         : `${totalFyPct.toFixed(2)}% of revenue`;
       const totName = rowSet === "purchasing" ? "Total purchases" : "Total cost of goods";
       rows.push({
@@ -701,7 +880,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     })();
 
     return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath };
-  }, [payload, weeks, labor, purch, rowSet, isFuture]);
+  }, [payload, weeks, labor, purch, rowSet, isFuture, phase]);
 
   const ready = !!(derived && labor && purch && !error);
   const { box: liftBox, gridRef } = useLift(ready);
@@ -808,19 +987,35 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const isC2 = anyLine ? anyLine.isC2 : false;
 
   // Status strip copy per render.
-  //   CP: "P10 · week 2 of 4 · day 10 of 28 · closes 10/04"
-  //   NP: "P11 · starts 10/05 · budget only, nothing has happened yet"
+  //   CP:     "P10 · week 2 of 4 · day 10 of 28 · closes 10/04"
+  //   NP:     "P11 · starts 10/05 · budget only, nothing has happened yet"
+  //   Closed: "P9 · verified, closed 09/06"  (R-133 step 3, 2026-09-20)
+  //           period_state ("verified") comes from Overview payload; on
+  //           the render's approved copy the word matches whatever the
+  //           payload carries so a payload change reads through to the
+  //           status line automatically. Close date is weeks[3].week_end
+  //           - labor board has no top-level closed-at field, and the
+  //           last week's end IS the period end by construction.
   const periodNo = payload?.range?.period_no ?? weeks[0]?.period_no ?? null;
   const wkOfPeriod = currentIdx >= 0 ? currentIdx + 1 : null;
   const closesDate = weeks[3]?.week_end || "";
   const closesLabel = closesDate.slice(5).replace(/-/, "/");
   const startsLabel = (weeks[0]?.week_start || "").slice(5).replace(/-/, "/");
-  const statusPill = isFuture ? "Planning view" : "Period running";
-  const statusSub = isFuture
+  const periodState = payload?.period_state || "closed";
+  const statusPill = phase === "future" ? "Planning view"
+                   : phase === "closed" ? "Period closed"
+                   : "Period running";
+  const statusSub = phase === "future"
     ? [
         periodNo != null && <><b>P{periodNo}</b></>,
         startsLabel && ` · starts ${startsLabel}`,
         " · budget only, nothing has happened yet",
+      ].filter(Boolean)
+    : phase === "closed"
+    ? [
+        periodNo != null && <><b>P{periodNo}</b></>,
+        ` · ${periodState}`,
+        closesLabel && `, closed ${closesLabel}`,
       ].filter(Boolean)
     : [
         periodNo != null && <><b>P{periodNo}</b></>,
@@ -923,11 +1118,17 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         <div className="kpi-ov-cp-hcell kpi-ov-cp-per kpi-ov-cp-vline" style={{ gridColumn: 6 }}>
           <div className="kpi-ov-cp-hcl1">
             <span className="kpi-ov-cp-wk">Period</span>
-            <span className="kpi-ov-cp-pill kpi-ov-cp-pill-navy">{isFuture ? "the plan" : "what is left"}</span>
+            <span className="kpi-ov-cp-pill kpi-ov-cp-pill-navy">
+              {phase === "future" ? "the plan"
+               : phase === "closed" ? "Final"
+               : "what is left"}
+            </span>
           </div>
           <div className="kpi-ov-cp-hcl2">
-            {isFuture
+            {phase === "future"
               ? <>P{periodNo ?? "?"} · not started</>
+              : phase === "closed"
+              ? <>P{periodNo ?? "?"} · {periodState}{closesLabel ? `, closed ${closesLabel}` : ""}</>
               : <>{Math.round(dayFrac * 100)}% of the period gone</>}
           </div>
         </div>
@@ -1029,7 +1230,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 return (
                   <div key={`c-${row.line || (isTot ? "tot" : "rev")}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
                     {isRev
-                      ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} isFuture={isFuture} />
+                      ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} phase={phase} />
                       : (() => {
                           // Kevin R-128 Part 3 item 6: total row's rolling
                           // data lives at perLine.get("__TOT__").
@@ -1045,12 +1246,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               goalRolling={pl ? pl.rolling[i] : goalInfo.goal[i]}
                               landed={isFuture ? 0 : landed[i]}
                               isLabor={row.isLabor}
-                              mode={isFuture ? "plan" : mode}
+                              mode={phase === "running" ? mode : "plan"}
                               dlt={dlt}
                               isC3={pl ? pl.isC3 : false}
                               splitHrly={sp ? sp.hrly : null}
                               splitSal={sp ? sp.sal : null}
                               isTotal={isTot}
+                              phase={phase}
                             />
                           );
                         })()}
@@ -1069,7 +1271,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
-                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} isFuture={isFuture} serviceDays={serviceDaysTotal} />
+                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} />
                   : (() => {
                       // Kevin R-128 Part 3 item 9 (2026-09-19). Pace on
                       // period cost cells. delta = landed - envelope × dayFrac.
@@ -1100,7 +1302,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           envelope={goalInfo.batr}
                           landed={actual}
                           dayFrac={dayFrac}
-                          isFuture={isFuture}
+                          phase={phase}
                           serviceDays={serviceDaysTotal}
                           splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
                           splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
