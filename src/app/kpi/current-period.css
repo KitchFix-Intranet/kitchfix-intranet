@@ -956,3 +956,10 @@
   padding-top: 10px;
   padding-bottom: 11px;
 }
+.kpi-app .kpi-ov-cp-led-footnote {
+  padding: 10px 18px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--n-600);
+  border-top: 1px solid var(--n-200);
+}
