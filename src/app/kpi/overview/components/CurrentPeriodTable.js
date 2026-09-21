@@ -75,7 +75,7 @@ function stateClass(w) {
 // via phase is the reliable path). SC + fee subs hide because labor
 // board weeks lack meal_revenue and fee_prorate - the `meals > 0`
 // and `fee > 0` guards suppress them automatically.
-function RevCellBody({ w, amount, labor, i, phase }) {
+function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
   const isFuture = phase === "future";
   const isClosed = phase === "closed";
   const basis = isFuture ? "forecast"
@@ -87,11 +87,40 @@ function RevCellBody({ w, amount, labor, i, phase }) {
   const conf  = Number(lbWk?.confirmed_services || 0);
   const totl  = Number(lbWk?.total_services || 0);
   const noteText = (phase === "running" && basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
+  // Kevin R-137 step 3 (2026-09-21). Fee-only week marker on future.
+  // A week with revenue but no service days bills the service fee and
+  // serves nobody - without a label a $3,554 week beside three $13,949
+  // weeks reads as a scheduling gap. Condition consumes fields the
+  // labor board already ships (service_days added 2026-09-16,
+  // week_revenue existing).
+  const lbSvcDays = Number(lbWk?.service_days ?? 0);
+  const wkRev = Number(lbWk?.week_revenue ?? w.week_revenue ?? amount ?? 0);
+  const feeOnlyWeek = isFuture && lbSvcDays === 0 && wkRev > 0;
+  // Kevin R-137.1 step 1 (2026-09-21). Revenue dash on the "budget
+  // fallback" state: period cell reads $52,061 from budget while the
+  // four raw week_revenue values are all zero. Reading `forecast $0`
+  // × 4 against that period cell breaks Invariant 1 on the face of
+  // the grid and lies about the state ("assert a forecast, and its
+  // value is zero" - both cannot be true).
+  //
+  // Scope: only when the parent computed the dashRow flag - which
+  // means every revRaw was 0 AND budget_revenue > 0. A genuine $0
+  // week inside a column that ties (TBR - FL P13 week 4) is NOT
+  // dashed - it keeps reading `forecast $0` and its column keeps
+  // summing to the period cell.
+  if (dashRow) {
+    return (
+      <div className="kpi-ov-cp-v">
+        <span className="kpi-ov-cp-big kpi-ov-cp-dash">—</span>
+      </div>
+    );
+  }
   return (
     <>
       <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">{basis}</span>{dollar0(amount)}</div>
-      {meals > 0 && <div className="kpi-ov-cp-sub">Service Calendar: <b>{dollar0(meals)}</b></div>}
-      {fee > 0 && <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>Service fee: <b>{dollar0(fee)}</b></div>}
+      {feeOnlyWeek && <div className="kpi-ov-cp-csub kpi-ov-cp-mute" style={{ marginTop: 2 }}>service fee only · no services</div>}
+      {!feeOnlyWeek && meals > 0 && <div className="kpi-ov-cp-sub">Service Calendar: <b>{dollar0(meals)}</b></div>}
+      {!feeOnlyWeek && fee > 0 && <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>Service fee: <b>{dollar0(fee)}</b></div>}
       {noteText && <div className="kpi-ov-cp-vd kpi-ov-cp-mute">{noteText}</div>}
     </>
   );
@@ -239,7 +268,7 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
 // comparison - the period is over. `projection` on closed is Σ week
 // revenue = the actual earned amount (revProj sourced from the same
 // sum upstream).
-function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays }) {
+function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue }) {
   const isFuture = phase === "future";
   if (phase === "closed") {
     return (
@@ -253,17 +282,40 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays }) 
     );
   }
   if (isFuture) {
-    const perWeek = projection / 4;
-    const perDay  = serviceDays > 0 ? projection / serviceDays : 0;
+    // Kevin R-137 step 1 (2026-09-21). Two shapes:
+    // - Forecast present: figure = forecast, sub = "forecast revenue"
+    //   + one line below "budget $Y". Plain figure, no arrow, no
+    //   colour, no delta. The two numbers sit side by side and the
+    //   operator draws the comparison.
+    // - No forecast (revSum <= 0): budget becomes the figure, sub
+    //   reads "budget · no forecast yet". Week cells dash via R-136.1.
+    const noForecast = Number(projection || 0) <= 0;
+    const bigFigure = noForecast ? Number(budgetRevenue || 0) : Number(projection || 0);
+    const perWeek = bigFigure / 4;
+    const perDay  = serviceDays > 0 ? bigFigure / serviceDays : 0;
     return (
       <>
         <div className="kpi-ov-cp-v">
-          <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
+          <span className="kpi-ov-cp-big">{dollar0(bigFigure)}</span>
         </div>
-        <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">planned revenue</div>
-        <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
-          <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
-        </div>
+        {noForecast
+          ? <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">budget · no forecast yet</div>
+          : (
+            <>
+              <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">forecast revenue</div>
+              {Number(budgetRevenue || 0) > 0 && (
+                <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
+                  budget <b>{dollar0(Number(budgetRevenue || 0))}</b>
+                </div>
+              )}
+              {serviceDays > 0 && (
+                <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
+                  <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
+                </div>
+              )}
+            </>
+          )}
+        {noForecast && serviceDays === 0 && null}
       </>
     );
   }
@@ -459,6 +511,17 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     if (weeks.length !== 4) return null;
     const stmtByLine = new Map((payload?.statement_rows || []).map(r => [r.line_code, r]));
     const revCard = (payload?.cards || [])[0] || null;
+    // Kevin R-137 step 1 + 4b (2026-09-21). Period budget revenue is
+    // the sum of period_budget across the 5 revenue lines - the same
+    // accessor the component already uses on cost lines. No new
+    // payload field. On management_fee accounts the budget sits on
+    // 2300; on per-meal accounts it splits across 2400.1 / 2400.2;
+    // fee lines 2200 / 2300 / 2600 sum where they populate. Any zero
+    // just drops out of the sum by construction.
+    const REVENUE_LINES = ["2200", "2300", "2400.1", "2400.2", "2600"];
+    const budgetRevenue = REVENUE_LINES.reduce(
+      (s, l) => s + Number(stmtByLine.get(l)?.period_budget || 0), 0
+    );
 
     // Kevin ruling 2026-09-16: on planned periods, batr is null for
     // 3200 and 3400 (nothing has landed, no adjustment yet). Fall back
@@ -757,6 +820,14 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const rev = phase === "future"
       ? allocateWeeks(revRaw, revRaw.reduce((s, v) => s + v, 0))
       : revRaw;
+    // Kevin R-137.1 step 1 (2026-09-21). Revenue dashRow flag. Fires
+    // only when every raw week is 0 AND the period cell will render
+    // on the budget fallback (revProj <= 0 AND budgetRevenue > 0).
+    // A genuine $0 week beside positive siblings keeps its
+    // `forecast $0` cell so its column ties (TBR - FL P13 week 4).
+    const revDashRow = phase === "future"
+      && revRaw.every(v => Number(v || 0) === 0)
+      && budgetRevenue > 0;
     // R-110 · on planned periods Overview ships no projected/confirmed;
     // period column reads the plan (sum of week revenue) instead of a
     // "projecting / confirmed" split. Kevin ruling 2026-09-16:
@@ -869,13 +940,33 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // Verb split: Overview names the line; drill-downs tell you what
     // to do with it. Overview subs are percent-only; drill-down subs
     // append "schedule to this" / "order against this".
-    const pctOfRevSub = (g) => `${(g.effectivePct || 0).toFixed(2)}% of revenue`;
+    // Kevin R-137 step 4b (2026-09-21). State-3 gate: budgeted period
+    // with no forecast (STL - FL P11 hourly + salary, and any account
+    // where SC has not produced dollars yet). On this gate `revSum`
+    // is 0, so `effectivePct = pctOfRev(envelope) = envelope / revSum`
+    // returns 0 and the cost row would print `0.00% of revenue` beside
+    // an $11,453 envelope - a lie on the face of the board.
+    //
+    // Fix: compute the percent as `row.period_budget / budgetRevenue`
+    // directly. `target_pct` is null on suppressed rows (STL - FL 3200
+    // billed_back, confirmed via probe) so it would not work here -
+    // computing from period_budget always does. Keep the "% of
+    // revenue" wording; the revenue row one line above already reads
+    // "budget · no forecast yet", so the basis is established once.
+    const isFutureBudgetOnly = phase === "future" && revSum <= 0 && budgetRevenue > 0;
+    const state3Pct = (lineCode) => budgetRevenue > 0
+      ? (Number(stmtByLine.get(lineCode)?.period_budget || 0) / budgetRevenue) * 100
+      : 0;
+    const pctOfRevSub = (g, lineCode) => {
+      const pct = isFutureBudgetOnly ? state3Pct(lineCode) : (g.effectivePct || 0);
+      return `${pct.toFixed(2)}% of revenue`;
+    };
     const laborSubFutureOv = salaryPath
-      ? pctOfRevSub(goalLabor)
-      : `hourly · ${pctOfRevSub(goalLabor)}`;
-    const foodSubPOv = pctOfRevSub(goalFood);
-    const packSubPOv = pctOfRevSub(goalPack);
-    const vehSubPOv  = pctOfRevSub(goalVeh);
+      ? pctOfRevSub(goalLabor, "3100")
+      : `hourly · ${pctOfRevSub(goalLabor, "3100")}`;
+    const foodSubPOv = pctOfRevSub(goalFood, "3200");
+    const packSubPOv = pctOfRevSub(goalPack, "3400");
+    const vehSubPOv  = pctOfRevSub(goalVeh,  "3500");
     // Drill-down NP subs · same percent, planning voice.
     const laborSubFuture = `${laborSubFutureOv} · schedule to this`;
     const foodSubP       = `${foodSubPOv} · order against this`;
@@ -958,6 +1049,20 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       : rowSet === "purchasing" ? ROWS_PURCHASING
       :                           ROWS_OVERVIEW;
 
+    // Kevin R-137 step 5 (2026-09-21). Closed off season: drop the
+    // "% of revenue" sub on every cost row when the period had no
+    // revenue. `0.00% of revenue` on a period with zero revenue is
+    // meaningless; the costs themselves are correct and continue to
+    // render. Sanctioned edit to an otherwise frozen surface - keeps
+    // strictly to the sub string. Revenue row's sub ("meals + service
+    // fee" / "what each week earns" / "what you are ordering for") is
+    // not a percent, so it stays.
+    if (phase === "closed" && revSum === 0) {
+      for (const r of rows) {
+        if (!r.rev) r.sub = "";
+      }
+    }
+
     // Kevin R-128 Part 3 item 6 (2026-09-19, review-fix 2026-09-19).
     // Total row. Kevin's item 6 brief: "each cell is the sum of the
     // four cost rows AS DISPLAYED in that same column, so the column
@@ -1030,8 +1135,20 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       //
       // Guarded on revSum > 0 to keep the zero-revenue "0.00%" state
       // that step 6a establishes for the off-season view.
-      const totFuturePct = revSum > 0 ? (totalBatr / revSum) * 100 : 0;
-      const totSub = phase === "future"
+      // Kevin R-137 step 4b (2026-09-21). State-3 total: same basis
+      // as the cost rows one step above (totalBatr / budgetRevenue).
+      // On the real data totalBatr sums envelopes; on suppressed
+      // rows envelope = period_budget via envelopeOf, so this equals
+      // Σ period_budget / budgetRevenue - matching the cost-row math.
+      // On STL - FL P11: 12,383 / 52,061 = 23.79%.
+      const totFuturePct = isFutureBudgetOnly
+        ? (budgetRevenue > 0 ? (totalBatr / budgetRevenue) * 100 : 0)
+        : (revSum > 0 ? (totalBatr / revSum) * 100 : 0);
+      // Kevin R-137 step 5 (2026-09-21). Same closed-0-revenue rule
+      // that suppresses the cost row subs above applies to the total.
+      const totSub = (phase === "closed" && revSum === 0)
+        ? ""
+        : phase === "future"
         ? `${totFuturePct.toFixed(2)}% of revenue`
         : phase === "closed"
         ? `${totalEffPct.toFixed(2)}% of revenue`
@@ -1085,7 +1202,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow };
   }, [payload, weeks, labor, purch, rowSet, isFuture, phase]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -1095,6 +1212,118 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   // not reach this component - the parent gate never mounts the CP
   // table on a future range - so no explicit C4 handling here.
   const [mode, setMode] = useState("plan");
+
+  // Kevin R-137 step 4 (2026-09-21). Off-season detection. Runs
+  // BEFORE the weeks.length !== 4 gate so dark hourly accounts
+  // (CIN - KY, TBJ - NY on the hourly toggle - trap 4.4) still
+  // mount the block. On those the labor route returns
+  // `applies: false, weeks: []` and today the component silently
+  // returns null - a blank page for a real state.
+  //
+  // Off-season fires when `phase === "future"` AND no revenue is
+  // budgeted AND no revenue is forecast. Computed straight off
+  // `payload.statement_rows` and `labor.board.weeks` so the check
+  // works even when `derived` is null (weeks.length !== 4).
+  const _osStmtRows = payload?.statement_rows || [];
+  const _osStmtByLine = new Map(_osStmtRows.map(r => [r.line_code, r]));
+  const _osREVENUE_LINES = ["2200", "2300", "2400.1", "2400.2", "2600"];
+  const _osBudgetRevenue = _osREVENUE_LINES.reduce(
+    (s, l) => s + Number(_osStmtByLine.get(l)?.period_budget || 0), 0
+  );
+  const _osWeekRevSum = (labor?.board?.weeks || []).reduce(
+    (s, w) => s + Number(w.week_revenue || 0), 0
+  );
+  const isOffSeason = phase === "future"
+    && _osBudgetRevenue <= 0
+    && _osWeekRevSum <= 0
+    && !!payload
+    && !!labor;
+  if (isOffSeason) {
+    // Kevin ruling 2026-09-21. Only a site leader should see salary
+    // in an off-season period. Gate off the same salary-toggle signal
+    // the rest of the component uses (labor.salary_included), NOT off
+    // whether 3100.2 happens to be present - the copy must not depend
+    // on a payload row being absent. Guard D already keeps the salary
+    // dollars out of the hourly payload; this keeps the FACT out of
+    // the hourly copy.
+    const salIncluded = labor?.salary_included === true;
+    const salaryFig = Number(_osStmtByLine.get("3100.2")?.period_budget || 0);
+    // Hourly: on hourly toggle the swapped 3100 IS hourly (R-98).
+    // On salary toggle read 3100.1 which the resolver splits out.
+    const hourlyFig = salIncluded
+      ? Number(_osStmtByLine.get("3100.1")?.period_budget || 0)
+      : Number(_osStmtByLine.get("3100")?.period_budget || 0);
+    const elseFig =
+      Number(_osStmtByLine.get("3200")?.period_budget || 0)
+      + Number(_osStmtByLine.get("3400")?.period_budget || 0)
+      + Number(_osStmtByLine.get("3500")?.period_budget || 0);
+    const _osPeriodNo = payload?.range?.period_no
+      ?? (labor?.board?.weeks || [])[0]?.period_no
+      ?? null;
+    // Kevin R-137.1 step 3 (2026-09-21). Drop the "ended in P{N}"
+    // clause entirely. Computing displayPeriodNo - 1 was correct
+    // only on the first dark period of each account (P11); on P12
+    // and P13 it lied - CIN - OH P13 claimed "ended in P12" while
+    // the last real revenue was P10. The correct number needs a
+    // new server field, which would move all 88 fingerprints. Not
+    // worth a re-baseline for one clause. Wording is now fixed:
+    // "The season has ended." - true whichever dark period the
+    // viewer is on.
+    // Kevin R-137.1 step 2b (2026-09-21). Copy adapts to what is
+    // actually budgeted. Salary view has three variants keyed on
+    // salaryFig / elseFig; hourly view has two variants keyed on
+    // elseFig only. Hourly copy MUST NOT leak that salary exists -
+    // CIN - OH P11 hourly stays "there is nothing to schedule or
+    // spend against this period" even though $6,722 salary sits
+    // behind the gate.
+    const salaryLine = salIncluded
+      ? (salaryFig > 0
+          ? "Salaried managers stay on payroll through the break, and that cost is budgeted. Nothing here is a variance."
+          : (elseFig > 0
+              ? "No salary is budgeted for this period. What is budgeted below continues through the break."
+              : "Nothing is budgeted against this period."))
+      : (elseFig > 0
+          ? "There is nothing to schedule. What is budgeted below continues through the break."
+          : "There is nothing to schedule or spend against this period.");
+    // Kevin R-137.1 step 2a (2026-09-21). Salary card renders only
+    // when salary > 0. A $0 card labelled "3100.2 · budgeted,
+    // continuing" is a claim, not a number - CIN - KY / TBJ - NY /
+    // TXR - TX - V don't budget salary on the dark periods and the
+    // card must not assert otherwise.
+    const showSalaryCard = salIncluded && salaryFig > 0;
+    const cardCount = (showSalaryCard ? 1 : 0) + 2; // hourly + everything-else always render
+    return (
+      <div className="kpi-ov-cp-offseason">
+        <p className="kpi-ov-cp-osline">
+          {salIncluded
+            ? `Off season. No revenue planned${_osPeriodNo != null ? ` for P${_osPeriodNo}` : ""}.`
+            : `Off season. No services scheduled${_osPeriodNo != null ? ` for P${_osPeriodNo}` : ""}.`}
+        </p>
+        <p className="kpi-ov-cp-ossub">
+          The season has ended. {salaryLine}
+        </p>
+        <div className={`kpi-ov-cp-perk${cardCount === 2 ? " kpi-ov-cp-perk--2col" : ""}`}>
+          {showSalaryCard && (
+            <div className="kpi-ov-cp-perk-k">
+              <div className="kpi-ov-cp-perk-e">Salaried labor · the period</div>
+              <div className="kpi-ov-cp-perk-v">{dollar0(salaryFig)}</div>
+              <div className="kpi-ov-cp-perk-s">3100.2 · budgeted, continuing</div>
+            </div>
+          )}
+          <div className="kpi-ov-cp-perk-k">
+            <div className="kpi-ov-cp-perk-e">Hourly labor</div>
+            <div className="kpi-ov-cp-perk-v">{dollar0(hourlyFig)}</div>
+            <div className="kpi-ov-cp-perk-s">{salIncluded ? "no services scheduled" : "no services"}</div>
+          </div>
+          <div className="kpi-ov-cp-perk-k">
+            <div className="kpi-ov-cp-perk-e">Everything else</div>
+            <div className="kpi-ov-cp-perk-v">{dollar0(elseFig)}</div>
+            <div className="kpi-ov-cp-perk-s">food, packaging, vehicle</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (weeks.length !== 4) {
     // No data yet. Kevin fix 2026-09-17 item 1: don't ship a second
@@ -1445,7 +1674,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 return (
                   <div key={`c-${row.line || (isTot ? "tot" : "rev")}-${i}`} className={cls} style={{ gridColumn: i + 2, gridRow: rlabGr }}>
                     {isRev
-                      ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} phase={phase} />
+                      ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} phase={phase} dashRow={!!derived.revDashRow} />
                       : (() => {
                           // Kevin R-128 Part 3 item 6: total row's rolling
                           // data lives at perLine.get("__TOT__").
@@ -1487,7 +1716,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
-                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} />
+                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} />
                   : (() => {
                       // Kevin R-128 Part 3 item 9 (2026-09-19). Pace on
                       // period cost cells. delta = landed - envelope × dayFrac.
