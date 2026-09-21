@@ -1657,6 +1657,82 @@ export async function GET(request) {
   // BEFORE recomputeVerdictFromPanel so verdict picks up the adjusted
   // spent. Zero-adjustment ranges are byte-identical.
   applyFinanceCloseSingle(boardSingle);
+  // Kevin R-132 (2026-09-21). Guard D at period grain. The hourly path
+  // resolves the finance-close adjustment against the parent 3100 line,
+  // which sums pnl_actuals 3100.1 + 3100.2 - i.e. hourly + salary. On a
+  // verified period the resulting `spent_to_date` includes the whole of
+  // salary, and the same payload ships `finance_close_adjustment.total`
+  // from which most of that salary is recoverable by subtraction. A
+  // site_manager on the hourly toggle currently sees a $42,509.96 figure
+  // that contains $14,424.62 of salaried manager pay (TBJ - FL P9).
+  //
+  // The correct hourly-side finance total is
+  //   finance_3100_total - labor_salary_actuals_for_period
+  // which is what the Overview 3100.1 actual comes out at ($28,085.34
+  // on TBJ - FL P9) by the same derivation. Using pnl_actuals 3100.1
+  // directly is not right - finance reclassifies at close so its
+  // 3100.1 split diverges from Rippling's authoritative salary
+  // (pnl_actuals 3100.2 = $16,655 vs labor_salary_actuals $14,424 on
+  // the same period; the derivation from Rippling is what Overview
+  // publishes).
+  //
+  // Mechanism · derive. Load labor_salary_actuals for the range, sum
+  // per verified period, subtract from finance_close_adjustment. Salary
+  // is used INTERNALLY only - no salary figure or salary-inclusive
+  // figure ships on the hourly payload; both spent_to_date and
+  // finance_close_adjustment shrink to hourly-only.
+  //
+  // Guard rules preserved:
+  //  · open + planned periods byte-identical (guard on
+  //    board.finance_close_adjustment present, which requires at least
+  //    one verified period in range).
+  //  · Salary path (bodySingle.board in withSalaryMerge) untouched -
+  //    its adjustment is already correct because merged_feed matches
+  //    pnl_actuals 3100 total on that path.
+  //  · Guard J holds by construction: hourly parent already carries
+  //    salary implicitly (via 3100.1 = parent - salary in the Overview
+  //    resolver at :2905). Here we take the same salary out of the
+  //    labor-board spent so the labor and overview surfaces publish
+  //    the same hourly number.
+  if (boardSingle
+      && boardSingle.applies !== false
+      && boardSingle.finance_close_adjustment
+      && Array.isArray(boardSingle.finance_close_adjustment.verified_periods)
+      && boardSingle.finance_close_adjustment.verified_periods.length > 0) {
+    const verifiedPeriods = boardSingle.finance_close_adjustment.verified_periods;
+    // Load salary actuals for the range (same helper the +salary
+    // path uses). One targeted query per hourly request; scoped to
+    // verified periods for the offset sum.
+    const salaryActualsResp = await loadSalaryActuals(supa, [account], start, end);
+    if (!salaryActualsResp.error) {
+      const salaryByPeriod = new Map();
+      for (const r of (salaryActualsResp.rows || [])) {
+        const p = r.week_start ? periodOfLabor(r.week_start) : null;
+        if (p == null || !verifiedPeriods.includes(p)) continue;
+        salaryByPeriod.set(p, (salaryByPeriod.get(p) || 0) + Number(r.amount || 0));
+      }
+      let salaryOffsetTotal = 0;
+      for (const [, amt] of salaryByPeriod) salaryOffsetTotal += Number(amt || 0);
+      salaryOffsetTotal = Math.round(salaryOffsetTotal * 100) / 100;
+      if (salaryOffsetTotal !== 0) {
+        const fc = boardSingle.finance_close_adjustment;
+        fc.total = Math.round((Number(fc.total || 0) - salaryOffsetTotal) * 100) / 100;
+        fc.by_period = (fc.by_period || []).map(b => ({
+          period_no: b.period_no,
+          amount: Math.round((Number(b.amount || 0) - Number(salaryByPeriod.get(b.period_no) || 0)) * 100) / 100,
+        }));
+        boardSingle.spent_to_date = Math.round(
+          (Number(boardSingle.spent_to_date || 0) - salaryOffsetTotal) * 100
+        ) / 100;
+        if (boardSingle.closed_spent_to_date != null && boardSingle.budget_at_this_revenue != null) {
+          // closed_variance = closed_spent - batr; closed_spent doesn't
+          // change here (it's already feeds-only via applyBatrToBoard),
+          // so no closed_variance change is needed. Only spent_to_date
+          // moved. Left explicit for future readers.
+        }
+      }
+    }
+  }
   // Kevin post-1051 sweep item 1: verdict must use the panel-
   // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
   // week batr fallback has data.
