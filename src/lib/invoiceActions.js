@@ -1256,12 +1256,20 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
   // invoice-archive / invoice-unarchive
   //
   // *** REQUIRED MIGRATION (run in Supabase SQL editor BEFORE deploy) ***
-  //     ALTER TABLE invoice_submissions DROP CONSTRAINT IF EXISTS invoice_submissions_status_check;
-  //     ALTER TABLE invoice_submissions ADD CONSTRAINT invoice_submissions_status_check
-  //       CHECK (status IN ('sent', 'returned', 'corrected', 'deleted', 'archived'));
-  // Without this migration, updateInvoiceFields will fail on the PG path
-  // with a CHECK constraint violation when archiving. Sheets writes do
-  // not have this constraint.
+  //     ALTER TABLE invoice_submissions
+  //       DROP CONSTRAINT IF EXISTS chk_status_enum;
+  // The intent when the archive feature shipped was to drop the older
+  // `chk_status_enum` and leave `invoice_submissions_status_check` as
+  // the sole authority on this column. The prior version of this
+  // comment named the wrong constraint (`invoice_submissions_status_check`),
+  // so the DROP silently no-op'd via IF EXISTS and `chk_status_enum`
+  // survived. Without the correct migration applied, updateInvoiceFields
+  // will fail on the PG path with a CHECK constraint violation (23514)
+  // when archiving. Sheets writes do not have this constraint, so the
+  // two stores diverge (Sheets flips to 'archived', PG throws, operator
+  // sees "Failed to archive"). See
+  // `docs/migrations/li-1-drop-duplicate-status-constraint.sql` for the
+  // corrected migration + safety evidence + verify block.
   // ───────────────────────────────────────────────────────────────
   if (action === "invoice-archive") {
     const { uuid } = body;
