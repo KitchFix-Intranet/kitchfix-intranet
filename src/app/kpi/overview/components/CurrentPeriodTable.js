@@ -293,11 +293,13 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays }) 
 // value on the 3100 row when salary view is active AND mode is
 // PLAN. Item 9 wires pace into the footer (see caller).
 //
-// Future range branch unchanged in structure (still `$X + to spend
-// (dropped) + per-week/per-day`) - future ranges have no landed to
-// pace against and no split to show, per Part 4 ("Next period has
-// only two states; the Plan/Rolling toggle does not render on a
-// future range").
+// Future range: `$X + per-week/per-day`. Kevin R-136 (2026-09-21):
+// dropped the "to spend" sub the future branch used to carry - the
+// period pill reads "THE PLAN" so the words were redundant, matching
+// R-128 item F's rule for the other phases. Future ranges have no
+// landed to pace against and no split to show, per Part 4 ("Next
+// period has only two states; the Plan/Rolling toggle does not
+// render on a future range").
 // Kevin R-133 step 3 (2026-09-20). Takes `phase` (not `isFuture`) so
 // closed can be its own branch. Closed period column:
 //   big:  `of $B $L` (of-hint + spent)
@@ -321,7 +323,6 @@ function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitH
         <div className="kpi-ov-cp-v">
           <span className="kpi-ov-cp-big">{dollar0(G)}</span>
         </div>
-        <div className="kpi-ov-cp-sub kpi-ov-cp-mute-strong">to spend</div>
         <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>
           <b>{dollar0(perWeek)}</b> a week · <b>{dollar0(perDay)}</b> a service day
         </div>
@@ -478,6 +479,79 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // (R-105).
     const revSum = weeks.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
 
+    // Kevin R-136 step 6a (2026-09-21). `revSum || 1` in the old code
+    // rendered dollars as a percent when a period had no revenue:
+    // STL - FL P11 printed "1145337.00% of week revenue" on the total
+    // row, +salary printed 2,799,183.00%. Zero revenue is a real,
+    // budgeted, recurring state (six accounts are budgeted at $0
+    // revenue for P1-P3 and P11-P13, off-season), not an error. The
+    // designed view for it is R-137; this guard is a holding measure
+    // so the board cannot print an impossible number in the meantime.
+    // Byte-identical wherever revSum > 0, which is every range that
+    // mounts this component today outside those off-season periods.
+    const pctOfRev = (envelope) => revSum > 0 ? (envelope / revSum) * 100 : 0;
+
+    // Kevin R-136 step 3 (2026-09-21). Largest-remainder allocation
+    // for the next-period week goals. `g = week_revenue × (envelope /
+    // revSum)` sums to envelope exactly before rounding; Math.round
+    // per cell throws the remainders away and nothing re-allocates
+    // them. On TBJ - FL P11 hourly Food weeks summed to $16,268
+    // against a $16,270 period cell before this fix.
+    //
+    // Round every cell down, then hand the shortfall out one dollar
+    // at a time to the cells with the largest discarded fraction.
+    // Deterministic, order-stable, sum is exact by construction.
+    //
+    // O(n log n) via one sort. Kevin review fix 2026-09-21: the
+    // dollar-at-a-time loop degenerates when every raw week is 0 -
+    // the whole envelope becomes remainder (11,453 iterations on
+    // STL - FL P11 labor, 17,365 on CIN - AZ P13). Integer-divide
+    // the remainder across the weeks first (equal share to each),
+    // then hand out the modulus one dollar at a time by largest
+    // fraction. `n` iterations of the loop instead of `|rem|`;
+    // rendered output identical on every non-zero-revenue account.
+    //
+    // FUTURE ONLY. Closed has the same arithmetic and the same small
+    // drift, but Kevin approved the closed render on 2026-09-20 and
+    // it is frozen until he rules. Running uses the FY ratio and a
+    // different week basis entirely - week goals come from labor
+    // board fields, not envelope × ratio, and R-128 already ties them.
+    const allocateWeeks = (raw, target) => {
+      if (!Array.isArray(raw) || raw.length === 0) return raw;
+      const n = raw.length;
+      const floors = raw.map(v => Math.floor(Number(v || 0)));
+      const targetInt = Math.round(Number(target || 0));
+      const rem = targetInt - floors.reduce((s, v) => s + v, 0);
+      // Equal share to every week first; modulus by largest fraction.
+      // Math.trunc + %-preserves sign so a negative rem clamps down.
+      const base = Math.trunc(rem / n);
+      let modulus = rem - base * n;
+      const out = floors.map(v => v + base);
+      if (modulus === 0) return out;
+      const order = raw
+        .map((v, i) => ({ i, frac: Number(v || 0) - Math.floor(Number(v || 0)) }))
+        .sort((a, b) => b.frac - a.frac || a.i - b.i);
+      // Positive modulus: hand +1 to the largest-fraction cells.
+      // Negative modulus: take -1 from the smallest-fraction cells
+      // (equivalently: iterate the sorted list from the end).
+      let k = 0;
+      while (modulus > 0 && k < n) { out[order[k].i] += 1; modulus -= 1; k += 1; }
+      k = 0;
+      while (modulus < 0 && k < n) { out[order[n - 1 - k].i] -= 1; modulus += 1; k += 1; }
+      return out;
+    };
+
+    // Kevin R-136 (2026-09-21). Pack a returned goal array for the
+    // future phase: apply largest-remainder allocation so Σ week
+    // cells === period cell exactly. On other phases return the raw
+    // array untouched. `sum` reported as the reduce of the packed
+    // array so callers reading `sum` on future see the exact integer
+    // total.
+    const packGoal = (goal, envelope) => {
+      const packed = phase === "future" ? allocateWeeks(goal, envelope) : goal;
+      return { goal: packed, sum: packed.reduce((s, v) => s + Number(v || 0), 0) };
+    };
+
     const goalFor = (line) => {
       const row = stmtByLine.get(line);
       if (!row) return { goal: [null, null, null, null], sum: 0, batr: 0, effectivePct: 0 };
@@ -533,8 +607,21 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
           return lw != null && lw[activeField] != null;
         });
         if (allFieldsPresent) {
-          const gs = weeks.map(w => Number(byStart.get(w.week_start)[activeField]));
-          return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+          // Kevin R-136 step 6a (2026-09-21). On the hourly toggle
+          // `week_hourly_allowed` = merged allowance minus the static
+          // salary/4 wedge. With no revenue there is nothing for the
+          // wedge to come out of and the field goes negative -
+          // STL - FL P11 hourly rendered -$4,135 in all four week
+          // cells under a +$11,453 period cell. Clamp on future only;
+          // running and closed report what actually happened and
+          // must be able to show a negative if one exists. R-137
+          // designs the off-season view.
+          const gs = weeks.map(w => {
+            const v = Number(byStart.get(w.week_start)[activeField]);
+            return phase === "future" ? Math.max(0, v) : v;
+          });
+          const packed = packGoal(gs, envelope);
+          return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
         }
         // Fallback: legacy R-111 formula on the salary path; generic
         // ratio on the hourly path. Preserves prior behaviour when
@@ -546,12 +633,15 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
           const hourlyRatio = Number(sub1.target_pct || 0) / 100;
           const salaryPerWeek = Number(sub2.period_budget || 0) / 4;
           const gs = weeks.map(w => Number(w.week_revenue || 0) * hourlyRatio + salaryPerWeek);
-          return { goal: gs, sum: gs.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: (envelope / (revSum || 1)) * 100 };
+          const packed = packGoal(gs, envelope);
+          return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
         }
         // hourly toggle fallback: generic ratio × revenue
-        return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: ratio * 100 };
+        const packedHrly = packGoal(g, envelope);
+        return { goal: packedHrly.goal, sum: packedHrly.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
       }
-      return { goal: g, sum: g.reduce((s, v) => s + v, 0), batr: envelope, effectivePct: ratio * 100 };
+      const packed = packGoal(g, envelope);
+      return { goal: packed.goal, sum: packed.sum, batr: envelope, effectivePct: pctOfRev(envelope) };
     };
 
     const landedFor = (line) => {
@@ -607,7 +697,22 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return codedByWeek;
     };
 
-    const rev = weeks.map(w => Number(w.week_revenue || 0));
+    // Kevin R-136 review 2026-09-21. Same Invariant 1 fix for the
+    // Revenue row on the next period: the four RevCellBody amounts
+    // rendered as dollar0(rev[i]) are individually rounded, and
+    // their sum drifted by up to $2 against the period cell
+    // dollar0(revProj) = Math.round(Σ raw). TBJ - FL P11 revenue
+    // weeks summed $70,626 against a $70,625 period cell; TBR - FL
+    // $93,415 vs $93,416; TXR - AZ $36,016 vs $36,015; CIN - AZ
+    // $44,192 vs $44,194.
+    //
+    // FUTURE ONLY. Closed revenue cells are confirmed / verified
+    // actuals - Kevin's ruling: do not touch them, not by a dollar.
+    // Running keeps the same behaviour.
+    const revRaw = weeks.map(w => Number(w.week_revenue || 0));
+    const rev = phase === "future"
+      ? allocateWeeks(revRaw, revRaw.reduce((s, v) => s + v, 0))
+      : revRaw;
     // R-110 · on planned periods Overview ships no projected/confirmed;
     // period column reads the plan (sum of week revenue) instead of a
     // "projecting / confirmed" split. Kevin ruling 2026-09-16:
@@ -671,14 +776,21 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // the period-exact ratio (envelope / planned rev) for the display
     // pct too, so the sub agrees with the per-week goals. On CP the
     // FY target_pct stays.
-    const goalHourly = goalFor("3100.1");
+    //
+    // Kevin R-136 step 1 (2026-09-21). Read 3100, not 3100.1. The
+    // Overview resolver ships 3100.1/3100.2 only on the salary
+    // payload; on the hourly payload it folds hourly into 3100 and
+    // sets 3100.target_pct = 18.20 (TBJ - FL P11). goalFor returns
+    // effectivePct: 0 for a row that is not in statement_rows, so
+    // the hourly next-period sub printed "hourly · 0.00% of week
+    // revenue" while its own card two rows below printed 18.19%.
+    // 3100 is present on both toggles and its envelope is per-toggle,
+    // so one lookup is correct in both states: hourly 18.19%, salary
+    // 41.40% on TBJ - FL P11.
+    const goalLabor  = goalFor("3100");
     const goalFood   = goalFor("3200");
     const goalPack   = goalFor("3400");
     const goalVeh    = goalFor("3500");
-    const laborPctFuture = (goalHourly.effectivePct || 0).toFixed(2);
-    const laborSubFuture = salaryPath
-      ? `${laborPct}% of revenue · schedule to this`
-      : `hourly · ${laborPctFuture}% of week revenue · schedule to this`;
     // Kevin R-133 step 3 (2026-09-20). Labor sub on closed. Shape
     // mirrors running (`% of revenue`, no "schedule to this" or
     // "of week revenue") but the percent comes from `laborPct` which
@@ -693,15 +805,38 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const foodSub    = `${(stmtByLine.get("3200")?.target_pct || 0).toFixed(2)}% of revenue`;
     const packSub    = `${(stmtByLine.get("3400")?.target_pct || 0).toFixed(2)}% of revenue`;
     const vehSub     = `${(stmtByLine.get("3500")?.target_pct || 0).toFixed(2)}% of revenue`;
-    const foodSubP   = `${(goalFood.effectivePct || 0).toFixed(2)}% of week revenue · order against this`;
-    const packSubP   = `${(goalPack.effectivePct || 0).toFixed(2)}% of week revenue`;
-    // Kevin R-128 Part 3 trap 3B.2 (2026-09-19). Vehicle needs its
-    // own future-range sub so its % agrees with the period-exact
-    // ratio the other rows use on NP. Without vehSubP, Vehicle's sub
-    // would show the FY ratio while Food and Pack. & Sup. above show
-    // the period-exact - three rows in a column, two computed one
-    // way and one the other.
-    const vehSubP    = `${(goalVeh.effectivePct || 0).toFixed(2)}% of week revenue`;
+    // Kevin R-136 step 2 (2026-09-21). One unit and one basis across
+    // the whole next-period column, on all three row sets.
+    //
+    // Unit: "% of revenue", matching the approved running view (TBJ -
+    // FL P10, live). Before this, Overview NP read "of revenue" on
+    // labor/food/pack and "of week revenue" on vehicle and the total
+    // - two units in one column - while Purchasing NP read "of week
+    // revenue" on all four.
+    //
+    // Basis: period-exact (envelope / Σ week_revenue), the same ratio
+    // that produces the cells. The FY target_pct diverges. TBJ - FL
+    // P11: 3200 is 23.03% FY against 23.04% period-exact, and Overview
+    // printed the first while its own Purchasing drill-down printed
+    // the second - the R-127 failure mode. 3100 hourly is 18.20% FY
+    // against 18.19% period-exact, and the Labor card already prints
+    // 18.19%.
+    //
+    // Verb split: Overview names the line; drill-downs tell you what
+    // to do with it. Overview subs are percent-only; drill-down subs
+    // append "schedule to this" / "order against this".
+    const pctOfRevSub = (g) => `${(g.effectivePct || 0).toFixed(2)}% of revenue`;
+    const laborSubFutureOv = salaryPath
+      ? pctOfRevSub(goalLabor)
+      : `hourly · ${pctOfRevSub(goalLabor)}`;
+    const foodSubPOv = pctOfRevSub(goalFood);
+    const packSubPOv = pctOfRevSub(goalPack);
+    const vehSubPOv  = pctOfRevSub(goalVeh);
+    // Drill-down NP subs · same percent, planning voice.
+    const laborSubFuture = `${laborSubFutureOv} · schedule to this`;
+    const foodSubP       = `${foodSubPOv} · order against this`;
+    const packSubP       = packSubPOv;
+    const vehSubP        = vehSubPOv;
     // Kevin R-133 step 3 (2026-09-20). Non-labor closed subs. Shape
     // matches running (`% of revenue`) but the percent is period-
     // exact (via goalFor.effectivePct, which under step 3's ratio
@@ -735,12 +870,19 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // exact, running-shape copy - the render's approved shape).
     const subFor = (running, future, closed) =>
       phase === "future" ? future : phase === "closed" ? closed : running;
+    // Kevin R-136 step 2 (2026-09-21). Labor gains subFor - the
+    // Overview labor sub was `laborSub` on every phase, so future
+    // showed the FY percent (18.20% hourly on TBJ P11) while the
+    // Labor drill-down showed the period-exact (18.19%). Future
+    // now uses the period-exact `laborSubFutureOv`; running and
+    // closed keep their prior expressions. Food/Pack/Veh switch to
+    // the Overview variants (percent-only, no planning verb).
     const ROWS_OVERVIEW = [
       { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
-      { line: "3100", name: "Kitchen labor", sub: laborSub, isLabor: true },
-      { line: "3200", name: "Food",      sub: subFor(foodSub, foodSub, foodSubClosed) },
-      { line: "3400", name: "Pack. & Sup.", sub: subFor(packSub, packSub, packSubClosed) },
-      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: subFor(vehSub, vehSubP, vehSubClosed) }] : []),
+      { line: "3100", name: "Kitchen labor", sub: subFor(laborSub, laborSubFutureOv, laborSubClosed), isLabor: true },
+      { line: "3200", name: "Food",      sub: subFor(foodSub, foodSubPOv, foodSubClosed) },
+      { line: "3400", name: "Pack. & Sup.", sub: subFor(packSub, packSubPOv, packSubClosed) },
+      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: subFor(vehSub, vehSubPOv, vehSubClosed) }] : []),
     ];
     // Kevin R-129 change 2.1 (2026-09-19). Labor row name follows the
     // salary toggle. Salary on merges hourly + salary into one row -
@@ -826,17 +968,27 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const totalEffPct = costOnly.reduce(
         (s, r) => s + Number(goalFor(r.line).effectivePct || 0), 0
       );
-      // Kevin R-133 step 3 (2026-09-20). Total row sub. Running uses
-      // FY target_pct sum (matches the FY-shape sub on each cost row).
-      // Future uses period-exact (planning-tone "of week revenue"
-      // matches R-129 change). Closed uses period-exact but with the
-      // running-shape "of revenue" copy - matches the per-row closed
-      // subs which are also period-exact with "of revenue" wording.
-      // TBJ P9 Purchasing: 18.28 + 1.96 + 0.57 = 20.81% (matches
-      // approved render). Would have been 26.18% (FY sum) under the
-      // pre-R-133 isFuture-only branch.
+      // Kevin R-133 step 3 (2026-09-20) + R-136 step 2 + R-136 review
+      // 2026-09-21. Total row sub. Running uses FY target_pct sum
+      // (matches the FY-shape sub on each cost row). Closed uses
+      // period-exact `totalEffPct` (Σ unrounded per-row pcts) - the
+      // closed render is frozen.
+      //
+      // Future uses `totalBatr / revSum × 100`, the same basis as the
+      // three-cards' `costTotal / revenueTotal × 100` (line 1486).
+      // `totalBatr = Σ Math.round(row.batr)` after R-136 step 4, so
+      // `totalBatr === costTotal` by construction and the sub agrees
+      // with the card to the digit. The prior `totalEffPct` summed
+      // unrounded per-row pcts and rounded once, which drifted 0.01
+      // against a card derived from the rounded batr - TBJ - FL P11
+      // salary total sub read 68.29% while its card read 68.30% for
+      // the same $48,234.
+      //
+      // Guarded on revSum > 0 to keep the zero-revenue "0.00%" state
+      // that step 6a establishes for the off-season view.
+      const totFuturePct = revSum > 0 ? (totalBatr / revSum) * 100 : 0;
       const totSub = phase === "future"
-        ? `${totalEffPct.toFixed(2)}% of week revenue`
+        ? `${totFuturePct.toFixed(2)}% of revenue`
         : phase === "closed"
         ? `${totalEffPct.toFixed(2)}% of revenue`
         : `${totalFyPct.toFixed(2)}% of revenue`;
@@ -1035,9 +1187,18 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   // 2x the truth. Guarded here rather than left to depend on the total
   // row's shape (whose `line: null` incidentally yields batr:0 today).
   const costRowsForCards = derived.rows.filter(r => !r.rev && !r.tot);
+  // Kevin R-136 step 4 (2026-09-21). Round-then-sum, matching the
+  // total row (line 805, R-128 review fix db7d895 that made the
+  // total row tie to its own column). The card previously summed
+  // unrounded batr and rounded once, so it read $1 below the total
+  // row directly above it on TBJ - FL P11 ($31,847 against $31,848),
+  // TBJ +salary ($48,233/$48,234), Purchasing ($18,997/$18,998),
+  // CIN - AZ hourly ($18,315/$18,316), STL - FL +salary
+  // ($28,921/$28,922). Cards render under `{isFuture && ...}` so
+  // this cannot reach running or closed.
   const costTotal = costRowsForCards.reduce((s, r) => {
     const gi = derived.goalFor(r.line);
-    return s + Number(gi.batr || 0);
+    return s + Math.round(Number(gi.batr || 0));
   }, 0);
   const revenueTotal = derived.rev.reduce((s, v) => s + v, 0);
   // Kevin R-129 change 2.1 (2026-09-19). Labor's future-period card
