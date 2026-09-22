@@ -84,6 +84,197 @@ export function chunk(values, size = IN_CHUNK) {
   return out;
 }
 
+// ── R-147 · invoice_submissions capture cutover ──────────────────────
+//
+// Kevin ruling 2026-09-22. From this date onward the KPI board + the
+// Overview ledger read invoice_submissions for the invoice side of
+// COGS. bill.com stays as the payment system and the reconciliation
+// check; it is no longer what the board counts.
+//
+// Cutover: `invoice_date >= 2026-09-07` (first day of FY2026 P10) AND
+// account NOT IN {CIN - KY, TBJ - NY}. Two accounts stay on the
+// bill.com lane for every period. Nothing before P10 changes on any
+// account, by construction of the date gate.
+//
+// Card spend is UNCHANGED. rippling_spend rows keep flowing through
+// purchasing_actuals for every period on every account. R-147 is
+// invoice-side only.
+//
+// Bucket map application: gl_line_code is emitted VERBATIM from
+// gl_breakdown[].code (Kevin ruling: do not rewrite operator data).
+// The downstream bucketOf / GL_PREFIX_FOR_BUCKET predicates apply as
+// they always have. `3200.2` has zero lines in P10, so the "3200.2 to
+// Pack & Sup" R-147 label question is moot for this cutover; if it
+// resurfaces it will be handled at the capture form or by a
+// source-branched bucketOf, not by rewriting the code here.
+//
+// Status filter: sent + returned included; corrected + deleted
+// excluded. `returned` is the rejection state (name it right - it is
+// NOT `rejected`). Kevin: a returned invoice keeps its GL amounts
+// until it is corrected or deleted.
+//
+// Sign convention: gl_breakdown[].amount is stored positive on both
+// invoice AND credit rows; the sign lives on invoice_submissions.
+// total_amount. Emit rows with amount negated when type='credit' so
+// they net at the aggregation layer. Verified 2026-09-22 (probe).
+//
+// Impossible dates: rows with invoice_date outside FY2026 fall out
+// of any FYTD range naturally. R-147 reports them as an exception
+// list in the PR body but the loader does not filter them
+// specifically - the invoice_date >= cutover predicate already
+// excludes any year that isn't 2026.
+export const CAPTURE_CUTOVER_ISO = "2026-09-07";
+export const CAPTURE_EXCLUDED_ACCOUNTS = new Set(["CIN - KY", "TBJ - NY"]);
+
+// Bucket derivation matches purchasing-1-schema.sql:382-386. Kept in
+// JS so the invoice_submissions emit tags gl_bucket the same way the
+// derive step tags purchasing_actuals rows. Consumers that read
+// gl_bucket (weekly_by_source, totals, etc.) see identical values
+// from either lane.
+export function deriveGlBucket(glLineCode) {
+  const s = String(glLineCode || "");
+  if (!s) return null;
+  const two = s.slice(0, 2);
+  if (two === "32" || two === "34" || two === "35") return "pl_cogs";
+  if (two === "13") return "reimbursable";
+  if (s.charAt(0) === "5") return "sga";
+  return "other";
+}
+
+function isoBefore(iso, days) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function isoMax(a, b) { return a > b ? a : b; }
+
+// Read from purchasing_actuals with the same column set + filters
+// paginateActuals uses. Extracted so the R-147 cutover splits can
+// share the read helper.
+async function readPurchasingActuals(supa, { members, start, end, cols, PS, sourceInclude, sourceExclude }) {
+  const out = [];
+  if (!members?.length || start > end) return out;
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      let q = supa
+        .from("purchasing_actuals")
+        .select(cols)
+        .in("account_key", memberChunk)
+        .eq("excluded", false)
+        .gte("txn_date", start)
+        .lte("txn_date", end)
+        .order("txn_date", { ascending: true })
+        .order("account_key", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PS - 1);
+      if (sourceInclude) q = q.in("source", sourceInclude);
+      if (sourceExclude) q = q.neq("source", sourceExclude);
+      const r = await q;
+      if (r.error) throw r.error;
+      const rows = r.data || [];
+      for (const row of rows) out.push(row);
+      if (rows.length < PS) break;
+      from += PS;
+    }
+  }
+  return out;
+}
+
+// invoice_submissions -> row set shaped like purchasing_actuals
+// (default 5-col trim or drill 14-col + R-147 extras: invoice_number,
+// type, status, sga_removed_amount, vendor_id, vendor_name).
+//
+// Emits ONE ROW per gl_breakdown line so downstream aggregators
+// (bucketWeeklySpend, billsOnlySpentForGl, PurchasingLedger footer)
+// see the same grain they see for purchasing_actuals rows today.
+//
+// The status + type + invoice_number + sga_removed_amount fields are
+// only useful to the ledger's transaction-grouped render; they are
+// carried on the drill rows and dropped in default mode.
+export async function paginateInvoiceSubmissions(supa, { members, start, end, includeLines }) {
+  const captureMembers = (members || []).filter(m => !CAPTURE_EXCLUDED_ACCOUNTS.has(m));
+  if (captureMembers.length === 0) return { data: [] };
+  const readStart = isoMax(start, CAPTURE_CUTOVER_ISO);
+  if (readStart > end) return { data: [] };
+  const PS = V6_PAGE_DEFAULT;
+  const subs = [];
+  for (const memberChunk of chunk(captureMembers, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const q = await supa
+        .from("invoice_submissions")
+        .select("id, account_key, vendor_id, vendor_name, invoice_number, invoice_date, total_amount, gl_breakdown, status, type")
+        .in("account_key", memberChunk)
+        .in("status", ["sent", "returned"])
+        .gte("invoice_date", readStart)
+        .lte("invoice_date", end)
+        .order("invoice_date", { ascending: true })
+        .order("account_key", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PS - 1);
+      if (q.error) return { error: q.error };
+      const rows = q.data || [];
+      for (const row of rows) subs.push(row);
+      if (rows.length < PS) break;
+      from += PS;
+    }
+  }
+  const out = [];
+  const derivedAt = new Date().toISOString();
+  for (const s of subs) {
+    const arr = Array.isArray(s.gl_breakdown) ? s.gl_breakdown : [];
+    // Precompute the invoice-level SG&A total so we can tag each COGS
+    // row of a mixed invoice with the SG&A amount that was removed.
+    // deriveGlBucket returns 'sga' for any 5xxx code (per schema).
+    let sgaRemoved = 0;
+    for (const line of arr) {
+      if (deriveGlBucket(line?.code) === "sga") sgaRemoved += Number(line?.amount || 0);
+    }
+    if (s.type === "credit") sgaRemoved = -sgaRemoved;
+    // Emit ONE row per gl_breakdown line so the grain matches
+    // purchasing_actuals. SG&A lines are emitted too (with gl_bucket =
+    // 'sga'); the KPI board's bucketOf routes them to the SG&A
+    // footnote / SG&A card, same as they arrived via billcom before.
+    for (let i = 0; i < arr.length; i += 1) {
+      const line = arr[i] || {};
+      const glCode = String(line.code || "");
+      const rawAmt = Number(line.amount || 0);
+      const signed = s.type === "credit" ? -rawAmt : rawAmt;
+      const row = includeLines ? {
+        id:                 null,
+        source:             "invoice_submissions",
+        source_bill_id:     s.id,
+        source_line_id:     `${s.id}#${i}`,
+        account_key:        s.account_key,
+        gl_line_code:       glCode || null,
+        gl_bucket:          deriveGlBucket(glCode),
+        txn_date:           s.invoice_date,
+        posting_date:       s.invoice_date,
+        amount:             Math.round(signed * 100) / 100,
+        paid:               false,
+        approx_date:        false,
+        derived_at:         derivedAt,
+        vendor_or_merchant: s.vendor_name || null,
+        // R-147 additions carried on the drill row only:
+        invoice_number:     s.invoice_number || null,
+        type:               s.type || "invoice",
+        status:             s.status || null,
+        sga_removed_amount: Math.round(sgaRemoved * 100) / 100,
+        vendor_id:          s.vendor_id || null,
+      } : {
+        source:             "invoice_submissions",
+        gl_line_code:       glCode || null,
+        amount:             Math.round(signed * 100) / 100,
+        account_key:        s.account_key,
+        txn_date:           s.invoice_date,
+      };
+      out.push(row);
+    }
+  }
+  return { data: out };
+}
+
 // ── purchasing_actuals paginator ─────────────────────────────────────
 
 // Paginate purchasing_actuals for a members set and a date range.
@@ -108,28 +299,59 @@ export const ACTUALS_COLS_DRILL   = "id, source, source_bill_id, source_line_id,
 export async function paginateActuals(supa, { members, start, end, pageSize, includeLines }) {
   const PS = pageSize && pageSize > 0 && pageSize <= V6_PAGE_DEFAULT ? pageSize : V6_PAGE_DEFAULT;
   const cols = includeLines ? ACTUALS_COLS_DRILL : ACTUALS_COLS_DEFAULT;
-  const out = [];
-  for (const memberChunk of chunk(members, IN_CHUNK)) {
-    let from = 0;
-    while (true) {
-      const q = await supa
-        .from("purchasing_actuals")
-        .select(cols)
-        .in("account_key", memberChunk)
-        .eq("excluded", false)
-        .gte("txn_date", start)
-        .lte("txn_date", end)
-        .order("txn_date", { ascending: true })
-        .order("account_key", { ascending: true })
-        .order("id", { ascending: true })   // stable tiebreak - .order() accepts columns outside .select()
-        .range(from, from + PS - 1);
-      if (q.error) return { error: q.error };
-      const rows = q.data || [];
-      for (const r of rows) out.push(r);
-      if (rows.length < PS) break;
-      from += PS;
+
+  // R-147 cutover. Range splits at CAPTURE_CUTOVER_ISO. Pre-cutover
+  // half reads purchasing_actuals as it always has. Post-cutover half
+  // reads (a) purchasing_actuals rippling_spend rows (card lane, all
+  // accounts), (b) purchasing_actuals non-rippling rows for
+  // CAPTURE_EXCLUDED_ACCOUNTS (CIN - KY, TBJ - NY stay on bill.com),
+  // (c) invoice_submissions for capture-eligible accounts. Ordering
+  // preserved via a final sort on (txn_date, account_key, id).
+  const preEnd = end < CAPTURE_CUTOVER_ISO ? end : isoBefore(CAPTURE_CUTOVER_ISO, 1);
+  const preRows = start <= preEnd
+    ? await readPurchasingActuals(supa, { members, start, end: preEnd, cols, PS }).catch(e => ({ error: e }))
+    : [];
+  if (preRows?.error) return { error: preRows.error };
+
+  const post = { cardAll: [], billExcluded: [], invoiceEligible: [] };
+  if (end >= CAPTURE_CUTOVER_ISO) {
+    const postStart = isoMax(start, CAPTURE_CUTOVER_ISO);
+    // Card lane for all members - never changes with the cutover.
+    post.cardAll = await readPurchasingActuals(supa, {
+      members, start: postStart, end, cols, PS,
+      sourceInclude: ["rippling_spend"],
+    }).catch(e => ({ error: e }));
+    if (post.cardAll?.error) return { error: post.cardAll.error };
+    // Bill lane for capture-excluded accounts (CIN - KY, TBJ - NY).
+    const excludedMembers = (members || []).filter(m => CAPTURE_EXCLUDED_ACCOUNTS.has(m));
+    if (excludedMembers.length > 0) {
+      post.billExcluded = await readPurchasingActuals(supa, {
+        members: excludedMembers, start: postStart, end, cols, PS,
+        sourceExclude: "rippling_spend",
+      }).catch(e => ({ error: e }));
+      if (post.billExcluded?.error) return { error: post.billExcluded.error };
     }
+    // Capture lane for capture-eligible accounts.
+    const invResp = await paginateInvoiceSubmissions(supa, { members, start: postStart, end, includeLines });
+    if (invResp.error) return { error: invResp.error };
+    post.invoiceEligible = invResp.data;
   }
+
+  const out = [];
+  for (const r of preRows) out.push(r);
+  for (const r of post.cardAll) out.push(r);
+  for (const r of post.billExcluded) out.push(r);
+  for (const r of post.invoiceEligible) out.push(r);
+  // Final ordering matches PostgREST's ORDER BY on the single-source
+  // query: txn_date ASC, account_key ASC, id ASC. Null ids from the
+  // invoice_submissions lane sort last within a tie.
+  out.sort((a, b) => {
+    if (a.txn_date !== b.txn_date) return a.txn_date < b.txn_date ? -1 : 1;
+    if (a.account_key !== b.account_key) return (a.account_key || "") < (b.account_key || "") ? -1 : 1;
+    const aid = a.id ?? Number.POSITIVE_INFINITY;
+    const bid = b.id ?? Number.POSITIVE_INFINITY;
+    return aid < bid ? -1 : aid > bid ? 1 : 0;
+  });
   return { data: out };
 }
 
@@ -150,27 +372,152 @@ export async function paginateActuals(supa, { members, start, end, pageSize, inc
 // bill buckets should filter gl_bucket='pl_cogs'.
 export async function paginateWeekly(supa, { members, start, end }) {
   const PS = V6_PAGE_DEFAULT;
-  const out = [];
-  for (const memberChunk of chunk(members, IN_CHUNK)) {
-    let from = 0;
-    while (true) {
-      const q = await supa
-        .from("v_purchasing_by_site_week")
-        .select("account_key, week_start, week_end, gl_line_code, gl_bucket, amount, line_count, bill_count, paid_amount")
-        .in("account_key", memberChunk)
-        .gte("week_start", start)
-        .lte("week_start", end)
-        .order("account_key", { ascending: true })
-        .order("week_start", { ascending: true })
-        .order("gl_line_code", { ascending: true, nullsFirst: false })
-        .range(from, from + PS - 1);
-      if (q.error) return { error: q.error };
-      const rows = q.data || [];
-      for (const r of rows) out.push(r);
-      if (rows.length < PS) break;
-      from += PS;
+
+  // R-147 cutover on the weekly grain. The view aggregates
+  // purchasing_actuals; post-cutover for capture-eligible accounts, we
+  // read invoice_submissions and aggregate here in JS to the same
+  // shape. The view sits on top of purchasing_actuals only, so any
+  // rows in invoice_submissions for a capture-eligible account +
+  // post-cutover week would otherwise be missing from payload.weekly.
+  //
+  // View exclusion for capture-eligible accounts post-cutover:
+  // v_purchasing_by_site_week aggregates every non-excluded
+  // purchasing_actuals row. Post-cutover invoice-side rows in
+  // purchasing_actuals for capture-eligible accounts (the bill.com
+  // derive lane) would double-count against invoice_submissions here
+  // if we didn't exclude them. Kevin's ruling: post-cutover, invoice
+  // side ships from capture. So we filter the view rows we accept from
+  // capture-eligible accounts post-cutover to gl_bucket = null (the
+  // uncoded card marker) or the rippling_spend contribution only.
+  // Cleaner: read v_purchasing_by_site_week for pre-cutover weeks and
+  // for excluded accounts across the whole range; read
+  // purchasing_actuals rippling_spend rows post-cutover for the card
+  // lane and re-aggregate to the weekly shape here; read
+  // invoice_submissions post-cutover for capture-eligible bill lane
+  // and aggregate here. Same shape returned in every case.
+  const captureEligible = (members || []).filter(m => !CAPTURE_EXCLUDED_ACCOUNTS.has(m));
+  const captureExcluded = (members || []).filter(m => CAPTURE_EXCLUDED_ACCOUNTS.has(m));
+
+  async function readViewSlice(memberSet, sStart, sEnd) {
+    const out = [];
+    if (memberSet.length === 0 || sStart > sEnd) return out;
+    for (const memberChunk of chunk(memberSet, IN_CHUNK)) {
+      let from = 0;
+      while (true) {
+        const q = await supa
+          .from("v_purchasing_by_site_week")
+          .select("account_key, week_start, week_end, gl_line_code, gl_bucket, amount, line_count, bill_count, paid_amount")
+          .in("account_key", memberChunk)
+          .gte("week_start", sStart)
+          .lte("week_start", sEnd)
+          .order("account_key", { ascending: true })
+          .order("week_start", { ascending: true })
+          .order("gl_line_code", { ascending: true, nullsFirst: false })
+          .range(from, from + PS - 1);
+        if (q.error) throw q.error;
+        const rows = q.data || [];
+        for (const r of rows) out.push(r);
+        if (rows.length < PS) break;
+        from += PS;
+      }
     }
+    return out;
   }
+
+  // week_start floor - same math the view uses (schema note L143-145).
+  const fyStartMs = new Date("2025-12-29T00:00:00Z").getTime();
+  function weekStartOf(txnDate) {
+    const t = new Date(txnDate + "T00:00:00Z").getTime();
+    if (!Number.isFinite(t) || t < fyStartMs) return null;
+    const wks = Math.floor((t - fyStartMs) / (7 * 86400000));
+    return new Date(fyStartMs + wks * 7 * 86400000).toISOString().slice(0, 10);
+  }
+  function weekEndOf(weekStart) {
+    const t = new Date(weekStart + "T00:00:00Z").getTime();
+    return new Date(t + 6 * 86400000).toISOString().slice(0, 10);
+  }
+
+  // Aggregate raw rows to the view shape: (account_key, week_start,
+  // week_end, gl_line_code, gl_bucket) -> summed amount + counts.
+  function aggregateWeekly(rows, { isInvoiceLane }) {
+    const acc = new Map();
+    const billsSeen = new Map();     // key: `${account}|${week}|${gl}` -> Set of source_bill_id
+    for (const r of rows) {
+      const ws = weekStartOf(r.txn_date);
+      if (!ws) continue;
+      const gl = r.gl_line_code || null;
+      const bucket = r.gl_bucket ?? null;
+      const key = `${r.account_key}||${ws}||${gl}||${bucket}`;
+      let ent = acc.get(key);
+      if (!ent) {
+        ent = { account_key: r.account_key, week_start: ws, week_end: weekEndOf(ws), gl_line_code: gl, gl_bucket: bucket, amount: 0, line_count: 0, bill_count: 0, paid_amount: 0 };
+        acc.set(key, ent);
+      }
+      ent.amount += Number(r.amount || 0);
+      ent.line_count += 1;
+      if (r.paid) ent.paid_amount += Number(r.amount || 0);
+      if (isInvoiceLane) {
+        const billKey = `${key}||${r.source_bill_id}`;
+        if (!billsSeen.has(key)) billsSeen.set(key, new Set());
+        billsSeen.get(key).add(r.source_bill_id);
+      }
+    }
+    if (isInvoiceLane) {
+      for (const [key, set] of billsSeen) acc.get(key).bill_count = set.size;
+    }
+    const out = [];
+    for (const ent of acc.values()) {
+      ent.amount      = Math.round(ent.amount * 100) / 100;
+      ent.paid_amount = Math.round(ent.paid_amount * 100) / 100;
+      out.push(ent);
+    }
+    return out;
+  }
+
+  const out = [];
+  try {
+    // Pre-cutover weeks: read the view for all members. The view's
+    // week_start floor matches weekStartOf(); a week_start <
+    // CAPTURE_CUTOVER_ISO belongs to the pre-cutover half.
+    const preEnd = end < CAPTURE_CUTOVER_ISO ? end : isoBefore(CAPTURE_CUTOVER_ISO, 1);
+    if (start <= preEnd) {
+      const preRows = await readViewSlice(members, start, preEnd);
+      for (const r of preRows) out.push(r);
+    }
+    // Post-cutover half. week_start >= CAPTURE_CUTOVER_ISO.
+    if (end >= CAPTURE_CUTOVER_ISO) {
+      const postStart = isoMax(start, CAPTURE_CUTOVER_ISO);
+      // Excluded accounts stay on the view.
+      if (captureExcluded.length > 0) {
+        const exclRows = await readViewSlice(captureExcluded, postStart, end);
+        for (const r of exclRows) out.push(r);
+      }
+      // Eligible accounts: (a) rippling_spend card contribution from
+      // purchasing_actuals, aggregated here to the view shape; (b)
+      // invoice_submissions contribution, also aggregated here.
+      if (captureEligible.length > 0) {
+        const cardRows = await readPurchasingActuals(supa, {
+          members: captureEligible, start: postStart, end, cols: ACTUALS_COLS_DRILL, PS,
+          sourceInclude: ["rippling_spend"],
+        });
+        for (const w of aggregateWeekly(cardRows, { isInvoiceLane: false })) out.push(w);
+
+        const invResp = await paginateInvoiceSubmissions(supa, { members: captureEligible, start: postStart, end, includeLines: true });
+        if (invResp.error) throw invResp.error;
+        for (const w of aggregateWeekly(invResp.data, { isInvoiceLane: true })) out.push(w);
+      }
+    }
+  } catch (e) {
+    return { error: e };
+  }
+  // Sort to match the view's ORDER BY.
+  out.sort((a, b) => {
+    if (a.account_key !== b.account_key) return a.account_key < b.account_key ? -1 : 1;
+    if (a.week_start !== b.week_start) return a.week_start < b.week_start ? -1 : 1;
+    const ag = a.gl_line_code == null ? "￿" : a.gl_line_code;
+    const bg = b.gl_line_code == null ? "￿" : b.gl_line_code;
+    return ag < bg ? -1 : ag > bg ? 1 : 0;
+  });
   return { data: out };
 }
 

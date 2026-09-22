@@ -60,17 +60,28 @@ const IN_SCOPE_BUCKETS = new Set(["food", "packaging", "vehicle", "reimbursable"
 function isInScope(gl) { return IN_SCOPE_BUCKETS.has(bucketOf(gl)); }
 
 function sourceGroupOf(src) {
-  if (src === "billcom" || src === "billcom_credit") return "bill";
+  // R-147 · invoice_submissions rows are the post-cutover bill lane;
+  // group them under `bill` so the "BILL.COM" filter chip catches them.
+  // Kevin ruling 2026-09-22: audience sees one bill lane. Missing this
+  // fold would silently drop every captured invoice from the chip
+  // (previously fell through to "upload").
+  if (src === "billcom" || src === "billcom_credit" || src === "invoice_submissions") return "bill";
   if (src === "rippling_spend") return "card";
   return "upload";
 }
 
 function matchesFilter(src, filter) {
   if (filter === "all") return true;
-  if (filter === "bill") return src === "billcom" || src === "billcom_credit";
+  if (filter === "bill") return src === "billcom" || src === "billcom_credit" || src === "invoice_submissions";
   if (filter === "cards") return src === "rippling_spend";
   return false;
 }
+
+// R-147 cutover. FY2026 P10 begins 2026-09-07. Cutover-straddling
+// ranges get an inline note explaining that invoice-side moved to
+// operator capture at the boundary. Strictly pre-cutover and strictly
+// post-cutover ranges render without a note.
+const CAPTURE_CUTOVER_ISO = "2026-09-07";
 
 export default function PurchasingLedger({ actuals, cardCharges, vendorRollup, rangeStart, rangeEnd, periodLabel }) {
   const [filter, setFilter] = useState("all");
@@ -313,6 +324,16 @@ export default function PurchasingLedger({ actuals, cardCharges, vendorRollup, r
           {derived.uncoded.length} card {derived.uncoded.length === 1 ? "charge has" : "charges have"} no P&amp;L line yet · {dollar0(derived.uncodedTotal)} · they count toward Food until someone codes them
         </div>
       )}
+      {/* R-147 · capture went live P10. When the range straddles the
+          cutover boundary (start < P10 <= end), announce the source
+          split. Strictly pre-cutover and strictly post-cutover ranges
+          get no note - the audience does not need to see the seam
+          (Kevin ruling 2026-09-22). Acceptance A8. */}
+      {rangeStart && rangeEnd && rangeStart < CAPTURE_CUTOVER_ISO && rangeEnd >= CAPTURE_CUTOVER_ISO && (
+        <div className="kpi-ov-cp-led-note" role="status" data-kpi-ov="capture-cutover">
+          Invoice capture went live for Period 10 · pre-P10 shown from bill.com, P10 onward from operator capture
+        </div>
+      )}
       <div className="kpi-ov-cp-led-scroll">
         <table className="kpi-ov-cp-led-tbl">
           <thead>
@@ -365,21 +386,40 @@ export default function PurchasingLedger({ actuals, cardCharges, vendorRollup, r
                       </td>
                     </tr>
                   )}
-                  {isOpen && !v.aggregate && v.lines.map((r, li) => (
-                    <tr key={`ln-${v.name}-${li}`} className="kpi-ov-cp-led-lrow">
-                      <td className="kpi-ov-cp-led-l">{short(r.txn_date)} · {r.gl_line_code || "not coded"}</td>
-                      <td colSpan="4" className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">
-                        {r.source === "rippling_spend" ? "card"
-                          : r.source === "billcom_credit" ? "credit"
-                          : r.source === "upload" ? "upload"
-                          : r.source === "uncoded_card" ? "card · not yet coded"
-                          : r.source === "report_only" ? "card · report-only pending"
-                          : "bill.com"}
-                      </td>
-                      <td></td>
-                      <td>{dollar0(r.amount)}</td>
-                    </tr>
-                  ))}
+                  {isOpen && !v.aggregate && v.lines.map((r, li) => {
+                    // R-147 · captured invoice + credit labelling.
+                    // `type='credit'` on invoice_submissions is the
+                    // same story as source=billcom_credit. `returned`
+                    // status renders inline so operators can see
+                    // rejection state without leaving the ledger; `sent`
+                    // is default so we omit the label. `bill.com` chip
+                    // covers billcom + billcom_credit + invoice_submissions
+                    // uniformly (Kevin ruling 2026-09-22).
+                    const isCapturedCredit = r.source === "invoice_submissions" && r.type === "credit";
+                    const label = r.source === "rippling_spend" ? "card"
+                      : (r.source === "billcom_credit" || isCapturedCredit) ? "credit"
+                      : r.source === "upload" ? "upload"
+                      : r.source === "uncoded_card" ? "card · not yet coded"
+                      : r.source === "report_only" ? "card · report-only pending"
+                      : "bill.com";
+                    return (
+                      <tr key={`ln-${v.name}-${li}`} className="kpi-ov-cp-led-lrow">
+                        <td className="kpi-ov-cp-led-l">{short(r.txn_date)} · {r.gl_line_code || "not coded"}</td>
+                        <td colSpan="4" className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">
+                          {label}
+                          {r.invoice_number ? ` · #${r.invoice_number}` : ""}
+                          {r.status && r.status !== "sent" ? ` · ${r.status}` : ""}
+                          {r.sga_removed_amount ? (
+                            <span className="kpi-ov-cp-led-sga" title="This invoice contained SG&A lines that don't count toward COGS; the row total is the COGS portion.">
+                              {" "}SG&amp;A {dollar0(r.sga_removed_amount)}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td></td>
+                        <td>{dollar0(r.amount)}</td>
+                      </tr>
+                    );
+                  })}
                 </Fragment>
               );
             })}

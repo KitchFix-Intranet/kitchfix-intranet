@@ -665,11 +665,15 @@ export async function GET(request) {
     for (const r of weekly) if (isDescendantOfLine(r.gl_line_code, gl)) s += Number(r.amount || 0);
     return Math.round(s * 100) / 100;
   }
+  // R-147 cutover 2026-09-22. Post-cutover invoice-side rows arrive
+  // from paginateActuals tagged `source='invoice_submissions'` for
+  // capture-eligible accounts on invoice_date >= 2026-09-07. Both
+  // sources contribute to the bill-side subtotal.
   function billsOnlySpentForGl(gl) {
     let s = 0;
     for (const r of actuals) {
       if (!isDescendantOfLine(r.gl_line_code, gl)) continue;
-      if (r.source !== "billcom") continue;
+      if (r.source !== "billcom" && r.source !== "invoice_submissions") continue;
       s += Number(r.amount || 0);
     }
     return Math.round(s * 100) / 100;
