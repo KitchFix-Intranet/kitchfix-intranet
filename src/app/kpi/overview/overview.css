@@ -1705,6 +1705,22 @@
 .kpi-app .kpi-ov-fold-card .kpi-ov-cb {
   padding: 0 var(--kpi-sp-4) var(--kpi-sp-4);
 }
+/* Consolidation PR 1 follow-up (2026-09-22). WeekTable's own card
+   chrome (border + radius + shadow + solid background via
+   .kpi-tbl-wrap at src/app/kpi/kpi.css:3388) is the labor page's
+   table card - correct THERE, but nested inside an Overview fold
+   it reads as a card inside a card while the sibling Full P&L
+   fold sits flush in .kpi-ov-cb. Strip the wrapper's chrome in
+   this scope only, so the labor page's own .kpi-tbl-wrap outside
+   a fold keeps its card. .kpi-tbl-scroll untouched - its
+   overflow: auto is what stops the page scrolling sideways at
+   narrow widths. */
+.kpi-app .kpi-ov-fold-card .kpi-tbl-wrap {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 /* When the trigger has the segment control inline (P&L Full/Summary),
  * pin the seg to the right and let the chevron sit past it. */
 .kpi-app .kpi-ov-fold-trigger .kpi-ov-seg {
