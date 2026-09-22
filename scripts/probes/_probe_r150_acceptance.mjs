@@ -31,11 +31,12 @@ const TRAINING = ["TBJ - FL", "CIN - AZ", "STL - FL", "TXR - TX - H"];
 const round2 = n => Math.round(Number(n || 0) * 100) / 100;
 const fmt$ = n => "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// R-150 bucket rule.
+// R-150 bucket rule (Kevin ruling 2026-09-22 revised: 3200.* all
+// sub-lines are Food; Resale Food 3200.2 is a Food sub-line per
+// finance CoA).
 function foldBucket(gl) {
   const g = String(gl || "").trim();
   if (!g) return null;
-  if (g === "3200.2" || g.startsWith("3200.2.")) return "packaging";
   if (g === "3200" || g.startsWith("3200.")) return "food";
   if (g === "3400" || g.startsWith("3400.")) return "packaging";
   if (g === "3500" || g.startsWith("3500.")) return "vehicle";
@@ -123,25 +124,15 @@ for (const acct of TRAINING) {
     const rows = await loadRows(acct, start, end);
     const fold = buildFold(rows);
     const board = boardTotals(rows, "2026-09-22");
-    // 3200.2 delta: fold routes to Pack&Sup, board routes to Food. If
-    // this is non-zero the two disagree on Food and Pack by that amount.
-    const gl3200_2 = rows
-      .filter(r => { const g = String(r.gl_line_code || ""); return g === "3200.2" || g.startsWith("3200.2."); })
-      .reduce((s, r) => s + Number(r.amount || 0), 0);
     const foldFood = round2(fold.foot.food);
     const foldPack = round2(fold.foot.packaging);
     const foldVeh  = round2(fold.foot.vehicle);
     const brdFood  = round2(board.food);
     const brdPack  = round2(board.packaging);
     const brdVeh   = round2(board.vehicle);
-    // A1 with 3200.2 correction: fold Food + 3200.2 == board Food,
-    // fold Pack - 3200.2 == board Pack, fold Veh == board Veh.
-    const foldFoodCorrected = round2(foldFood + gl3200_2);
-    const foldPackCorrected = round2(foldPack - gl3200_2);
-    track(`  ${acct.padEnd(14)} P${p}  Food (fold + $3200.2 == board): fold=${fmt$(foldFood)} +${fmt$(round2(gl3200_2))} = ${fmt$(foldFoodCorrected)} · board=${fmt$(brdFood)}`, foldFoodCorrected === brdFood);
-    track(`  ${acct.padEnd(14)} P${p}  Pack (fold - $3200.2 == board): fold=${fmt$(foldPack)} -${fmt$(round2(gl3200_2))} = ${fmt$(foldPackCorrected)} · board=${fmt$(brdPack)}`, foldPackCorrected === brdPack);
-    track(`  ${acct.padEnd(14)} P${p}  Veh:  fold=${fmt$(foldVeh)} · board=${fmt$(brdVeh)}`, foldVeh === brdVeh);
-    if (gl3200_2 !== 0) console.log(`      note: ${fmt$(round2(gl3200_2))} of 3200.2 in range · R-150 rule places in Pack, board's rule places in Food.`);
+    track(`  ${acct.padEnd(14)} P${p}  Food fold=${fmt$(foldFood)} board=${fmt$(brdFood)}`, foldFood === brdFood);
+    track(`  ${acct.padEnd(14)} P${p}  Pack fold=${fmt$(foldPack)} board=${fmt$(brdPack)}`, foldPack === brdPack);
+    track(`  ${acct.padEnd(14)} P${p}  Veh  fold=${fmt$(foldVeh)}  board=${fmt$(brdVeh)}`, foldVeh === brdVeh);
   }
 }
 console.log();

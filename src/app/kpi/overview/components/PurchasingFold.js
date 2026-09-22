@@ -21,16 +21,24 @@
 // the shared columns for rippling_spend. See
 // src/lib/purchasing/loaders.js:paginateInvoiceSubmissions.
 //
-// Bucket rule (R-150, ruled 2026-09-22):
-//   3200.* except 3200.2  -> Food
-//   3400.* and 3200.2     -> Pack & Sup    (includes 3400.5 Linen)
+// Bucket rule (R-150, ruled 2026-09-22, revised 2026-09-22 after PR
+// review):
+//   3200.*                -> Food                (Resale Food 3200.2 is a
+//                                                 Food sub-line per finance
+//                                                 CoA; verified against P9
+//                                                 workbook TBJ - FL 3200.1
+//                                                 $38,781.84 + 3200.2 $1,716
+//                                                 = $40,497.84 Total Food)
+//   3400.*                -> Pack & Sup          (Linen 3400.5 included)
 //   3500.*                -> Vehicle
 //   13*                   -> Billed back
 //   5*                    -> SG&A (dropped from table)
 //
-// R-147's shared GL_PREFIX_FOR_BUCKET treats every 3200.* as Food; a
-// new local bucketOf here implements the split without altering the
-// shared map or the existing PurchasingLedger.
+// Prior draft split 3200.2 into Pack & Sup, which put the ledger $297.91
+// out of tie with the board's Food line on TBJ - FL P9 (Kevin's ruling
+// referenced the workbook to correct). This rule now matches
+// GL_PREFIX_FOR_BUCKET on 3200 / 3400 / 3500; the fold + board tie on
+// every bucket, every period.
 //
 // R-148 note (2026-09-22): the current dataset carries duplicated
 // rippling_spend rows from reassigned parent ids. R-148 retires the
@@ -70,14 +78,13 @@ const R150_BUCKET = {
   sga:       "SG&A",
 };
 
-// Kevin ruling 2026-09-22. 3200.* except 3200.2 -> Food; 3400.* AND
-// 3200.2 -> Pack & Sup; 3500.* -> Vehicle; 13* -> Billed back; 5* ->
-// SG&A (dropped). Any other code (uncoded / anything not matching)
-// falls to null and does not enter the table.
+// Kevin ruling 2026-09-22 (revised). 3200.* all sub-lines including
+// Resale Food 3200.2 -> Food; 3400.* -> Pack & Sup; 3500.* -> Vehicle;
+// 13* -> Billed back; 5* -> SG&A (dropped). Any other code (uncoded /
+// anything not matching) falls to null and does not enter the table.
 function bucketOf(gl) {
   const s = String(gl || "").trim();
   if (!s) return null;                            // uncoded - handled separately
-  if (s === "3200.2" || s.startsWith("3200.2.")) return "packaging";
   if (s === "3200" || s.startsWith("3200.")) return "food";
   if (s === "3400" || s.startsWith("3400.")) return "packaging";
   if (s === "3500" || s.startsWith("3500.")) return "vehicle";
