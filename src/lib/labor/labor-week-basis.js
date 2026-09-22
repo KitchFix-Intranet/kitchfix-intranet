@@ -524,30 +524,42 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
       // includes 2200/2300/2600 actuals). Do not add it again.
       w.week_contractual_accrual = 0;
     } else {
-      // Non-verified: current path. Per-week SC + budget-accrual/4
-      // for closed weeks (fee is inside the 2300 contractual accrual,
-      // don't double-count). Kevin R-101 (2026-09-09): the
-      // sc_measured branch (running + planning weeks, no accrual)
-      // was missing the fee entirely, so the labor target on CP + NP
-      // read $21k / $48k low against the Overview's week rail on
-      // TBJ - FL. When the caller passes `feeBudgetByPeriod`, add
-      // fee_period / 4 to sc_measured weeks. Only sc_measured fires
-      // here because pnl_distributed_by_sc + sc_plus_budget_accrual
-      // already carry the fee upstream. On CY (verified) + LP
-      // (closed_awaiting) this branch is unreachable by
-      // construction; on CP + NP every week hits it.
-      const periodAccrual = periodNo != null ? Number(accrualByPeriod.get(periodNo) || 0) : 0;
-      const weekAccrual = (basis.temporal === "closed" && periodAccrual > 0)
-        ? periodAccrual / 4
-        : 0;
-      w.week_contractual_accrual = weekAccrual;
-      if (weekAccrual > 0) {
-        revenueForWeek = Number(basis.revenue || 0) + weekAccrual;
+      // Kevin R-140 (2026-09-21). Closed weeks of a running period
+      // now use fee_period/4 (line 2300 only), NOT the full
+      // contractual accrual (2200 + 2300 + 2600). Per R-96 (memory
+      // `project_r96_only_2300_accrues.md`), lines 2200 and 2600 sit
+      // INSIDE the SC per-week revenue as B&G Lunch / equivalent, so
+      // adding the R-67 accrual on top double-counts them. Only
+      // service fee (2300) is a separate accrual on top of SC. On
+      // TBR - FL P10 this double-count inflated Σ week_revenue by
+      // $2,275/week × 2 closed weeks = $4,550, which then flowed
+      // into per-week batr and the Labor panel envelope, breaking
+      // the Guard 1 tie with the Overview 3100 batr (docs/backlog/
+      // guard1-tbr-cp-431.md).
+      //
+      // Blast radius: 17 account-periods across FY2026 carry
+      // non-zero 2200 or 2600 (CIN - AZ P1/P2/P3, TBJ - FL P1/P2/P3,
+      // TBR - FL P1-6/P9-P13). Verified branch above zeros
+      // week_contractual_accrual and uses P&L period total × SC
+      // weight, so P1-P9 (verified) tie Overview cent-exact by
+      // construction and are NOT affected by this change. Future
+      // weeks (basis.temporal !== "closed") take the sc_measured
+      // branch, no accrual, byte-identical. Only closed-but-not-
+      // verified weeks (P10 running) move.
+      //
+      // The two branches now do the same arithmetic; the derivation
+      // label stays split so downstream tile/tooltip copy that keys
+      // off `sc_plus_budget_accrual` still fires on closed weeks
+      // (fee, though pinned to 2300 only, is still an accrual on top
+      // of SC on that branch's semantics).
+      const feePeriod = periodNo != null ? Number(feeBudgetByPeriod?.get?.(periodNo) || 0) : 0;
+      const feeThisWeek = feePeriod > 0 ? feePeriod / 4 : 0;
+      if (basis.temporal === "closed" && feeThisWeek > 0) {
+        w.week_contractual_accrual = feeThisWeek;
+        revenueForWeek = Number(basis.revenue || 0) + feeThisWeek;
         derivation = "sc_plus_budget_accrual";
       } else {
-        // sc_measured: raw SC. Add fee/4 if the caller opted in.
-        const feePeriod = periodNo != null ? Number(feeBudgetByPeriod?.get?.(periodNo) || 0) : 0;
-        const feeThisWeek = feePeriod > 0 ? feePeriod / 4 : 0;
+        w.week_contractual_accrual = 0;
         revenueForWeek = Number(basis.revenue || 0) + feeThisWeek;
         derivation = "sc_measured";
       }
