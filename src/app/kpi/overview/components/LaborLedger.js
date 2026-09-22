@@ -34,7 +34,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { WeekTable } from "@/app/kpi/labor/components/WeekTable";
+import { WeekTable, WEEK_TABLE_POP_BODY } from "@/app/kpi/labor/components/WeekTable";
+import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import {
   buildFilteredActuals,
   buildWeekAggregates,
@@ -114,23 +115,36 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
       data-kpi-ov="labor-ledger"
       data-kpi-ov-open={open ? "1" : "0"}
     >
-      <button
-        type="button"
-        className="kpi-ov-fold-trigger"
-        data-kpi-ov="fold-labor"
-        onClick={onToggle}
-        aria-expanded={open ? "true" : "false"}
-      >
-        <span className="kpi-ov-eb">Rippling labor</span>
-        <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
-      </button>
+      {/* Consolidation PR 1 · commit 4 (2026-09-22). Header row
+          holds the fold trigger and the HelpPop as SIBLINGS.
+          Nesting HelpPop inside the trigger button would be
+          button-in-button (invalid HTML). Sibling shape means a
+          click on the "?" opens the popover without toggling the
+          fold. .kpi-ov-fold-head layout in overview.css. Meta
+          row (`{account} · {start} – {end}`) deleted per Kevin
+          - the scope is already implied by the page filter and
+          added a stray row between the fold header and the
+          table's header row. Use id="qLaborFold" (not
+          qWeekTable) - the labor page's own toolbar HelpPop is
+          still on the page inside a display:none .kpi-tbar,
+          so a duplicated id would put two data-hs-help="qWeek
+          Table" nodes in the DOM and break existing probe
+          selectors. */}
+      <div className="kpi-ov-fold-head">
+        <button
+          type="button"
+          className="kpi-ov-fold-trigger"
+          data-kpi-ov="fold-labor"
+          onClick={onToggle}
+          aria-expanded={open ? "true" : "false"}
+        >
+          <span className="kpi-ov-eb">Rippling labor</span>
+          <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
+        </button>
+        <HelpPop id="qLaborFold" title="The week table" body={WEEK_TABLE_POP_BODY} />
+      </div>
       {open && (
         <>
-          <div className="kpi-ov-fold-meta">
-            <span className="kpi-ov-gl" data-kpi-ov="labor-ledger-scope">
-              {account} · {start} – {end}
-            </span>
-          </div>
           <div className="kpi-ov-cb">
             {laborError ? (
               <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="labor-ledger-error">
@@ -151,12 +165,23 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
               // "If WeekTable takes props to drive any of the four
               // items above, pass them off rather than editing
               // WeekTable, so the labor page keeps its behavior for
-              // Stage A." Passing boardKind:"single_period_in_progress"
-              // hides all four toolbar clusters uniformly (WeekTable
-              // already gates the toolbar on that kind for the CP
-              // cleanup). onWorkersChange and onToggleRedact absent
-              // so those clusters do not render even if boardKind
-              // were something else.
+              // Stage A."
+              //
+              // Correction to the PR 1 commit 2 message (2026-09-22):
+              // that message said `boardKind="single_period_in_
+              // progress"` hides all four toolbar clusters. It hides
+              // THREE (Expand/Collapse, Workers filter, Names/
+              // Numbers). The jump chips have their own gate at
+              // WeekTable.js:495 (`chips.length >= 2`) and the
+              // toolbar spacer, rule and HelpPop are unconditional.
+              // The remaining clusters are hidden by the
+              // `.kpi-app .kpi-ov-fold-card .kpi-tbar { display:
+              // none }` rule in overview.css, added in commit 4 -
+              // one scoped CSS rule, no WeekTable JSX change.
+              //
+              // onWorkersChange and onToggleRedact absent below so
+              // those clusters do not render even if boardKind were
+              // something else.
               <WeekTable
                 account={account}
                 grouped={grouped}

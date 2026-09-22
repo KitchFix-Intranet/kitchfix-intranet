@@ -121,7 +121,12 @@ function WorkersFilter({ workerRoster, selectedWorkers, onWorkersChange }) {
 // (section "Period board · other regions"). Replaces the prior
 // rate-basis blurb that shipped as "ABOUT THIS TABLE". Body is a
 // ReactNode so the shared HelpPop can render it verbatim.
-const WEEK_TABLE_POP_BODY = (
+// Consolidation PR 1 · commit 4 (2026-09-22). Exported so the
+// LaborLedger fold on /kpi/overview can render the same "?" text
+// as the labor page - one source of truth for the copy. Labor
+// page's own render is unchanged; the toolbar's HelpPop still
+// consumes this constant in-file.
+export const WEEK_TABLE_POP_BODY = (
   <>
     Every week in the period, with its own spend, hours and overtime. <b>Click a week to open it and see who worked.</b>
     <br /><br />
