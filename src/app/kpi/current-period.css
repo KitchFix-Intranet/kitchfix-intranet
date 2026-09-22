@@ -1032,3 +1032,34 @@
   color: var(--n-600);
   white-space: nowrap;
 }
+
+/* R-150 · Purchasing fold week band. Sits between transaction rows,
+   summing the week. Three states: settled (past), in-progress
+   (contains today), ahead (future). Same visual pattern as the labor
+   table's period bands, muted so transaction rows read as the primary
+   surface. */
+.kpi-app .kpi-ov-pf-wband td {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  background: #F4F5F7;
+  color: var(--n-700);
+  border-top: 1px solid var(--n-200);
+  border-bottom: 1px solid var(--n-200);
+}
+.kpi-app .kpi-ov-pf-wband td.kpi-ov-cp-led-l {
+  padding-left: 18px;
+  text-align: left;
+}
+.kpi-app .kpi-ov-pf-wband-settled td { color: var(--n-600); }
+.kpi-app .kpi-ov-pf-wband-run td {
+  background: var(--amber-50);
+  color: var(--amber-600);
+}
+.kpi-app .kpi-ov-pf-wband-ahead td {
+  background: var(--n-50);
+  color: var(--n-500);
+  font-weight: 700;
+}

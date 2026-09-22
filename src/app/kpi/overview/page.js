@@ -87,6 +87,12 @@ import CurrentPeriodReview from "./components/CurrentPeriodReview";
 // below the Full P&L on closed / CY, below CurrentPeriodReview on
 // CP. Server-side canSeeSalary gate holds via the fetch alone.
 import LaborLedger from "./components/LaborLedger";
+// R-150 (2026-09-22). Purchasing detail as a fold, period into weeks
+// into transactions. Mounts beside the labor fold on single-period
+// ranges only; multi-period (Current Year) is R-151 and does not
+// render this. Own fetch of /api/kpi/purchasing?drill=lines, own
+// controlled fold state.
+import PurchasingFold from "./components/PurchasingFold";
 
 const LAST_ACCOUNT_KEY = "kpi:overview:lastAccount";
 
@@ -337,6 +343,46 @@ export default function KpiOverviewPage() {
     return () => ctrl.abort();
   }, [fetchAccount, start, end, urlPreview, urlIncludeSalary]);
 
+  // R-150 (2026-09-22). Purchasing fold fetch. Same cadence as the
+  // labor fetch: fires on every range, so a subsequent range change
+  // starts the request in flight before the fold renders. drill=lines
+  // is added only on a single-period range (Kevin's rule: multi-
+  // period, no fold, no drill). Failure lands in the fold's own error
+  // state; the Overview above renders normally.
+  //
+  // No include_salary forward. Purchasing has no salary dimension and
+  // the route rejects the flag silently, but not sending it keeps the
+  // request cache-key cleaner.
+  useEffect(() => {
+    if (!fetchAccount && !urlPreview) return;
+    if (!start || !end) return;
+    const ctrl = new AbortController();
+    setPurchasingLedger(null);
+    setPurchasingLedgerError(null);
+    const p = new URLSearchParams({ account: fetchAccount, start, end });
+    if (urlPreview) p.set("preview", urlPreview);
+    if (rangeSelection?.kind === "period") p.set("drill", "lines");
+    fetch(`/api/kpi/purchasing?${p}`, { signal: ctrl.signal })
+      .then(async (r) => {
+        if (r.status === 401) throw new Error("session_expired");
+        if (r.status === 403) throw new Error("forbidden");
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error || `HTTP ${r.status}`);
+        }
+        return r.json();
+      })
+      .then((d) => {
+        if (ctrl.signal.aborted) return;
+        setPurchasingLedger(d);
+      })
+      .catch((e) => {
+        if (e?.name === "AbortError") return;
+        setPurchasingLedgerError(String(e?.message || e));
+      });
+    return () => ctrl.abort();
+  }, [fetchAccount, start, end, urlPreview, rangeSelection?.kind]);
+
   // ── URL setters ─────────────────────────────────────────────
   const setParams = useCallback((patch) => {
     const p = new URLSearchParams(searchParams.toString());
@@ -394,6 +440,14 @@ export default function KpiOverviewPage() {
   const [laborLedgerOpen, setLaborLedgerOpen] = useState(false);
   const [laborLedger, setLaborLedger] = useState(null);
   const [laborLedgerError, setLaborLedgerError] = useState(null);
+  // R-150 (2026-09-22). Purchasing fold state + fetch. Single-period
+  // only; the fetch fires on every range (mirrors labor's cadence),
+  // adds ?drill=lines only when the range is a single period. Failure
+  // isolation: the fold renders its own error state; the Overview
+  // above never breaks.
+  const [purchasingFoldOpen, setPurchasingFoldOpen] = useState(false);
+  const [purchasingLedger, setPurchasingLedger] = useState(null);
+  const [purchasingLedgerError, setPurchasingLedgerError] = useState(null);
 
   // ── Fiscal context (today / period / week) ──────────────────
   const fiscal = useMemo(() => {
@@ -677,6 +731,23 @@ export default function KpiOverviewPage() {
                   open={laborLedgerOpen}
                   onToggle={() => setLaborLedgerOpen(o => !o)}
                 />
+                {/* R-150 · Purchasing fold on CP. Single-period only;
+                    CP is by construction a single period so the guard
+                    is a belt-and-braces (matches the mount rule
+                    elsewhere so a future range mode does not surprise
+                    the fold). */}
+                {rangeSelection?.kind === "period" && (
+                  <PurchasingFold
+                    payload={purchasingLedger}
+                    error={purchasingLedgerError}
+                    account={account}
+                    start={start}
+                    end={end}
+                    today={today}
+                    open={purchasingFoldOpen}
+                    onToggle={() => setPurchasingFoldOpen(o => !o)}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -729,6 +800,21 @@ export default function KpiOverviewPage() {
               open={laborLedgerOpen}
               onToggle={() => setLaborLedgerOpen(o => !o)}
             />
+            {/* R-150 · Purchasing fold on Closed / CY portfolio branch.
+                Only renders on single-period ranges; multi-period
+                (Current Year) is R-151. */}
+            {rangeSelection?.kind === "period" && (
+              <PurchasingFold
+                payload={purchasingLedger}
+                error={purchasingLedgerError}
+                account={account}
+                start={start}
+                end={end}
+                today={today}
+                open={purchasingFoldOpen}
+                onToggle={() => setPurchasingFoldOpen(o => !o)}
+              />
+            )}
           </>
         ) : (
           /* Kevin ruling final-presentation (2026-09-03): the chart
@@ -763,6 +849,21 @@ export default function KpiOverviewPage() {
               open={laborLedgerOpen}
               onToggle={() => setLaborLedgerOpen(o => !o)}
             />
+            {/* R-150 · Purchasing fold on Closed / CY single-account
+                branch (the "non-chart" one, chart lives inside the
+                split above). Single-period only. */}
+            {rangeSelection?.kind === "period" && (
+              <PurchasingFold
+                payload={purchasingLedger}
+                error={purchasingLedgerError}
+                account={account}
+                start={start}
+                end={end}
+                today={today}
+                open={purchasingFoldOpen}
+                onToggle={() => setPurchasingFoldOpen(o => !o)}
+              />
+            )}
           </>
         )}
         {/* Consolidation PR 1 (2026-09-22). Explicit multi-period
