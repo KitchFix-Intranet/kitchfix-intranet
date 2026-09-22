@@ -878,7 +878,51 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const boardBud = lbWks.reduce((s, w) => s + Number(w.budget_at_this_week_revenue || 0), 0);
       return boardRev > 0 ? (boardBud / boardRev) * 100 : 0;
     })();
-    const laborPct = (phase === "closed" ? laborPctFromBoard : laborPctFromStmt).toFixed(2);
+    // Kevin R-139 (2026-09-21). The running-period labor row printed
+    // `target_pct` (the line's BUDGET rate) beside an envelope that
+    // is `parent - static salary` (the REMAINDER, R-141). Those are
+    // different numbers - the row has no budget column to reconcile
+    // against so the percent reads as describing the dollar, and on
+    // TBR - FL P10 hourly it points the wrong way (18.96% printed
+    // against 16.01% actual, telling the operator they have room
+    // they do not). Only labor diverges; food / packaging / vehicle
+    // carry no fixed component so `batr / rev = target_pct` there
+    // by construction (24/24 no-op verified on the training accounts).
+    //
+    // Switch running to the achieved rate: envelope / revenue-basis
+    // using the SAME operands the CP grid renders - Overview's 3100
+    // batr as numerator, Σ week_rail.week_revenue (=revSum) as
+    // denominator. The labor board's own per-week sums use a
+    // different revenue basis (finance-aware per-period) and would
+    // print a rate that ties to neither the envelope in this grid
+    // nor the Full P&L - $19,599 / $118,248 = 16.57% on TBR - FL P10
+    // hourly, against the Overview 3100 batr of $18,201 / revSum of
+    // $113,698 = 16.01% which is what appears IN THIS ROW.
+    //
+    // Salary toggle parent: merged batr = merged_pct × revSum, so
+    // batr / revSum = merged_pct = target_pct on that branch. The
+    // salary parent stays byte-identical (33.29% on TBJ - FL P10).
+    //
+    // Scope: running only. Closed keeps laborPctFromBoard (its own
+    // rev basis IS the labor board's own basis on closed, where the
+    // per-period finance-verified revenue and the CP grid's revenue
+    // agree cent-exact per R-133). Future uses `laborSubFutureOv`
+    // (a different variable, unaffected).
+    const _r139RunningEnvelope = (() => {
+      const row = stmtByLine.get("3100");
+      if (!row) return 0;
+      const batr = Number(row.budget_at_this_revenue || 0);
+      const pb = Number(row.period_budget || 0);
+      return batr > 0 ? batr : pb;
+    })();
+    const laborPctRunningAchieved = revSum > 0
+      ? (_r139RunningEnvelope / revSum) * 100
+      : 0;
+    const laborPct = (
+      phase === "future"  ? laborPctFromStmt
+      : phase === "closed" ? laborPctFromBoard
+      : laborPctRunningAchieved
+    ).toFixed(2);
     // Kevin R-128 Part 3 item 11 (2026-09-19). Drop the `labor · `
     // prefix on the salary view - the row is already labelled
     // "Kitchen labor" in the label column. Keep `hourly · ` on the
