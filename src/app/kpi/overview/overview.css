@@ -1705,6 +1705,55 @@
 .kpi-app .kpi-ov-fold-card .kpi-ov-cb {
   padding: 0 var(--kpi-sp-4) var(--kpi-sp-4);
 }
+/* Consolidation PR 1 follow-up (2026-09-22). WeekTable's own card
+   chrome (border + radius + shadow + solid background via
+   .kpi-tbl-wrap at src/app/kpi/kpi.css:3388) is the labor page's
+   table card - correct THERE, but nested inside an Overview fold
+   it reads as a card inside a card while the sibling Full P&L
+   fold sits flush in .kpi-ov-cb. Strip the wrapper's chrome in
+   this scope only, so the labor page's own .kpi-tbl-wrap outside
+   a fold keeps its card. .kpi-tbl-scroll untouched - its
+   overflow: auto is what stops the page scrolling sideways at
+   narrow widths. */
+.kpi-app .kpi-ov-fold-card .kpi-tbl-wrap {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* Consolidation PR 1 · commit 4 (2026-09-22). WeekTable renders
+   .kpi-tbar unconditionally. boardKind="single_period_in_progress"
+   hides three of its four clusters (Expand/Collapse, Workers,
+   Names/Numbers). The jump chips have their own gate
+   (showChips = chips.length >= 2, WeekTable.js:495), and the
+   spacer, rule and toolbar HelpPop are unconditional. Result: a
+   row of chips on multi-period ranges (Current Year), an empty
+   row on single-period ranges (P9). Kevin: "gone. The ? goes in
+   the header row." display:none inside a fold takes the whole
+   toolbar out of layout, tab order and the accessibility tree,
+   with no JSX change to WeekTable. */
+.kpi-app .kpi-ov-fold-card .kpi-tbar {
+  display: none;
+}
+/* Consolidation PR 1 · commit 4 (2026-09-22). Header row wrapper
+   for the labor fold: trigger button + sibling HelpPop on one
+   line. HelpPop must not nest inside the trigger button (invalid
+   HTML: button-in-button). Trigger takes the remaining width so
+   the click target stays full width; HelpPop sits at the right
+   next to the chevron. */
+.kpi-app .kpi-ov-fold-head {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.kpi-app .kpi-ov-fold-head > .kpi-ov-fold-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.kpi-app .kpi-ov-fold-head > [data-hs-help] {
+  flex: 0 0 auto;
+  margin-right: var(--kpi-sp-3);
+}
 /* When the trigger has the segment control inline (P&L Full/Summary),
  * pin the seg to the right and let the chevron sit past it. */
 .kpi-app .kpi-ov-fold-trigger .kpi-ov-seg {
