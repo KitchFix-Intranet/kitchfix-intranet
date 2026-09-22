@@ -83,6 +83,10 @@ import SkeletonBoard from "./components/SkeletonBoard";
 // unchanged (Guard 1).
 import CurrentPeriodTable from "./components/CurrentPeriodTable";
 import CurrentPeriodReview from "./components/CurrentPeriodReview";
+// Consolidation PR 1 (2026-09-22). Rippling labor detail as a fold
+// below the Full P&L on closed / CY, below CurrentPeriodReview on
+// CP. Server-side canSeeSalary gate holds via the fetch alone.
+import LaborLedger from "./components/LaborLedger";
 
 const LAST_ACCOUNT_KEY = "kpi:overview:lastAccount";
 
@@ -297,6 +301,42 @@ export default function KpiOverviewPage() {
     return () => ctrl.abort();
   }, [useCpTable, fetchAccount, start, end, urlPreview, urlIncludeSalary]);
 
+  // Consolidation PR 1 (2026-09-22). Labor ledger fetch. Runs on
+  // every range (not gated on cpGateActive) so the fold works on
+  // closed / CY / CP alike. Same account + range as the Overview
+  // fetch; forwards include_salary and preview only. Failure
+  // isolation: 401 / 403 / network errors land in
+  // laborLedgerError; the Overview above renders normally.
+  useEffect(() => {
+    if (!fetchAccount && !urlPreview) return;
+    if (!start || !end) return;
+    const ctrl = new AbortController();
+    setLaborLedger(null);
+    setLaborLedgerError(null);
+    const p = new URLSearchParams({ account: fetchAccount, start, end });
+    if (urlPreview) p.set("preview", urlPreview);
+    if (urlIncludeSalary) p.set("include_salary", "1");
+    fetch(`/api/kpi/labor?${p}`, { signal: ctrl.signal })
+      .then(async (r) => {
+        if (r.status === 401) throw new Error("session_expired");
+        if (r.status === 403) throw new Error("forbidden");
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error || `HTTP ${r.status}`);
+        }
+        return r.json();
+      })
+      .then((d) => {
+        if (ctrl.signal.aborted) return;
+        setLaborLedger(d);
+      })
+      .catch((e) => {
+        if (e?.name === "AbortError") return;
+        setLaborLedgerError(String(e?.message || e));
+      });
+    return () => ctrl.abort();
+  }, [fetchAccount, start, end, urlPreview, urlIncludeSalary]);
+
   // ── URL setters ─────────────────────────────────────────────
   const setParams = useCallback((patch) => {
     const p = new URLSearchParams(searchParams.toString());
@@ -345,6 +385,15 @@ export default function KpiOverviewPage() {
   // back into the right column beneath Cost of goods, always open;
   // only P&L remains a fold at the bottom.
   const [pnlOpen, setPnlOpen] = useState(false);
+  // Consolidation PR 1 (2026-09-22). Labor ledger fold state +
+  // client-side fetch of /api/kpi/labor for this range. Mirrors
+  // labor/page.js:268 exactly - same account, same range, forwards
+  // include_salary and preview, does NOT forward homestand (out of
+  // scope per Kevin). 401/403 land silently in the fold's error
+  // state; the Overview above never breaks.
+  const [laborLedgerOpen, setLaborLedgerOpen] = useState(false);
+  const [laborLedger, setLaborLedger] = useState(null);
+  const [laborLedgerError, setLaborLedgerError] = useState(null);
 
   // ── Fiscal context (today / period / week) ──────────────────
   const fiscal = useMemo(() => {
@@ -540,12 +589,24 @@ export default function KpiOverviewPage() {
             still handles the running-period case; NP takes over the
             `planned` state. */}
         {npGateActive ? (
-          <CurrentPeriodTable
-            payload={data}
-            labor={cpLabor}
-            purch={cpPurch}
-            error={cpAuxError}
-          />
+          <>
+            <CurrentPeriodTable
+              payload={data}
+              labor={cpLabor}
+              purch={cpPurch}
+              error={cpAuxError}
+            />
+            <LaborLedger
+              labor={laborLedger}
+              laborError={laborLedgerError}
+              account={account}
+              start={start}
+              end={end}
+              today={today}
+              open={laborLedgerOpen}
+              onToggle={() => setLaborLedgerOpen(o => !o)}
+            />
+          </>
         ) : (
           <>
             {/* R-112 PR 2 (2026-09-16): CurrentPeriodTable now owns
@@ -606,6 +667,16 @@ export default function KpiOverviewPage() {
                   labor={cpLabor}
                   purchasing={cpPurch}
                 />
+                <LaborLedger
+                  labor={laborLedger}
+                  laborError={laborLedgerError}
+                  account={account}
+                  start={start}
+                  end={end}
+                  today={today}
+                  open={laborLedgerOpen}
+                  onToggle={() => setLaborLedgerOpen(o => !o)}
+                />
               </>
             ) : (
               <>
@@ -648,6 +719,16 @@ export default function KpiOverviewPage() {
             <Chart chart={data.chart} revenueModel={data.revenue_model} />
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
             <AlsoTracked payload={data} />
+            <LaborLedger
+              labor={laborLedger}
+              laborError={laborLedgerError}
+              account={account}
+              start={start}
+              end={end}
+              today={today}
+              open={laborLedgerOpen}
+              onToggle={() => setLaborLedgerOpen(o => !o)}
+            />
           </>
         ) : (
           /* Kevin ruling final-presentation (2026-09-03): the chart
@@ -672,7 +753,37 @@ export default function KpiOverviewPage() {
               </div>
             </div>
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
+            <LaborLedger
+              labor={laborLedger}
+              laborError={laborLedgerError}
+              account={account}
+              start={start}
+              end={end}
+              today={today}
+              open={laborLedgerOpen}
+              onToggle={() => setLaborLedgerOpen(o => !o)}
+            />
           </>
+        )}
+        {/* Consolidation PR 1 (2026-09-22). Explicit multi-period
+            ranges whose LAST period is planned (e.g. TXR - AZ full
+            FY where P11-P13 are dark) trip the
+            `period_state === "planned"` null-gate above and would
+            otherwise miss the fold. Render it here for that case,
+            outside the closed/CY branch. cpGateActive + npGateActive
+            already own their own mounts above, so gate on both to
+            avoid double-rendering. */}
+        {!cpGateActive && !npGateActive && data.period_state === "planned" && data.range?.kind !== "period" && (
+          <LaborLedger
+            labor={laborLedger}
+            laborError={laborLedgerError}
+            account={account}
+            start={start}
+            end={end}
+            today={today}
+            open={laborLedgerOpen}
+            onToggle={() => setLaborLedgerOpen(o => !o)}
+          />
         )}
       </div>
     );
