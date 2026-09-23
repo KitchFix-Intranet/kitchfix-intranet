@@ -604,6 +604,146 @@ export async function fireN2(args) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// fireNoOpAlert - operator resubmitted a week that already has a
+// live invoice on file. 2026-09-23, after the TXR-AZ 2026-09-14
+// silent-lie incident.
+// ═══════════════════════════════════════════════════════════════════
+//
+// Fires when `postInvoiceDraft` returns `wasNoOp: true` on the
+// idempotency short-circuit at qboAdapter.js:491. Nothing was sent;
+// the ledger already holds a `created` row for this (account, week,
+// slot). Under FIX 1 (Kevin ruling 2026-09-23):
+//   - The operator does NOT get an N1 email. Nothing was sent, and
+//     the operator is not authorized to fix a no-op.
+//   - Kevin alone gets both an email and a Slack post naming what
+//     resubmitted, what existed, and what the next action is.
+//   - Sebastian is NOT looped in - the invoice he already knows
+//     about still stands, so nothing has changed on his side. Kevin
+//     triages and pulls him in only if the existing amount is stale.
+//
+// Copy content per Kevin's D4 ruling. Subject uses a hyphen not an
+// em-dash (docs/GOTCHAS.md: some mail clients render em-dashes in
+// subjects as `=?UTF-8?...` garbage). Body may use em-dashes freely.
+function noOpAlertBody({ accountKey, weekStart, weekEnd, submitterEmail, priorInvoices, finalizedAt }) {
+  const rows = priorInvoices.map((inv) => `
+    <tr>
+      <td style="padding:4px 12px 4px 0;color:#64748B;font-size:13px">Slot</td>
+      <td style="padding:4px 0;color:#0F172A;font-size:13px;font-weight:600">${escapeHtml(inv.invoice_slot || inv.invoiceSlot || "-")}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 12px 4px 0;color:#64748B;font-size:13px">Existing DocNumber</td>
+      <td style="padding:4px 0;color:#0F172A;font-size:13px;font-weight:600">${escapeHtml(inv.qbo_doc_number || inv.qboDocNumber || "(none)")}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 12px 4px 0;color:#64748B;font-size:13px">QBO Invoice ID</td>
+      <td style="padding:4px 0;color:#0F172A;font-size:13px;font-weight:600">${escapeHtml(inv.qbo_invoice_id || inv.qboInvoiceId || "(none)")}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 12px 4px 0;color:#64748B;font-size:13px">Ledger Row</td>
+      <td style="padding:4px 0;color:#0F172A;font-size:13px;font-family:monospace">${escapeHtml(inv.ledger_row_id || inv.ledgerRowId || "(none)")}</td>
+    </tr>
+  `).join("");
+  return `
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+  <tr><td style="padding-bottom:8px;font-size:10px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#8A5A16;background:#FDF3E6;border-bottom:1px solid #F0D9B5;padding:7px 20px;display:block">Idempotency short-circuit</td></tr>
+  <tr><td style="padding:12px 20px 8px 20px;font-size:17px;line-height:1.35;font-weight:bold;color:#0F172A">Operator resubmitted a week that already has an invoice on file</td></tr>
+  <tr><td style="padding:0 20px 14px 20px;font-size:13px;line-height:1.55;color:#475569">
+    <strong>${escapeHtml(submitterEmail || "(unknown submitter)")}</strong> pressed finalize on <strong>${escapeHtml(accountKey)}</strong> week ${escapeHtml(fmtWeekRange(weekStart, weekEnd))}${finalizedAt ? ` at ${escapeHtml(finalizedAt)}` : ""}. The adapter's idempotency check found an existing ledger row for the same (account, week, slot) and did not send a new invoice. QuickBooks was not touched.
+  </td></tr>
+  <tr><td style="padding:0 20px 15px 20px">
+    <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#F8FAFC;border-radius:6px;padding:8px 12px">
+      ${rows}
+    </table>
+  </td></tr>
+  <tr><td style="padding:0 20px 14px 20px;font-size:13px;line-height:1.55;color:#475569">
+    <strong>Action required:</strong> verify the existing invoice in QuickBooks matches the intended amount for this week. If it does not, supersede the ledger row in Studio and revert the week — the operator will re-finalize.
+  </td></tr>
+  <tr><td style="padding:0 20px 14px 20px;font-size:12px;line-height:1.55;color:#94A3B8">
+    The operator was NOT told the finalize succeeded — the confirm screen showed an amber banner naming the dead end. No follow-up from them is expected.
+  </td></tr>
+</table>`;
+}
+
+function noOpAlertSlackText({ accountKey, weekStart, submitterEmail, priorInvoices }) {
+  const kfList = priorInvoices
+    .map(inv => inv.qbo_doc_number || inv.qboDocNumber || "(no KF)")
+    .join(", ");
+  const idList = priorInvoices
+    .map(inv => inv.qbo_invoice_id || inv.qboInvoiceId || "(no id)")
+    .join(", ");
+  return [
+    `*[SC no-op]* ${accountKey} · week of ${fmtWeekTitle(weekStart)}`,
+    `> submitter: ${submitterEmail || "(unknown)"}`,
+    `> existing DocNumber: ${kfList}`,
+    `> QBO invoice id: ${idList}`,
+    `> action: verify amount in QuickBooks. If stale, supersede the ledger row + revert; the operator will re-finalize.`,
+  ].join("\n");
+}
+
+/**
+ * Fire the no-op alert. Email + Slack, Kevin only.
+ *
+ * @param {Object} args
+ * @param {string} args.accountKey
+ * @param {string} args.weekStart      ISO Monday (pair start for biweekly)
+ * @param {string} args.weekEnd        ISO closing Sunday
+ * @param {string} [args.submitterEmail]  Who pressed finalize
+ * @param {string} [args.finalizedAt]     ISO string for the finalize timestamp
+ * @param {Array<{invoice_slot, qbo_doc_number, qbo_invoice_id, ledger_row_id}>} args.priorInvoices
+ * @param {boolean} [args.send=true]   Set false in tests to render only
+ * @param {Object}  [args.deps]        { emailSender, sendSlack, slackWebhookUrl } for injection
+ * @returns {{ recipients, subject, preheader, html, slack, email }}
+ */
+export async function fireNoOpAlert(args) {
+  const {
+    accountKey, weekStart, weekEnd, submitterEmail, finalizedAt,
+    priorInvoices = [], send = true, deps,
+  } = args;
+  const kfLabel = priorInvoices.length > 0
+    ? priorInvoices.map(i => i.qbo_doc_number || i.qboDocNumber || "(no KF)").join(", ")
+    : "(no KF on file)";
+  // D4 ruling: subject uses hyphen not em-dash. docs/GOTCHAS.md
+  // "Em-dashes in email subjects break encoding" - some clients
+  // render `=?UTF-8?...` garbage.
+  const subject = `[SC no-op] ${accountKey} week of ${fmtWeekTitle(weekStart)} - operator resubmitted; existing invoice ${kfLabel} on file`;
+  const preheader = `Operator ${submitterEmail || "(unknown)"} pressed finalize but the adapter short-circuited. Verify existing invoice in QBO.`;
+  const html = emailShell({
+    preheader,
+    body: noOpAlertBody({ accountKey, weekStart, weekEnd, submitterEmail, priorInvoices, finalizedAt }),
+  });
+  const slackText = noOpAlertSlackText({ accountKey, weekStart, submitterEmail, priorInvoices });
+
+  // Kevin-only recipients. Sebastian is NOT included: the invoice he
+  // already knows about still stands, and Kevin triages before
+  // looping him in.
+  const recipients = { to: [KEVIN_EMAIL], cc: [] };
+
+  let emailResult = "not_sent";
+  let slackResult = { sent: false, skipped: "not sent (send=false)" };
+  if (send) {
+    const sender = deps?.emailSender || sendEmailSA;
+    emailResult = await sender({
+      sender: EMAIL_SENDER,
+      displayName: EMAIL_DISPLAY_NAME,
+      to: recipients.to,
+      subject,
+      html,
+    });
+    const slackWebhook = deps?.slackWebhookUrl || process.env.SLACK_SC_BILLING_WEBHOOK_URL;
+    slackResult = await (deps?.sendSlack || sendSlack)({
+      webhookUrl: slackWebhook,
+      text: slackText,
+    });
+  }
+  return {
+    recipients, subject, preheader, html,
+    slack: { text: slackText, result: slackResult },
+    email: { result: emailResult },
+  };
+}
+
+
 // ─── Legacy render entry points (kept for existing unit tests) ────
 //
 // PR-C's tests call renderN1 / renderN2. Preserve those signatures

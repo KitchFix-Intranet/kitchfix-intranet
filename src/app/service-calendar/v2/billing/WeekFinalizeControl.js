@@ -326,18 +326,39 @@ export default function WeekFinalizeControl({
       await new Promise((r) => setTimeout(r, 250));
       setWorkingStepIndex(5);
       setOverlayMode("idle");
-      // 2026-09-04 (motion cleanup): use the shared SC toast. FinalizeToast
-      // retired. Same copy shape as the retired component:
-      //   1 invoice  -> "AP has the invoice for review."
-      //   N > 1      -> "AP has N invoices for review."
-      showToast?.({
-        variant: "generic",
-        tier: "ok",
-        title: "Week finalized",
-        detail: displayCount === 1
-          ? "AP has the invoice for review."
-          : `AP has ${displayCount} invoices for review.`,
-      });
+      // 2026-09-23 (FIX 1): distinguish the no-op case from happy path.
+      // The adapter's idempotency short-circuit fired; nothing was
+      // sent to QuickBooks. Kevin ruling D4: name the dead end so the
+      // operator does not press submit again and produce another
+      // no-op. Copy is Kevin-approved verbatim.
+      if (finalizeResult?.pushed === false && finalizeResult?.reason === "already_invoiced") {
+        const priorKf = Array.isArray(finalizeResult?.priorInvoiceRecords)
+          ? finalizeResult.priorInvoiceRecords
+              .map(r => r.qbo_doc_number || r.qboDocNumber)
+              .filter(Boolean)
+              .join(", ")
+          : "";
+        const kfPhrase = priorKf ? `QuickBooks holds ${priorKf} from an earlier submission.` : "QuickBooks already holds an invoice from an earlier submission.";
+        showToast?.({
+          variant: "generic",
+          tier: "warn",
+          title: "This week already has an invoice on file",
+          detail: `${kfPhrase} Nothing was sent to billing this time, and resubmitting won't change that. Kevin has been notified - nothing further is needed from you.`,
+        });
+      } else {
+        // 2026-09-04 (motion cleanup): use the shared SC toast. FinalizeToast
+        // retired. Same copy shape as the retired component:
+        //   1 invoice  -> "AP has the invoice for review."
+        //   N > 1      -> "AP has N invoices for review."
+        showToast?.({
+          variant: "generic",
+          tier: "ok",
+          title: "Week finalized",
+          detail: displayCount === 1
+            ? "AP has the invoice for review."
+            : `AP has ${displayCount} invoices for review.`,
+        });
+      }
     } catch (e) {
       clearInterval(tickTimer);
       setOverlayMode("idle");
