@@ -10,11 +10,13 @@
 // Auth (mirrors labor + purchasing routes):
 //   - TEST_MODE double-gate (kills on Vercel) for probes / smokes
 //   - NextAuth session for real users
-//   - KPI_PREVIEW_ALLOWLIST fence (only Kevin until KPI_PREVIEW_ONLY
-//     flips to false in Phase 4)
-//   - OPS_LEADERSHIP_EMAILS gate (session must be on the list)
+//   - KPI_PREVIEW_ALLOWLIST fence (Kevin + the R-160 training cohort
+//     until KPI_PREVIEW_ONLY flips to false)
 //   - Role gate resolves the caller shape (corporate / rdo /
-//     site_leader / site_manager)
+//     site_leader / site_manager) and refuses null callers below.
+//     V-role-gates - OPS_LEADERSHIP_EMAILS retired here (R-160).
+//     Authorisation is now the role gate + canViewAccount, per
+//     docs/KPI_ROLE_GATES_SPEC.md.
 //   - Preview mode via resolvePreviewAccess (narrows, never grants)
 //
 // Query params:
@@ -32,7 +34,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getServiceClient } from "@/lib/supabase";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST, loadRoleGate } from "@/lib/kpi/roleGate.js";
 import { resolvePreviewAccess } from "@/lib/kpi/previewAccess.js";
 import { isKnownAccount } from "@/lib/accountModels.js";
@@ -90,13 +91,12 @@ export async function GET(request) {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
     email = session.user?.email?.toLowerCase().trim();
-    // KPI preview fence (mirrors labor/purchasing routes). Sits IN FRONT
-    // of the OPS_LEADERSHIP gate so a fenced caller is refused even if
-    // on the ops list.
+    // KPI preview fence (mirrors labor + purchasing routes). Sits in
+    // front of the role gate: a fenced email is refused before we
+    // read kpi_roles or people. V-role-gates: OPS_LEADERSHIP_EMAILS
+    // gate retired here (R-160); authorisation is the role gate +
+    // canViewAccount below.
     if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
-    if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   }

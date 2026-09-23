@@ -51,23 +51,39 @@ function normEmail(e) {
   return String(e || "").trim().toLowerCase();
 }
 
-// KPI PREVIEW FENCE - 2026-08-19.
+// KPI PREVIEW FENCE - 2026-08-19, cohort extended 2026-09-23 (R-160).
 // The role model in this file is complete and correct; the BOARD is
-// still under active development. Until Kevin opens it, only the
-// preview allowlist resolves to a role. Everyone else resolves null
-// and the route returns 403, exactly as an unknown caller would.
+// still under active development. Until Kevin opens it broadly, only
+// the named cohort below resolves to a role. Everyone else resolves
+// null and the route returns 403, exactly as an unknown caller would.
 //
-// TO OPEN THE BOARD: set KPI_PREVIEW_ONLY = false. That single edit
-// restores the full four-role model with no data changes - the 11
-// seeded site leaders, the 9 corporate rows and the 2 rdo rows are
-// untouched by this fence and need no re-seeding.
+// The cohort is nine people plus Kevin - R-160 opens CIN - AZ and
+// TXR - AZ for training. Every email lowercase; normEmail() trims +
+// lowercases at compare time so a mixed-case entry here would never
+// match (M3 failure mode recorded in the spec).
+//
+// TO OPEN THE BOARD to every role the four-role model admits: set
+// KPI_PREVIEW_ONLY = false. That single edit restores the full model
+// with no data changes - the seeded site leaders, corporate rows and
+// rdo rows are untouched by this fence and need no re-seeding.
 //
 // A hardcoded constant, not an env var, on purpose: Kevin merges
 // through GitHub Desktop and does not want a Vercel dashboard edit
 // in the loop. A constant is greppable, diff-visible, and cannot
 // drift between environments.
 export const KPI_PREVIEW_ONLY = true;
-export const KPI_PREVIEW_ALLOWLIST = ["k.fietek@kitchfix.com"];
+export const KPI_PREVIEW_ALLOWLIST = [
+  "k.fietek@kitchfix.com",
+  "joe@kitchfix.com",
+  "josh@kitchfix.com",
+  "m.chavez@kitchfix.com",
+  "r.moore@kitchfix.com",
+  "j.trible@kitchfix.com",
+  "m.decanio@kitchfix.com",
+  "e.randall@kitchfix.com",
+  "a.lacy@kitchfix.com",
+  "a.hughes@kitchfix.com",
+];
 
 /**
  * Load the KPI role gate for one request.

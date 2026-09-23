@@ -85,18 +85,21 @@
 //   end                YYYY-MM-DD (defaults to today)
 //   drill              'lines' to include the per-line `actuals` array
 //
-// Auth: session gate via OPS_LEADERSHIP_EMAILS (identical to labor).
+// Auth: preview fence + role gate + canViewAccount, matching the
+// Overview and labor routes (V-role-gates - OPS_LEADERSHIP_EMAILS
+// gate retired here on 2026-09-23 per R-160). Authorisation is the
+// role gate resolution (null caller -> 403) plus a canViewAccount
+// check against the settled account (unauthorised -> locked body,
+// spec §3).
 // TEST_MODE bypass mirrors src/middleware.js for local Playwright +
 // smoke runs; never fires on Vercel (VERCEL=1 unsets regardless).
 // No name / dollar / vendor / merchant echo in error paths.
 
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 // KPI PREVIEW FENCE - single source of truth in roleGate.js. The
-// purchasing route has not adopted the full role model yet (that is
-// Phase 2 work); until it does, the same allowlist that gates the
-// labor route also gates this one.
+// preview allowlist gates access before the role gate reads
+// kpi_roles or people.
 import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { loadRoleGate } from "@/lib/kpi/roleGate.js";
 import { resolvePreviewAccess } from "@/lib/kpi/previewAccess.js";
@@ -328,15 +331,12 @@ export async function GET(request) {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
     const email = session.user?.email?.toLowerCase().trim();
-    // KPI PREVIEW FENCE - sits in FRONT of the existing
-    // OPS_LEADERSHIP_EMAILS gate so a fenced caller is refused even
-    // if they are on the ops leadership list. Flipping
-    // KPI_PREVIEW_ONLY to false in src/lib/kpi/roleGate.js opens
-    // this route back up to OPS_LEADERSHIP_EMAILS.
+    // KPI PREVIEW FENCE - sits in front of the role gate so a fenced
+    // email is refused before we read kpi_roles or people.
+    // V-role-gates - OPS_LEADERSHIP_EMAILS gate retired here (R-160).
+    // Authorisation is now the null-caller refusal + canViewAccount
+    // check below.
     if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
-    if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   }
@@ -371,16 +371,12 @@ export async function GET(request) {
 
   const supa = getServiceClient();
 
-  // 2026-08-28 preview mode adoption (labor's #873 shape).  Load the
-  // role gate to get `canViewAccount` for the preview intersection;
-  // resolvePreviewAccess silently ignores preview whose target the
-  // caller can't view.  This runs BEFORE the !account 400 gate so a
-  // corporate hitting `?preview=CIN - AZ` (no ?account=) still lands
-  // on the previewed account.
-  //
-  // NOT a permissions change: the OPS_LEADERSHIP + KPI_PREVIEW gates
-  // above already refused unauthorised callers.  This block only
-  // narrows an authorised caller's effective account.
+  // Role gate resolution. V-role-gates 2026-09-23 (R-160): this is
+  // now the authorisation step, not a narrowing helper. The preview
+  // fence above blocks fenced emails; anyone past it must resolve to
+  // a role or the route refuses. resolvePreviewAccess further down
+  // still uses canViewAccount to narrow a corporate caller into a
+  // previewed account.
   const gate = await loadRoleGate(supa);
   if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
   let caller = null;
@@ -390,9 +386,13 @@ export async function GET(request) {
     // Auth already ran above; re-derive email for the gate.
     const session = await auth();
     const email = session?.user?.email?.toLowerCase().trim();
-    if (email) {
-      try { caller = await gate.resolveKpiRole(email); } catch {}
-    }
+    // Resolver failure is a 500, not a silent null. `catch {}` here
+    // would leave caller=null and rely on downstream checks; the
+    // Overview/labor routes surface the error and this route now
+    // mirrors that (spec §3: THE ROUTE MUST NOT RETURN THE DATA).
+    try { caller = email ? await gate.resolveKpiRole(email) : null; }
+    catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
+    if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const landing_account = caller ? gate.landingAccount(caller) : null;
 
@@ -424,6 +424,21 @@ export async function GET(request) {
   }
   if (D17_OUT_OF_SCOPE.has(account)) {
     return NextResponse.json({ error: "account_out_of_scope", account }, { status: 400 });
+  }
+
+  // V-role-gates 2026-09-23 (R-160). Locked-state response for
+  // accounts the caller cannot view - shape mirrors the Overview
+  // route. No `board`, no `actuals`, no `budget`, no rows, no vendor
+  // names, no counts. Spec §3: the LOCK IS SERVER-SIDE.
+  if (!gate.canViewAccount(caller, account)) {
+    return NextResponse.json({
+      locked: true,
+      account,
+      reason: "not_authorised",
+      landing_account,
+      preview_account,
+      todayISO: today,
+    });
   }
 
   // Resolve members.
