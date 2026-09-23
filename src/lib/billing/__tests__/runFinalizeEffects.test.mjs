@@ -585,3 +585,126 @@ test("biweekly close-week: metaErr on lookup is surfaced (not swallowed)", async
   );
 });
 
+// ─── FIX 1 (2026-09-23): adapter idempotency short-circuit ─────────
+//
+// Live incident 2026-09-14 (TXR-AZ): operator resubmitted a week that
+// had been reverted in the UI but whose `created` ledger row was still
+// on file. postInvoiceDraft honestly returned wasNoOp:true; N1 fired
+// anyway, telling everyone the invoice was sent when nothing existed
+// in QuickBooks. FIX 1 (Kevin ruling 2026-09-23):
+//   D1: suppress operator N1; Kevin alone gets email + Slack
+//   D2: return { pushed: false, reason: "already_invoiced", ... }
+//       matching the two sibling pushed:false outcomes
+//   D3: sc_week_finalize row still transitions to 'finalized'
+//   D4: banner copy names the dead end
+
+test("no-op (FIX 1): wasNoOp=true -> pushed:false, reason:already_invoiced, priorInvoiceRecords populated", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const supa = makeSupaMock({ tables: makeSeedTables({ map: liveMap }) });
+
+  const deps = {
+    supa,
+    postInvoiceDraft: async () => ({
+      wasNoOp:      true,
+      ledgerRowId:  "led-existing",
+      qboInvoiceId: "INV-42",
+      qboDocNumber: "KF000000042",
+      status:       "created",
+    }),
+    fireN1: () => { throw new Error("N1 must NOT fire on no-op path"); },
+    fireN2: () => { throw new Error("N2 must NOT fire on no-op path"); },
+    fireNoOpAlert: async (args) => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject:    `[SC no-op] ${args.accountKey} week of Jul 27 - operator resubmitted; existing invoice KF000000042 on file`,
+      preheader:  "",
+      html:       "<html>...</html>",
+      slack:      { text: "*SC no-op alert* ...", result: { sent: true } },
+      email:      { result: "sent" },
+    }),
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  const result = await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(result.pushed, false,
+    "D2 ruling: PRIMARY flag is honest - nothing was pushed");
+  assert.equal(result.reason, "already_invoiced",
+    "D2 ruling: reason matches sibling pushed:false outcomes");
+  assert.equal(Array.isArray(result.priorInvoiceRecords), true);
+  assert.equal(result.priorInvoiceRecords.length, 1);
+  assert.equal(result.priorInvoiceRecords[0].qbo_doc_number, "KF000000042");
+  assert.equal(result.priorInvoiceRecords[0].qbo_invoice_id, "INV-42");
+  assert.equal(result.priorInvoiceRecords[0].ledger_row_id, "led-existing");
+  assert.ok(result.kevinAlert, "kevinAlert attached to result for consumers");
+  assert.deepEqual(result.kevinAlert.recipients.to, [KEVIN_EMAIL],
+    "D1 ruling: Kevin alone on the alert, no operator or Sebastian");
+});
+
+test("no-op (FIX 1): fireN1 NOT called; fireNoOpAlert called with account/week/submitter/priorInvoices", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const supa = makeSupaMock({ tables: makeSeedTables({ map: liveMap }) });
+
+  let n1Called = false;
+  let noOpArgs = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async () => ({
+      wasNoOp:      true,
+      ledgerRowId:  "led-existing",
+      qboInvoiceId: "INV-42",
+      qboDocNumber: "KF000000042",
+      status:       "created",
+    }),
+    fireN1: async () => { n1Called = true; return {}; },
+    fireN2: () => { throw new Error("N2 must NOT fire on no-op path"); },
+    fireNoOpAlert: async (args) => {
+      noOpArgs = args;
+      return {
+        recipients: { to: [KEVIN_EMAIL], cc: [] },
+        subject:    "[SC no-op] ...",
+        html:       "",
+        slack:      { text: "", result: { sent: true } },
+        email:      { result: "sent" },
+      };
+    },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(n1Called, false,
+    "D1 ruling: operator N1 suppressed - a truthful N1 was the bug the fix removes");
+  assert.ok(noOpArgs, "fireNoOpAlert MUST fire on the no-op path");
+  assert.equal(noOpArgs.accountKey, "TXR - AZ");
+  assert.equal(noOpArgs.weekStart, "2026-07-27");
+  assert.equal(noOpArgs.weekEnd, "2026-08-02",
+    "weekEnd is Sunday of the same week (weekly cadence)");
+  assert.equal(Array.isArray(noOpArgs.priorInvoices), true);
+  assert.equal(noOpArgs.priorInvoices.length, 1);
+  assert.equal(noOpArgs.priorInvoices[0].qbo_doc_number, "KF000000042",
+    "Kevin's alert receives the KF number so it can name it in email + Slack");
+});
+
+test("no-op (FIX 1): sc_week_finalize row stays 'finalized' (D3 ruling)", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const supa = makeSupaMock({ tables: makeSeedTables({ map: liveMap }) });
+
+  const deps = {
+    supa,
+    postInvoiceDraft: async () => ({
+      wasNoOp: true, ledgerRowId: "led-existing",
+      qboInvoiceId: "INV-42", qboDocNumber: "KF000000042", status: "created",
+    }),
+    fireN1: () => { throw new Error("N1 must NOT fire on no-op path"); },
+    fireN2: () => { throw new Error("N2 must NOT fire on no-op path"); },
+    fireNoOpAlert: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "", html: "", slack: { text: "", result: { sent: true } },
+      email: { result: "sent" },
+    }),
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(supa._dump("sc_week_finalize")[0].status, "finalized",
+    "D3 ruling: the operator did finalize; the row records their action");
+});
+

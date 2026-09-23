@@ -298,7 +298,18 @@ export default function PeriodWorkspace({
     // toast can report the actual count (TBJ produces 3-8 invoices per
     // week). Shape: { pushed:true, invoiceRecords:[...], n1:{...} } |
     // { pushed:false, ... }.
-    return { invoiceRecords: responseBody?.effects?.invoiceRecords || [] };
+    //
+    // 2026-09-23 (FIX 1): also pass through the effects.reason field
+    // so the toast can distinguish "already_invoiced" (no-op path)
+    // from the standard happy path. Toast in WeekFinalizeControl
+    // renders an amber warn tier on already_invoiced.
+    const effects = responseBody?.effects || {};
+    return {
+      invoiceRecords: effects.invoiceRecords || [],
+      pushed:         effects.pushed,
+      reason:         effects.reason,
+      priorInvoiceRecords: effects.priorInvoiceRecords || [],
+    };
   }, []);
 
   const handleRevert = useCallback(async ({ accountKey: acctK, weekStart, reason }) => {

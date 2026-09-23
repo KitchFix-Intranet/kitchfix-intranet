@@ -31,7 +31,7 @@ import { getServiceClient } from "@/lib/supabase";
 import { isScLockOverride } from "@/lib/admin";
 import { buildInvoicePayload } from "@/lib/billing/buildInvoicePayload";
 import { postInvoiceDraft, NotAllowlistedError, QboPostError } from "@/lib/billing/qboAdapter";
-import { fireN1, fireN2 } from "@/lib/billing/qboNotifications";
+import { fireN1, fireN2, fireNoOpAlert } from "@/lib/billing/qboNotifications";
 import { getSalariedManagerEmails } from "@/lib/billing/getSalariedManagerEmails";
 
 // ─────────────────────────────────────────────────────────────────
@@ -461,9 +461,21 @@ export async function assertWeekOpenForWrite(accountKey, dates, email) {
 //     { pushed: false, reason: 'awaiting_pair_close' }
 //   Output on no-billable-actuals:
 //     { pushed: false, reason: 'no_billable_actuals' }
+//   Output on adapter idempotency short-circuit (2026-09-23, FIX 1):
+//     { pushed: false, reason: 'already_invoiced',
+//       priorInvoiceRecords: [...], kevinAlert: {...} }
+//     The ledger already holds a `created` row for this (account,
+//     week, slot). Nothing was pushed. Operator N1 is suppressed
+//     entirely; Kevin gets an email + Slack alert instead. The
+//     sc_week_finalize row still transitions to 'finalized' (the
+//     operator did press finalize; the row records their action).
 //
 // deps is an injection seam for tests. Every external call is
 // swappable so unit tests never touch the DB or the network.
+//   deps.fireN1        - override the N1 sender (happy path)
+//   deps.fireN2        - override the N2 sender (failure path)
+//   deps.fireNoOpAlert - override the Kevin-alert sender (no-op path)
+//   deps.postInvoiceDraft - override the QBO adapter
 
 const REVENUE_COLS =
   "service_date, service_id, service_name, account_key, is_flat_fee, is_tax_free, is_non_revenue, actual_count, actual_price_at_date, price_at_date, projected_count, period, week_label, has_actuals, has_projection";
@@ -526,6 +538,7 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   // for unit tests that swap in a fake sender.
   const doN1   = deps.fireN1 || fireN1;
   const doN2   = deps.fireN2 || fireN2;
+  const doNoOpAlert = deps.fireNoOpAlert || fireNoOpAlert;
   const log    = deps.logger || console;
 
   if (!ctx?.accountKey || !ctx?.weekStart || !ctx?.finalizedRow) {
@@ -748,7 +761,16 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   // accountMap.qbo_mode drives the per-mode fence. Test mode routes
   // to 22463 with markers; live mode routes to the account's mapped
   // customer id. Neither mode can silently reach the wrong customer.
+  //
+  // 2026-09-23 (FIX 1): wasNoOp: true from the adapter means the
+  // idempotency short-circuit fired - the ledger already holds a
+  // `created` row for this (account, week, slot) and nothing was
+  // pushed. Segregate those results from invoiceRecords so we do not
+  // fire N1 to the operator on a no-op. Kevin gets a dedicated alert
+  // instead. See the "Output on adapter idempotency short-circuit"
+  // contract line above for the return shape.
   const invoiceRecords = [];
+  const priorInvoiceRecords = [];
   const errors = [];
   const isTest = qboMode === "test";
   for (const invoice of payload.invoices) {
@@ -763,6 +785,22 @@ export async function runFinalizeEffects(ctx, deps = {}) {
         createdBy:   submitterEmail || "sc-finalize",
         deps:        { supa },
       });
+      // 2026-09-23 (FIX 1): no-op branch. The adapter honestly
+      // returned wasNoOp: true; capture the prior ledger's identity
+      // so Kevin's alert can name it. Do NOT push into
+      // invoiceRecords - that array feeds N1's "Sent to billing"
+      // language and would tell the operator we did something we
+      // did not. Kevin ruling 2026-09-23 (D1): suppress operator N1
+      // entirely; Kevin alone gets email + Slack.
+      if (result.wasNoOp === true) {
+        priorInvoiceRecords.push({
+          invoice_slot:   invoice._slot,
+          qbo_invoice_id: result.qboInvoiceId,
+          qbo_doc_number: result.qboDocNumber,
+          ledger_row_id:  result.ledgerRowId,
+        });
+        continue;
+      }
       // 2026-09-16: attach per-line detail so fireN1's record-copy PDF
       // has the data it needs to render + total. Prior to this fix
       // invoiceRecords carried only summary fields (slot / qboIds /
@@ -834,6 +872,43 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     return {
       pushed: false,
       failure: { code: errors[0].code, message: errText, errors, n2 },
+    };
+  }
+
+  // 6b. No-op branch (FIX 1, Kevin ruling 2026-09-23). If ANY slot
+  // short-circuited on adapter idempotency, treat the whole finalize
+  // as a no-op: do NOT fire operator N1, fire fireNoOpAlert to Kevin
+  // alone (email + Slack), return the shape that matches the two
+  // sibling `pushed: false` outcomes (`awaiting_pair_close`,
+  // `no_billable_actuals`). The sc_week_finalize row stays
+  // 'finalized' - the operator did press finalize and the row
+  // records their action (D3 ruling).
+  //
+  // Mixed case (some slots wasNoOp, some pushed fresh) is treated as
+  // no-op for the purpose of the operator N1 suppression: if any
+  // slot short-circuited, the operator cannot trust the resubmission
+  // was a fresh send, and Kevin must reconcile the mixed state.
+  if (priorInvoiceRecords.length > 0) {
+    const kevinAlert = await doNoOpAlert({
+      accountKey,
+      weekStart:     pairStart,
+      weekEnd:       pairEnd,
+      submitterEmail,
+      finalizedAt:   finalizedRow?.finalized_at || null,
+      priorInvoices: priorInvoiceRecords,
+    });
+    log.warn("[no-op alert fired]", {
+      subject: kevinAlert.subject,
+      to: kevinAlert.recipients?.to,
+      slackSent: kevinAlert.slack?.result?.sent,
+      priorCount: priorInvoiceRecords.length,
+      freshCount: invoiceRecords.length,
+    });
+    return {
+      pushed: false,
+      reason: "already_invoiced",
+      priorInvoiceRecords,
+      kevinAlert,
     };
   }
 
