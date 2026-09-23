@@ -12,24 +12,41 @@ export const OPS_LEADERSHIP_EMAILS = [
 ];
 
 /**
- * Service Calendar admin gate. Tighter than OPS_LEADERSHIP because
- * SC config edits (price changes, service deactivation) move money;
- * the gate stays restrictive until the v1 site-lead rollout settles.
+ * Service Calendar page-level gate: who can OPEN the Service Calendar
+ * at all. Anyone not in this list gets the "Coming Soon" screen from
+ * src/app/service-calendar/page.js.
  *
- * Call sites today (all in src/app/service-calendar/):
- *   - page.js                  page-level gate (Coming Soon screen)
- *   - api/service-calendar/    server-side gate on every admin POST
- *                              action (price, fee, archive/reactivate,
- *                              add-service, add-group); see route.js
- *                              for the action-by-action gate table
+ * Two related lists in this file, one question each:
+ *   - SC_ADMINS (this constant): who can open the Service Calendar.
+ *     Corporate admins + the site-lead operator group at each live
+ *     account.
+ *   - SC_ADMIN_EMAILS (below): who can edit money-moving config
+ *     (prices, fees, services, archive/reactivate). Corporate only.
  *
- * The pre-Stage-2 ServiceConfig.js admin component was retired in PR
- * #209; modern admin paths live under
- * src/app/service-calendar/admin/.
+ * The five site operators (Trible, Decanio at CIN - AZ; Randall, Lacy,
+ * Hughes at TXR - AZ) sit in SC_ADMINS so they can run the tool on
+ * their account, and DELIBERATELY do NOT sit in SC_ADMIN_EMAILS.
+ * Operators run the calendar; corporate admins move money. Adding a
+ * site operator to the money-moving list is a separate ruling and a
+ * separate PR.
+ *
+ * Functional call site: src/app/service-calendar/page.js:223 (the
+ * Coming Soon short-circuit). Every other reference to SC_ADMINS is a
+ * comment; the admin POST handlers under api/service-calendar/ gate on
+ * isScAdmin(SC_ADMIN_EMAILS), not on SC_ADMINS.
  */
 export const SC_ADMINS = [
-  "k.fietek@kitchfix.com",
-  "joe@kitchfix.com",
+  "k.fietek@kitchfix.com",  // Kevin Fietek - Director of Operations
+  "joe@kitchfix.com",        // Joe Lessard - VP Operations
+  "josh@kitchfix.com",       // Josh Katt - CEO
+  "s.castro@kitchfix.com",   // Sebastian Castro - Finance / billing
+  "m.chavez@kitchfix.com",   // Mariela Chavez - Human Resources
+  "r.moore@kitchfix.com",    // Ryan Moore - Regional Director West
+  "j.trible@kitchfix.com",   // Jennifer Trible - GM, CIN - AZ
+  "m.decanio@kitchfix.com",  // Michael Decanio - Chef de Cuisine, CIN - AZ
+  "e.randall@kitchfix.com",  // Liz Randall - GM, TXR - AZ
+  "a.lacy@kitchfix.com",     // Adam Lacy - Chef de Cuisine, TXR - AZ
+  "a.hughes@kitchfix.com",   // Anna Hughes - Asst Hospitality Mgr, TXR - AZ
 ];
 
 /**
