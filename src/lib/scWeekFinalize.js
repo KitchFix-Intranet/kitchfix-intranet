@@ -246,8 +246,12 @@ export async function loadLiveFinalizeRow(accountKey, dateInWeek) {
 // Returns { dates, isBiweekly, weekIndex, spanStart, spanEnd } or
 // throws on a DB error. Never null; a missing cadence row defaults
 // to weekly (matches sc-finalize-states line 666).
-export async function resolveFinalizeReviewSpan(accountKey, weekStart) {
-  const supa = getServiceClient();
+//
+// 2026-09-23: optional `supa` parameter for test injection. Existing
+// callers unchanged. checkLiveInvoiceForRevert below passes its
+// own supa through so it can be mocked in unit tests.
+export async function resolveFinalizeReviewSpan(accountKey, weekStart, supaArg = null) {
+  const supa = supaArg || getServiceClient();
   const monday = mondayOfWeek(weekStart);
   const { data: accountMap, error: amErr } = await supa
     .from("sc_qbo_account_map")
@@ -279,6 +283,59 @@ export async function resolveFinalizeReviewSpan(accountKey, weekStart) {
     dates.push(addDaysIso(spanStart, i));
   }
   return { dates, isBiweekly, weekIndex, spanStart, spanEnd };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// checkLiveInvoiceForRevert (2026-09-23)
+// ─────────────────────────────────────────────────────────────────
+//
+// Guard for sc-revert-finalize. Refuses the revert when a live
+// invoice (status='created', is_test=false) still exists in
+// sc_export_ledger for the (account, week) pair.
+//
+// The live incident this closes: TXR - AZ week 2026-09-14, finalized
+// as KF000000001, then reverted, then AP deleted the invoice in QBO
+// but nobody superseded the ledger row. Re-finalize hit the
+// idempotency short-circuit in qboAdapter.postInvoiceDraft, returned
+// wasNoOp with the STALE ledger row, and never pushed - N1 fired
+// anyway and everyone was told the invoice was sent. Nothing existed
+// in QuickBooks.
+//
+// Where this helper fits: called from the sc-revert-finalize route
+// AFTER the status checks (finalized|push_failed) and BEFORE the
+// UPDATE that flips the row to reverted. Route constructs the 403
+// response from the returned info.
+//
+// Biweekly-safety: resolveFinalizeReviewSpan translates the caller's
+// week (a close-week Monday for weekIndex 2 or 4) to the pair-start
+// Monday. That is the week the ledger row is keyed on. Reverting
+// week two of a CIN - AZ pair still finds the pair's invoice.
+//
+// Returns:
+//   null      => allowed to revert (no live invoice for this week)
+//   { code, invoices, spanStart, reviewSpan } => refuse; caller uses
+//     invoices[] to name the KF numbers and spanStart / reviewSpan
+//     to reuse the resolved span for the subsequent review-clear step
+//     (avoids a second resolveFinalizeReviewSpan call).
+export async function checkLiveInvoiceForRevert(accountKey, weekStart, supaArg = null) {
+  const supa = supaArg || getServiceClient();
+  const reviewSpan = await resolveFinalizeReviewSpan(accountKey, weekStart, supa);
+  const { data, error } = await supa
+    .from("sc_export_ledger")
+    .select("qbo_doc_number, qbo_invoice_id, invoice_slot")
+    .eq("account_key", accountKey)
+    .eq("week_start", reviewSpan.spanStart)
+    .eq("status", "created")
+    .eq("is_test", false);
+  if (error) throw new Error(`checkLiveInvoiceForRevert: ${error.message}`);
+  const rows = data || [];
+  if (rows.length === 0) return null;
+  return {
+    code: "WEEK_HAS_LIVE_INVOICE",
+    invoices: rows,
+    spanStart: reviewSpan.spanStart,
+    reviewSpan,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────

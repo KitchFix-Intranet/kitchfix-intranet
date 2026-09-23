@@ -13,6 +13,7 @@ import {
   loadLiveFinalizeRow,
   mondayOfWeek,
   resolveFinalizeReviewSpan,
+  checkLiveInvoiceForRevert,
   runFinalizeEffects,
   weekDates,
 } from "@/lib/scWeekFinalize";
@@ -2015,6 +2016,39 @@ export async function POST(request) {
         );
       }
       const supa = getServiceClient();
+
+      // 2026-09-23 · WEEK_HAS_LIVE_INVOICE guard. The live-incident
+      // 2026-09-14 TXR-AZ case: revert then AP-delete without
+      // superseding the ledger row -> re-finalize hit the adapter's
+      // idempotency short-circuit and silently sent no invoice.
+      // Refuse the revert if a live ledger row is still on file so
+      // the operator (or Kevin, if it happens off-hours) has to
+      // handle the ledger row first. Biweekly-safe: the helper
+      // resolves the pair-start week internally, matching how the
+      // ledger is keyed.
+      let liveInvoiceCheck;
+      try {
+        liveInvoiceCheck = await checkLiveInvoiceForRevert(accountKey, weekStart, supa);
+      } catch (checkErr) {
+        return NextResponse.json(
+          { success: false, error: `checkLiveInvoiceForRevert: ${checkErr.message}` },
+          { status: 500 }
+        );
+      }
+      if (liveInvoiceCheck) {
+        const invoicesLabel = liveInvoiceCheck.invoices
+          .map((r) => r.qbo_doc_number || `(qbo invoice ${r.qbo_invoice_id})`)
+          .join(", ");
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Cannot unlock: QuickBooks still holds invoice ${invoicesLabel} for this week. Void or correct it in QuickBooks first, then supersede the ledger row - otherwise a resubmit will silently do nothing.`,
+            code: "WEEK_HAS_LIVE_INVOICE",
+          },
+          { status: 403 }
+        );
+      }
+
       const { data: updated, error: updErr } = await supa
         .from("sc_week_finalize")
         .update({
