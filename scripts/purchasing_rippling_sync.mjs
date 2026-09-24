@@ -638,9 +638,24 @@ async function deriveSpendLines({ rippling_ids }) {
   // ─── Ruling 4 seed: parent IDs in the unfiltered Rippling report ────
   // Populated one-shot by scripts/purchasing_report_load.mjs. Consulted for
   // report-arbitration precedence (spec §PRECEDENCE 1..3):
-  //   1. Both parents in report -> keep both
+  //   1. Both in report AND both settled-shaped -> keep both
+  //   1b. Both in report, at least one pending-shape -> exclude earlier (R-148C)
   //   2. Only earlier in report -> keep earlier
   //   3. Otherwise              -> keep later
+  //
+  // Precedence 1 was tightened 2026-09-23 (R-148C, Kevin ruling): a pending
+  // swipe row (posted_date IS NULL AND approval_state IS NULL) and its
+  // settled twin are both live in report_txns_latest, and the old "both in
+  // report -> keep both" branch silently double-counted the same real
+  // charge (300 rows fleet-wide measured pre-fix). Tightening requires both
+  // parents to be settled-shaped for the keep-both branch; pending/settled
+  // pairs fall to Precedence 1b (exclude earlier pending swipe).
+  //
+  // If settledSeen is unusable (load failed, table missing, or 0 rows),
+  // Precedence 1 falls BACK to keep-both to protect the 34 both-settled
+  // groups (airline bag fees, etc). Loud warn at load time so the state
+  // is visible. Do NOT let empty settledSeen silently exclude those.
+  //
   // Empty set is OK on first run (before the seed loads) - degrades
   // gracefully to deterministic "keep later" (rule 3 only). Owner will
   // seed before merging PR.
@@ -670,6 +685,57 @@ async function deriveSpendLines({ rippling_ids }) {
       from += PAGE;
     }
     console.log(`[ruling-4] report-seen parents loaded: ${reportSeen.size}`);
+  }
+
+  // R-148C (Kevin ruling 2026-09-23): settled-shape marker for the
+  // Precedence 1 tightening. Load parent_txn_ids from
+  // rippling_report_txns_latest whose posted_date IS NOT NULL AND
+  // approval_state IS NOT NULL. Precedence 1 requires both parents in
+  // a pair to be present here; otherwise the pair is treated as a swipe/
+  // settle companion and falls to Precedence 1b (exclude earlier).
+  //
+  // Availability contract: `settledSeenUsable` is true iff the load
+  // succeeded AND returned at least one row. When false (table absent,
+  // load failed, or genuinely empty result), the tightening is DISABLED
+  // and Precedence 1 falls back to the pre-R-148C behavior (keep both).
+  // Falling to 1b without a populated settledSeen would strip the
+  // deliberately-protected both-settled groups (airline bag fee shape,
+  // etc) instead of the pending-swipe pairs the tightening targets.
+  // The fallback is loud on purpose - a missing report table should be
+  // visible in the log, not silent.
+  const settledSeen = new Set();
+  let settledSeenUsable = false;
+  {
+    const PAGE = 1000;
+    let from = 0;
+    let loadFailed = false;
+    for (;;) {
+      const { data, error } = await supa
+        .from("rippling_report_txns_latest")
+        .select("parent_txn_id")
+        .not("posted_date", "is", null)
+        .not("approval_state", "is", null)
+        .order("parent_txn_id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        if (error.code === "42P01") {
+          console.warn("[ruling-4] WARN rippling_report_txns_latest table absent · R-148C tightening DISABLED · Precedence 1 falls back to keep-both (pre-R-148C behavior)");
+          loadFailed = true;
+          break;
+        }
+        console.error(`[ruling-4] settled-seen load FAILED: ${error.message}`);
+        return { ok: false, error: error.message };
+      }
+      const rows = data || [];
+      for (const r of rows) settledSeen.add(r.parent_txn_id);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    settledSeenUsable = !loadFailed && settledSeen.size > 0;
+    console.log(`[ruling-4] settled-seen parents loaded: ${settledSeen.size} · usable=${settledSeenUsable}`);
+    if (!settledSeenUsable && !loadFailed) {
+      console.warn("[ruling-4] WARN settledSeen returned 0 rows · R-148C tightening DISABLED · Precedence 1 falls back to keep-both (pre-R-148C behavior) · verify rippling_report_txns_latest is populated");
+    }
   }
 
   // ─── Ruling 6 seed: parent hexes with a CODED report row ────────────
@@ -929,8 +995,24 @@ async function deriveSpendLines({ rippling_ids }) {
         const aIn = reportSeen.has(a.parent);
         const bIn = reportSeen.has(b.parent);
         if (aIn && bIn) {
-          // Precedence 1: both in report -> keep both
-          authPairKeptEarlierParents.add(a.parent);
+          if (!settledSeenUsable) {
+            // Fallback: settledSeen unavailable or empty. R-148C tightening
+            // disabled for this run - restore pre-R-148C Precedence 1
+            // (keep both). Warn at load time made this visible in the log.
+            authPairKeptEarlierParents.add(a.parent);
+          } else if (settledSeen.has(a.parent) && settledSeen.has(b.parent)) {
+            // Precedence 1: both in report AND both settled-shaped -> keep both.
+            authPairKeptEarlierParents.add(a.parent);
+          } else {
+            // Precedence 1b (R-148C, Kevin ruling 2026-09-23): both in report
+            // but at least one is pending-shape (posted_date IS NULL AND
+            // approval_state IS NULL in rippling_report_txns_latest). This is
+            // the swipe/settle pattern - the pending row is Rippling's swipe
+            // authorization companion to the settled row, not a second real
+            // charge. Exclude the earlier (pending swipe has the lower
+            // ObjectID timestamp); keep the later (settled).
+            authPairEarlierParents.add(a.parent);
+          }
         } else if (aIn && !bIn) {
           // Precedence 2: earlier in report -> keep earlier, exclude later
           authPairKeptEarlierParents.add(a.parent);
