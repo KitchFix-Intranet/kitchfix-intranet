@@ -38,7 +38,7 @@
 // merges (sc-35 seeds qbo_mode='test'). Live-mode routing is built
 // and unit-tested but no account exercises it in the wild.
 
-import { resolveRecipients, NOTIFICATION_TYPES, KEVIN_EMAIL } from "./recipients.js";
+import { resolveRecipients, NOTIFICATION_TYPES, KEVIN_EMAIL, SEBASTIAN_EMAIL } from "./recipients.js";
 import { sendEmailSA } from "@/lib/gmail";
 import { buildRecordCopyPdf, computeApproverPhrase } from "./recordCopyPdf.js";
 
@@ -796,7 +796,7 @@ export function renderN2({ accountKey, weekStart, weekEnd, errorText, retryLink,
   });
   const slackText = n2SlackText({ accountKey, weekStart, weekEnd, errorText, retryLink, isTest: false, attempt: 1 });
   return {
-    email: { mode: "dryrun", to: [KEVIN_EMAIL, "sebastian@kitchfix.com"], subject, html },
+    email: { mode: "dryrun", to: [KEVIN_EMAIL, SEBASTIAN_EMAIL], subject, html },
     slack: { mode: "dryrun", text: slackText },
   };
 }
@@ -804,12 +804,12 @@ export function renderN2({ accountKey, weekStart, weekEnd, errorText, retryLink,
 // Legacy N1 recipients used only by renderN1 (the old dryRunOnly API).
 // New code uses resolveRecipients + accountMap.
 export const N1_STATIC_RECIPIENTS = Object.freeze([
-  "sebastian@kitchfix.com",
+  SEBASTIAN_EMAIL,
   KEVIN_EMAIL,
   "joe@kitchfix.com",
   "josh@kitchfix.com",
 ]);
-export const N2_RECIPIENTS = Object.freeze([KEVIN_EMAIL, "sebastian@kitchfix.com"]);
+export const N2_RECIPIENTS = Object.freeze([KEVIN_EMAIL, SEBASTIAN_EMAIL]);
 function n1LegacyRecipients({ accountKey, submitterEmail }) {
   const set = new Set(N1_STATIC_RECIPIENTS);
   if (submitterEmail) set.add(String(submitterEmail).toLowerCase());
