@@ -28,7 +28,7 @@ import { derivePhaseTimeline } from "./season/phaseDerivation";
 import { resolveSpringDateSet } from "./season/mlbSpringSibling";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
-import { tierFromRoles, computeInitialView } from "./computeInitialView";
+import { computeInitialView } from "./computeInitialView";
 import { useScV2, useScEntryV2Effective } from "./v2/flags";
 // M-2 (2026-07-29): pilot allow-list for the homestand scope + detail
 // surface. Client-side gate at every render decision that could route
@@ -521,11 +521,6 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const [scope, setScope] = useState("year");
   const [lens, setLens]   = useState("period");
   const [isAdminView, setIsAdminView] = useState(false);
-  const [roleTier, setRoleTier] = useState("unknown");
-  // F2: raw contacts.role strings kept alongside the derived tier so
-  // computeInitialView can be called with the multi-role-aware `roles`
-  // input (floor-wins tiebreaker) rather than a pre-collapsed string.
-  const [rawRoles, setRawRoles] = useState([]);
   // F2: hasHomeAccount = the user's resolved account (via
   // user_accounts_derived) exists AND is in the sorted account list
   // the dropdown carries. Gates the floor-tier Period-workspace
@@ -746,23 +741,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           if (sorted.find(a => a.key === f)) { initial = f; break; }
         }
         setSelectedAccount(initial);
-        // Mount default: routed through computeInitialView() so the
-        // role-conditional landing (floor -> Period workspace at the
-        // current period; leadership -> Season overview) is one body
-        // edit in the helper, not a scatter here.
-        //
-        // Role activation: sc-accounts now returns `roles[]` from
-        // contacts.role for the requesting user. A user can have
-        // multiple contacts rows (one per role/account combo, per
-        // sc-3 seed), so we pass the array - the helper applies the
-        // floor-wins tiebreaker (tierFromRoles). Empty/missing roles
-        // resolve to "unknown" tier -> Season default (no regression).
-        // The URL is the source of truth for the routed view (see the
-        // URL->state effect below), so the mount no longer sets
-        // scope/lens/periodKey/isAdminView here. We only capture the
-        // role tier, used by the floor-default landing redirect.
-        setRoleTier(tierFromRoles(d.roles || []));
-        setRawRoles(d.roles || []);
+        // Mount default: routed through computeInitialView() (see
+        // the helper for the current precedence). The URL is the
+        // source of truth for the routed view (see the URL->state
+        // effect below), so the mount no longer sets scope / lens /
+        // periodKey / isAdminView here.
         // F2 (R-A ruling 2026-07-09): hasHomeAccount is TRUE only when
         // the user's resolved account (via user_accounts_derived)
         // matches a live account in the dropdown list. A stale mapping
@@ -1123,17 +1106,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     );
   }, [isHomestandOnNonPilot, selectedAccount, router]);
 
-  // Floor-role default landing (preserved behavior): a floor user with a
-  // clean URL lands on the current period workspace. Fires once
-  // periodRanges is ready, and only while the URL is still clean - a
-  // deep-link or any navigation takes precedence. Replace (not push) so
-  // the default does not sit in the back-stack behind first paint.
-  //
-  // F2: the "should I redirect" decision is delegated to
-  // computeInitialView so the ROLE_TIERS map + the hasHomeAccount gate
-  // stay in one place. A floor role WITHOUT a resolved home account now
-  // stays on the Season overview instead of being force-landed on the
-  // CIN-AZ fallback they don't own.
+  // Clean-URL landing effect. Two live behaviors after the
+  // 2026-09-23 year/Period-lens ruling:
+  //   1. `?reset=1` marker: TopNav's Service Calendar click pushes
+  //      this to force a fresh landing. Stripped here via
+  //      router.replace so the URL after this pass is plain
+  //      /service-calendar.
+  //   2. Latch on explicit URL scope (?view / ?period / ?month) so
+  //      subsequent renders do not re-fire the landing computation.
+  // The final computeInitialView() call is now a no-op on clean URLs
+  // (landOnCurrentPeriod always false) - kept for shape so a future
+  // landing signal has one place to plug in.
   const floorRedirectDone = useRef(false);
   useEffect(() => {
     // P1.1 (2026-07-10): fresh-landing intent is signaled by TopNav via
@@ -1193,7 +1176,6 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     if (!periodRanges?.length) return;
     const landing = computeInitialView({
       urlView: null, urlPeriod: null, isAdmin,
-      roles: rawRoles,          // raw contacts.role strings; helper resolves tier via floor-wins
       hasHomeAccount,
     });
     if (!landing.landOnCurrentPeriod) return;
@@ -1201,7 +1183,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     const target = containingToday ? containingToday.period : periodRanges[0].period;
     floorRedirectDone.current = true;
     router.replace(buildScUrl({ account: selectedAccount || undefined, period: target }), { scroll: false });
-  }, [rawRoles, hasHomeAccount, isAdmin, periodRanges, searchParams, today, router, selectedAccount]);
+  }, [hasHomeAccount, isAdmin, periodRanges, searchParams, today, router, selectedAccount]);
 
   // Save invalidation: each save handler now drops ONLY the calendar
   // month(s) it wrote to, surgically. The prior blanket setMonthCache({})

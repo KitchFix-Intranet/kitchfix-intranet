@@ -11,6 +11,12 @@
 // removed. These tests pin the ruling so a future well-intentioned
 // re-introduction of a floor-fastpath fails the suite.
 //
+// 2026-09-24 cleanup: the ROLE_TIERS / roleTier / tierFromRoles
+// machinery + the `role` and `roles` parameters were dropped from
+// computeInitialView; branch 3's removal in #1209 had already made
+// them unreachable. Every previous call site that passed `roles:`
+// was updated here to reflect the trimmed signature.
+//
 // Run via: node --import ./scripts/_setup/register-aliases.mjs --test \
 //          src/app/service-calendar/__tests__/computeInitialView.test.mjs
 
@@ -26,30 +32,30 @@ const YEAR_PERIOD_DEFAULT = {
 
 // ─── The ruling: clean URL always lands year/Period ────────────────
 
-test("clean URL + floor role + home account -> year overview on Period lens (ruling)", () => {
-  // The case that CHANGED. Pre-ruling this returned scope:'period',
-  // landOnCurrentPeriod:true. If a future change re-introduces the
-  // floor-fastpath, this test fails.
+test("clean URL + hasHomeAccount=true -> year overview on Period lens (the ruling)", () => {
+  // Pre-2026-09-23 this returned scope:'period', landOnCurrentPeriod:true
+  // for floor roles with a home account. Post-ruling the tier no longer
+  // enters the decision. If a future change re-introduces a fastpath on
+  // ANY input, this test fails.
   const result = computeInitialView({
     urlView: null, urlPeriod: null, isAdmin: false,
-    roles: ["Executive Chef"], hasHomeAccount: true,
+    hasHomeAccount: true,
   });
   assert.deepEqual(result, YEAR_PERIOD_DEFAULT,
-    "floor+home no longer auto-drops into the period workspace");
+    "clean URL + home account no longer auto-drops into the period workspace");
 });
 
-test("clean URL + leadership role -> year overview on Period lens (unchanged)", () => {
+test("clean URL + hasHomeAccount=false -> year overview on Period lens (unchanged)", () => {
   const result = computeInitialView({
     urlView: null, urlPeriod: null, isAdmin: false,
-    roles: ["Director of Operations"], hasHomeAccount: true,
+    hasHomeAccount: false,
   });
   assert.deepEqual(result, YEAR_PERIOD_DEFAULT);
 });
 
-test("clean URL + no role at all -> year overview on Period lens (unchanged)", () => {
+test("clean URL + no options at all -> year overview on Period lens (unchanged)", () => {
   const result = computeInitialView({
     urlView: null, urlPeriod: null, isAdmin: false,
-    // omit roles + role entirely
   });
   assert.deepEqual(result, YEAR_PERIOD_DEFAULT);
 });
@@ -59,7 +65,7 @@ test("clean URL + no role at all -> year overview on Period lens (unchanged)", (
 test("?period=P7 deep-link still wins over the default", () => {
   const result = computeInitialView({
     urlView: null, urlPeriod: "P7", isAdmin: false,
-    roles: ["Executive Chef"], hasHomeAccount: true,
+    hasHomeAccount: true,
   });
   assert.equal(result.scope, "period");
   assert.equal(result.lens, "period");
@@ -74,7 +80,7 @@ test("?period=P7 deep-link still wins over the default", () => {
 test("?view=admin + isAdmin=true -> admin surface", () => {
   const result = computeInitialView({
     urlView: "admin", urlPeriod: null, isAdmin: true,
-    roles: ["Executive Chef"], hasHomeAccount: true,
+    hasHomeAccount: true,
   });
   assert.equal(result.isAdminView, true);
   assert.equal(result.scope, "year");
@@ -84,7 +90,7 @@ test("?view=admin + isAdmin=true -> admin surface", () => {
 test("?view=admin + isAdmin=false -> does NOT reach admin (falls to default)", () => {
   const result = computeInitialView({
     urlView: "admin", urlPeriod: null, isAdmin: false,
-    roles: ["Director of Operations"], hasHomeAccount: true,
+    hasHomeAccount: true,
   });
   assert.deepEqual(result, YEAR_PERIOD_DEFAULT,
     "URL admin intent without the isAdmin gate must not reach the admin surface");
