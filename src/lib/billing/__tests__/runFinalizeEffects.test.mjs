@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runFinalizeEffects } from "../../scWeekFinalize.js";
 import { NotAllowlistedError } from "../qboAdapter.js";
-import { KEVIN_EMAIL } from "../recipients.js";
+import { KEVIN_EMAIL, SEBASTIAN_EMAIL } from "../recipients.js";
 import { makeSupaMock } from "./_supa-mock.mjs";
 
 const TXR_MAP = {
@@ -285,7 +285,7 @@ test("live mode: qboMode='live' + accountMap threaded to postInvoiceDraft and fi
     fireN1: async (args) => {
       n1Args = args;
       return {
-        recipients: { to: ["sebastian@kitchfix.com", KEVIN_EMAIL, "joe@kitchfix.com", "josh@kitchfix.com", "l.ochoa@kitchfix.com", "leader@kitchfix.com"], cc: [] },
+        recipients: { to: [SEBASTIAN_EMAIL, KEVIN_EMAIL, "joe@kitchfix.com", "josh@kitchfix.com", "l.ochoa@kitchfix.com", "leader@kitchfix.com"], cc: [] },
         subject: `Invoice ready: ${args.accountKey}, week of Jul 27`,
         html: "",
         email: { result: "sent" },

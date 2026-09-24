@@ -47,9 +47,19 @@
 
 // Static-set primary recipients per addendum §A6.
 export const KEVIN_EMAIL     = "k.fietek@kitchfix.com";
-export const SEBASTIAN_EMAIL = "sebastian@kitchfix.com";
+// 2026-09-24 Sebastian address correction. The prior "sebastian@kitchfix.com"
+// mailbox does not exist - every N1/N2/chase to Sebastian since the feature
+// shipped bounced. His real address is s.castro@kitchfix.com, matching
+// src/lib/admin.js, src/lib/opdAcl.js, LaborTool.js, InvoiceAdmin.js, and
+// the `people` table.
+export const SEBASTIAN_EMAIL = "s.castro@kitchfix.com";
 export const JOE_EMAIL       = "joe@kitchfix.com";     // Joe Lessard (VPO), aligned with incidentSchema.js VPO_EMAIL
 export const JOSH_EMAIL      = "josh@kitchfix.com";    // Josh Katt (CEO), aligned with incidentSchema.js CEO_EMAIL
+// 2026-09-24 Kevin ruling: AP joins the invoice-confirmation email (N1)
+// only. Not on N2 (push failed - no invoice for AP to act on) and not on
+// the chase ladder (N3.reminder / N3.urgent - those are operators being
+// nagged for counts).
+export const AP_EMAIL        = "ap@kitchfix.com";
 
 // Recognized notification types. Adding one here without a matching
 // live-mode branch is a compile-time-esque error (the switch defaults
@@ -159,8 +169,12 @@ export function resolveRecipients(args) {
     // system). The JOE_EMAIL + JOSH_EMAIL constants remain exported
     // because N4 (credit-needed) still routes to them per §A6.
     case NOTIFICATION_TYPES.N1: {
+      // 2026-09-24 Kevin ruling: AP_EMAIL joins N1. AP receives
+      // every invoice-ready confirmation; the address is generic
+      // (not personal), so it does not belong on push-failed (N2)
+      // or the chase ladder (N3.reminder / N3.urgent).
       const to = dedup([
-        SEBASTIAN_EMAIL, KEVIN_EMAIL,
+        SEBASTIAN_EMAIL, KEVIN_EMAIL, AP_EMAIL,
         ...salaried,
         submitter,
         rdo,

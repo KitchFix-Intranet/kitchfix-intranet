@@ -83,7 +83,7 @@ test("fireN1 live mode: routes to §A6 matrix (static + salaried + submitter)", 
     deps: { emailSender: email.impl },
   });
   const to = res.recipients.to;
-  assert.ok(to.includes("sebastian@kitchfix.com"));
+  assert.ok(to.includes(SEBASTIAN_EMAIL));
   assert.ok(to.includes(KEVIN_EMAIL));
   // #1164 (2026-09-17): Joe + Josh no longer on the N1 list.
   assert.ok(!to.includes("joe@kitchfix.com"));
@@ -460,9 +460,9 @@ test("F6 structural override: test mode returns Kevin only regardless of account
 // Sanity: the two exported constants are what the tests expect.
 test("static exports: N1_STATIC_RECIPIENTS + N2_RECIPIENTS + TEST_SLACK_FOOTER", () => {
   assert.ok(N1_STATIC_RECIPIENTS.includes(KEVIN_EMAIL));
-  assert.ok(N1_STATIC_RECIPIENTS.includes("sebastian@kitchfix.com"));
+  assert.ok(N1_STATIC_RECIPIENTS.includes(SEBASTIAN_EMAIL));
   assert.ok(N2_RECIPIENTS.includes(KEVIN_EMAIL));
-  assert.ok(N2_RECIPIENTS.includes("sebastian@kitchfix.com"));
+  assert.ok(N2_RECIPIENTS.includes(SEBASTIAN_EMAIL));
   assert.equal(typeof TEST_SLACK_FOOTER, "string");
   assert.ok(TEST_SLACK_FOOTER.length > 0);
 });
