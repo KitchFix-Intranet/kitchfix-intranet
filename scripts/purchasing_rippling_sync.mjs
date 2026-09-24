@@ -1630,6 +1630,355 @@ async function runProbes({ rippling_ids }) {
   return { probes, allPass };
 }
 
+// ─── R-148B sweep · retire superseded "Please Select" uncoded rows ───
+//
+// Mechanism (Kevin ruling 2026-09-24): rippling_raw_spend_lines_latest
+// external_id is `<txn_objectid>__line_item_content_<category_id>_<amount>
+// _no_dimensions`. Category is baked into line identity, so when an
+// operator picks a category the old (Please Select) line stops being
+// returned by the API walk and a new line appears with the chosen category.
+// The derive inserts the new coded row and never removes the old one
+// (touchedSourceLineIds at :1268 only ever contains walk-returned ids).
+// One orphaned uncoded row accumulates per coded charge, forever.
+//
+// This sweep runs AFTER deriveSpendLines completes in the same job, so
+// a row coded and re-derived in the same run is not swept on stale
+// evidence.
+//
+// Assertions (dry-run + write share the same code path):
+//   A1 · coded_last_seen > unset_last_seen for every retirement · permanent halt
+//   A2 · zero mixed-amount groups (GL-split guard, structurally impossible) · permanent halt
+//   A3 · retirements from multi-recode groups (2+ coded twins) · info only
+//   A4 · every retirement covered by (a) direct twin counting, (b) settled
+//        elsewhere within +/-5d, or (c) intentional exclusion (map_excluded
+//        or report_coded) · permanent halt on uncovered > 0
+//
+// One-time backfill guard (Kevin ruling 2026-09-24): set env
+// R148B_STRICT_BASELINE=true for the first production sweep only, to
+// require an exact 156/19/4 A4 split match. After that run succeeds,
+// unset the env var; on subsequent nightly runs, drift is EXPECTED (a
+// coded charge tomorrow moves the split) and halting a nightly job on
+// expected change is worse than not checking. Drift logs a WARN and
+// continues. The KEVIN_BASELINE constant below stays as documentation
+// but is only consulted when STRICT_BASELINE is set.
+//
+// Writes: DELETE-then-INSERT-marker (service_role has no UPDATE grant
+// per :1258 verified 2026-09-24). Marker row preserves source, source_
+// line_id, source_bill_id, txn_date, posting_date, amount, vendor_or_
+// merchant, gl_line_code, gl_bucket, paid, approx_date; sets excluded=
+// true, reason='superseded_uncoded', account_key=NULL (required by
+// purchasing_actuals_excluded_shape).
+//
+// Reversal artifact (source_line_id + reason only, safe for public repo)
+// is written BEFORE any DELETE so a manual undo has the id list even if
+// mid-loop failure leaves the DB partially swept.
+
+async function sweepSupersededUncoded({ dryRun }) {
+  const t0 = Date.now();
+  const PLEASE_SELECT_CAT = "68ed4977b7aabd4234afda3a";
+  const OBJECTID_RE = /^[a-f0-9]{24}__line_item_content_/;
+  const KEVIN_BASELINE = { direct: 156, settled_elsewhere: 19, intentional: 4 };
+  const STRICT_BASELINE = process.env.R148B_STRICT_BASELINE === "true";
+  const INTENTIONAL_REASONS = new Set(["map_excluded", "report_coded"]);
+  const FIVE_DAYS_MS = 5 * 86400000;
+
+  async function pageAll(table, sel, filters = q => q) {
+    const out = [];
+    const PAGE = 1000;
+    let from = 0;
+    for (;;) {
+      const q = filters(supa.from(table).select(sel).range(from, from + PAGE - 1));
+      const r = await q;
+      if (r.error) throw r.error;
+      out.push(...(r.data || []));
+      if ((r.data || []).length < PAGE) break;
+      from += PAGE;
+    }
+    return out;
+  }
+
+  console.log("[r148b] sweep · load raw spend lines + all rippling_spend rows in purchasing_actuals");
+  const rawAll = await pageAll("rippling_raw_spend_lines_latest", "rippling_id, external_id, category_id, amount, last_seen_at");
+  const raw = rawAll.filter(r => r.external_id && OBJECTID_RE.test(r.external_id));
+  const paAll = await pageAll("purchasing_actuals", "id, source, source_line_id, source_bill_id, account_key, gl_line_code, gl_bucket, amount, txn_date, posting_date, paid, approx_date, vendor_or_merchant, excluded, reason", q => q.eq("source", "rippling_spend"));
+  const paBySli = new Map(paAll.map(r => [r.source_line_id.replace(/^rippling_spend:/, ""), r]));
+
+  // Group raw lines by (objectid_prefix, amount)
+  const byGroup = new Map();
+  for (const r of raw) {
+    const k = `${r.external_id.slice(0, 24)}|${Number(r.amount).toFixed(2)}`;
+    if (!byGroup.has(k)) byGroup.set(k, []);
+    byGroup.get(k).push(r);
+  }
+
+  // A2 · scan for mixed-amount groups (should be structurally zero per grouping key)
+  let a2_mixed = 0;
+  for (const [, members] of byGroup) {
+    const amts = new Set(members.map(m => Number(m.amount).toFixed(2)));
+    if (amts.size > 1) a2_mixed += 1;
+  }
+  if (a2_mixed > 0) {
+    console.error(`[r148b] HALT A2 · ${a2_mixed} mixed-amount groups (grouping key broken)`);
+    return { ok: false, halted: "A2", swept: 0, planned: 0 };
+  }
+
+  // Classify Please Select lines with coded peer
+  const candidates = [];
+  for (const [, members] of byGroup) {
+    const unset = members.filter(r => r.category_id === PLEASE_SELECT_CAT);
+    const coded = members.filter(r => r.category_id && r.category_id !== PLEASE_SELECT_CAT);
+    if (unset.length === 0 || coded.length === 0) continue;
+    for (const u of unset) {
+      const uSeen = new Date(u.last_seen_at).getTime();
+      const codedSeen = coded.map(c => ({ c, t: new Date(c.last_seen_at).getTime() }));
+      const maxCoded = codedSeen.reduce((a, b) => a.t > b.t ? a : b);
+      if (maxCoded.t <= uSeen) continue;  // not superseded
+      candidates.push({
+        unset_rippling_id: u.rippling_id,
+        unset_last_seen:   u.last_seen_at,
+        coded_last_seen:   maxCoded.c.last_seen_at,
+        coded_twin_count:  coded.length,
+        coded_all:         coded.map(c => c.rippling_id),
+      });
+    }
+  }
+
+  // Filter to counting-in-PA rows (already-excluded fall out - idempotency)
+  const retireRows = [];
+  for (const c of candidates) {
+    const pa = paBySli.get(c.unset_rippling_id);
+    if (!pa || pa.excluded !== false) continue;
+    retireRows.push({ ...c, pa });
+  }
+  console.log(`[r148b] detection · ${candidates.length} superseded in raw · ${retireRows.length} counting in PA (queue for retirement)`);
+
+  // A1 · coded_last_seen > unset_last_seen for every retirement
+  const a1_bad = retireRows.filter(r => new Date(r.coded_last_seen).getTime() <= new Date(r.unset_last_seen).getTime()).length;
+  if (a1_bad > 0) {
+    console.error(`[r148b] HALT A1 · ${a1_bad} retirements have coded_last_seen <= unset_last_seen`);
+    return { ok: false, halted: "A1", swept: 0, planned: retireRows.length };
+  }
+
+  // A4 · classify coverage per row (direct / settled elsewhere / intentional / uncovered)
+  const countingByKey = new Map();
+  for (const pa of paAll) {
+    if (pa.excluded !== false) continue;
+    const k = `${pa.account_key}|${pa.vendor_or_merchant}|${Number(pa.amount).toFixed(2)}`;
+    if (!countingByKey.has(k)) countingByKey.set(k, []);
+    countingByKey.get(k).push(pa);
+  }
+  const retireIds = new Set(retireRows.map(r => r.pa.id));
+  const a4 = { direct: 0, settled_elsewhere: 0, intentional: 0, uncovered: [] };
+  for (const r of retireRows) {
+    const directCounting = r.coded_all.some(rid => {
+      const twinPa = paBySli.get(rid);
+      return twinPa && twinPa.excluded === false;
+    });
+    if (directCounting) { a4.direct += 1; continue; }
+    const k = `${r.pa.account_key}|${r.pa.vendor_or_merchant}|${Number(r.pa.amount).toFixed(2)}`;
+    const nearby = countingByKey.get(k) || [];
+    const rDate = r.pa.txn_date ? new Date(r.pa.txn_date + "T00:00:00Z").getTime() : null;
+    const settledElsewhere = rDate != null && nearby.some(pa =>
+      pa.id !== r.pa.id && !retireIds.has(pa.id) && pa.txn_date
+      && Math.abs(new Date(pa.txn_date + "T00:00:00Z").getTime() - rDate) <= FIVE_DAYS_MS);
+    if (settledElsewhere) { a4.settled_elsewhere += 1; continue; }
+    const intentional = r.coded_all.some(rid => {
+      const twinPa = paBySli.get(rid);
+      return twinPa && twinPa.excluded === true && INTENTIONAL_REASONS.has(twinPa.reason);
+    });
+    if (intentional) { a4.intentional += 1; continue; }
+    a4.uncovered.push(r);
+  }
+  // Test hook (dry-run only): inject a synthetic uncovered row to prove
+  // the halt path fires + exits non-zero. Kevin's rule: an untested halt
+  // path is not a halt path. Gated on env + dry-run so it can never
+  // affect production. Payload is a fake source_line_id + account_key.
+  if (dryRun && process.env.R148B_TEST_HALT_UNCOVERED === "true") {
+    a4.uncovered.push({
+      pa: { source_line_id: "rippling_spend:__test_halt__", account_key: "__TEST__", txn_date: "9999-12-31", vendor_or_merchant: "__TEST_UNCOVERED__" },
+    });
+    console.warn(`[r148b] TEST HOOK · R148B_TEST_HALT_UNCOVERED=true injected 1 synthetic uncovered row`);
+  }
+  console.log(`[r148b] A4 · direct=${a4.direct} settled_elsewhere=${a4.settled_elsewhere} intentional=${a4.intentional} uncovered=${a4.uncovered.length}`);
+
+  if (a4.uncovered.length > 0) {
+    console.error(`[r148b] HALT A4 · ${a4.uncovered.length} retirements uncovered (no counting replacement, no documented reason). Sample:`);
+    for (const r of a4.uncovered.slice(0, 5)) {
+      console.error(`  ${r.pa.account_key} · ${r.pa.txn_date} · ${r.pa.vendor_or_merchant} · unset_sli=${r.pa.source_line_id}`);
+    }
+    return { ok: false, halted: "A4-uncovered", swept: 0, planned: retireRows.length };
+  }
+
+  // A4 strict baseline (one-time, env-gated). Drift warns and continues by default;
+  // halts only when R148B_STRICT_BASELINE=true. See comment block above.
+  const drift = ["direct", "settled_elsewhere", "intentional"].filter(k => a4[k] !== KEVIN_BASELINE[k]);
+  if (drift.length > 0) {
+    const msg = `A4 split drift from 2026-09-24 baseline on ${drift.join(", ")} · expected ${JSON.stringify(KEVIN_BASELINE)} got direct=${a4.direct} settled_elsewhere=${a4.settled_elsewhere} intentional=${a4.intentional}`;
+    if (STRICT_BASELINE) {
+      console.error(`[r148b] HALT A4-strict · ${msg} · R148B_STRICT_BASELINE=true`);
+      return { ok: false, halted: "A4-strict", swept: 0, planned: retireRows.length };
+    }
+    console.warn(`[r148b] WARN · ${msg} · continuing (unset R148B_STRICT_BASELINE, drift is expected on nightly)`);
+  }
+
+  if (retireRows.length === 0) {
+    console.log(`[r148b] nothing to sweep · no-op`);
+    return { ok: true, halted: null, swept: 0, planned: 0, a4 };
+  }
+
+  // ── constraint precheck runs BEFORE the dry-run early-return so
+  // dry-run proves the marker shape safely, without ever touching the
+  // DB. Halt-then-report if any marker would fail; production run
+  // never gets to the DELETE loop with a bad marker.
+  //
+  //   CHECK constraints:
+  //     excluded_shape · NOT (excluded=true AND account_key IS NOT NULL)
+  //     reason_shape   · reason IS NULL OR excluded=true
+  //     source_check   · source IN ('billcom','billcom_credit','rippling_spend','upload')
+  //
+  //   NOT NULL (with no default, must carry a value):
+  //     source, source_line_id, amount
+  //     (id defaults from sequence, excluded/paid/approx_date default false,
+  //      derived_at defaults now() - not asserted here)
+  //
+  //   Amount + txn_date preservation:
+  //     amount MUST equal orig.amount (retired dollars stay auditable)
+  //     txn_date MUST equal orig.txn_date
+  //     Kevin ruling 2026-09-24: retired rows keep their real figures.
+  const VALID_SOURCES = new Set(["billcom", "billcom_credit", "rippling_spend", "upload"]);
+  const buildMarker = orig => ({
+    source:             orig.source,
+    source_line_id:     orig.source_line_id,
+    source_bill_id:     orig.source_bill_id,
+    account_key:        null,
+    gl_line_code:       orig.gl_line_code,
+    gl_bucket:          orig.gl_bucket,
+    amount:             orig.amount,
+    txn_date:           orig.txn_date,
+    posting_date:       orig.posting_date,
+    vendor_or_merchant: orig.vendor_or_merchant,
+    paid:               orig.paid,
+    approx_date:        orig.approx_date,
+    excluded:           true,
+    reason:             "superseded_uncoded",
+  });
+  let cshape = 0, cshape_bad = [];
+  for (const r of retireRows) {
+    const m = buildMarker(r.pa);
+    // CHECK constraints
+    const ok_excluded = !(m.excluded === true && m.account_key !== null);
+    const ok_reason   = m.reason === null || m.excluded === true;
+    const ok_source   = VALID_SOURCES.has(m.source);
+    // NOT NULL columns (no default)
+    const ok_source_nn = m.source != null;
+    const ok_sli_nn    = m.source_line_id != null;
+    const ok_amount_nn = m.amount != null;
+    // amount + txn_date preservation (retired dollars stay auditable)
+    const ok_amount_preserved   = Number(m.amount) === Number(r.pa.amount);
+    const ok_txndate_preserved  = m.txn_date === r.pa.txn_date;
+    const all = ok_excluded && ok_reason && ok_source && ok_source_nn && ok_sli_nn && ok_amount_nn && ok_amount_preserved && ok_txndate_preserved;
+    if (!all) {
+      cshape_bad.push({ pa_id: r.pa.id, ok_excluded, ok_reason, ok_source, ok_source_nn, ok_sli_nn, ok_amount_nn, ok_amount_preserved, ok_txndate_preserved });
+    } else {
+      cshape += 1;
+    }
+  }
+  if (cshape_bad.length > 0) {
+    console.error(`[r148b] HALT constraint-precheck · ${cshape_bad.length} markers would fail a PA constraint or drop a load-bearing column · sample:`);
+    for (const b of cshape_bad.slice(0, 5)) console.error(`  ${JSON.stringify(b)}`);
+    return { ok: false, halted: "constraint-precheck", swept: 0, planned: retireRows.length, a4 };
+  }
+  console.log(`[r148b] constraint-precheck · ${cshape}/${retireRows.length} markers pass: 3 CHECK constraints + 3 NOT NULL columns + amount/txn_date preservation`);
+
+  if (dryRun) {
+    console.log(`[r148b] dry-run · would retire ${retireRows.length} rows · no write`);
+    return { ok: true, halted: null, swept: 0, planned: retireRows.length, a4 };
+  }
+
+  // Write reversal artifact BEFORE any DELETE so a mid-loop failure still
+  // leaves a full retirement id list on disk. Path is committable per
+  // .gitignore exception; content is source_line_id + reason only, no
+  // dollars, no vendors, no employees.
+  const path = await import("node:path");
+  const fs = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const { homedir } = await import("node:os");
+  const __sweepFilename = fileURLToPath(import.meta.url);
+  const ARTIFACT_DIR = path.join(path.dirname(__sweepFilename), "probes", "artifacts");
+  if (!fs.existsSync(ARTIFACT_DIR)) fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+  const REVERSAL_PATH = path.join(ARTIFACT_DIR, "r148b_reversal.json");
+  const REVIEW_PATH = process.env.R148B_REVIEW_PATH
+    || path.join(homedir(), "Downloads", "kf-r148b-review.json");
+  const reversal = {
+    brief_ref: "R-148B · Kevin ruling 2026-09-24 (mechanism confirmed)",
+    schema_version: 2,
+    reason: "superseded_uncoded",
+    swept_at: new Date().toISOString(),
+    // account_key included so reversal is self-contained and does not
+    // depend on spend_work_location_site_map staying stable. Safe for
+    // the public repo (no dollars, no vendors, no employees).
+    retirements: retireRows.map(r => ({
+      source_line_id: `rippling_spend:${r.unset_rippling_id}`,
+      account_key:    r.pa.account_key,
+    })).sort((a, b) => a.source_line_id.localeCompare(b.source_line_id)),
+  };
+  fs.writeFileSync(REVERSAL_PATH, JSON.stringify(reversal, null, 2));
+  const review = {
+    generated_at: new Date().toISOString(),
+    brief_ref: "R-148B · sweep run",
+    a4_split: { direct: a4.direct, settled_elsewhere: a4.settled_elsewhere, intentional: a4.intentional },
+    retirements: retireRows.map(r => ({
+      source_line_id: `rippling_spend:${r.unset_rippling_id}`,
+      pa_id: r.pa.id, source_bill_id: r.pa.source_bill_id, account_key: r.pa.account_key,
+      amount: Number(r.pa.amount), txn_date: r.pa.txn_date, vendor_or_merchant: r.pa.vendor_or_merchant,
+      coded_twin_count: r.coded_twin_count,
+    })),
+  };
+  fs.writeFileSync(REVIEW_PATH, JSON.stringify(review, null, 2));
+  console.log(`[r148b] wrote reversal ${REVERSAL_PATH} + review ${REVIEW_PATH} before writes`);
+
+  // DELETE-then-INSERT-marker per row. Sequential for isolation - on any
+  // failure we know exactly which row broke; already-processed rows are
+  // durable, remaining rows will be picked up on the next nightly run
+  // (idempotent by the excluded=false filter).
+  let swept = 0, deleted = 0, inserted = 0;
+  const failures = [];
+  for (const r of retireRows) {
+    const orig = r.pa;
+    // DELETE
+    const del = await supa.from("purchasing_actuals").delete().eq("id", orig.id);
+    if (del.error) {
+      failures.push({ id: orig.id, step: "DELETE", error: del.error.message });
+      console.error(`[r148b] DELETE FAIL id=${orig.id} · ${del.error.message}`);
+      break;
+    }
+    deleted += 1;
+    // INSERT marker (same source_line_id, now free; account_key NULL; excluded true; reason set)
+    const marker = buildMarker(orig);
+    const ins = await supa.from("purchasing_actuals").insert([marker]);
+    if (ins.error) {
+      failures.push({ id: orig.id, step: "INSERT", error: ins.error.message, orig });
+      console.error(`[r148b] INSERT FAIL after DELETE for orig id=${orig.id} sli=${orig.source_line_id} · ${ins.error.message} · row is GONE, marker not written`);
+      break;
+    }
+    inserted += 1;
+    swept += 1;
+  }
+  // Kevin's proof 2: rows deleted MUST equal marker rows inserted.
+  // Assert after the loop (guards against a fall-through where DELETE
+  // succeeded but INSERT was skipped without breaking out of the loop).
+  if (deleted !== inserted) {
+    console.error(`[r148b] HALT leakage · deleted=${deleted} !== inserted=${inserted} · row(s) gone with no marker`);
+    return { ok: false, halted: "leakage", swept, planned: retireRows.length, deleted, inserted, failures, a4 };
+  }
+  const dur = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`[r148b] sweep complete · swept=${swept}/${retireRows.length} · duration=${dur}s`);
+  if (failures.length > 0) {
+    return { ok: false, halted: "write", swept, planned: retireRows.length, failures, a4 };
+  }
+  return { ok: true, halted: null, swept, planned: retireRows.length, a4 };
+}
+
 // ─── Main ────────────────────────────────────────────────────────────
 
 // --derive-only path: skip the API walk and load every rippling_id from
@@ -1660,7 +2009,7 @@ async function loadAllRipplingIds() {
   return { ok: true, rippling_ids: ids };
 }
 
-let walkResult, catCandResult, deriveResult, probesResult;
+let walkResult, catCandResult, deriveResult, probesResult, sweepResult;
 try {
   if (args.deriveOnly) {
     const loadResult = await loadAllRipplingIds();
@@ -1673,6 +2022,11 @@ try {
       catCandResult = { ok: true, upserted: 0 };
       deriveResult = await deriveSpendLines({ rippling_ids: loadResult.rippling_ids });
       probesResult = await runProbes({ rippling_ids: loadResult.rippling_ids });
+      // R-148B sweep runs AFTER derive completes so a row coded and
+      // re-derived in the same run is not swept on stale evidence.
+      if (deriveResult?.ok) {
+        sweepResult = await sweepSupersededUncoded({ dryRun: args.dryRun });
+      }
     }
   } else {
     walkResult = await walkSpendLines();
@@ -1683,6 +2037,11 @@ try {
       if (catCandResult.ok) {
         deriveResult = await deriveSpendLines({ rippling_ids: walkResult.rippling_ids });
         probesResult = await runProbes({ rippling_ids: walkResult.rippling_ids });
+        // R-148B sweep runs AFTER derive completes so a row coded and
+        // re-derived in the same run is not swept on stale evidence.
+        if (deriveResult?.ok) {
+          sweepResult = await sweepSupersededUncoded({ dryRun: args.dryRun });
+        }
       }
     }
   }
@@ -1699,8 +2058,12 @@ if (walkResult) console.log(`  spend_lines:   ${walkResult.ok ? "ok" : "FAIL"}  
 if (catCandResult) console.log(`  category_map:  ${catCandResult.ok ? "ok" : "FAIL"}  upserted=${catCandResult.upserted}`);
 if (deriveResult) console.log(`  derive:        ${deriveResult.ok ? "ok" : "FAIL"}  lines_derived=${deriveResult.linesDerived} unattributed=${deriveResult.unattributed} uncoded=${deriveResult.uncoded} label_fallback_inserted=${deriveResult.labelFallbackInserted ?? 0}`);
 if (probesResult) console.log(`  probes:        ${probesResult.allPass ? "ALL PASS" : "FAIL"}  ${probesResult.probes.map(p => `${p.id}=${p.pass ? "P" : "F"}`).join(" ")}`);
+if (sweepResult) console.log(`  r148b_sweep:   ${sweepResult.ok ? "ok" : "FAIL"}  swept=${sweepResult.swept}/${sweepResult.planned}${sweepResult.halted ? " halted=" + sweepResult.halted : ""}${sweepResult.a4 ? " a4=" + sweepResult.a4.direct + "/" + sweepResult.a4.settled_elsewhere + "/" + sweepResult.a4.intentional : ""}`);
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
 if (!walkResult?.ok || !catCandResult?.ok || !deriveResult?.ok) process.exit(2);
+// Sweep halt / write failure exits non-zero so the cron surfaces it,
+// but does NOT roll back the derive (which already committed above).
+if (sweepResult && !sweepResult.ok) process.exit(3);
 if (probesResult && !probesResult.allPass) process.exit(4);
 process.exit(0);

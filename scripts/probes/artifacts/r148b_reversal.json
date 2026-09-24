@@ -1,0 +1,723 @@
+{
+  "brief_ref": "R-148B · Kevin ruling 2026-09-24 (mechanism confirmed)",
+  "schema_version": 2,
+  "reason": "superseded_uncoded",
+  "retirements": [
+    {
+      "source_line_id": "rippling_spend:01a044ab-13b4-7b59-9690-fac0f2be7c2f",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-17ca-7e87-8684-f158a16d6387",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-1dcb-700c-9ba5-4623ef1b7439",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-2c30-78be-bfbc-4c4d523e7c30",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-31cf-793e-9053-0d797a291299",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-31d1-73b7-b49f-5be9aa30c6f5",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-35b6-756f-bb43-e917123c1ed9",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-35b7-7290-9aca-203139ceaf8a",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-3b21-7593-8f2c-7fc5b47fdd4e",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-3b22-70d7-a6fe-7b4ce469a005",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-3b23-759d-a402-a35bb50e7b9e",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-3b28-7237-a36c-7a525b0c9419",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-3f5b-71f0-b7a5-b1f932b94c92",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-4534-7645-bdfa-30602f7c98c9",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-49a1-739a-9f82-023d6038bf61",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-4f06-73f9-836f-7ff83ba4b4f2",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-535c-7aa5-9d09-93225c91371c",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a044ab-535d-721e-bb1a-cfd4af950ea3",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0499e-b5ff-74aa-9d1d-7f488e4a896c",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0499e-c785-734f-a1a6-44135099d8da",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0499e-c787-7ae3-a51e-eafacdc803ea",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0499e-c788-770a-89d4-de881772ee54",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0499e-c789-7d8c-b6e9-92f5b00686e8",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0499e-c78a-7337-a555-e107f6cf6815",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a04a25-417c-7ea2-ae9f-8fdf5b189c56",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a04c23-b53e-70fb-b9ae-b398f3de121d",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a04d3e-d3ea-7a36-a1b4-01fe755c4c80",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a04e7b-0531-74f8-95b3-fcd285354294",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a04e7b-725e-7267-8bec-5dde5679d733",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05131-c1dc-74b2-bea9-bd05df9bdca2",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a051b8-ad97-751c-8d03-a2b1eecad5e5",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05231-f0f2-706f-83c1-025a7d684750",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a053a0-4f1d-7cfb-b2c8-815c6cc14688",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05580-f5e2-7f72-9927-0361d8bb3b01",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05713-8fdd-7f38-8166-a339b98d6ca4",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0596f-a778-73c4-8e1f-0bd7ab635707",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05971-b5d9-700b-81aa-99b8b501d1e0",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05b06-cbbc-71a0-aa19-743e569793eb",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05b25-0edf-7e08-ba89-c74888d9b5f5",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05bc0-2036-77c9-8c52-53da2ba6f04e",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05c09-e78c-79f7-a55d-676dd26a73fd",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05c68-2a41-738e-b8ae-9570b16e44f9",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05c68-631b-7dda-ab4b-ffcb4c3c0d9a",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05c69-c08a-79da-b7f3-753cd8baaa54",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05c7b-1c9f-7ebc-84cc-cf279a6333e6",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05c7d-307d-70e0-877b-2e3cef1b43a8",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05c87-85f2-7354-b763-6b62f159229e",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05e7e-9619-76ad-9e1f-f1eb24e9f0d6",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05f44-f439-7ed8-9b2d-1e358682dd8e",
+      "account_key": "CIN - KY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05f87-096b-7119-9af0-485e40819d09",
+      "account_key": "CIN - KY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a05ff9-ad4b-76f0-a54b-2b6b50d62e43",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06019-1fa6-7cbf-bd96-9ca170fe871d",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06019-2a36-7a99-bf81-350331f0c4a4",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0611f-e1d4-703c-8d15-7847c8e60ffd",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06120-8ea6-7158-b94f-48dfe198e540",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06183-7995-7718-848a-e447dfe17e1d",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06193-1e3c-74f3-85fb-ed2f4b86daa3",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06195-d3bd-70f2-ac43-ff1c2af592e4",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a061b6-d3fd-7643-9cfb-4043fd3bdc9b",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a061b7-4c14-7bdc-8534-9a01c8aaa7b2",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a061b8-0d2c-741e-b66d-8f14fa6fc257",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0627b-a1cf-799f-bbcf-acbd6352857a",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0639d-c7ed-73bc-8350-d4b6ce0fc191",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a063a1-6323-7abd-a20d-d3848b8fd4e4",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a063a2-cc12-75ef-aa3b-2049525e00df",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a063e0-41c1-7502-8d38-656cffbaaa9e",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06527-2c99-7c29-8a6b-c8ea5b8d33d5",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06539-7508-71be-b7ff-ce5b36364601",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a065f0-46cd-7d28-854f-294d278c555f",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06606-9cc5-7f94-91c3-d0765c091ea0",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06607-96d6-7167-b5af-a1b581bf9df2",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06699-2116-7bf1-ae1e-49abe4d63d97",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a066f1-53ea-7453-bd95-7c1470df1722",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06724-e41f-72bf-9611-416f7fb29912",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06791-132b-7d3d-a137-8d5cf8a8d065",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06906-a0a0-7bc7-a866-22afa1354e06",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06906-f681-7041-b918-9a5d4e939e11",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06a29-3395-74a2-9874-8e3a79831647",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06ba3-15b6-7b62-a621-b9a110995eed",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06ba6-113a-7a6e-a01b-f93d6a392f18",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06bf2-ee0a-7c21-9409-92082b411b19",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06bf4-9507-76bb-9f94-ae1f10e59413",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06c0c-6e42-7f1e-8e8b-814ffc8e6e62",
+      "account_key": "TXR - TX - V"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06d7f-6b8a-70d9-b7c9-46207332dbae",
+      "account_key": "TXR - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06e16-d3d8-7231-93de-9b296a9e3c30",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a06f4e-d4de-73e1-831a-974a37bac190",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a070c0-8330-7966-b99f-349c688fbe2a",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a070d2-b3aa-701a-95c8-3c7a928c2285",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a070d3-8a33-7426-8dea-7d1bddf36f8d",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a070d4-0bad-7f13-bbf0-5531c3a74939",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07120-9b39-7b89-8e11-f7fceece964e",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07120-ee22-70e7-bd05-0f6ec6513352",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07120-ee28-7836-a7a1-eed678d08541",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07122-44dd-7f4a-83eb-ed7fa7dc38ae",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0729e-d5e5-7ff5-8288-3bee7326d96a",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07378-ba41-7d91-98a5-56f0855f8364",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0745e-4f15-70e6-b44d-732668d8f1f4",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07491-828b-718b-ac1b-ba06946c782f",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07559-fae5-7a6c-b3df-0ada502ed62d",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07606-fc17-7507-af0e-7807b7bb3393",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07607-5378-741d-9457-4ac911c2e606",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0763d-d117-70a7-82dc-28107649c5a4",
+      "account_key": "CIN - KY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0763d-d692-75b3-a4b5-8472447b1e2c",
+      "account_key": "CIN - KY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0763d-d7ea-7a65-9d32-83b650c20425",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0788f-3b46-7e26-97b5-7a3105fca75d",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07890-8ead-707c-97d4-3240c7f42b89",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a079a4-05e4-7bd8-9a4f-eb53366f7341",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a079a4-6e54-79b1-a889-f954b631e3b5",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07a36-2a5e-7204-b37b-839d1ec73af0",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07a37-7f42-7207-9edf-800427f84d08",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07b73-1046-74e2-9f64-9bc726c10e5c",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07d98-8d24-75ed-95a7-c70145cfe919",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a07d9a-08ea-7455-aded-dbe64a3a2a03",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a082be-3538-77b0-b904-7e3539f66dea",
+      "account_key": "TXR - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08437-3deb-70f9-8579-67c5b06b1544",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a085b0-eb1e-7a27-98f9-83e1f5b7c432",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a085b4-44ee-79f8-8c07-0d7a26483424",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a085b6-2e82-77bd-bb72-5eb820bed9b7",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a087d8-bbc1-7033-a48e-a69a56c21f2f",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08a48-ded5-7e32-a5e3-2feea104a397",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08a56-f088-762a-a2d2-c16c3cfe52e0",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08a59-73ed-7017-8bd2-c0e0a7262088",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08ac1-7fd7-7233-ae8c-4a5026ff7c09",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08c6b-e2ab-78f4-b91a-abef17341cb8",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08dca-6904-754a-b54d-3161123e9d14",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08f16-15fe-7692-8093-87ff2c64a7e2",
+      "account_key": "TXR - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a08fb7-3bef-7494-9fca-f658a3090a13",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a09423-5c21-7952-8b78-d8a831ad3aab",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a094bb-6240-7bd9-8930-5bb91b410657",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a09541-5e7a-7355-852c-68b3aa4a0c69",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a09d84-3c25-73d8-9b39-4aa4ba290cf9",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a09f34-fd85-7c66-8bdf-ded965a96fba",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a09f35-9031-767a-9e28-c04835813c42",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a09f35-a55d-7e1e-9cf9-c74397cc0469",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a1c7-4cc6-7606-9ebd-b2979e20f259",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a478-9a57-7289-b6eb-b12e48e69773",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a4c5-753d-73f1-98dd-642227d93e2a",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a61c-4ee3-7f58-8de5-a5384f48062f",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a714-c38c-797c-ba48-4336c225c623",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a830-6718-7296-a6d4-84cb4e66641a",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a836-9b9a-79ed-8af6-f363f8f4300e",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0a9b3-84a4-7956-ae60-f3a65c99021f",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0aac4-9f2f-7db4-acd1-e45120b5259a",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0acef-b496-7253-a61b-97cff7672a60",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0ae54-4913-7333-8c36-bed74ebf6453",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0ae56-7daa-708a-a87c-d6934b26c966",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0aeac-8818-7924-b82d-d8499165d04b",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0aefd-2212-71f2-91db-ef9c8a164bf5",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0aefd-984f-7a6b-8013-1deeedc5aef3",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b085-96d2-72ac-a6c4-cd2bec8f7d37",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b086-eacd-71d0-aa18-a375f0855ed2",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b1fc-daff-797a-be2c-e5c4b0b641e0",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b259-9062-77ab-8b5d-08b5da0d378b",
+      "account_key": "TXR - TX - H"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b2b3-5e3d-7fcf-b86f-a3631a3441c7",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b335-b1a1-7a4a-ba1a-0e23f6f78799",
+      "account_key": "STL - MO"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b3fe-1c55-7926-8894-d3e6652b0f2b",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b3fe-281e-7bef-af8a-25fe63e3490a",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b42f-4499-766e-9469-9b46a5d47315",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b4ec-11d7-75b1-b38e-45266cf3dcd0",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b722-bd1d-74b6-aa0f-4252bbcc1c50",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b7c7-4bd4-7769-b995-ace75b230656",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b7c7-896d-7a6f-a086-b2a053a9b75d",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b88b-3065-7438-8c6b-ddff48b0dd0a",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b88c-c7b6-7b8a-97b2-43f31ba4447e",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b8e4-f7d2-730b-b16f-949be79c3b38",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b8e5-0770-7079-b85b-1b07b94d21b4",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b90f-8382-782e-9524-dfa112eaf684",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0b945-2e36-7f13-93d4-8dc657a11a7a",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0bba0-3a30-7d70-88ec-d47cd6f3a8d1",
+      "account_key": "TBJ - NY"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0bdd9-7d6f-7b32-9884-78d0bab8c2b4",
+      "account_key": "TBJ - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0bdd9-91b8-7468-b542-6bccbb2fe50b",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0bdd9-e520-7bb1-ac8c-c3cf630763a9",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0be62-ee1f-7d37-81c9-0925252635c9",
+      "account_key": "CIN - AZ"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0be7d-f5ff-7ed2-92f3-681da393b324",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0c0f7-0e26-7bed-b4db-7814b678e2b1",
+      "account_key": "STL - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0c224-31b5-7d45-a45f-f9bc8bcce2c1",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0c2f2-2983-74cb-97fd-17dfdd5b3b74",
+      "account_key": "CIN - OH"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0c7a8-3050-72c2-9f20-cbc8e5223077",
+      "account_key": "TBR - FL"
+    },
+    {
+      "source_line_id": "rippling_spend:01a0ca8b-f963-7b23-84c3-bdff06c5f393",
+      "account_key": "TBJ - FL"
+    }
+  ]
+}
