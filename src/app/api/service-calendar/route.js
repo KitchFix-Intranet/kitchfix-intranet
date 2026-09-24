@@ -402,12 +402,6 @@ export async function GET(request) {
     //     derived.sql for the shape: ACTIVE people (work_email +
     //     account_key) UNION user_accounts_manual owner-overlay. The
     //     frontend auto-selects this on mount, fallback CIN-AZ.
-    //   roles: the requesting user's role strings from contacts.role.
-    //     A user can have multiple contacts rows (one per role/account
-    //     combo - see sc-3 comment); we return ALL roles and let the
-    //     client apply the floor-wins tiebreaker via computeInitialView
-    //     for intent-aware landing (Stage 4 seam, activated here).
-    //     Empty array when no contacts row matches the email.
     //
     // 2026-08-27 cutover: reads from user_accounts_derived (view over
     // `people` ACTIVE rows + owner overlay in user_accounts_manual).
@@ -421,7 +415,6 @@ export async function GET(request) {
     if (action === "sc-accounts") {
       const accounts = await loadAccountList();
       let defaultAccount = null;
-      let roles = [];
       if (email) {
         try {
           const supa = getServiceClient();
@@ -429,37 +422,31 @@ export async function GET(request) {
           // user_accounts_derived when a row exists. Kevin ruling:
           // "an explicit row exists because someone decided it, and
           // a derived default should never beat a deliberate
-          // choice." Runs in parallel with the existing two reads;
-          // adds one round trip that touches a two-row table.
+          // choice." Runs in parallel with the existing read; adds
+          // one round trip that touches a two-row table.
           //
           // Case discipline. sc_landing_override.email is CHECK
           // (email = lower(email)) at the schema level, so a canonical
-          // .eq() on lowercased input is deterministic. The two older
-          // reads keep .ilike() because their tables (user_accounts_-
-          // derived, contacts) union sources that store mixed casing;
-          // sc_landing_override is fresh and has no such source.
+          // .eq() on lowercased input is deterministic. The older
+          // read keeps .ilike() because user_accounts_derived unions
+          // sources that store mixed casing; sc_landing_override is
+          // fresh and has no such source.
           const emailLower = String(email).trim().toLowerCase();
-          const [overrideRes, acctRes, rolesRes] = await Promise.all([
+          const [overrideRes, acctRes] = await Promise.all([
             supa.from("sc_landing_override").select("account_key").eq("email", emailLower).limit(1),
             supa.from("user_accounts_derived").select("account").ilike("email", email).limit(1),
-            supa.from("contacts").select("role").ilike("email", email),
           ]);
           if (!overrideRes.error && overrideRes.data?.[0]?.account_key) {
             defaultAccount = overrideRes.data[0].account_key;
           } else if (!acctRes.error && acctRes.data?.[0]?.account) {
             defaultAccount = acctRes.data[0].account;
           }
-          if (!rolesRes.error && rolesRes.data?.length) {
-            roles = rolesRes.data
-              .map(r => r.role)
-              .filter(r => r != null && String(r).trim() !== "");
-          }
         } catch {
-          // Any of the three reads missing or failing - swallow.
-          // Frontend falls back to CIN-AZ + Season default landing.
+          // Any read missing or failing - swallow. Frontend falls
+          // back to CIN-AZ + Season default landing.
         }
       }
-      return NextResponse.json({ success: true, accounts, defaultAccount, roles });
+      return NextResponse.json({ success: true, accounts, defaultAccount });
     }
 
     // ── sc-load: full month data for one account ──
