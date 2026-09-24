@@ -358,14 +358,11 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
 // landed to pace against and no split to show, per Part 4 ("Next
 // period has only two states; the Plan/Rolling toggle does not
 // render on a future range").
-// Kevin R-133 step 3 (2026-09-20). Takes `phase` (not `isFuture`) so
-// closed can be its own branch. Closed period column:
-//   big:  `of $B $L` (of-hint + spent)
-//   bar:  keeps the bar for period-level scan; navy on total row,
-//         else red if over-envelope / green otherwise. NO pace clock.
-//   foot: `X% used · verdict` where verdict is `▲ $Y over` (red) or
-//         `▼ $Y under` (grey per R-128 colour rule; render's `good`
-//         tag is a rendering artifact - prompt wins).
+// Kevin R-133 step 3 (2026-09-20), superseded by PR B (2026-09-23).
+// Takes `phase` (not `isFuture`) so closed can be its own branch. PR B
+// shape (matches the running branch): big + `left of $G budget` below +
+// bar + verdict (`▲ $Y over` red / `▼ $Y under` grey). No `X% used`
+// footer per Kevin's approved render.
 // No split line (item 1 running-only), no pace text (dayFrac = 1 on
 // closed collapses on_pace to full budget).
 function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitHrly, splitSal, paceText, paceClass, isTotal }) {
@@ -394,13 +391,14 @@ function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitH
       ? "var(--navy-700, #153968)"
       : (over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
     // PR B item B1 + Flag A revision (Kevin ruling 2026-09-23). Pace
-    // span removed; `.kpi-ov-cp-pc` retired. Wording matches the
-    // running branch: constant `left of $G budget`, big = G - L (goes
-    // negative on over-budget). Column header says "WHAT IS LEFT"; a
-    // "spent" flip on the over case would contradict the heading.
-    // Verdict kept in `.kpi-ov-cp-vd` under the bar, `X% used` footer
-    // beneath - closed period keeps its explicit over/under verdict
-    // as the period is done and the reader wants the final position.
+    // span removed; `.kpi-ov-cp-pc` retired. `X% used` footer removed
+    // per Kevin's approved render (2026-09-23 follow-up). Wording
+    // matches the running branch: constant `left of $G budget`, big =
+    // G - L (goes negative on over-budget). Column header says "WHAT
+    // IS LEFT"; a "spent" flip on the over case would contradict the
+    // heading. Closed keeps its explicit over/under verdict in
+    // `.kpi-ov-cp-vd` under the bar - the period is done and the
+    // reader wants the final position stated.
     // NOTE: this branch is currently dormant - the parent never
     // passes isClosedRange=true today (see :514-518). Kept in-shape
     // for the step-2 rewiring that will surface closed periods here.
@@ -417,7 +415,6 @@ function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitH
           <i style={{ width: `${usedPct}%`, background: barColor }} />
         </div>
         <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
-        <div className="kpi-ov-cp-fl">{usedPct}% used</div>
       </>
     );
   }
@@ -450,7 +447,6 @@ function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitH
         <i style={{ width: `${usedPct}%`, background: barColor }} />
         <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
       </div>
-      <div className="kpi-ov-cp-fl">{usedPct}% used</div>
     </>
   );
 }
