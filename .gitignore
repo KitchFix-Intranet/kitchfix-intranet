@@ -81,3 +81,12 @@ fy2026_pnl_budget_seed.json
 *fin2027*baseline*snapshot*.json
 *fin2027*local_reference*.json
 scripts/probes/fin2027_w5_baseline_snapshot.json
+
+# Probe artifacts default to gitignored. This repo is public; probe
+# output routinely contains dollar figures, vendor names, and other
+# per-charge detail. Only the minimal R-148B reversal record (source_
+# line_id + reason, no dollars/vendors) is committable, as an exception.
+# All other probe artifacts stay local. Full-detail review files live
+# at ~/Downloads/kf-*-review.json instead.
+scripts/probes/artifacts/*
+!scripts/probes/artifacts/r148b_reversal.json
