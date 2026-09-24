@@ -480,10 +480,11 @@
   margin-top: 3px;
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-sp b { color: var(--n-900); font-weight: 700; }
-/* Kevin R-128 Part 3 items F + 9 (2026-09-19). `.kpi-ov-cp-fl` is the
-   footer line that carries `$X left` on week cells and `X% used ·
-   ▲ $Y over pace` on period cells. `.kpi-ov-cp-pc` is the bolder-
-   weight modifier for the pace span itself. */
+/* Kevin R-128 Part 3 item F + PR B (2026-09-23). `.kpi-ov-cp-fl` is the
+   footer line under the value: `spent of $Y budget` / `left of $Y budget`
+   on cost cells, `X% used` on period cells, `period revenue` on the
+   revenue period cell. `.kpi-ov-cp-pc` (pace modifier) was removed in
+   PR B alongside the pace-line-per-row deletion. */
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl {
   font-size: 10px;
   font-weight: 600;
@@ -491,7 +492,6 @@
   margin-top: 4px;
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-fl b { color: var(--n-900); font-weight: 700; }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-pc { font-weight: 800; }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vd {
   font-size: 10px;
   font-weight: 800;

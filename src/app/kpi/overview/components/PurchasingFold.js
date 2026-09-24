@@ -304,7 +304,25 @@ export default function PurchasingFold({ payload, error, account, start, end, to
       b.vehicle = round2(b.vehicle);
       b.billed = round2(b.billed);
     }
-    const weekBands = [...byWeek.values()];
+    const ascendingBands = [...byWeek.values()];
+    // PR B item B5 (Kevin ruling 2026-09-23). Reorder weeks for display:
+    // - Running period: current (in-progress) week first, then settled
+    //   weeks most-recent-first, then any future (ahead) weeks last.
+    //   e.g. WK3, WK2, WK1, WK4. Kevin's rule (future week has no
+    //   purchases, so it goes last, not before the current week).
+    // - Closed period: no in-progress week; reverse to most-recent-first
+    //   (WK4, WK3, WK2, WK1). This is my inference, not Kevin's ruling;
+    //   flagged for his review.
+    // Period footer total is computed from the whole set above and is
+    // order-independent; not affected by this reordering.
+    const inProgress = ascendingBands.find(b => b.state === "in-progress");
+    const weekBands = inProgress
+      ? [
+          inProgress,
+          ...ascendingBands.filter(b => b.state === "settled").reverse(),
+          ...ascendingBands.filter(b => b.state === "ahead"),
+        ]
+      : [...ascendingBands].reverse();
 
     return {
       uncoded,

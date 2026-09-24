@@ -204,18 +204,23 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
   // pair ▲ over / ▼ under per the approved render, red / grey per
   // R-128 Part 3 colour rule ("red is over, grey is under, green is
   // only revenue running ahead"). No bar on closed week cells - the
-  // period column keeps its bar as a period-level scan. Running-phase
-  // week cells keep the R-128 Part 3 item F shape (`$X left · mute`
-  // for non-over) unchanged.
+  // period column keeps its bar as a period-level scan.
+  //
+  // PR B (Kevin ruling 2026-09-23) supersedes R-128 Part 3 item F for
+  // the week-cell shape. Item F dropped the bare `spent` / `to spend`
+  // prefix that used to lead the value. PR B adds a full-phrase line
+  // BELOW the value (`spent of $Y budget`) - a different construction
+  // Kevin asked for by name after the walkthrough. Not a revert of
+  // item F; the reader wants the relationship stated under the number.
   if (phaseClosed) {
     const verdictText = over ? `▲ ${dollar0(l - g)} over` : `▼ ${dollar0(g - l)} under`;
     const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
     return (
       <>
         <div className="kpi-ov-cp-v">
-          <span className="kpi-ov-cp-of">of {dollar0(g)}</span>
           <span className="kpi-ov-cp-big">{dollar0(l)}</span>
         </div>
+        <div className="kpi-ov-cp-fl">spent of <b>{dollar0(g)}</b> budget</div>
         <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
       </>
     );
@@ -234,9 +239,9 @@ function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, 
   return (
     <>
       <div className="kpi-ov-cp-v">
-        <span className="kpi-ov-cp-of">of {dollar0(g)}</span>
         <span className="kpi-ov-cp-big">{dollar0(l)}</span>
       </div>
+      <div className="kpi-ov-cp-fl">spent of <b>{dollar0(g)}</b> budget</div>
       {splitLine}
       <div className="kpi-ov-cp-bar" style={{ marginBottom: 4 }}>
         <i style={{ width: `${pctBar}%`, background: barColor }} />
@@ -319,27 +324,23 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
       </>
     );
   }
-  const p = projection > 0 ? Math.min(100, (confirmed / projection) * 100) : 0;
-  const onPace = projection * dayFrac;
-  const paceDelta = confirmed - onPace;
-  const ahead = paceDelta >= 0;
-  const paceText = ahead
-    ? `▲ ${dollar0(paceDelta)} ahead of pace`
-    : `▼ ${dollar0(-paceDelta)} behind pace`;
-  const paceClass = ahead ? "kpi-ov-cp-good" : "kpi-ov-cp-mute";
+  // PR B item B4 (Kevin ruling 2026-09-23, walkthrough). Revenue period
+  // cell reads big period-revenue total + "period revenue" label below.
+  // Gone: `left to earn`, the delta figure, the progress bar, the
+  // `confirmed of projection · pace` footer. Matches every other cell
+  // on the board (number first, qualifier beneath). Kevin approved the
+  // render with this exact shape. Includes forecast weeks; only part
+  // is confirmed - Kevin has seen and approved.
+  //
+  // Params `confirmed`, `dayFrac` still received (upstream API stable);
+  // now unused. Kept to avoid churn on the caller signature.
+  void confirmed; void dayFrac;
   return (
     <>
       <div className="kpi-ov-cp-v">
-        <span className="kpi-ov-cp-of">left to earn</span>
-        <span className="kpi-ov-cp-big">{dollar0(Math.max(0, projection - confirmed))}</span>
+        <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
       </div>
-      <div className="kpi-ov-cp-bar">
-        <i style={{ width: `${p}%`, background: "var(--green-600, #008330)" }} />
-        <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
-      </div>
-      <div className="kpi-ov-cp-fl">
-        <b>{dollar0(confirmed)}</b> of {dollar0(projection)} · <span className={`kpi-ov-cp-pc ${paceClass}`}>{paceText}</span>
-      </div>
+      <div className="kpi-ov-cp-fl kpi-ov-cp-mute">period revenue</div>
     </>
   );
 }
@@ -392,20 +393,31 @@ function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitH
     const barColor = isTotal
       ? "var(--navy-700, #153968)"
       : (over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
+    // PR B item B1 + Flag A revision (Kevin ruling 2026-09-23). Pace
+    // span removed; `.kpi-ov-cp-pc` retired. Wording matches the
+    // running branch: constant `left of $G budget`, big = G - L (goes
+    // negative on over-budget). Column header says "WHAT IS LEFT"; a
+    // "spent" flip on the over case would contradict the heading.
+    // Verdict kept in `.kpi-ov-cp-vd` under the bar, `X% used` footer
+    // beneath - closed period keeps its explicit over/under verdict
+    // as the period is done and the reader wants the final position.
+    // NOTE: this branch is currently dormant - the parent never
+    // passes isClosedRange=true today (see :514-518). Kept in-shape
+    // for the step-2 rewiring that will surface closed periods here.
+    const bigValue = G - L;
     const verdictText = over ? `▲ ${dollar0(L - G)} over` : `▼ ${dollar0(G - L)} under`;
     const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
     return (
       <>
         <div className="kpi-ov-cp-v">
-          <span className="kpi-ov-cp-of">of {dollar0(G)}</span>
-          <span className="kpi-ov-cp-big">{dollar0(L)}</span>
+          <span className="kpi-ov-cp-big">{dollar0(bigValue)}</span>
         </div>
+        <div className="kpi-ov-cp-fl">left of <b>{dollar0(G)}</b> budget</div>
         <div className="kpi-ov-cp-bar">
           <i style={{ width: `${usedPct}%`, background: barColor }} />
         </div>
-        <div className="kpi-ov-cp-fl">
-          {usedPct}% used · <span className={`kpi-ov-cp-pc ${verdictClass}`}>{verdictText}</span>
-        </div>
+        <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
+        <div className="kpi-ov-cp-fl">{usedPct}% used</div>
       </>
     );
   }
@@ -416,23 +428,29 @@ function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitH
   const splitLine = (splitHrly != null && splitSal != null) ? (
     <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
   ) : null;
+  // PR B items B1 + B3 (Kevin ruling 2026-09-23, Flag A revision).
+  // Period column always reads `left of $G budget`. Big value = G - L,
+  // which goes negative when over-budget; the negative sign carries
+  // the over story. Wording stays constant with the column header
+  // ("WHAT IS LEFT"); a case-based "spent" flip would make the row
+  // contradict its own heading. Pace span retired (`.kpi-ov-cp-pc` gone).
+  const bigValue = G - L;
+  // paceText / paceClass now unused (pace span removed). Kept in the
+  // signature so upstream callers do not need to change; drop next
+  // time this component's props are refactored.
+  void paceText; void paceClass;
   return (
     <>
       <div className="kpi-ov-cp-v">
-        <span className="kpi-ov-cp-of">left of {dollar0(G)}</span>
-        <span className="kpi-ov-cp-big">{dollar0(G - L)}</span>
+        <span className="kpi-ov-cp-big">{dollar0(bigValue)}</span>
       </div>
+      <div className="kpi-ov-cp-fl">left of <b>{dollar0(G)}</b> budget</div>
       {splitLine}
       <div className="kpi-ov-cp-bar">
         <i style={{ width: `${usedPct}%`, background: barColor }} />
         <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
       </div>
-      <div className="kpi-ov-cp-fl">
-        {usedPct}% used
-        {paceText && (
-          <> · <span className={`kpi-ov-cp-pc ${paceClass || "kpi-ov-cp-mute"}`}>{paceText}</span></>
-        )}
-      </div>
+      <div className="kpi-ov-cp-fl">{usedPct}% used</div>
     </>
   );
 }
