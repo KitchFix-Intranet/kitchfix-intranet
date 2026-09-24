@@ -98,17 +98,34 @@ const round2 = n => Math.round(Number(n || 0) * 100) / 100;
 const fmt0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
 
 // Type / Status derivations per row source.
-//   invoice_submissions type='invoice'   -> "Invoice"
-//   invoice_submissions type='credit'    -> "Credit"
-//   billcom                              -> "Invoice"   (pre-cutover bills)
-//   billcom_credit                       -> "Credit"    (pre-cutover credits)
-//   upload                               -> "Invoice"   (finance-injected)
-//   rippling_spend                       -> "Card"
-//   invoice_submissions status='sent'    -> "Submitted"
-//   invoice_submissions status='returned' -> "Returned"
-//   rippling_spend gl_line_code IS NULL  -> "Not coded"
-//   rippling_spend otherwise             -> "Coded"
-//   billcom / billcom_credit / upload    -> "—"          (no status field on bill.com lane)
+//   invoice_submissions type='invoice'         -> "Invoice"
+//   invoice_submissions type='credit'          -> "Credit"
+//   billcom                                    -> "Invoice"   (pre-cutover bills)
+//   billcom_credit                             -> "Credit"    (pre-cutover credits)
+//   upload                                     -> "Invoice"   (finance-injected)
+//   rippling_spend                             -> "Card"
+//   invoice_submissions status='sent'          -> "Submitted"
+//   invoice_submissions status='returned'      -> "Returned"
+//   rippling_spend group has any uncoded line  -> "Needs coding"
+//   rippling_spend group fully coded           -> "Coded"
+//   billcom / billcom_credit / upload          -> "—"          (no status field on bill.com lane)
+//
+// Kevin ruling 2026-09-24 on card status. Two changes from what this
+// comment used to describe. First, the rule keys on the whole group,
+// not one line: a card bill can be GL-split across lines and if any
+// one line is uncoded the reader still has work outstanding on that
+// charge - it reads "Needs coding" until every line has a category.
+// Second, the wording is "Needs coding" not "Not coded". This system
+// uses "closed" to mean a closed fiscal period elsewhere on the
+// board, so "open" / "closed" as a two-state label would collide with
+// something load-bearing.
+//
+// Before this fix, statusLabel read r.gl_line_code on a group object
+// that never carried it (buildTransactions constructs groups with a
+// specific field set, gl_line_code is not in it), so the ternary
+// returned "Not coded" unconditionally for every card row. The fix
+// carries codedLines / uncodedLines counts onto the group in
+// buildTransactions, then reads them here.
 function typeLabel(r) {
   if (r.source === "invoice_submissions") return r.type === "credit" ? "Credit" : "Invoice";
   if (r.source === "billcom_credit")      return "Credit";
@@ -123,13 +140,24 @@ function statusLabel(r) {
     if (r.status === "sent")     return "Submitted";
     return "—";
   }
-  if (r.source === "rippling_spend") return r.gl_line_code ? "Coded" : "Not coded";
+  if (r.source === "rippling_spend") {
+    return r.uncodedLines > 0 ? "Needs coding" : "Coded";
+  }
   return "—";
 }
 function numberLabel(r) {
   if (r.source === "invoice_submissions") return r.invoice_number ? `#${r.invoice_number}` : "—";
-  // Card + bill.com share the short-source_bill_id convention.
-  return r.source_bill_id ? `#${String(r.source_bill_id).slice(0, 8)}` : "—";
+  // Kevin ruling 2026-09-24. source_bill_id is a ULID; the first 8
+  // hex chars encode the millisecond epoch, so multiple bills within
+  // the same ms collide on slice(0, 8). Measured on the ledger since
+  // 2026-08-10: 1,952 distinct charges collapsed into 1,032 distinct
+  // 8-char prefixes - roughly half the numbers on screen were shared
+  // by unrelated charges, which is why three different American
+  // Airlines charges displayed under one # and looked like duplicates.
+  // slice(0, 13) is fully unique over the same set (measured), and
+  // keeps the chronological-scan property operators are used to (the
+  // ULID timestamp prefix stays visible).
+  return r.source_bill_id ? `#${String(r.source_bill_id).slice(0, 13)}` : "—";
 }
 
 // Group actuals rows by source_bill_id + source. One transaction = one
@@ -159,6 +187,12 @@ function buildTransactions(rows) {
         hasCogs: false,
         allSga: true,
         anyLine: false,
+        // Card coding counts. statusLabel reads these to answer
+        // "Coded" (all lines have a gl_line_code) vs "Needs coding"
+        // (any one line is still uncoded). Group-level, not line-
+        // level, because a card bill can be GL-split across lines.
+        codedLines: 0,
+        uncodedLines: 0,
         rawLines: [],
       };
       groups.set(key, g);
@@ -166,6 +200,10 @@ function buildTransactions(rows) {
     const b = bucketOf(r.gl_line_code);
     g.anyLine = true;
     g.rawLines.push(r);
+    if (r.source === "rippling_spend") {
+      if (r.gl_line_code) g.codedLines += 1;
+      else                g.uncodedLines += 1;
+    }
     if (b === "sga") { /* drop from columns; sga_removed carries the total for invoices */ }
     else if (b) {
       g.allSga = false;
