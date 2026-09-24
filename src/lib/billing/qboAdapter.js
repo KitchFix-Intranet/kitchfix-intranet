@@ -191,6 +191,19 @@ export function composeInvoiceUrl(proxyBase, realmId) {
   return `${stripped}/v3/company/${encodeURIComponent(realmId)}/invoice?minorversion=75`;
 }
 
+// sc BillEmail (Kevin ruling 2026-09-24). The invoice payload has never
+// carried BillEmail, so Sebastian had to type one in QBO before he
+// could send. Read the customer's PrimaryEmailAddr from QBO at push
+// time and copy it onto BillEmail. Same shape as composeInvoiceUrl but
+// against /customer/<id>.
+export function composeCustomerUrl(proxyBase, realmId, customerId) {
+  if (!proxyBase) throw new Error("composeCustomerUrl: proxyBase required");
+  if (!realmId)   throw new Error("composeCustomerUrl: realmId required");
+  if (!customerId) throw new Error("composeCustomerUrl: customerId required");
+  const stripped = String(proxyBase).replace(/\/+$/, "");
+  return `${stripped}/v3/company/${encodeURIComponent(realmId)}/customer/${encodeURIComponent(customerId)}?minorversion=75`;
+}
+
 // ─── Errors (named so callers can branch cleanly) ─────────────────
 export class NotAllowlistedError extends Error {
   constructor(customerId, mode, allowlist) {
@@ -412,6 +425,58 @@ async function doPost(url, apiKey, payload) {
   }
 }
 
+// GET a QBO entity via the proxy. Same shape as doPost + AbortController
+// so a hang on the QBO customer read cannot stall the invoice push.
+// Never throws. Timeout absorbed as { ok:false, status:0 }.
+const CUSTOMER_READ_TIMEOUT_MS = 8000;
+async function doGetCustomer(url, apiKey, { timeoutMs = CUSTOMER_READ_TIMEOUT_MS } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method:  "GET",
+      headers: { "X-API-Key": apiKey, "Accept": "application/json" },
+      signal:  controller.signal,
+    });
+    const body = await res.text();
+    return { ok: res.ok, status: res.status, body };
+  } catch (err) {
+    return { ok: false, status: 0, body: `network: ${err?.message || String(err)}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Read the customer's PrimaryEmailAddr.Address from QBO. Never throws;
+// returns the email string on success or null on any failure (missing
+// email, HTTP error, non-JSON body, timeout, network). Logs one line
+// per outcome so operators can trace why BillEmail was omitted.
+async function readCustomerBillEmail({ proxyBase, realmId, apiKey, customerId, accountKey, fetchImpl }) {
+  if (!customerId) {
+    console.warn(`[qboAdapter] customer read skipped: no customerId (accountKey=${accountKey || "?"})`);
+    return null;
+  }
+  const url = composeCustomerUrl(proxyBase, realmId, customerId);
+  const res = await fetchImpl(url, apiKey);
+  if (!res.ok) {
+    console.warn(`[qboAdapter] customer read failed for ${accountKey || "?"} customer=${customerId} status=${res.status} - BillEmail omitted`);
+    return null;
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(res.body);
+  } catch (err) {
+    console.warn(`[qboAdapter] customer read parse failed for ${accountKey || "?"} customer=${customerId}: ${err?.message || String(err)} - BillEmail omitted`);
+    return null;
+  }
+  const addr = parsed?.Customer?.PrimaryEmailAddr?.Address;
+  if (typeof addr !== "string" || !addr.trim()) {
+    console.warn(`[qboAdapter] customer has no PrimaryEmailAddr in QBO for ${accountKey || "?"} customer=${customerId} - BillEmail omitted`);
+    return null;
+  }
+  return addr.trim();
+}
+
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -579,14 +644,50 @@ export async function postInvoiceDraft(payload, ctx) {
   if (!realmId)   throw new Error("postInvoiceDraft: QBO_REALM_ID required");
   const url = composeInvoiceUrl(proxyBase, realmId);
 
+  // ─── sc BillEmail: read customer's PrimaryEmailAddr from QBO ──
+  // Kevin ruling 2026-09-24. The invoice payload has never carried
+  // BillEmail, so Sebastian had to type one in QBO before sending.
+  // QBO stays source of truth for client contacts; sc_qbo_account_map
+  // does not store BillEmail, so the two systems cannot drift.
+  //
+  // Placed BEFORE the DocNumber reservation seam. A failed customer
+  // read AFTER reservation would burn a live KF number for an
+  // invoice that never posts. Before the seam, failures cost nothing.
+  //
+  // NON-FATAL. If the customer has no PrimaryEmailAddr in QBO, if
+  // the read returns non-2xx, or if the read errors/times out, we
+  // omit BillEmail, log the reason, and push the invoice anyway.
+  // The invoice matters more than the pre-filled email field.
+  //
+  // Test mode: skipped. The test-mode CustomerRef is 22463 (ZZ TEST),
+  // whose PrimaryEmailAddr is not the address we want on real
+  // invoices; test pushes never need a BillEmail.
+  //
+  // Test injection: `deps.fetchCustomerImpl` opts a test into
+  // exercising this branch. When `deps.fetchImpl` is set but
+  // `deps.fetchCustomerImpl` is not, the read is skipped so existing
+  // adapter tests don't accidentally hit the real QBO proxy or need
+  // to mock a second endpoint.
+  const customerFetch = ctx.deps?.fetchCustomerImpl
+    ?? (ctx.deps?.fetchImpl ? null : doGetCustomer);
+  if (!isTest && customerFetch) {
+    const billEmail = await readCustomerBillEmail({
+      proxyBase, realmId, apiKey,
+      customerId: outgoing?.CustomerRef?.value,
+      accountKey: ctx.accountKey,
+      fetchImpl: customerFetch,
+    });
+    if (billEmail) outgoing.BillEmail = { Address: billEmail };
+  }
+
   // ─── sc-48: reserve DocNumber immediately before the POST ─────
   // This is the reservation seam. Every upstream stage (arg
   // validation, idempotency, test-marking, strip, fence, snapshot,
-  // env) can fail without burning a number. From here on, the
-  // number is consumed regardless of the POST outcome (Kevin
-  // ruling: burn on failure). The retry-on-5xx below reuses the
-  // SAME docNumber - a 5xx is a retry within one attempt, not a
-  // new attempt.
+  // env, customer read) can fail without burning a number. From
+  // here on, the number is consumed regardless of the POST outcome
+  // (Kevin ruling: burn on failure). The retry-on-5xx below reuses
+  // the SAME docNumber - a 5xx is a retry within one attempt, not
+  // a new attempt.
   const docNumber = await reserveInvoiceDocNumber(supa, isTest);
   outgoing.DocNumber = docNumber;
 

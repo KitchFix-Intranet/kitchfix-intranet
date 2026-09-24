@@ -547,3 +547,92 @@ test("qboMode required: missing throws with the field named", async () => {
     /qboMode required/,
   );
 });
+
+// ─── sc BillEmail (Kevin ruling 2026-09-24) ───────────────────────
+//
+// The invoice payload has never carried BillEmail, so Sebastian had
+// to type one in QBO before sending. Live-mode pushes now read the
+// customer's PrimaryEmailAddr from QBO and copy it onto BillEmail.
+// Non-fatal on every failure - the invoice matters more than the
+// pre-filled email.
+//
+// deps.fetchCustomerImpl is the test seam. When absent (and fetchImpl
+// is set, as in every other adapter test), the read is skipped; when
+// present, we exercise the branch and inspect the wire payload.
+
+test("BillEmail: customer has PrimaryEmailAddr in QBO -> copied onto invoice as BillEmail.Address", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => { captured = p; return okEcho("LIVE-BE-1", p); };
+  const fetchCustomerImpl = async () => ({
+    ok: true, status: 200,
+    body: JSON.stringify({
+      Customer: {
+        Id: "19000",
+        DisplayName: "Texas Rangers - Surprise, AZ",
+        PrimaryEmailAddr: { Address: "billing@rangers.example" },
+      },
+    }),
+  });
+
+  const res = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live" },
+      qboMode: "live",
+      deps: { supa, fetchImpl, fetchCustomerImpl },
+    },
+  );
+
+  assert.equal(res.status, "created");
+  assert.equal(captured.BillEmail?.Address, "billing@rangers.example",
+    "BillEmail.Address set to the customer's PrimaryEmailAddr from QBO");
+});
+
+test("BillEmail: customer has NO PrimaryEmailAddr in QBO -> BillEmail omitted, push proceeds", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => { captured = p; return okEcho("LIVE-BE-2", p); };
+  const fetchCustomerImpl = async () => ({
+    ok: true, status: 200,
+    body: JSON.stringify({
+      Customer: { Id: "19000", DisplayName: "Texas Rangers - Surprise, AZ" },
+    }),
+  });
+
+  const res = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live" },
+      qboMode: "live",
+      deps: { supa, fetchImpl, fetchCustomerImpl },
+    },
+  );
+
+  assert.equal(res.status, "created", "invoice still posted");
+  assert.equal(captured.BillEmail, undefined,
+    "BillEmail must be absent when the customer has no PrimaryEmailAddr");
+});
+
+test("BillEmail: customer read errors -> BillEmail omitted, push proceeds (non-fatal)", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => { captured = p; return okEcho("LIVE-BE-3", p); };
+  const fetchCustomerImpl = async () => ({ ok: false, status: 500, body: "internal error" });
+
+  const res = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live" },
+      qboMode: "live",
+      deps: { supa, fetchImpl, fetchCustomerImpl },
+    },
+  );
+
+  assert.equal(res.status, "created", "invoice still posted despite customer-read failure");
+  assert.equal(captured.BillEmail, undefined,
+    "BillEmail absent when the customer read fails");
+});
