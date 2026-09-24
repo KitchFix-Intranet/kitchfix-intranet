@@ -8,25 +8,20 @@
 // Precedence (highest wins):
 //   1. urlView === "admin" + isAdmin       -> admin parallel surface
 //   2. urlPeriod matches /^P\d+$/          -> deep-link to that period
-//   3. role mapped to floor                -> current-period workspace
-//                                            (landOnCurrentPeriod=true,
-//                                            periodKey filled by the
-//                                            mount once periodRanges
-//                                            arrives)
-//   4. role mapped to leadership / unknown -> Season overview (today's
-//                                            default)
+//   3. default (every clean-URL landing)   -> year overview on the
+//                                             Period lens
 //
-// Stage 4 wired the seam (helper + ROLE_TIERS map + landing precedence)
-// but the mount passed role=null because contacts.role wasn't exposed
-// at the mount fetch.
+// 2026-09-23 ruling (Kevin): every user lands on their own account's
+// year overview with the Period lens. Nobody is auto-dropped into a
+// period workspace; users drill in themselves. The prior floor-role
+// -> current-period-workspace branch (F2, 2026-07-09) is removed;
+// explicit user intent (admin URL, ?period deep-link) still wins.
 //
-// Role activation (this PR): sc-accounts now returns the requesting
-// user's contacts.role values as `roles[]` (multiple rows possible per
-// the sc-3 seed). The mount captures roles and passes them here; we
-// resolve the tier via tierFromRoles() with the floor-wins tiebreaker.
-// Engine touch is minimal + scoped: the existing user-resolution in
-// sc-accounts gets one additional contacts query alongside the
-// user_accounts_derived query (Promise.all).
+// The ROLE_TIERS map + roleTier + tierFromRoles helpers below are
+// left in place; they no longer influence the return value from this
+// helper. Their last outcome-bearing consumer was branch 3. Retirement
+// (and the follow-on retirement of contacts.role in favor of `people`
+// as the source of truth) is follow-up scope, not this PR.
 
 // ─── Role alias map ─────────────────────────────────────────────
 // contacts.role is free-text - the seed has 14 known roles (per
@@ -108,19 +103,13 @@ function pickRepresentativeRole(roles) {
   return roles[0];
 }
 
-// F2 (R-A ruling 2026-07-09): the floor -> workspace redirect now
-// REQUIRES a resolved home account. A floor-tier user with NO
-// mapped account falls through to the Season overview (the picker)
-// rather than being force-landed on the CIN-AZ fallback they don't
-// own. hasHomeAccount is the signal - true only when the user has
-// a resolved account (via user_accounts_derived) AND that account is
-// present in the account list the dropdown carries (guards against
-// a mapping pointing at an unimported account; see the account-
-// fallback comment in ServiceCalendar.js).
-//
 // URL account/scope still wins over the landing computation (branches 1
 // and 2 below); the account switcher is orthogonal - flipping accounts
 // after landing does not re-run this helper.
+//
+// `role`, `roles`, and `hasHomeAccount` are accepted for signature
+// stability with the mount caller; they no longer affect the return
+// value after the 2026-09-23 ruling.
 export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, roles = null, hasHomeAccount = false }) {
   // 1) admin URL wins (explicit user intent + isAdmin gate)
   if (urlView === "admin" && isAdmin) {
@@ -138,34 +127,9 @@ export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, r
       landOnCurrentPeriod: false,
     };
   }
-  // 3) floor tier + resolved home account -> workspace at current period.
-  //    Resolve tier from either `roles` (multi-role aware) or `role`
-  //    (single - kept for backward compat with the Stage 4 signature).
-  //    Floor-wins applies on `roles`; single-role uses the same map.
-  //    periodKey is null at mount; the existing periodRanges-init
-  //    effect (B2a) sets periodKey to the period containing today
-  //    when landOnCurrentPeriod is true.
-  //    F2: gated on hasHomeAccount so a floor role without a resolved
-  //    account (via user_accounts_derived) falls to the Season overview
-  //    instead of the CIN-AZ fallback.
-  const tier = Array.isArray(roles)
-    ? tierFromRoles(roles)
-    : roleTier(role);
-  if (tier === "floor" && hasHomeAccount) {
-    return {
-      scope: "period", lens: "period",
-      isAdminView: false, periodKey: null,
-      landOnCurrentPeriod: true,
-    };
-  }
-  // 4) leadership / unknown / floor-without-home -> Season overview,
-  //    Period lens (2026-09-03 ruling). Prior default was
-  //    lens="calendar" for this branch; Kevin ruled Period is the
-  //    right default view for everyone because the calendar-shaped
-  //    month view invites finalizing a billing week from a month-
-  //    shaped screen (see item 2 finalize scope). Session-only: no
-  //    persistence. If Kevin sees people re-toggling to Calendar,
-  //    revisit with a preference column.
+  // 3) default (2026-09-23 ruling): every clean-URL landing resolves
+  //    to the year overview on the Period lens. Nobody is auto-dropped
+  //    into a period workspace; users drill in themselves.
   return {
     scope: "year", lens: "period",
     isAdminView: false, periodKey: null,
