@@ -19,11 +19,38 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 ].join(" "),
           access_type: "offline",
           prompt: "consent",
+          // UX hint only. Surfaces KitchFix accounts first in Google's
+          // account chooser. NOT a security control - the user can
+          // pick any Google account regardless. The real domain gate
+          // is the signIn callback below; do not delete that thinking
+          // this covers it.
+          hd: "kitchfix.com",
         },
       },
     }),
   ],
   callbacks: {
+    // 2026-09-23: gate sign-in to @kitchfix.com. Prior state: no
+    // signIn callback, no hosted-domain restriction; any Google
+    // account on earth completed login and passed middleware's
+    // session-exists check. Chat-Claude verified against production
+    // that zero active people and zero contacts rows carry a non-
+    // @kitchfix.com email, so nobody legitimate is locked out.
+    //
+    // Deny-by-default: missing / non-string / non-suffix emails all
+    // return false. Exact-suffix match on "@kitchfix.com" only -
+    // .includes() would let "kitchfix.com.attacker.net" pass.
+    async signIn({ user, profile }) {
+      const raw = user?.email ?? profile?.email ?? null;
+      const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+      const allowed = email.endsWith("@kitchfix.com");
+      // Log every attempt so "did anyone unexpected sign in?" is
+      // answerable via Vercel runtime logs. Durable history (a
+      // sign_in_attempts table) is follow-up scope; this PR does not
+      // touch the migration gate.
+      console.log(`[Auth signIn] ${allowed ? "ALLOW" : "DENY"} email=${email || "<missing>"}`);
+      return allowed;
+    },
     async jwt({ token, account }) {
       // First sign-in: save all Google tokens
 if (account) {

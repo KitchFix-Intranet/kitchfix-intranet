@@ -20,9 +20,22 @@ function getRotating(arr) {
   return arr[(day + hour) % arr.length];
 }
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }) {
   const welcome = getRotating(WELCOME_LINES);
   const subtitle = getRotating(SUBTITLE_LINES);
+  // Next 16 delivers searchParams as a Promise; await before reading.
+  // NextAuth redirects a denied sign-in back to /login?error=AccessDenied
+  // (the signIn callback in src/lib/auth.js returned false). Every other
+  // ?error value is rendered as a generic sign-in failure so a denied
+  // user does not loop the button with no explanation.
+  const sp = (await searchParams) || {};
+  const errorParam = typeof sp.error === "string" ? sp.error : Array.isArray(sp.error) ? sp.error[0] : "";
+  const isAccessDenied = errorParam === "AccessDenied";
+  const errorMessage = isAccessDenied
+    ? "Use your KitchFix account to sign in."
+    : errorParam
+      ? "Sign-in failed. Try again."
+      : "";
 
   return (
     <div className="kf-login">
@@ -44,6 +57,10 @@ export default function LoginPage() {
           <span className="kf-login-badge">Home Field Operations</span>
           <h2 className="kf-login-welcome">{welcome}</h2>
           <p className="kf-login-desc">{subtitle}</p>
+
+          {errorMessage ? (
+            <p className="kf-login-error" role="alert">{errorMessage}</p>
+          ) : null}
 
           <form
             action={async () => {

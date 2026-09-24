@@ -1515,6 +1515,20 @@ body {
   margin: 0 0 28px;
 }
 
+/* ── Access denied / error notice ── */
+.kf-login-error {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  text-align: center;
+}
+
 /* ── Sign In Button ── */
 .kf-login-btn {
   width: 100%;
