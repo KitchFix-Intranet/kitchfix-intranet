@@ -1789,6 +1789,16 @@ async function sweepSupersededUncoded({ dryRun }) {
     if (intentional) { a4.intentional += 1; continue; }
     a4.uncovered.push(r);
   }
+  // Test hook (dry-run only): inject a synthetic uncovered row to prove
+  // the halt path fires + exits non-zero. Kevin's rule: an untested halt
+  // path is not a halt path. Gated on env + dry-run so it can never
+  // affect production. Payload is a fake source_line_id + account_key.
+  if (dryRun && process.env.R148B_TEST_HALT_UNCOVERED === "true") {
+    a4.uncovered.push({
+      pa: { source_line_id: "rippling_spend:__test_halt__", account_key: "__TEST__", txn_date: "9999-12-31", vendor_or_merchant: "__TEST_UNCOVERED__" },
+    });
+    console.warn(`[r148b] TEST HOOK · R148B_TEST_HALT_UNCOVERED=true injected 1 synthetic uncovered row`);
+  }
   console.log(`[r148b] A4 · direct=${a4.direct} settled_elsewhere=${a4.settled_elsewhere} intentional=${a4.intentional} uncovered=${a4.uncovered.length}`);
 
   if (a4.uncovered.length > 0) {
@@ -1811,14 +1821,78 @@ async function sweepSupersededUncoded({ dryRun }) {
     console.warn(`[r148b] WARN · ${msg} · continuing (unset R148B_STRICT_BASELINE, drift is expected on nightly)`);
   }
 
-  if (dryRun) {
-    console.log(`[r148b] dry-run · would retire ${retireRows.length} rows · no write`);
-    return { ok: true, halted: null, swept: 0, planned: retireRows.length, a4 };
-  }
-
   if (retireRows.length === 0) {
     console.log(`[r148b] nothing to sweep · no-op`);
     return { ok: true, halted: null, swept: 0, planned: 0, a4 };
+  }
+
+  // ── constraint precheck runs BEFORE the dry-run early-return so
+  // dry-run proves the marker shape safely, without ever touching the
+  // DB. Halt-then-report if any marker would fail; production run
+  // never gets to the DELETE loop with a bad marker.
+  //
+  //   CHECK constraints:
+  //     excluded_shape · NOT (excluded=true AND account_key IS NOT NULL)
+  //     reason_shape   · reason IS NULL OR excluded=true
+  //     source_check   · source IN ('billcom','billcom_credit','rippling_spend','upload')
+  //
+  //   NOT NULL (with no default, must carry a value):
+  //     source, source_line_id, amount
+  //     (id defaults from sequence, excluded/paid/approx_date default false,
+  //      derived_at defaults now() - not asserted here)
+  //
+  //   Amount + txn_date preservation:
+  //     amount MUST equal orig.amount (retired dollars stay auditable)
+  //     txn_date MUST equal orig.txn_date
+  //     Kevin ruling 2026-09-24: retired rows keep their real figures.
+  const VALID_SOURCES = new Set(["billcom", "billcom_credit", "rippling_spend", "upload"]);
+  const buildMarker = orig => ({
+    source:             orig.source,
+    source_line_id:     orig.source_line_id,
+    source_bill_id:     orig.source_bill_id,
+    account_key:        null,
+    gl_line_code:       orig.gl_line_code,
+    gl_bucket:          orig.gl_bucket,
+    amount:             orig.amount,
+    txn_date:           orig.txn_date,
+    posting_date:       orig.posting_date,
+    vendor_or_merchant: orig.vendor_or_merchant,
+    paid:               orig.paid,
+    approx_date:        orig.approx_date,
+    excluded:           true,
+    reason:             "superseded_uncoded",
+  });
+  let cshape = 0, cshape_bad = [];
+  for (const r of retireRows) {
+    const m = buildMarker(r.pa);
+    // CHECK constraints
+    const ok_excluded = !(m.excluded === true && m.account_key !== null);
+    const ok_reason   = m.reason === null || m.excluded === true;
+    const ok_source   = VALID_SOURCES.has(m.source);
+    // NOT NULL columns (no default)
+    const ok_source_nn = m.source != null;
+    const ok_sli_nn    = m.source_line_id != null;
+    const ok_amount_nn = m.amount != null;
+    // amount + txn_date preservation (retired dollars stay auditable)
+    const ok_amount_preserved   = Number(m.amount) === Number(r.pa.amount);
+    const ok_txndate_preserved  = m.txn_date === r.pa.txn_date;
+    const all = ok_excluded && ok_reason && ok_source && ok_source_nn && ok_sli_nn && ok_amount_nn && ok_amount_preserved && ok_txndate_preserved;
+    if (!all) {
+      cshape_bad.push({ pa_id: r.pa.id, ok_excluded, ok_reason, ok_source, ok_source_nn, ok_sli_nn, ok_amount_nn, ok_amount_preserved, ok_txndate_preserved });
+    } else {
+      cshape += 1;
+    }
+  }
+  if (cshape_bad.length > 0) {
+    console.error(`[r148b] HALT constraint-precheck · ${cshape_bad.length} markers would fail a PA constraint or drop a load-bearing column · sample:`);
+    for (const b of cshape_bad.slice(0, 5)) console.error(`  ${JSON.stringify(b)}`);
+    return { ok: false, halted: "constraint-precheck", swept: 0, planned: retireRows.length, a4 };
+  }
+  console.log(`[r148b] constraint-precheck · ${cshape}/${retireRows.length} markers pass: 3 CHECK constraints + 3 NOT NULL columns + amount/txn_date preservation`);
+
+  if (dryRun) {
+    console.log(`[r148b] dry-run · would retire ${retireRows.length} rows · no write`);
+    return { ok: true, halted: null, swept: 0, planned: retireRows.length, a4 };
   }
 
   // Write reversal artifact BEFORE any DELETE so a mid-loop failure still
@@ -1837,11 +1911,16 @@ async function sweepSupersededUncoded({ dryRun }) {
     || path.join(homedir(), "Downloads", "kf-r148b-review.json");
   const reversal = {
     brief_ref: "R-148B · Kevin ruling 2026-09-24 (mechanism confirmed)",
-    schema_version: 1,
+    schema_version: 2,
     reason: "superseded_uncoded",
     swept_at: new Date().toISOString(),
-    retirements: retireRows.map(r => ({ source_line_id: `rippling_spend:${r.unset_rippling_id}` }))
-      .sort((a, b) => a.source_line_id.localeCompare(b.source_line_id)),
+    // account_key included so reversal is self-contained and does not
+    // depend on spend_work_location_site_map staying stable. Safe for
+    // the public repo (no dollars, no vendors, no employees).
+    retirements: retireRows.map(r => ({
+      source_line_id: `rippling_spend:${r.unset_rippling_id}`,
+      account_key:    r.pa.account_key,
+    })).sort((a, b) => a.source_line_id.localeCompare(b.source_line_id)),
   };
   fs.writeFileSync(REVERSAL_PATH, JSON.stringify(reversal, null, 2));
   const review = {
@@ -1862,7 +1941,7 @@ async function sweepSupersededUncoded({ dryRun }) {
   // failure we know exactly which row broke; already-processed rows are
   // durable, remaining rows will be picked up on the next nightly run
   // (idempotent by the excluded=false filter).
-  let swept = 0;
+  let swept = 0, deleted = 0, inserted = 0;
   const failures = [];
   for (const r of retireRows) {
     const orig = r.pa;
@@ -1873,30 +1952,24 @@ async function sweepSupersededUncoded({ dryRun }) {
       console.error(`[r148b] DELETE FAIL id=${orig.id} · ${del.error.message}`);
       break;
     }
+    deleted += 1;
     // INSERT marker (same source_line_id, now free; account_key NULL; excluded true; reason set)
-    const marker = {
-      source:             orig.source,
-      source_line_id:     orig.source_line_id,
-      source_bill_id:     orig.source_bill_id,
-      account_key:        null,
-      gl_line_code:       orig.gl_line_code,
-      gl_bucket:          orig.gl_bucket,
-      amount:             orig.amount,
-      txn_date:           orig.txn_date,
-      posting_date:       orig.posting_date,
-      vendor_or_merchant: orig.vendor_or_merchant,
-      paid:               orig.paid,
-      approx_date:        orig.approx_date,
-      excluded:           true,
-      reason:             "superseded_uncoded",
-    };
+    const marker = buildMarker(orig);
     const ins = await supa.from("purchasing_actuals").insert([marker]);
     if (ins.error) {
       failures.push({ id: orig.id, step: "INSERT", error: ins.error.message, orig });
       console.error(`[r148b] INSERT FAIL after DELETE for orig id=${orig.id} sli=${orig.source_line_id} · ${ins.error.message} · row is GONE, marker not written`);
       break;
     }
+    inserted += 1;
     swept += 1;
+  }
+  // Kevin's proof 2: rows deleted MUST equal marker rows inserted.
+  // Assert after the loop (guards against a fall-through where DELETE
+  // succeeded but INSERT was skipped without breaking out of the loop).
+  if (deleted !== inserted) {
+    console.error(`[r148b] HALT leakage · deleted=${deleted} !== inserted=${inserted} · row(s) gone with no marker`);
+    return { ok: false, halted: "leakage", swept, planned: retireRows.length, deleted, inserted, failures, a4 };
   }
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`[r148b] sweep complete · swept=${swept}/${retireRows.length} · duration=${dur}s`);

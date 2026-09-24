@@ -300,13 +300,19 @@ console.log(`| ${"PORTFOLIO".padEnd(15)} | ${String(tot.br).padStart(3)} → ${S
 console.log();
 console.log("Step 7 · write artifacts");
 
-// Reversal file · committable · source_line_id + reason only, sorted for stable diffs
+// Reversal file · committable · source_line_id + account_key + reason
+// only (Kevin ruling 2026-09-24). account_key makes reversal self-
+// contained so it does not depend on spend_work_location_site_map
+// staying stable. Zero dollars, zero vendors, zero employees.
 const reversal = {
   brief_ref: "R-148B · Kevin ruling 2026-09-24 (mechanism confirmed)",
-  schema_version: 1,
+  schema_version: 2,
   reason: "superseded_uncoded",
   retirements: retireRows
-    .map(r => ({ source_line_id: `rippling_spend:${r.unset_rippling_id}` }))
+    .map(r => ({
+      source_line_id: `rippling_spend:${r.unset_rippling_id}`,
+      account_key:    r.pa.account_key,
+    }))
     .sort((a, b) => a.source_line_id.localeCompare(b.source_line_id)),
 };
 fs.writeFileSync(REVERSAL_PATH, JSON.stringify(reversal, null, 2));
