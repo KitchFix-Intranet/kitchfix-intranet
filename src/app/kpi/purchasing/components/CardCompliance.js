@@ -142,6 +142,18 @@ export function CardCompliance({
         </div>
       </div>
 
+      {/* Source label · Kevin ruling 2026-09-24. The per-person
+          breakdown reads the nightly Rippling report table (only
+          source with employee attribution). The Overview's Needs
+          Review headline reads a different source (card_charges /
+          purchasing_actuals + report-only pending) so the two counts
+          will not sum. That is by design; the label states it so a
+          chef does not read the per-person rows as a decomposition
+          of the headline. Wording placeholder - Kevin will rule on
+          the exact phrasing. */}
+      <div className="kpi-p-cc-src" style={{ fontSize: 10, fontWeight: 600, color: "var(--n-600)", margin: "6px 0 2px" }}>
+        Attribution and receipts · from the nightly card report
+      </div>
       {/* Column header - only shown at aggregate scopes where the site
           row is meaningful. At single-account scope we auto-expand to
           people directly under the header. */}
