@@ -73,3 +73,11 @@ scripts/sc-print/artifacts-proto/
 fy2026_pnl_budget_seed.json
 *P_L*Clean.xlsx
 *P&L*Clean.xlsx
+
+# FIN-2027 loader baselines · per-cell budget+actual snapshots. Same
+# reason as the workbooks above - real financial data in a public
+# repo. Snapshots live outside the tree (~/Downloads/kf-fin2027-*).
+# Belt-and-suspenders in case one is ever copied in.
+*fin2027*baseline*snapshot*.json
+*fin2027*local_reference*.json
+scripts/probes/fin2027_w5_baseline_snapshot.json
