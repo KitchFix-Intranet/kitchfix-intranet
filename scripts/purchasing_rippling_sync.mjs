@@ -738,6 +738,55 @@ async function deriveSpendLines({ rippling_ids }) {
     }
   }
 
+  // R-148D (Kevin ruling 2026-09-24). A Card Authorization is a swipe
+  // hold, not a charge. Never counts, whether it pairs or not.
+  // rippling_report_txns_latest.raw->>'Object Type' names the shape
+  // outright ("Card Authorization" / "Card Transaction" / "Mileage
+  // Request" / "Expense Request"). Two sets:
+  //   holdSeen         · parents whose Object Type IS 'Card Authorization'
+  //   reportSeenAnyOT  · parents with ANY non-null Object Type
+  // The precedence chain fires `card_authorization` for holdSeen hits,
+  // skips the R-148C `auth_pair` inference when reportSeenAnyOT confirms
+  // the row is NOT a hold, and falls back to the R-148C inference when
+  // Object Type is absent (pre-2026-07-28 rows, no report row yet).
+  // Silent-fail contract: if either load fails, both sets stay empty and
+  // the whole precedence chain falls back to pre-R-148D behavior
+  // (auth_pair inference alone). Loud warn on 42P01; hard-fail on other
+  // errors so a broken load never silently un-classifies.
+  const holdSeen = new Set();
+  const reportSeenAnyOT = new Set();
+  {
+    const PAGE = 1000;
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supa
+        .from("rippling_report_txns_latest")
+        .select("parent_txn_id, raw")
+        .order("parent_txn_id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        if (error.code === "42P01") {
+          console.warn("[r148d] WARN rippling_report_txns_latest table absent · Card Authorization exclusion DISABLED · precedence falls back to R-148C auth_pair inference");
+          break;
+        }
+        console.error(`[r148d] hold-seen load FAILED: ${error.message}`);
+        return { ok: false, error: error.message };
+      }
+      const rows = data || [];
+      for (const r of rows) {
+        const objType = r.raw && r.raw["Object Type"];
+        if (objType != null) reportSeenAnyOT.add(r.parent_txn_id);
+        if (objType === "Card Authorization") holdSeen.add(r.parent_txn_id);
+      }
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    console.log(`[r148d] hold-seen parents loaded: ${holdSeen.size} · reportSeenAnyOT parents: ${reportSeenAnyOT.size}`);
+    if (holdSeen.size === 0 && reportSeenAnyOT.size === 0) {
+      console.warn("[r148d] WARN both sets empty · Card Authorization exclusion DISABLED · precedence falls back to R-148C auth_pair inference");
+    }
+  }
+
   // ─── Ruling 6 seed: parent hexes with a CODED report row ────────────
   //
   // Owner ruling 2026-08-28, scope restored 2026-09-01. Ruling 6
@@ -1113,11 +1162,19 @@ async function deriveSpendLines({ rippling_ids }) {
     const ccy = String(r.currency || "").toUpperCase();
     const currencyHit = ccy && ccy !== "USD" && ccy !== "";
 
-    // ─── Ruling 4 (auth-pair) + Ruling 5 (zero-amount) ──────────────
-    // Parent-level flags computed in the pre-scan above.
-    const authPairEarlierHit  = parent ? authPairEarlierParents.has(parent) : false;
-    const authPairLaterHit    = parent ? authPairLaterParentExcluded.has(parent) : false;
-    const zeroAmountHit       = parent ? zeroAmountParents.has(parent) : false;
+    // ─── Ruling 4 (auth-pair) + Ruling 5 (zero-amount) + R-148D ─────
+    // Parent-level flags computed in the pre-scan above + R-148D lookup.
+    const authPairEarlierHit    = parent ? authPairEarlierParents.has(parent) : false;
+    const authPairLaterHit      = parent ? authPairLaterParentExcluded.has(parent) : false;
+    const zeroAmountHit         = parent ? zeroAmountParents.has(parent) : false;
+    // R-148D (Kevin ruling 2026-09-24). Object Type is Rippling's own
+    // field for "this line is a hold" vs "this line is a settled
+    // charge". `parentIsCardAuth` fires the card_authorization branch
+    // below. `parentHasOtherObjectType` (Object Type present + NOT
+    // Card Authorization) tells the auth_pair inference to stand
+    // down - the ruling is authoritative when the field is present.
+    const parentIsCardAuth        = parent ? holdSeen.has(parent) : false;
+    const parentHasOtherObjectType = parent ? (reportSeenAnyOT.has(parent) && !parentIsCardAuth) : false;
     // INV-P12 truncation-pair stored ruling (Kevin 2026-08-27).
     const truncationPairHit   = parent ? truncationPairRuledParents.has(parent) : false;
     // Ruling 6 (2026-08-28, scope restored 2026-09-01): a coded report
@@ -1142,22 +1199,32 @@ async function deriveSpendLines({ rippling_ids }) {
 
     // Reason precedence for the recorded reason column. First hit wins.
     // The order below matches the exclusion causality:
-    //   1. map_excluded      - work_location owner-seeded excluded=TRUE
-    //   2. label_fallback    - one of three EXCLUDED_LABEL_FALLBACK literals
-    //   3. truncation_pair   - INV-P12 stored ruling (Kevin 2026-08-27).  Pre-empts
-    //                          the live auth_pair rule so a hand-ruled parent stays
-    //                          labeled with the specific decision that put it here.
-    //   4. dup_split         - Ruling 2 duplicate-split parent
-    //   5. non_usd           - Ruling 3
-    //   6. report_coded      - Ruling 6 (2026-08-28, scope restored 2026-09-01).
-    //                          Fires ONLY when the API row is uncoded on our side
-    //                          (!glLine) AND the report has a coded twin at the same
-    //                          parent_hex. Scope-constraint form: a coded API row is
-    //                          real spend and must never be excluded here. Precedes
-    //                          auth_pair because when it fires it is a stronger
-    //                          statement than the earlier-of-pair guess.
-    //   7. auth_pair         - Ruling 4 (earlier of pair; or later when earlier-in-report)
-    //   8. zero_amount       - Ruling 5
+    //   1. map_excluded         - work_location owner-seeded excluded=TRUE
+    //   2. label_fallback       - one of three EXCLUDED_LABEL_FALLBACK literals
+    //   3. truncation_pair      - INV-P12 stored ruling (Kevin 2026-08-27).  Pre-empts
+    //                             the live auth_pair rule so a hand-ruled parent stays
+    //                             labeled with the specific decision that put it here.
+    //   4. dup_split            - Ruling 2 duplicate-split parent
+    //   5. non_usd              - Ruling 3
+    //   6. report_coded         - Ruling 6 (2026-08-28, scope restored 2026-09-01).
+    //                             Fires ONLY when the API row is uncoded on our side
+    //                             (!glLine) AND the report has a coded twin at the same
+    //                             parent_hex. Scope-constraint form: a coded API row is
+    //                             real spend and must never be excluded here. Precedes
+    //                             auth_pair because when it fires it is a stronger
+    //                             statement than the earlier-of-pair guess.
+    //   7. card_authorization   - R-148D (Kevin ruling 2026-09-24). Object Type on the
+    //                             report row is 'Card Authorization'. A hold never counts,
+    //                             regardless of pairing. Unconditional; no settled-twin
+    //                             test. Replaces the R-148C auth_pair inference for
+    //                             report rows that carry Object Type (>= 2026-07-28).
+    //   8. auth_pair            - Ruling 4 (earlier of pair; or later when earlier-in-report).
+    //                             Now gated on `!parentHasOtherObjectType` so it only
+    //                             fires when Object Type is ABSENT (pre-2026-07-28 rows
+    //                             or parents not in the report). When Object Type is
+    //                             present and is anything OTHER than Card Authorization,
+    //                             the row is not a hold and this branch stands down.
+    //   9. zero_amount          - Ruling 5
     let reason = null;
     if (wlRow?.excluded === true) reason = "map_excluded";
     else if (labelFallbackHit)    reason = "label_fallback";
@@ -1165,7 +1232,8 @@ async function deriveSpendLines({ rippling_ids }) {
     else if (dupSplitHit)         reason = "dup_split";
     else if (currencyHit)         reason = "non_usd";
     else if (reportCodedHit && !glLine) reason = "report_coded";
-    else if (authPairEarlierHit || authPairLaterHit) reason = "auth_pair";
+    else if (parentIsCardAuth)    reason = "card_authorization";
+    else if (!parentHasOtherObjectType && (authPairEarlierHit || authPairLaterHit)) reason = "auth_pair";
     else if (zeroAmountHit)       reason = "zero_amount";
 
     const excluded = reason !== null;
@@ -1979,6 +2047,216 @@ async function sweepSupersededUncoded({ dryRun }) {
   return { ok: true, halted: null, swept, planned: retireRows.length, a4 };
 }
 
+// ─── R-148D · retire counting Card Authorization holds ──────────────
+//
+// Mechanism (Kevin ruling 2026-09-24): a Card Authorization is a swipe
+// hold, not a charge. Never counts, whether it pairs or not. The
+// derive rule change above excludes NEWLY-derived hold rows on every
+// run. This sweep catches CURRENTLY-COUNTING hold rows that the
+// derive won't re-derive today: walk-dead rows (Rippling dropped the
+// hold post-settlement) + rows that landed before the derive rule
+// existed. Same pattern as sweepSupersededUncoded: constraint
+// precheck, reversal file first, DELETE-then-INSERT-marker per row,
+// abort on first failure, leakage assertion.
+//
+// Detection: for each PA row with source=rippling_spend AND excluded=
+// false, join to rippling_raw_spend_lines_latest via source_line_id ->
+// rippling_id -> external_id, extract parent_hex (leading 24 hex
+// before __line_item_content_). If parent_hex is in holdSeen (parents
+// with Object Type = 'Card Authorization'), retire.
+//
+// Regression guards:
+//   A1 · every retirement's parent_hex IS in holdSeen (definitional)
+//   A2 · zero retirements where parent_hex is NOT in holdSeen (halt
+//        the sweep if any Card Transaction slipped in - that would
+//        delete real spend)
+//   A3 · zero retirements with a NULL Object Type (pre-2026-07-28
+//        rows classified by R-148C, never by this sweep)
+//   A4 · zero retirements with Object Type in {Mileage Request,
+//        Expense Request} - Kevin ruling: untouched
+async function sweepCardAuthorizations({ dryRun }) {
+  const t0 = Date.now();
+  const OBJECTID_RE = /^[a-f0-9]{24}__line_item_content_/;
+
+  async function pageAll(table, sel, filters = q => q) {
+    const out = [];
+    const PAGE = 1000;
+    let from = 0;
+    for (;;) {
+      const q = filters(supa.from(table).select(sel).range(from, from + PAGE - 1));
+      const r = await q;
+      if (r.error) throw r.error;
+      out.push(...(r.data || []));
+      if ((r.data || []).length < PAGE) break;
+      from += PAGE;
+    }
+    return out;
+  }
+
+  console.log("[r148d] sweep · load raw spend lines + counting rippling_spend rows + report_txns Object Type");
+  const rawAll = await pageAll("rippling_raw_spend_lines_latest", "rippling_id, external_id");
+  const rawByRid = new Map();
+  for (const r of rawAll) {
+    if (!r.external_id || !OBJECTID_RE.test(r.external_id)) continue;
+    rawByRid.set(r.rippling_id, r.external_id.slice(0, 24));
+  }
+
+  const holdSet = new Set();
+  const objTypeByParent = new Map();  // parent_hex -> Object Type string (or null)
+  const reportRows = await pageAll("rippling_report_txns_latest", "parent_txn_id, raw");
+  for (const r of reportRows) {
+    const objType = (r.raw && r.raw["Object Type"]) || null;
+    objTypeByParent.set(r.parent_txn_id, objType);
+    if (objType === "Card Authorization") holdSet.add(r.parent_txn_id);
+  }
+
+  const paCounting = await pageAll(
+    "purchasing_actuals",
+    "id, source, source_line_id, source_bill_id, account_key, gl_line_code, gl_bucket, amount, txn_date, posting_date, paid, approx_date, vendor_or_merchant, excluded, reason",
+    q => q.eq("source", "rippling_spend").eq("excluded", false),
+  );
+
+  const retireRows = [];
+  const regressionSuspect = [];  // rows queued despite Object Type != Card Auth (should be zero)
+  for (const pa of paCounting) {
+    const rid = (pa.source_line_id || "").replace(/^rippling_spend:/, "");
+    const parentHex = rawByRid.get(rid);
+    if (!parentHex) continue;
+    if (!holdSet.has(parentHex)) continue;
+    // A2/A3/A4 sanity: the row's parent must have Object Type = Card Authorization.
+    // If Object Type is anything else (or null), this is a regression - skip and log.
+    const objType = objTypeByParent.get(parentHex);
+    if (objType !== "Card Authorization") {
+      regressionSuspect.push({ pa_id: pa.id, parent_hex: parentHex, object_type: objType });
+      continue;
+    }
+    retireRows.push({ pa, parentHex });
+  }
+  console.log(`[r148d] detection · ${paCounting.length} counting rippling_spend rows · ${retireRows.length} matched Card Authorization holdSet`);
+  if (regressionSuspect.length > 0) {
+    console.error(`[r148d] HALT regression-suspect · ${regressionSuspect.length} candidates had parent in holdSet but Object Type mismatched. Sample:`);
+    for (const s of regressionSuspect.slice(0, 5)) console.error(`  ${JSON.stringify(s)}`);
+    return { ok: false, halted: "regression-suspect", swept: 0, planned: 0, suspects: regressionSuspect.length };
+  }
+
+  if (retireRows.length === 0) {
+    console.log(`[r148d] nothing to sweep · no-op`);
+    return { ok: true, halted: null, swept: 0, planned: 0 };
+  }
+
+  // Constraint precheck (same shape as R-148B).
+  const VALID_SOURCES = new Set(["billcom", "billcom_credit", "rippling_spend", "upload"]);
+  const buildMarker = orig => ({
+    source:             orig.source,
+    source_line_id:     orig.source_line_id,
+    source_bill_id:     orig.source_bill_id,
+    account_key:        null,
+    gl_line_code:       orig.gl_line_code,
+    gl_bucket:          orig.gl_bucket,
+    amount:             orig.amount,
+    txn_date:           orig.txn_date,
+    posting_date:       orig.posting_date,
+    vendor_or_merchant: orig.vendor_or_merchant,
+    paid:               orig.paid,
+    approx_date:        orig.approx_date,
+    excluded:           true,
+    reason:             "card_authorization",
+  });
+  let cshape = 0, cshape_bad = [];
+  for (const r of retireRows) {
+    const m = buildMarker(r.pa);
+    const ok_excluded = !(m.excluded === true && m.account_key !== null);
+    const ok_reason   = m.reason === null || m.excluded === true;
+    const ok_source   = VALID_SOURCES.has(m.source);
+    const ok_source_nn = m.source != null;
+    const ok_sli_nn    = m.source_line_id != null;
+    const ok_amount_nn = m.amount != null;
+    const ok_amount_preserved  = Number(m.amount) === Number(r.pa.amount);
+    const ok_txndate_preserved = m.txn_date === r.pa.txn_date;
+    const all = ok_excluded && ok_reason && ok_source && ok_source_nn && ok_sli_nn && ok_amount_nn && ok_amount_preserved && ok_txndate_preserved;
+    if (!all) cshape_bad.push({ pa_id: r.pa.id, ok_excluded, ok_reason, ok_source, ok_source_nn, ok_sli_nn, ok_amount_nn, ok_amount_preserved, ok_txndate_preserved });
+    else cshape += 1;
+  }
+  if (cshape_bad.length > 0) {
+    console.error(`[r148d] HALT constraint-precheck · ${cshape_bad.length} markers would fail a PA constraint. Sample:`);
+    for (const b of cshape_bad.slice(0, 5)) console.error(`  ${JSON.stringify(b)}`);
+    return { ok: false, halted: "constraint-precheck", swept: 0, planned: retireRows.length };
+  }
+  console.log(`[r148d] constraint-precheck · ${cshape}/${retireRows.length} markers pass: 3 CHECK + 3 NOT NULL + amount/txn_date preservation`);
+
+  if (dryRun) {
+    console.log(`[r148d] dry-run · would retire ${retireRows.length} rows · no write`);
+    return { ok: true, halted: null, swept: 0, planned: retireRows.length };
+  }
+
+  // Reversal file first · same shape + safe-for-repo contract as R-148B.
+  const path = await import("node:path");
+  const fs = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const { homedir } = await import("node:os");
+  const __sweepFilename = fileURLToPath(import.meta.url);
+  const ARTIFACT_DIR = path.join(path.dirname(__sweepFilename), "probes", "artifacts");
+  if (!fs.existsSync(ARTIFACT_DIR)) fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+  const REVERSAL_PATH = path.join(ARTIFACT_DIR, "r148d_reversal.json");
+  const REVIEW_PATH = process.env.R148D_REVIEW_PATH
+    || path.join(homedir(), "Downloads", "kf-r148d-review.json");
+  const reversal = {
+    brief_ref: "R-148D · Kevin ruling 2026-09-24",
+    schema_version: 1,
+    reason: "card_authorization",
+    swept_at: new Date().toISOString(),
+    retirements: retireRows.map(r => ({
+      source_line_id: `rippling_spend:${(r.pa.source_line_id || "").replace(/^rippling_spend:/, "")}`,
+      account_key:    r.pa.account_key,
+    })).sort((a, b) => a.source_line_id.localeCompare(b.source_line_id)),
+  };
+  fs.writeFileSync(REVERSAL_PATH, JSON.stringify(reversal, null, 2));
+  const review = {
+    generated_at: new Date().toISOString(),
+    brief_ref: "R-148D · sweep run",
+    retirements: retireRows.map(r => ({
+      source_line_id: r.pa.source_line_id,
+      pa_id: r.pa.id, source_bill_id: r.pa.source_bill_id, account_key: r.pa.account_key,
+      amount: Number(r.pa.amount), txn_date: r.pa.txn_date, vendor_or_merchant: r.pa.vendor_or_merchant,
+      parent_hex: r.parentHex,
+    })),
+  };
+  fs.writeFileSync(REVIEW_PATH, JSON.stringify(review, null, 2));
+  console.log(`[r148d] wrote reversal ${REVERSAL_PATH} + review ${REVIEW_PATH} before writes`);
+
+  let swept = 0, deleted = 0, inserted = 0;
+  const failures = [];
+  for (const r of retireRows) {
+    const orig = r.pa;
+    const del = await supa.from("purchasing_actuals").delete().eq("id", orig.id);
+    if (del.error) {
+      failures.push({ id: orig.id, step: "DELETE", error: del.error.message });
+      console.error(`[r148d] DELETE FAIL id=${orig.id} · ${del.error.message}`);
+      break;
+    }
+    deleted += 1;
+    const marker = buildMarker(orig);
+    const ins = await supa.from("purchasing_actuals").insert([marker]);
+    if (ins.error) {
+      failures.push({ id: orig.id, step: "INSERT", error: ins.error.message, orig });
+      console.error(`[r148d] INSERT FAIL after DELETE for orig id=${orig.id} sli=${orig.source_line_id} · ${ins.error.message} · row is GONE, marker not written`);
+      break;
+    }
+    inserted += 1;
+    swept += 1;
+  }
+  if (deleted !== inserted) {
+    console.error(`[r148d] HALT leakage · deleted=${deleted} !== inserted=${inserted} · row(s) gone with no marker`);
+    return { ok: false, halted: "leakage", swept, planned: retireRows.length, deleted, inserted, failures };
+  }
+  const dur = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`[r148d] sweep complete · swept=${swept}/${retireRows.length} · duration=${dur}s`);
+  if (failures.length > 0) {
+    return { ok: false, halted: "write", swept, planned: retireRows.length, failures };
+  }
+  return { ok: true, halted: null, swept, planned: retireRows.length };
+}
+
 // ─── Main ────────────────────────────────────────────────────────────
 
 // --derive-only path: skip the API walk and load every rippling_id from
@@ -2009,7 +2287,7 @@ async function loadAllRipplingIds() {
   return { ok: true, rippling_ids: ids };
 }
 
-let walkResult, catCandResult, deriveResult, probesResult, sweepResult;
+let walkResult, catCandResult, deriveResult, probesResult, sweepResult, sweepDResult;
 try {
   if (args.deriveOnly) {
     const loadResult = await loadAllRipplingIds();
@@ -2024,8 +2302,11 @@ try {
       probesResult = await runProbes({ rippling_ids: loadResult.rippling_ids });
       // R-148B sweep runs AFTER derive completes so a row coded and
       // re-derived in the same run is not swept on stale evidence.
+      // R-148D sweep runs after R-148B - catches walk-dead Card
+      // Authorization holds the derive won't re-derive today.
       if (deriveResult?.ok) {
-        sweepResult = await sweepSupersededUncoded({ dryRun: args.dryRun });
+        sweepResult  = await sweepSupersededUncoded({ dryRun: args.dryRun });
+        sweepDResult = await sweepCardAuthorizations({ dryRun: args.dryRun });
       }
     }
   } else {
@@ -2039,8 +2320,11 @@ try {
         probesResult = await runProbes({ rippling_ids: walkResult.rippling_ids });
         // R-148B sweep runs AFTER derive completes so a row coded and
         // re-derived in the same run is not swept on stale evidence.
+        // R-148D sweep runs after R-148B - catches walk-dead Card
+        // Authorization holds the derive won't re-derive today.
         if (deriveResult?.ok) {
-          sweepResult = await sweepSupersededUncoded({ dryRun: args.dryRun });
+          sweepResult  = await sweepSupersededUncoded({ dryRun: args.dryRun });
+          sweepDResult = await sweepCardAuthorizations({ dryRun: args.dryRun });
         }
       }
     }
@@ -2059,11 +2343,13 @@ if (catCandResult) console.log(`  category_map:  ${catCandResult.ok ? "ok" : "FA
 if (deriveResult) console.log(`  derive:        ${deriveResult.ok ? "ok" : "FAIL"}  lines_derived=${deriveResult.linesDerived} unattributed=${deriveResult.unattributed} uncoded=${deriveResult.uncoded} label_fallback_inserted=${deriveResult.labelFallbackInserted ?? 0}`);
 if (probesResult) console.log(`  probes:        ${probesResult.allPass ? "ALL PASS" : "FAIL"}  ${probesResult.probes.map(p => `${p.id}=${p.pass ? "P" : "F"}`).join(" ")}`);
 if (sweepResult) console.log(`  r148b_sweep:   ${sweepResult.ok ? "ok" : "FAIL"}  swept=${sweepResult.swept}/${sweepResult.planned}${sweepResult.halted ? " halted=" + sweepResult.halted : ""}${sweepResult.a4 ? " a4=" + sweepResult.a4.direct + "/" + sweepResult.a4.settled_elsewhere + "/" + sweepResult.a4.intentional : ""}`);
+if (sweepDResult) console.log(`  r148d_sweep:   ${sweepDResult.ok ? "ok" : "FAIL"}  swept=${sweepDResult.swept}/${sweepDResult.planned}${sweepDResult.halted ? " halted=" + sweepDResult.halted : ""}`);
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
 if (!walkResult?.ok || !catCandResult?.ok || !deriveResult?.ok) process.exit(2);
 // Sweep halt / write failure exits non-zero so the cron surfaces it,
 // but does NOT roll back the derive (which already committed above).
 if (sweepResult && !sweepResult.ok) process.exit(3);
+if (sweepDResult && !sweepDResult.ok) process.exit(5);
 if (probesResult && !probesResult.allPass) process.exit(4);
 process.exit(0);
