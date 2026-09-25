@@ -1763,6 +1763,98 @@
   margin-left: var(--kpi-sp-2);
 }
 
+/* Editorial (2026-09-25) · fold header summary. Right-aligned meta-
+   sized text between the fold title and the chevron. Reads what the
+   fold contains when it is collapsed - so a shut fold on a busy
+   account still names the work outstanding. Adjacent-chevron rule
+   overrides the chevron's own margin-left:auto so both do not fight
+   over the free space. */
+.kpi-app .kpi-ov-fold-summary {
+  margin-left: auto;
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  color: var(--n-600);
+  letter-spacing: 0.2px;
+}
+.kpi-app .kpi-ov-fold-trigger .kpi-ov-fold-summary + .kpi-ov-fold-cv {
+  margin-left: var(--kpi-sp-2);
+}
+
+/* Editorial (2026-09-25) · fold panel shell. The fold ships with the
+   .kpi-ov-card chrome (border + radius + shadow) which reads as a
+   card-inside-a-card against the Overview section above it. The
+   panel variant strips the shadow so the fold reads as a bordered
+   section of the same surface as its neighbour, not a floating card
+   with its own elevation. Border + radius stay so the fold still
+   has a container edge. */
+.kpi-app .kpi-ov-fold-panel {
+  box-shadow: none;
+}
+
+/* Editorial (2026-09-25) · Labor fold takes the same grammar as
+   Purchasing. Period band goes solid navy on the settled state and
+   navy-700 when it is the currently running period, matching the
+   Purchasing week band. Rail on rows that need attention retunes
+   from amber-600 to amber-500 to align with the Purchasing rail
+   (same signal, same colour token). Scoped to the fold panel so the
+   standalone Labor page still ships its V36 grammar - the standalone
+   page has different visual context (its own header, its own rules)
+   and its own rulings; the Editorial pass only touches the fold. */
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td {
+  background: var(--navy-900);
+  color: var(--n-0);
+  border-top: 1px solid var(--navy-800);
+  border-bottom: 1px solid var(--navy-800);
+}
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band:hover > td {
+  background: var(--navy-800);
+}
+/* Running (in-progress) period band lifts one step to navy-700 so the
+   band that is not yet closed reads distinct against the settled
+   ones. WeekTable does not carry a data-in-progress attribute on the
+   band today, so this scopes via the same `isPeriodInProgress`
+   condition as the label render: the band is running iff the current
+   week is within its bounds, which today the panel infers from
+   containing an open band (that heuristic breaks for closed periods
+   the user has expanded). Correct scoping needs a WeekTable JSX prop
+   change; for this PR the settled navy applies to all bands and the
+   open state keeps its existing navy-100 lift on the OPEN band. */
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td {
+  background: var(--navy-100);
+  color: var(--navy-700);
+}
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open:hover > td {
+  background: var(--navy-100);
+}
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td:first-child {
+  box-shadow: inset 3px 0 0 var(--navy-700);
+}
+/* The band button + its sub-label sit inside the td; both need to
+   pick up the white text against navy. The chevron uses text-subtle
+   which reads dim on navy - restate it. */
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-bandbtn { color: var(--n-0); }
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-bandsub { color: var(--navy-200); }
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-chev   { color: var(--navy-200); }
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-bandbtn:hover {
+  background: var(--navy-800);
+  color: var(--n-0);
+}
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td .kpi-tbl-bandbtn,
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td .kpi-tbl-bandsub,
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td .kpi-tbl-chev {
+  color: var(--navy-700);
+}
+/* Rail alignment. Purchasing rail is amber-500; Labor's existing
+   .kpi-tbl-attn rail is amber-600. Retune the fold-scoped rail so
+   the two tables carry the same edge - one colour token for "row
+   needs work", regardless of subject. */
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-attn > td:first-child {
+  box-shadow: inset 3px 0 0 var(--amber-500);
+}
+.kpi-app .kpi-ov-fold-panel .kpi-tbl-child.kpi-tbl-attn > td:first-child {
+  box-shadow: inset 3px 0 0 var(--amber-500);
+}
+
 /* ── Rev-source toggle (corporate posture) - lives in Shell's
      revSourceToggle slot ────────────────────────────────────────── */
 .kpi-app .kpi-ov-revtog {

@@ -107,25 +107,14 @@ const fmt0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Numb
 //   invoice_submissions status='sent'          -> "Submitted"
 //   invoice_submissions status='returned'      -> "Returned"
 //   rippling_spend group has any uncoded line  -> "Needs coding"
-//   rippling_spend group fully coded           -> "Coded"
-//   billcom / billcom_credit / upload          -> "—"          (no status field on bill.com lane)
 //
-// Kevin ruling 2026-09-24 on card status. Two changes from what this
-// comment used to describe. First, the rule keys on the whole group,
-// not one line: a card bill can be GL-split across lines and if any
-// one line is uncoded the reader still has work outstanding on that
-// charge - it reads "Needs coding" until every line has a category.
-// Second, the wording is "Needs coding" not "Not coded". This system
-// uses "closed" to mean a closed fiscal period elsewhere on the
-// board, so "open" / "closed" as a two-state label would collide with
-// something load-bearing.
-//
-// Before this fix, statusLabel read r.gl_line_code on a group object
-// that never carried it (buildTransactions constructs groups with a
-// specific field set, gl_line_code is not in it), so the ternary
-// returned "Not coded" unconditionally for every card row. The fix
-// carries codedLines / uncodedLines counts onto the group in
-// buildTransactions, then reads them here.
+// Editorial (2026-09-25). Status was a standalone column, retired
+// here. The signal moves to two places on the row: a 3px amber rail
+// on the vendor cell when the group needs coding (statusRail), and
+// a second line inside the vendor cell (statusSub) reading the same
+// text an operator saw in the old column. Rail predicate is
+// uncodedLines > 0 - the same test statusLabel used before, so the
+// signal is unchanged; only its render surface moved.
 function typeLabel(r) {
   if (r.source === "invoice_submissions") return r.type === "credit" ? "Credit" : "Invoice";
   if (r.source === "billcom_credit")      return "Credit";
@@ -134,16 +123,26 @@ function typeLabel(r) {
   if (r.source === "rippling_spend")      return "Card";
   return "—";
 }
-function statusLabel(r) {
-  if (r.source === "invoice_submissions") {
-    if (r.status === "returned") return "Returned";
-    if (r.status === "sent")     return "Submitted";
-    return "—";
-  }
+// Sub-line rendered under the vendor name. Cards flag "Needs coding"
+// (warn tone); coded cards render nothing. Invoices render their
+// captured status (Submitted / Returned) in a neutral tone. Bill.com
+// / upload rows have no status field, so no sub-line.
+function statusSub(r) {
   if (r.source === "rippling_spend") {
-    return r.uncodedLines > 0 ? "Needs coding" : "Coded";
+    return r.uncodedLines > 0 ? { text: "Needs coding", warn: true } : null;
   }
-  return "—";
+  if (r.source === "invoice_submissions") {
+    if (r.status === "returned") return { text: "Returned", warn: false };
+    if (r.status === "sent")     return { text: "Submitted", warn: false };
+    return null;
+  }
+  return null;
+}
+// Rail predicate. Same uncodedLines > 0 test the retired statusLabel
+// used - one source of truth for "row needs work" so the rail and any
+// future header count read the same population.
+function needsCodingRail(r) {
+  return r.source === "rippling_spend" && r.uncodedLines > 0;
 }
 function numberLabel(r) {
   if (r.source === "invoice_submissions") return r.invoice_number ? `#${r.invoice_number}` : "—";
@@ -276,8 +275,24 @@ function uncodedCardCount(rows) {
   return { n, total: round2(s) };
 }
 
+// Fold header summary. Reads uncoded card charge count + dollar amount
+// from payload.card_charges (loadCardCharges in src/lib/purchasing/
+// loaders.js). Rendered on the header at --kpi-t-meta so the collapsed
+// fold still names the work outstanding. Zero-uncoded state renders
+// nothing rather than "0 charges" - a collapsed fold with a busy label
+// on a quiet account reads louder than the account deserves.
+function foldHeaderSummary(payload) {
+  const cc = payload?.card_charges;
+  if (!cc) return null;
+  const n = Number(cc.total_count || 0);
+  if (n <= 0) return null;
+  const amt = fmt0(cc.total_amount || 0);
+  return `${n} card ${n === 1 ? "charge" : "charges"} awaiting coding · ${amt}`;
+}
+
 export default function PurchasingFold({ payload, error, account, start, end, today, open, onToggle }) {
   const actuals = Array.isArray(payload?.actuals) ? payload.actuals : null;
+  const headerSummary = foldHeaderSummary(payload);
 
   const derived = useMemo(() => {
     if (!actuals) return null;
@@ -373,7 +388,7 @@ export default function PurchasingFold({ payload, error, account, start, end, to
 
   return (
     <div
-      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
+      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card kpi-ov-fold-panel${open ? " kpi-ov-fold-open" : ""}`}
       data-kpi-ov="purchasing-ledger"
       data-kpi-ov-open={open ? "1" : "0"}
     >
@@ -386,6 +401,9 @@ export default function PurchasingFold({ payload, error, account, start, end, to
           aria-expanded={open ? "true" : "false"}
         >
           <span className="kpi-ov-eb">Purchasing detail</span>
+          {headerSummary && (
+            <span className="kpi-ov-fold-summary" data-kpi-ov="purchasing-fold-summary">{headerSummary}</span>
+          )}
           <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
         </button>
         <HelpPop id="qPurchasingFold" title="The purchasing table" body={HELP_BODY} />
@@ -428,7 +446,6 @@ function PurchasingTable({ derived }) {
             <tr>
               <th className="kpi-ov-cp-led-l">Vendor</th>
               <th className="kpi-ov-cp-led-l">Type</th>
-              <th className="kpi-ov-cp-led-l">Status</th>
               <th className="kpi-ov-cp-led-l">Number</th>
               <th>Food</th>
               <th>Pack. &amp; Sup.</th>
@@ -442,7 +459,7 @@ function PurchasingTable({ derived }) {
               <PurchasingWeekBand key={band.week_start} band={band} showVehicle={showVehicle} />
             ))}
             <tr className="kpi-ov-cp-led-foot" data-kpi-ov="purchasing-ledger-foot">
-              <td className="kpi-ov-cp-led-l" colSpan={4}>Period</td>
+              <td className="kpi-ov-cp-led-l" colSpan={3}>Period</td>
               <td>{fmt0(foot.food)}</td>
               <td>{fmt0(foot.packaging)}</td>
               {showVehicle && <td>{fmt0(foot.vehicle)}</td>}
@@ -457,51 +474,79 @@ function PurchasingTable({ derived }) {
 }
 
 function PurchasingWeekBand({ band, showVehicle }) {
-  const colSpan = 4 + (showVehicle ? 4 : 3); // vendor+type+status+number + buckets + total column count
-  const label = (() => {
-    const dtRange = `${band.week_start.slice(5)} – ${band.week_end.slice(5)}`;
-    if (band.state === "in-progress") return `Week · ${dtRange} · in progress`;
-    if (band.state === "ahead")       return `Week · ${dtRange} · ahead`;
-    return `Week · ${dtRange}`;
-  })();
+  // Editorial (2026-09-25). Status column retired: leading label
+  // columns drop from 4 (vendor + type + status + number) to 3 (vendor
+  // + type + number). Both the computed colSpan for empty-week rows
+  // AND the two hardcoded colSpan sites (band label + period footer)
+  // move together - a mismatched pair would shear the table on empty
+  // weeks or across showVehicle transitions.
+  const colSpan = 3 + (showVehicle ? 4 : 3); // vendor + type + number + buckets + total column count
+  const dtRange = `${band.week_start.slice(5)} – ${band.week_end.slice(5)}`;
   const stateTag = band.state === "in-progress" ? "kpi-ov-pf-wband-run"
                 : band.state === "ahead"       ? "kpi-ov-pf-wband-ahead"
                 :                                "kpi-ov-pf-wband-settled";
+  const weekTotal = band.food + band.packaging + band.vehicle + band.billed;
   return (
     <>
-      <tr className={`kpi-ov-pf-wband ${stateTag}`} data-kpi-ov="purchasing-week-band" data-week-start={band.week_start}>
-        <td className="kpi-ov-cp-led-l" colSpan={4}>{label}</td>
+      <tr className={`kpi-ov-pf-wband ${stateTag}`} data-kpi-ov="purchasing-week-band" data-week-start={band.week_start} data-week-state={band.state}>
+        <td className="kpi-ov-cp-led-l" colSpan={3}>
+          <span className="kpi-ov-pf-wband-label">{`Week · ${dtRange}`}</span>
+          {band.state === "in-progress" && (
+            <span className="kpi-ov-pf-wband-tag">
+              <span className="kpi-ov-pf-wband-dot" aria-hidden="true" />
+              in progress
+            </span>
+          )}
+          {band.state === "ahead" && (
+            <span className="kpi-ov-pf-wband-tag kpi-ov-pf-wband-tag-ahead">ahead</span>
+          )}
+        </td>
         <td>{fmt0(band.food)}</td>
         <td>{fmt0(band.packaging)}</td>
         {showVehicle && <td>{fmt0(band.vehicle)}</td>}
         <td className="kpi-ov-cp-led-bb">{fmt0(band.billed)}</td>
-        <td>{fmt0(band.food + band.packaging + band.vehicle + band.billed)}</td>
+        <td className="kpi-ov-pf-wband-total">{fmt0(weekTotal)}</td>
       </tr>
       {band.rows.length === 0 ? (
         <tr className="kpi-ov-cp-led-lrow" data-kpi-ov="purchasing-week-empty">
           <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute" colSpan={colSpan}>No purchases in this week.</td>
         </tr>
       ) : (
-        band.rows.map((r, i) => (
-          <tr key={r.key} className="kpi-ov-cp-led-lrow" data-kpi-ov="purchasing-txn">
-            <td className="kpi-ov-cp-led-l">
-              {r.vendor}
-              {r.sga_removed > 0 && (
-                <span className="kpi-ov-cp-led-sga" title="Invoice included SG&A lines that are not part of COGS; the row total is the COGS portion.">
-                  {" "}SG&amp;A {fmt0(r.sga_removed)}
+        band.rows.map((r, i) => {
+          const sub = statusSub(r);
+          const rail = needsCodingRail(r);
+          return (
+            <tr
+              key={r.key}
+              className="kpi-ov-cp-led-lrow"
+              data-kpi-ov="purchasing-txn"
+              data-status-rail={rail ? "1" : "0"}
+            >
+              <td className="kpi-ov-cp-led-l">
+                <span className="kpi-ov-pf-vname">
+                  {r.vendor}
+                  {r.sga_removed > 0 && (
+                    <span className="kpi-ov-cp-led-sga" title="Invoice included SG&A lines that are not part of COGS; the row total is the COGS portion.">
+                      {" "}SG&amp;A {fmt0(r.sga_removed)}
+                    </span>
+                  )}
                 </span>
-              )}
-            </td>
-            <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{typeLabel(r)}</td>
-            <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{statusLabel(r)}</td>
-            <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{numberLabel(r)}</td>
-            <td>{cellCell(r.food)}</td>
-            <td>{cellCell(r.packaging)}</td>
-            {showVehicle && <td>{cellCell(r.vehicle)}</td>}
-            <td className="kpi-ov-cp-led-bb">{cellCell(r.billed)}</td>
-            <td><b>{fmt0(r.total)}</b></td>
-          </tr>
-        ))
+                {sub && (
+                  <span className={`kpi-ov-pf-vsub${sub.warn ? " kpi-ov-pf-vsub-warn" : ""}`}>
+                    {sub.text}
+                  </span>
+                )}
+              </td>
+              <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{typeLabel(r)}</td>
+              <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{numberLabel(r)}</td>
+              <td>{cellCell(r.food)}</td>
+              <td>{cellCell(r.packaging)}</td>
+              {showVehicle && <td>{cellCell(r.vehicle)}</td>}
+              <td className="kpi-ov-cp-led-bb">{cellCell(r.billed)}</td>
+              <td><b>{fmt0(r.total)}</b></td>
+            </tr>
+          );
+        })
       )}
     </>
   );
