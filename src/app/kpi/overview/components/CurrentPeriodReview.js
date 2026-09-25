@@ -7,7 +7,15 @@
 //
 // Populated from the two payloads the table already fetched:
 //   labor.board.pending_hours + amount        - hours awaiting approval
-//   purchasing.compliance.total_count + $     - card charges without a GL
+//   purchasing.card_charges.total_count + $   - card charges without a GL
+//
+// Purchasing headline reads card_charges, not compliance. Kevin ruling
+// 2026-09-24: the fold banner and this card must show the same number,
+// which means they must share a source. card_charges is that source
+// (purchasing_actuals + R16 P0 report-only merge). Compliance reads a
+// separate nightly-emailed snapshot and lags by up to a day; the
+// compliance card still uses that read for its own count + per-person
+// attribution.
 //
 // Copy is fixed per prompt § 0's render.
 
@@ -22,7 +30,9 @@ export default function CurrentPeriodReview({ labor, purchasing }) {
   const laborPending = laborPendingSummary(labor);
   if (laborPending) items.push(laborPending);
 
-  // Purchasing · uncoded card charges (compliance panel data).
+  // Purchasing · uncoded card charges (same source as the Purchasing
+  // Detail fold banner - card_charges, not compliance - so the two
+  // numbers on the same screen agree).
   const purchPending = purchasingPendingSummary(purchasing);
   if (purchPending) items.push(purchPending);
 
@@ -79,12 +89,26 @@ function laborPendingSummary(labor) {
 
 function purchasingPendingSummary(purchasing) {
   if (!purchasing) return null;
-  const comp = purchasing.compliance || null;
-  if (!comp) return null;
-  const count = Number(comp.total_count || 0);
+  // Kevin ruling 2026-09-24. Point the Needs Review headline at
+  // `purchasing.card_charges` (same source the Purchasing Detail fold
+  // reads via loadCardCharges + R16 P0 report-only merge) rather than
+  // `purchasing.compliance` (which reads rippling_report_txns_latest,
+  // a nightly-emailed snapshot). Two numbers describing the same thing
+  // on the same screen was the original training-feedback complaint;
+  // the fix is to source both from the same table.
+  //
+  // Recent charges land in `purchasing_actuals` before they land in
+  // the nightly report table, so the compliance number lags the fold
+  // number by up to a day. The compliance card itself (CardCompliance,
+  // labelled as "receipt + attribution detail from nightly card
+  // report") continues to show its own count derived from the report
+  // table; per-person attribution is only available there.
+  const cc = purchasing.card_charges || null;
+  if (!cc) return null;
+  const count = Number(cc.total_count || 0);
   if (!(count > 0)) return null;
-  const amount = Number(comp.total_amount || 0);
-  const oldest = comp.oldest_age_days;
+  const amount = Number(cc.total_amount || 0);
+  const oldest = cc.oldest_age_days;
   const detail = `Purchasing · ${dollar0(amount)}${oldest != null ? ` · oldest ${oldest} day${oldest === 1 ? "" : "s"}` : ""}`;
   return {
     title: `${count} card charge${count === 1 ? "" : "s"} need a P&L line`,

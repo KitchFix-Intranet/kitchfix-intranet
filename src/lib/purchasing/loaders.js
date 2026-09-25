@@ -62,6 +62,7 @@
 import {
   periodStartISO, periodEndISO, periodOf,
 } from "@/app/kpi/labor/lib/periods.js";
+import { isCardAuthorization } from "@/lib/rippling.js";
 
 // ── constants ────────────────────────────────────────────────────────
 
@@ -1096,12 +1097,28 @@ export async function loadCardCharges(supa, { members, start, end, cap = 50, rep
   const enriched = [...enrichedApi, ...enrichedReport]
     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
   const capped = enriched.slice(0, cap);
+  // Oldest age in days over the ENTIRE enriched pool (not the capped
+  // display slice), computed as of today. Consumed by
+  // CurrentPeriodReview's Needs Review headline (Kevin ruling 2026-09-24)
+  // so the headline picks the same source the fold uses instead of
+  // the compliance panel (which reads a different table).
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayMs = new Date(todayIso + "T00:00:00Z").getTime();
+  let oldestAgeDays = 0;
+  for (const r of enriched) {
+    if (!r.txn_date) continue;
+    const rMs = new Date(r.txn_date + "T00:00:00Z").getTime();
+    if (!Number.isFinite(rMs)) continue;
+    const age = Math.floor((todayMs - rMs) / 86400000);
+    if (age > oldestAgeDays) oldestAgeDays = age;
+  }
   return {
     data: {
       rows: capped,
       cap,
       total_count: totalCount,
       total_amount: Math.round(totalAmount * 100) / 100,
+      oldest_age_days: oldestAgeDays,
       // F-11: bubble the guard state up so the payload can honestly say
       // whether the report-only slice was omitted vs empty. hero/list/
       // drill parity holds either way because reportRows is empty in
@@ -1290,7 +1307,7 @@ export async function loadCompliance(supa, { members, start, end, today }) {
   let from = 0;
   while (true) {
     const q = await supa.from("rippling_report_txns_latest")
-      .select("purchased_at, amount, work_location, employee, has_receipt, approval_state, category")
+      .select("purchased_at, amount, work_location, employee, has_receipt, approval_state, category, raw")
       .ilike("category", "%please select%")
       .gte("purchased_at", start)
       .lte("purchased_at", end)
@@ -1298,7 +1315,28 @@ export async function loadCompliance(supa, { members, start, end, today }) {
       .range(from, from + PS - 1);
     if (q.error) return { error: q.error };
     const data = q.data || [];
-    for (const r of data) rows.push(r);
+    // Kevin ruling 2026-09-24. Rippling emits a Card Authorization
+    // (swipe hold) and a separate Card Transaction (settled charge)
+    // for the same purchase; both carry the operator's category. Left
+    // in, an uncoded purchase inflates this count roughly 2x and
+    // misattributes work to named people. R-148C already excludes the
+    // hold from purchasing_actuals; this filter matches the compliance
+    // read to the same shape.
+    //
+    // NULL guard: raw->>'Object Type' is null for report rows landed
+    // before 2026-07-28 (Rippling only started emitting the field
+    // then). A SQL `<> 'Card Authorization'` would evaluate NULL to
+    // NULL and drop them, silently losing real charges. Filter in JS
+    // so the null case is explicit: keep the row unless Object Type
+    // is exactly the string "Card Authorization".
+    //
+    // Same read path as CC task #83 (key auth-pair rule on Object
+    // Type instead of inferring hold-shape from blank posted_date +
+    // approval_state); the derive-side change lives in #83, not here.
+    for (const r of data) {
+      if (isCardAuthorization(r.raw)) continue;
+      rows.push(r);
+    }
     if (data.length < PS) break;
     from += PS;
   }
