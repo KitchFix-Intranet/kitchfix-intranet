@@ -167,6 +167,22 @@ export function extractRows(body) {
   return [];
 }
 
+// R-148D · Card Authorization classifier. Kevin ruling 2026-09-24: a
+// swipe hold is not a charge. This helper reads Rippling's own
+// `Object Type` field from a report_txns row's `raw` jsonb and returns
+// true when the row is a Card Authorization hold. Used by:
+//   - scripts/purchasing_rippling_sync.mjs (derive-side holdSeen build)
+//   - src/lib/purchasing/loaders.js       (loadCompliance filter)
+// Same three-line predicate in both places; extracting it keeps the
+// hold classification single-sourced. Object Type is null on report
+// rows landed before 2026-07-28; callers decide whether to keep or
+// drop those - this helper only answers "is this a hold?" for rows
+// that actually carry the field.
+export function isCardAuthorization(rawJsonb) {
+  const objectType = rawJsonb && rawJsonb["Object Type"];
+  return objectType === "Card Authorization";
+}
+
 // Build the starting URL for a full walk.
 export function firstPageUrl(path, limit = 100) {
   const p = path.replace(/^\//, "");

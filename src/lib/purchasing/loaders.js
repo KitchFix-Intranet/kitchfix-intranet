@@ -62,6 +62,7 @@
 import {
   periodStartISO, periodEndISO, periodOf,
 } from "@/app/kpi/labor/lib/periods.js";
+import { isCardAuthorization } from "@/lib/rippling.js";
 
 // ── constants ────────────────────────────────────────────────────────
 
@@ -1333,8 +1334,7 @@ export async function loadCompliance(supa, { members, start, end, today }) {
     // Type instead of inferring hold-shape from blank posted_date +
     // approval_state); the derive-side change lives in #83, not here.
     for (const r of data) {
-      const objectType = r.raw && r.raw["Object Type"];
-      if (objectType === "Card Authorization") continue;
+      if (isCardAuthorization(r.raw)) continue;
       rows.push(r);
     }
     if (data.length < PS) break;
