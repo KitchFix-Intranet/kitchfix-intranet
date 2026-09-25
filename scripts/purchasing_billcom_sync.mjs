@@ -716,12 +716,23 @@ async function deriveForTouchedBills({ touchedBillIds }) {
       const excluded  = classRow?.excluded === true;
       const accountKey = excluded ? null : (classRow?.account_key || null);
       const glLineCode = line.chart_of_account_id ? (accountToNumber.get(line.chart_of_account_id) || null) : null;
+      // Kevin ruling 2026-09-24. A GL code outside the board's chart
+      // of accounts is correctly excluded - the board exists to help
+      // a site operator hit budget, anything else is noise. The class
+      // map's `excluded=true` classes are the operator-maintained list
+      // of "not on the board" bill.com accounting classes; when the
+      // class map excludes a row, stamp the reason so the exclusion
+      // is documented rather than a silent reason=null. The 97
+      // currently-orphan billcom rows have their reason backfilled by
+      // scripts/probes/_probe_r148d_billcom_stamp.mjs.
+      const reason = excluded ? "gl_not_on_board" : null;
       newRows.push({
         source:             "billcom",
         source_bill_id:     billId,
         source_line_id:     `billcom:${line.line_id}`,
         account_key:        accountKey,
         excluded:           excluded,
+        reason:             reason,
         gl_line_code:       glLineCode,
         gl_bucket:          glBucketFor(glLineCode),
         txn_date:           header.invoice_date,

@@ -91,3 +91,4 @@ scripts/probes/fin2027_w5_baseline_snapshot.json
 scripts/probes/artifacts/*
 !scripts/probes/artifacts/r148b_reversal.json
 !scripts/probes/artifacts/r148d_reversal.json
+!scripts/probes/artifacts/r148d_billcom_reversal.json
