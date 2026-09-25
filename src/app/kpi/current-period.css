@@ -106,7 +106,7 @@
   background: var(--n-0);
 }
 .kpi-app .kpi-ov-cp-seg button {
-  font-size: var(--kpi-t-label);
+  font-size: var(--kpi-size-ctl);
   font-weight: 800;
   letter-spacing: 0.5px;
   padding: 6px 13px;
@@ -884,7 +884,7 @@
   background: var(--n-0);
   color: var(--n-700);
   font-family: inherit;
-  font-size: var(--kpi-t-meta);
+  font-size: var(--kpi-size-ctl);
   font-weight: 800;
   letter-spacing: 0.3px;
   padding: 5px 11px;
@@ -949,7 +949,7 @@
 .kpi-app .kpi-ov-cp-led-vrow-open td { background: var(--n-100); }
 .kpi-app .kpi-ov-cp-led-lrow td {
   background: #FCFCFD;
-  font-size: var(--kpi-t-body);
+  font-size: var(--kpi-t-meta);
   font-weight: 600;
   color: var(--n-700);
   padding: 5px 14px;
