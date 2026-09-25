@@ -480,7 +480,12 @@ function PurchasingWeekBand({ band, showVehicle }) {
   // AND the two hardcoded colSpan sites (band label + period footer)
   // move together - a mismatched pair would shear the table on empty
   // weeks or across showVehicle transitions.
-  const colSpan = 3 + (showVehicle ? 4 : 3); // vendor + type + number + buckets + total column count
+  // Right side is Food + Pack + [Vehicle] + Billed + Total = 5/4, not
+  // 4/3. Pre-existing off-by-one carried over from `4 + (showVehicle
+  // ? 4 : 3)` (Kevin ruling 2026-09-25, post PR-1222 review); affects
+  // only the lone-td empty-week row, which was leaving one blank cell
+  // at the right.
+  const colSpan = 3 + (showVehicle ? 5 : 4); // vendor + type + number + buckets + total column count
   const dtRange = `${band.week_start.slice(5)} – ${band.week_end.slice(5)}`;
   const stateTag = band.state === "in-progress" ? "kpi-ov-pf-wband-run"
                 : band.state === "ahead"       ? "kpi-ov-pf-wband-ahead"
