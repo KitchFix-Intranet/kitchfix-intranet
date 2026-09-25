@@ -29,6 +29,7 @@
 // Prints per-account before/after for CP (P10).
 
 import { createClient } from "@supabase/supabase-js";
+import { fetchPage, extractRows, firstPageUrl } from "../../src/lib/rippling.js";
 import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
@@ -39,8 +40,10 @@ const __dirname  = path.dirname(__filename);
 
 const KEY_URL = process.env.SUPABASE_URL;
 const KEY_SVC = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const KEY_RIP = process.env.RIPPLING_API_KEY;
 console.log(`SUPABASE_URL: ${KEY_URL ? "PRESENT" : "ABSENT"}`);
 console.log(`SUPABASE_SERVICE_ROLE_KEY: ${KEY_SVC ? "PRESENT" : "ABSENT"}`);
+console.log(`RIPPLING_API_KEY: ${KEY_RIP ? "PRESENT" : "ABSENT"}  (needed for A5 walk-alive check)`);
 if (!KEY_URL || !KEY_SVC) process.exit(1);
 
 const s = createClient(KEY_URL, KEY_SVC, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -123,6 +126,99 @@ console.log(`  Object Type other  (mileage/exp):   ${String(buckets.other.length
 console.log(`  No report row (walk ahead of nightly): ${buckets.no_report.length}`);
 console.log(`  No parent_hex (external_id shape):     ${buckets.no_parent.length}`);
 
+// A5 (Kevin ruling 2026-09-24). The R-148C auth_pair inference is now
+// gated on `!parentHasOtherObjectType`. That gate turns the inference
+// OFF for any currently-excluded auth_pair row whose parent Object
+// Type says it's not a hold. Those rows would fall through the reason
+// chain on the next derive, get reason=null, and start counting again.
+// Assertion: enumerate those rows, then filter to walk-alive - only
+// walk-alive rows will actually flip on the next derive (walk-dead
+// rows keep their old exclusion state because the derive won't
+// re-derive them).
+console.log();
+console.log("Step 2b · A5 · currently-excluded rows that would FLIP to counting on the next derive");
+const paExcludedAuthPair = await pageAll(
+  "purchasing_actuals",
+  "id, source_line_id, account_key, amount, txn_date, vendor_or_merchant, reason",
+  q => q.eq("source", "rippling_spend").eq("excluded", true).eq("reason", "auth_pair"),
+);
+console.log(`  loaded ${paExcludedAuthPair.length} currently-excluded auth_pair rows`);
+
+// Classify each auth_pair-excluded row by its parent's Object Type.
+const flipTheoretical = { CardTransaction: [], MileageRequest: [], ExpenseRequest: [], other: [], null: [], noParent: [] };
+for (const pa of paExcludedAuthPair) {
+  const rid = (pa.source_line_id || "").replace(/^rippling_spend:/, "");
+  const parentHex = rawByRid.get(rid);
+  if (!parentHex) { flipTheoretical.noParent.push(pa); continue; }
+  const objType = objTypeByParent.get(parentHex);
+  if (objType === "Card Transaction") flipTheoretical.CardTransaction.push({ pa, parentHex, rid });
+  else if (objType === "Mileage Request") flipTheoretical.MileageRequest.push({ pa, parentHex, rid });
+  else if (objType === "Expense Request") flipTheoretical.ExpenseRequest.push({ pa, parentHex, rid });
+  else if (objType == null) flipTheoretical.null.push({ pa, parentHex, rid });
+  else flipTheoretical.other.push({ pa, parentHex, rid, objType });
+}
+const flipTheoreticalAll = [
+  ...flipTheoretical.CardTransaction,
+  ...flipTheoretical.MileageRequest,
+  ...flipTheoretical.ExpenseRequest,
+];
+const sumTh = arr => arr.reduce((s, x) => s + Math.abs(Number((x.pa ?? x).amount || 0)), 0);
+console.log(`  theoretical flip candidates by Object Type:`);
+console.log(`    Card Transaction:  ${String(flipTheoretical.CardTransaction.length).padStart(3)} rows · ${fmt$(sumTh(flipTheoretical.CardTransaction))}`);
+console.log(`    Mileage Request:   ${String(flipTheoretical.MileageRequest.length).padStart(3)} rows · ${fmt$(sumTh(flipTheoretical.MileageRequest))}`);
+console.log(`    Expense Request:   ${String(flipTheoretical.ExpenseRequest.length).padStart(3)} rows · ${fmt$(sumTh(flipTheoretical.ExpenseRequest))}`);
+console.log(`    Object Type null:  ${String(flipTheoretical.null.length).padStart(3)} rows · ${fmt$(sumTh(flipTheoretical.null))}  (untouched - R-148C still classifies)`);
+console.log(`    Object Type other: ${String(flipTheoretical.other.length).padStart(3)} rows · ${fmt$(sumTh(flipTheoretical.other))}`);
+console.log(`    no parent_hex:     ${flipTheoretical.noParent.length} rows (excluded state preserved)`);
+console.log(`  theoretical total to flip:  ${flipTheoreticalAll.length} rows · ${fmt$(sumTh(flipTheoreticalAll))}`);
+
+// Live walk to determine walk-alive subset. The derive only re-derives
+// walk-alive rows; walk-dead rows keep whatever excluded state they
+// have. So the REAL flip count is walk-alive subset of the theoretical.
+let flipReal = { CardTransaction: [], MileageRequest: [], ExpenseRequest: [] };
+let liveIds = null;
+if (KEY_RIP && flipTheoreticalAll.length > 0) {
+  console.log(`  live walking /custom-objects/spend_transaction_line_item_zo/records ...`);
+  const t0 = Date.now();
+  liveIds = new Set();
+  let url = firstPageUrl("custom-objects/spend_transaction_line_item_zo/records", 100);
+  let pages = 0;
+  const CAP = 2000;
+  let cursorExhausted = false;
+  while (url && pages < CAP) {
+    const r = await fetchPage(url, KEY_RIP);
+    if (!r.ok) {
+      console.error(`    walk failed at page ${pages + 1} · status=${r.status} error=${r.error}`);
+      liveIds = null;
+      break;
+    }
+    for (const row of extractRows(r.body)) {
+      const id = String(row.id || "");
+      if (id) liveIds.add(id);
+    }
+    pages += 1;
+    const next = r.body?.next_link || null;
+    if (!next) { cursorExhausted = true; break; }
+    url = next;
+  }
+  if (liveIds) {
+    console.log(`    walk complete · ${pages} pages · ${liveIds.size} live ids · ${((Date.now() - t0) / 1000).toFixed(1)}s · cursor exhausted=${cursorExhausted}`);
+    for (const key of ["CardTransaction", "MileageRequest", "ExpenseRequest"]) {
+      flipReal[key] = flipTheoretical[key].filter(x => liveIds.has(x.rid));
+    }
+  }
+} else if (!KEY_RIP) {
+  console.warn(`  SKIP walk-alive check · RIPPLING_API_KEY not set. Theoretical numbers reported without walk filter.`);
+}
+if (liveIds) {
+  const flipRealAll = [...flipReal.CardTransaction, ...flipReal.MileageRequest, ...flipReal.ExpenseRequest];
+  console.log(`  REAL flip (walk-alive subset · rows the next derive actually re-derives):`);
+  console.log(`    Card Transaction:  ${String(flipReal.CardTransaction.length).padStart(3)} rows · ${fmt$(sumTh(flipReal.CardTransaction))}`);
+  console.log(`    Mileage Request:   ${String(flipReal.MileageRequest.length).padStart(3)} rows · ${fmt$(sumTh(flipReal.MileageRequest))}`);
+  console.log(`    Expense Request:   ${String(flipReal.ExpenseRequest.length).padStart(3)} rows · ${fmt$(sumTh(flipReal.ExpenseRequest))}`);
+  console.log(`  REAL total to flip:         ${flipRealAll.length} rows · ${fmt$(sumTh(flipRealAll))}  ← net dollars ADDING back to the board`);
+}
+
 console.log();
 console.log("Step 3 · assertions");
 // A1 (definitional): every candidate has parent in holdSet - true by construction of buckets.hold
@@ -133,17 +229,35 @@ console.log(`  A2 · zero Card Transaction rows in retire set · PASS (${buckets
 console.log(`  A3 · zero null-Object-Type rows in retire set · PASS (${buckets.null.length} in null bucket, 0 in hold bucket)`);
 // A4: zero Mileage/Expense in retire set
 console.log(`  A4 · zero Mileage/Expense rows in retire set · PASS (${buckets.other.length} in other bucket, 0 in hold bucket)`);
+if (liveIds) {
+  const flipRealAll = [...flipReal.CardTransaction, ...flipReal.MileageRequest, ...flipReal.ExpenseRequest];
+  console.log(`  A5 · rows LEAVING excluded set (walk-alive auth_pair with Object Type != Card Authorization): ${flipRealAll.length} rows · ${fmt$(sumTh(flipRealAll))} · REPORT ONLY, does not gate the sweep`);
+} else {
+  console.log(`  A5 · walk not run (RIPPLING_API_KEY absent or walk failed); theoretical flip count = ${flipTheoreticalAll.length} rows · ${fmt$(sumTh(flipTheoreticalAll))} · REPORT ONLY`);
+}
+
+// A5 net · combine retire set (rows OFF the board) with real flip
+// (rows ON the board) per account for the CP P10 window.
+const flipRealAllRows = liveIds
+  ? [...flipReal.CardTransaction, ...flipReal.MileageRequest, ...flipReal.ExpenseRequest]
+  : [...flipTheoretical.CardTransaction, ...flipTheoretical.MileageRequest, ...flipTheoretical.ExpenseRequest];
 
 console.log();
 console.log("Step 4 · per-account before/after · CP P10 (2026-09-07 to 2026-10-04)");
+console.log("  Note: 'after' factors BOTH the R-148D retire set (rows leaving the board) AND");
+console.log("        the R-148D-implied auth_pair un-exclusion (rows returning to the board).");
 const p10Rows = paCounting.filter(r => r.txn_date && r.txn_date >= P10.start && r.txn_date <= P10.end);
 const p10RetIds = new Set(buckets.hold
   .filter(x => x.pa.txn_date && x.pa.txn_date >= P10.start && x.pa.txn_date <= P10.end)
   .map(x => x.pa.id));
+// A5-flip rows in the P10 window that would return to counting.
+const p10FlipRows = flipRealAllRows
+  .filter(x => x.pa.txn_date && x.pa.txn_date >= P10.start && x.pa.txn_date <= P10.end)
+  .map(x => x.pa);
 
-const accounts = [...new Set(p10Rows.map(r => r.account_key).filter(Boolean))].sort();
+const accounts = [...new Set([...p10Rows.map(r => r.account_key), ...p10FlipRows.map(r => r.account_key)].filter(Boolean))].sort();
 const perAcct = new Map();
-for (const acct of accounts) perAcct.set(acct, { beforeRows: 0, beforeUn: 0, beforeSum: 0, afterRows: 0, afterUn: 0, afterSum: 0 });
+for (const acct of accounts) perAcct.set(acct, { beforeRows: 0, beforeUn: 0, beforeSum: 0, afterRows: 0, afterUn: 0, afterSum: 0, flipRows: 0, flipSum: 0 });
 for (const r of p10Rows) {
   const b = perAcct.get(r.account_key);
   if (!b) continue;
@@ -156,6 +270,19 @@ for (const r of p10Rows) {
     if (r.gl_line_code == null) b.afterUn += 1;
     b.afterSum += amt;
   }
+}
+// A5 · add flipped-in rows to the AFTER counts (they return to counting)
+for (const fr of p10FlipRows) {
+  const b = perAcct.get(fr.account_key);
+  if (!b) continue;
+  const amt = Number(fr.amount || 0);
+  b.afterRows += 1;
+  // The flipped-in row's gl_line_code is not selected in the paExcludedAuthPair
+  // query above; treat as unknown for uncoded counting. Not material to A5
+  // reporting, which is about total row + $ movement.
+  b.afterSum += amt;
+  b.flipRows += 1;
+  b.flipSum += amt;
 }
 
 console.log(`| account         | rows Δ         | uncoded Δ       | spend Δ                                            |`);
