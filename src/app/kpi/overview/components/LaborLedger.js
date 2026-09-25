@@ -99,6 +99,32 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
     [grouped, today, labor?.board?.avg_rate],
   );
 
+  // Editorial (2026-09-25) · fold header summary. Range-level hours
+  // and dollars pulled from `grand`, which is already computed
+  // upstream for WeekTable. Same pattern as PurchasingFold: a
+  // collapsed fold still names what is inside. `null` when grand
+  // is not yet available (payload still loading).
+  const headerSummary = useMemo(() => {
+    if (!grand) return null;
+    // Kevin ruling 2026-09-25 (post PR-1222 review). Settled dollars
+    // only. `grand.hours_regular + hours_overtime + hours_double_time`
+    // excludes both `hours_without_dollars` and `draft_hours`, so the
+    // hours side is a settled figure; using `amount + hatched` on the
+    // dollar side would render an estimate (hatched = unpriced * rate
+    // + draft * rate; see labor/lib/aggregate.js:352) as one
+    // unlabelled figure sitting next to a settled hours count. The
+    // two would count different populations. Amount only. The table
+    // inside the fold explains the rest.
+    const totalHrs = (grand.hours_regular || 0)
+                   + (grand.hours_overtime || 0)
+                   + (grand.hours_double_time || 0);
+    const totalAmt = (grand.amount || 0);
+    if (totalHrs <= 0 && totalAmt <= 0) return null;
+    const hrs = Math.round(totalHrs).toLocaleString("en-US");
+    const amt = (totalAmt < 0 ? "-$" : "$") + Math.abs(Math.round(totalAmt)).toLocaleString("en-US");
+    return `${hrs} hrs · ${amt}`;
+  }, [grand]);
+
   const workerRangeTotals = useMemo(
     () => buildWorkerRangeTotals(filteredActuals),
     [filteredActuals],
@@ -111,7 +137,7 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
 
   return (
     <div
-      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
+      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card kpi-ov-fold-panel${open ? " kpi-ov-fold-open" : ""}`}
       data-kpi-ov="labor-ledger"
       data-kpi-ov-open={open ? "1" : "0"}
     >
@@ -139,6 +165,9 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
           aria-expanded={open ? "true" : "false"}
         >
           <span className="kpi-ov-eb">Rippling labor</span>
+          {headerSummary && (
+            <span className="kpi-ov-fold-summary" data-kpi-ov="labor-fold-summary">{headerSummary}</span>
+          )}
           <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
         </button>
         <HelpPop id="qLaborFold" title="The week table" body={WEEK_TABLE_POP_BODY} />

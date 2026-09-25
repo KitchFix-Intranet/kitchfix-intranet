@@ -106,7 +106,7 @@
   background: var(--n-0);
 }
 .kpi-app .kpi-ov-cp-seg button {
-  font-size: var(--kpi-t-label);
+  font-size: var(--kpi-size-ctl);
   font-weight: 800;
   letter-spacing: 0.5px;
   padding: 6px 13px;
@@ -884,7 +884,7 @@
   background: var(--n-0);
   color: var(--n-700);
   font-family: inherit;
-  font-size: var(--kpi-t-meta);
+  font-size: var(--kpi-size-ctl);
   font-weight: 800;
   letter-spacing: 0.3px;
   padding: 5px 11px;
@@ -949,7 +949,7 @@
 .kpi-app .kpi-ov-cp-led-vrow-open td { background: var(--n-100); }
 .kpi-app .kpi-ov-cp-led-lrow td {
   background: #FCFCFD;
-  font-size: var(--kpi-t-body);
+  font-size: var(--kpi-t-meta);
   font-weight: 600;
   color: var(--n-700);
   padding: 5px 14px;
@@ -1035,31 +1035,127 @@
 
 /* R-150 · Purchasing fold week band. Sits between transaction rows,
    summing the week. Three states: settled (past), in-progress
-   (contains today), ahead (future). Same visual pattern as the labor
-   table's period bands, muted so transaction rows read as the primary
-   surface. */
+   (contains today), ahead (future).
+
+   Editorial (2026-09-25). Bands go solid navy - against the navy
+   dashboard header and the navy period-total rule, the prior grey
+   band read as absence. White text; the week total (rightmost cell)
+   sizes up to --kpi-t-medium to read as the summary. The running
+   week keeps a compact amber dot + "in progress" tag in amber-200
+   rather than a full amber wash - a wash on every current-week band
+   would drown out the transaction rows it is meant to summarise. */
 .kpi-app .kpi-ov-pf-wband td {
   font-size: var(--kpi-t-label);
   font-weight: 800;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   padding: 6px 14px;
-  background: #F4F5F7;
-  color: var(--n-700);
-  border-top: 1px solid var(--n-200);
-  border-bottom: 1px solid var(--n-200);
+  background: var(--navy-900);
+  color: var(--n-0);
+  border-top: 1px solid var(--navy-800);
+  border-bottom: 1px solid var(--navy-800);
 }
 .kpi-app .kpi-ov-pf-wband td.kpi-ov-cp-led-l {
   padding-left: 18px;
   text-align: left;
 }
-.kpi-app .kpi-ov-pf-wband-settled td { color: var(--n-600); }
 .kpi-app .kpi-ov-pf-wband-run td {
-  background: var(--amber-50);
-  color: var(--amber-600);
+  background: var(--navy-700);
 }
 .kpi-app .kpi-ov-pf-wband-ahead td {
-  background: var(--n-50);
-  color: var(--n-500);
+  background: var(--navy-900);
+  color: var(--navy-200);
   font-weight: 700;
+}
+.kpi-app .kpi-ov-pf-wband-label {
+  color: var(--n-0);
+}
+.kpi-app .kpi-ov-pf-wband-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--amber-200);
+}
+.kpi-app .kpi-ov-pf-wband-tag-ahead {
+  color: var(--navy-200);
+}
+.kpi-app .kpi-ov-pf-wband-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber-500);
+  display: inline-block;
+}
+.kpi-app .kpi-ov-pf-wband-total {
+  font-size: var(--kpi-t-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Editorial (2026-09-25) · Fold-scoped overrides for the shared
+   ledger-row class. .kpi-ov-cp-led-lrow is used by two surfaces:
+   PurchasingLedger renders it as a nested (indented) child under an
+   expanded vendor row, and PurchasingFold renders it as the primary
+   transaction row. The base rule (:950) sizes at --kpi-t-meta for the
+   Ledger nested case; here we push Fold rows back up to --kpi-t-body
+   so operators can read them as primary content. Scoped via the
+   data-kpi-ov="purchasing-txn" attribute already on the row. */
+.kpi-app [data-kpi-ov="purchasing-txn"] > td {
+  font-size: var(--kpi-t-body);
+}
+
+/* Editorial · row rail. A 3px amber-500 border on the vendor cell
+   marks a transaction that still needs work - today, that means a
+   card charge with any uncoded line (needsCodingRail predicate in
+   PurchasingFold.js). Transparent when no rail so the border-box
+   stays the same size across states - no horizontal shift. The row
+   picks up a light amber tint so the rail reads as an edge on a band,
+   not a stray line. Same colour token the Needs Review card carries
+   above the fold - the card and the rows it refers to visibly share a
+   language. */
+.kpi-app [data-kpi-ov="purchasing-txn"] > td:first-child {
+  border-left: 3px solid transparent;
+  padding-left: calc(34px - 3px);
+}
+.kpi-app [data-kpi-ov="purchasing-txn"][data-status-rail="1"] > td:first-child {
+  border-left-color: var(--amber-500);
+}
+.kpi-app [data-kpi-ov="purchasing-txn"][data-status-rail="1"] > td {
+  background: #FFFCF7;
+}
+
+/* Editorial · vendor cell inner. Name on top, optional sub-line
+   underneath (Needs coding / Submitted / Returned). vname stays at
+   the row's base type (--kpi-t-body); vsub drops to --kpi-t-meta and
+   picks up amber-700 on the warn variant. */
+.kpi-app .kpi-ov-pf-vname {
+  display: block;
+  color: var(--n-900);
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-pf-vsub {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  color: var(--n-600);
+  letter-spacing: 0.2px;
+}
+.kpi-app .kpi-ov-pf-vsub-warn {
+  color: var(--amber-700);
+}
+
+/* Editorial · money + charge-number cells sit in the mono family so
+   the digits align on their columns. Text (vendor, type, sub-lines,
+   week-band labels) stays Inter. Scoped to the Fold's table so the
+   Ledger elsewhere on the page is not affected. */
+.kpi-app [data-kpi-ov="purchasing-ledger"] .kpi-ov-cp-led-tbl td:not(.kpi-ov-cp-led-l),
+.kpi-app [data-kpi-ov="purchasing-ledger"] .kpi-ov-cp-led-lrow > td:nth-child(3) {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-variant-numeric: tabular-nums;
 }
