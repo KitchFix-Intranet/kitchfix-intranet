@@ -1,0 +1,300 @@
+{
+  "brief_ref": "R-148D pre-sweep · billcom gl_not_on_board stamp · Kevin ruling 2026-09-24",
+  "schema_version": 1,
+  "reason_before": null,
+  "reason_after": "gl_not_on_board",
+  "swept_at": "2026-09-25T01:26:55.520Z",
+  "retirements": [
+    {
+      "source_line_id": "billcom:bli01ADGZZTMKHkrq91a"
+    },
+    {
+      "source_line_id": "billcom:bli01ADKSWAWWKl3vunc"
+    },
+    {
+      "source_line_id": "billcom:bli01AOFFLSXTGkmyys6"
+    },
+    {
+      "source_line_id": "billcom:bli01AOSRYXUCPl3vp23"
+    },
+    {
+      "source_line_id": "billcom:bli01AXJWNWHJDl3vrd6"
+    },
+    {
+      "source_line_id": "billcom:bli01AXOFFMSFAlbqp3x"
+    },
+    {
+      "source_line_id": "billcom:bli01AYTXTYOJMl9cvfw"
+    },
+    {
+      "source_line_id": "billcom:bli01BGIIREZLRknbvoj"
+    },
+    {
+      "source_line_id": "billcom:bli01BNEWZHSLNkjw5mt"
+    },
+    {
+      "source_line_id": "billcom:bli01CBQGOYMHZl0i6qj"
+    },
+    {
+      "source_line_id": "billcom:bli01CDYURQVUMkt7f0g"
+    },
+    {
+      "source_line_id": "billcom:bli01CMDUHSNGRkm31zr"
+    },
+    {
+      "source_line_id": "billcom:bli01CMPYUOJROl7l5cf"
+    },
+    {
+      "source_line_id": "billcom:bli01CNPVYSZBTkkh2io"
+    },
+    {
+      "source_line_id": "billcom:bli01CPBXGAYBIkvbcmy"
+    },
+    {
+      "source_line_id": "billcom:bli01DIHCIBLMPkhm5kl"
+    },
+    {
+      "source_line_id": "billcom:bli01DLPRUHDXLkm31go"
+    },
+    {
+      "source_line_id": "billcom:bli01DMIIJQOJUlhhaql"
+    },
+    {
+      "source_line_id": "billcom:bli01DOIKCTECWl3vrva"
+    },
+    {
+      "source_line_id": "billcom:bli01DPKAFFGVFl4hg3t"
+    },
+    {
+      "source_line_id": "billcom:bli01DYXSZSKXOl3vtdd"
+    },
+    {
+      "source_line_id": "billcom:bli01DZHOGQIQGkvj4j5"
+    },
+    {
+      "source_line_id": "billcom:bli01EKQHAZPIYl0i6kx"
+    },
+    {
+      "source_line_id": "billcom:bli01EYEHNDTWJkyur2y"
+    },
+    {
+      "source_line_id": "billcom:bli01FFDQGADHSkoa8w0"
+    },
+    {
+      "source_line_id": "billcom:bli01FUAMBDMTNkos7k2"
+    },
+    {
+      "source_line_id": "billcom:bli01GHDYWPUTCl9d3cs"
+    },
+    {
+      "source_line_id": "billcom:bli01GIFMTMMUJkqifu1"
+    },
+    {
+      "source_line_id": "billcom:bli01GJZPWUGHLkkqcay"
+    },
+    {
+      "source_line_id": "billcom:bli01GOAYCOTDFl3vscy"
+    },
+    {
+      "source_line_id": "billcom:bli01GXWFYJCUZkw0uim"
+    },
+    {
+      "source_line_id": "billcom:bli01HLZFMLTONkz3u8c"
+    },
+    {
+      "source_line_id": "billcom:bli01HTXIOLSINl9ccky"
+    },
+    {
+      "source_line_id": "billcom:bli01ICAVMZHYPl3vszm"
+    },
+    {
+      "source_line_id": "billcom:bli01INWWBCYLEldut7u"
+    },
+    {
+      "source_line_id": "billcom:bli01IQBWFURWIldtv15"
+    },
+    {
+      "source_line_id": "billcom:bli01ISRURIANKknxwch"
+    },
+    {
+      "source_line_id": "billcom:bli01ITVDKOYWBl2efao"
+    },
+    {
+      "source_line_id": "billcom:bli01IWGQQKSVRkizzug"
+    },
+    {
+      "source_line_id": "billcom:bli01JERJJNXOYkx3jej"
+    },
+    {
+      "source_line_id": "billcom:bli01JILFNVTTKl4jhck"
+    },
+    {
+      "source_line_id": "billcom:bli01JIZGKPXLXl3rnlc"
+    },
+    {
+      "source_line_id": "billcom:bli01JQVWHWDMOl3vsrh"
+    },
+    {
+      "source_line_id": "billcom:bli01KCXMKGZHNli38e9"
+    },
+    {
+      "source_line_id": "billcom:bli01LIIZULRRMkz3u02"
+    },
+    {
+      "source_line_id": "billcom:bli01LKBJSDTOAkmc5cm"
+    },
+    {
+      "source_line_id": "billcom:bli01LMHOITOWTkmz469"
+    },
+    {
+      "source_line_id": "billcom:bli01MCMIWBPULl3votj"
+    },
+    {
+      "source_line_id": "billcom:bli01MJLYFJJGUl9ctp3"
+    },
+    {
+      "source_line_id": "billcom:bli01MMYDHWKSWl3vsjm"
+    },
+    {
+      "source_line_id": "billcom:bli01MMZRCMKHJldustk"
+    },
+    {
+      "source_line_id": "billcom:bli01MQUBFJIIHkmze6g"
+    },
+    {
+      "source_line_id": "billcom:bli01NJDSELKNLknb6vf"
+    },
+    {
+      "source_line_id": "billcom:bli01OAOFHFFLHkrq9fm"
+    },
+    {
+      "source_line_id": "billcom:bli01OGZYTBHXLkllrwj"
+    },
+    {
+      "source_line_id": "billcom:bli01OKSWZOLLXkvj3o5"
+    },
+    {
+      "source_line_id": "billcom:bli01OKYABELDGl3vujc"
+    },
+    {
+      "source_line_id": "billcom:bli01OYPZNJSDWl4hera"
+    },
+    {
+      "source_line_id": "billcom:bli01PBILSHLBVl0i6ue"
+    },
+    {
+      "source_line_id": "billcom:bli01PUTIBZVZSkjw5ib"
+    },
+    {
+      "source_line_id": "billcom:bli01PWEODJOCJkw0ueb"
+    },
+    {
+      "source_line_id": "billcom:bli01PWPKMNPYDl3vqjr"
+    },
+    {
+      "source_line_id": "billcom:bli01QCRAPOYHOkx39kk"
+    },
+    {
+      "source_line_id": "billcom:bli01QINEITLMWkvj41k"
+    },
+    {
+      "source_line_id": "billcom:bli01QWNWIGBSQl3vrjw"
+    },
+    {
+      "source_line_id": "billcom:bli01ROYLLXYGLkqigbv"
+    },
+    {
+      "source_line_id": "billcom:bli01RZPKHYWGRl4hdz4"
+    },
+    {
+      "source_line_id": "billcom:bli01TDERBDWHIl3vu6e"
+    },
+    {
+      "source_line_id": "billcom:bli01TEIQSOYYAl6dsb5"
+    },
+    {
+      "source_line_id": "billcom:bli01THCTNOYJVl9cw1t"
+    },
+    {
+      "source_line_id": "billcom:bli01TPWRHFCIBlgflnf"
+    },
+    {
+      "source_line_id": "billcom:bli01TTGFXTIHPl4jgyw"
+    },
+    {
+      "source_line_id": "billcom:bli01UBPZSQXNWkdfyb9"
+    },
+    {
+      "source_line_id": "billcom:bli01UFTIAIOMCl4jg7b"
+    },
+    {
+      "source_line_id": "billcom:bli01UGTTNHZUEldutmq"
+    },
+    {
+      "source_line_id": "billcom:bli01UIKDVEMVDkqop14"
+    },
+    {
+      "source_line_id": "billcom:bli01UJEQQQORLl5hujm"
+    },
+    {
+      "source_line_id": "billcom:bli01UTYQVIPTIkm31xb"
+    },
+    {
+      "source_line_id": "billcom:bli01UXYXDMTZLkvbh74"
+    },
+    {
+      "source_line_id": "billcom:bli01VEZZQLJDRknxx72"
+    },
+    {
+      "source_line_id": "billcom:bli01VKXXIVRBZl9vqqe"
+    },
+    {
+      "source_line_id": "billcom:bli01VNGVMMOHTkrq9jv"
+    },
+    {
+      "source_line_id": "billcom:bli01VTSXEVCSTl4hdnf"
+    },
+    {
+      "source_line_id": "billcom:bli01WCCNDIEKSkybail"
+    },
+    {
+      "source_line_id": "billcom:bli01WSBFHPMOFkzaxfw"
+    },
+    {
+      "source_line_id": "billcom:bli01XFYQGWPXCkvj406"
+    },
+    {
+      "source_line_id": "billcom:bli01XPIFHQFDPkxyoei"
+    },
+    {
+      "source_line_id": "billcom:bli01XZDRPOPAMl9vqwc"
+    },
+    {
+      "source_line_id": "billcom:bli01YCNCPFNDAl4hapz"
+    },
+    {
+      "source_line_id": "billcom:bli01YQIZYZMKVl4jgp6"
+    },
+    {
+      "source_line_id": "billcom:bli01YRXBHEYBJkprvni"
+    },
+    {
+      "source_line_id": "billcom:bli01YTXGTRWGSkjw5s9"
+    },
+    {
+      "source_line_id": "billcom:bli01ZAFWCXBDYl3vpjz"
+    },
+    {
+      "source_line_id": "billcom:bli01ZMJNKIJWAkyur2z"
+    },
+    {
+      "source_line_id": "billcom:bli01ZNTVCFQZAl3rntv"
+    },
+    {
+      "source_line_id": "billcom:bli01ZPZYKORZPl2eg5q"
+    },
+    {
+      "source_line_id": "billcom:bli01ZQZNRJJGDkvi2l5"
+    }
+  ]
+}

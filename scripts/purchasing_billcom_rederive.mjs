@@ -178,12 +178,18 @@ try {
       const excluded  = classRow?.excluded === true;
       const accountKey = excluded ? null : (classRow?.account_key || null);
       const glLineCode = line.chart_of_account_id ? (accountToNumber.get(line.chart_of_account_id) || null) : null;
+      // Kevin ruling 2026-09-24. Stamp reason='gl_not_on_board' when
+      // the class map excludes a row. Mirror of the same block in
+      // scripts/purchasing_billcom_sync.mjs so re-derive and nightly
+      // sync produce the same reason.
+      const reason = excluded ? "gl_not_on_board" : null;
       newRows.push({
         source:             "billcom",
         source_bill_id:     billId,
         source_line_id:     `billcom:${line.line_id}`,
         account_key:        accountKey,
         excluded:           excluded,
+        reason:             reason,
         gl_line_code:       glLineCode,
         gl_bucket:          glBucketFor(glLineCode),
         txn_date:           header.invoice_date,
