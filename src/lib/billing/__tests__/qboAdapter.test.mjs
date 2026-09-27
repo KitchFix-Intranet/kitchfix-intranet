@@ -16,9 +16,16 @@ import {
   shiftTxnDateToTestYear,
   payloadHash,
   composeInvoiceUrl,
+  composeCustomerUrl,
+  composeQueryUrl,
   stripInternalMarkers,
   allowedCustomerIdsFor,
   reserveInvoiceDocNumber,
+  buildInvoiceDocNumber,
+  computeAccountCode,
+  formatWeekStartYYMMDD,
+  BuildDocNumberError,
+  parseQboFaultCode,
   _internals,
 } from "../qboAdapter.js";
 import { makeSupaMock } from "./_supa-mock.mjs";
@@ -55,6 +62,10 @@ const BASE_CTX = {
   cadenceUnit: "weekly",
   createdBy:   "k.fietek@kitchfix.com",
   accountMap:  TXR_MAP,
+  // sc-49: live pushes require slotCode; ignored in test mode. Set
+  // here so every test that spreads BASE_CTX passes the guard.
+  slotCode:    "MN",
+  revision:    1,
 };
 
 function fakePayload(overrides = {}) {
@@ -335,9 +346,16 @@ test("qboMode='test': success writes status='test' + is_test=true", async () => 
   assert.equal(row.qbo_doc_number, "KFT000000001");
 });
 
-// ─── sc-48: reservation + echo assertion ──────────────────────────
+// ─── sc-49: deterministic DocNumber + echo assertion ──────────────
+//
+// sc-48 renamed to sc-49: the live path no longer draws from
+// sc_invoice_number_seq. buildInvoiceDocNumber returns
+// KF{accountCode}{YYMMDD}{slotCode}{revision?}. BASE_CTX carries
+// weekStart=2026-07-27, accountKey='TXR - AZ', slotCode='MN', so
+// the deterministic DocNumber is KFTXRAZ260727MN. The KFT sequence
+// is unchanged (see reserveInvoiceDocNumber tests below).
 
-test("sc-48 reservation: KF number injected on live push, KFT on test push", async () => {
+test("sc-49 DocNumber: deterministic KF on live push, sequence-backed KFT on test push", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
   let capturedLive = null, capturedTest = null;
   const fetchLive = async (_u, _k, p) => { capturedLive = p; return okEcho("LIVE-1", p); };
@@ -364,15 +382,15 @@ test("sc-48 reservation: KF number injected on live push, KFT on test push", asy
   );
 
   assert.equal(liveRes.status, "created");
-  assert.equal(liveRes.qboDocNumber, "KF000000001");
-  assert.equal(capturedLive.DocNumber, "KF000000001");
+  assert.equal(liveRes.qboDocNumber, "KFTXRAZ260727MN");
+  assert.equal(capturedLive.DocNumber, "KFTXRAZ260727MN");
 
   assert.equal(testRes.status, "test");
   assert.equal(testRes.qboDocNumber, "KFT000000001");
   assert.equal(capturedTest.DocNumber, "KFT000000001");
 });
 
-test("sc-48 echo assertion: mismatch writes failed row + throws DocNumberEchoMismatchError", async () => {
+test("sc-49 echo assertion: mismatch writes failed row + throws DocNumberEchoMismatchError", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
   // Simulate QBO silently overriding: response echoes something else.
   const fetchImpl = async (_u, _k, _p) => ({
@@ -392,7 +410,7 @@ test("sc-48 echo assertion: mismatch writes failed row + throws DocNumberEchoMis
     ),
     (err) => {
       assert.ok(err instanceof DocNumberEchoMismatchError);
-      assert.equal(err.sent,   "KF000000001");
+      assert.equal(err.sent,   "KFTXRAZ260727MN");
       assert.equal(err.echoed, "K3OVERRIDE");
       return true;
     },
@@ -401,12 +419,12 @@ test("sc-48 echo assertion: mismatch writes failed row + throws DocNumberEchoMis
   const rows = supa._dump("sc_export_ledger");
   assert.equal(rows.length, 1);
   assert.equal(rows[0].status, "failed");
-  assert.equal(rows[0].qbo_doc_number, "KF000000001", "burned KF number recorded on echo-mismatch failure");
+  assert.equal(rows[0].qbo_doc_number, "KFTXRAZ260727MN", "sent KF number recorded on echo-mismatch failure");
   assert.equal(rows[0].qbo_invoice_id, "MISMATCH-1", "QBO invoice id captured for reconciliation");
   assert.match(rows[0].error, /docnumber_echo_mismatch/);
 });
 
-test("sc-48 burn semantics: failed POST records burned KF number in ledger", async () => {
+test("sc-49 failed POST records the sent KF number in ledger", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
   const fetchImpl = async () => ({ ok: false, status: 500, body: "server error" });
 
@@ -426,10 +444,13 @@ test("sc-48 burn semantics: failed POST records burned KF number in ledger", asy
   const rows = supa._dump("sc_export_ledger");
   assert.equal(rows.length, 1);
   assert.equal(rows[0].status, "failed");
-  assert.equal(rows[0].qbo_doc_number, "KF000000001", "burned KF number recorded on 5xx failure");
+  // sc-49: deterministic, so the failed row records the same
+  // number the next attempt will rebuild. Not "burned" - re-submits
+  // are safe.
+  assert.equal(rows[0].qbo_doc_number, "KFTXRAZ260727MN");
 });
 
-test("sc-48 fence rejection does NOT burn a number (pre-reservation)", async () => {
+test("sc-49 fence rejection: no sequence consumed, no ledger burn", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
   const fetchImpl = async () => { throw new Error("must not reach network"); };
 
@@ -449,21 +470,24 @@ test("sc-48 fence rejection does NOT burn a number (pre-reservation)", async () 
   const rows = supa._dump("sc_export_ledger");
   assert.equal(rows.length, 1);
   assert.equal(rows[0].status, "failed");
-  assert.equal(rows[0].qbo_doc_number, null, "fence rejection is a config bug pre-reservation - no number burned");
-  // Also verify no RPC was called (no sequence consumed).
+  assert.equal(rows[0].qbo_doc_number, null, "fence rejection is a config bug pre-DocNumber - no number written");
+  // sc-49: live DocNumbers do not draw from the sequence at all.
   assert.equal(supa._rpcCounters().nextval_sc_invoice_number || 0, 0);
 });
 
-test("sc-48 reserveInvoiceDocNumber: formats KF vs KFT with 9-digit zero pad", async () => {
+test("sc-49 reserveInvoiceDocNumber: KFT sequence still counter-based; live path retired", async () => {
   const supa = makeSupaMock({ tables: {} });
-  const live1 = await reserveInvoiceDocNumber(supa, false);
-  const live2 = await reserveInvoiceDocNumber(supa, false);
+  // KFT test sequence unchanged from sc-48.
   const test1 = await reserveInvoiceDocNumber(supa, true);
   const test2 = await reserveInvoiceDocNumber(supa, true);
-  assert.equal(live1, "KF000000001");
-  assert.equal(live2, "KF000000002");
   assert.equal(test1, "KFT000000001");
   assert.equal(test2, "KFT000000002");
+  // Live path retired at sc-49 - throws to surface any lingering
+  // caller that has not switched to buildInvoiceDocNumber.
+  await assert.rejects(
+    () => reserveInvoiceDocNumber(supa, false),
+    /live path retired at sc-49/,
+  );
 });
 
 // ─── URL composition (PR-C7 fixes) ────────────────────────────────
@@ -635,4 +659,265 @@ test("BillEmail: customer read errors -> BillEmail omitted, push proceeds (non-f
   assert.equal(res.status, "created", "invoice still posted despite customer-read failure");
   assert.equal(captured.BillEmail, undefined,
     "BillEmail absent when the customer read fails");
+});
+
+// ─── sc-49: buildInvoiceDocNumber pure function ────────────────────
+//
+// Deterministic DocNumber from (account, week, slot, revision). No I/O,
+// no counter. Pinning the outputs here so any format drift trips the
+// suite before it hits QBO's duplicate-detection.
+
+test("sc-49 buildInvoiceDocNumber: shape KFTXRAZ260921MN (first issue, no suffix)", () => {
+  assert.equal(
+    buildInvoiceDocNumber({
+      accountKey: "TXR - AZ", weekStart: "2026-09-21", slotCode: "MN",
+    }),
+    "KFTXRAZ260921MN",
+  );
+});
+
+test("sc-49 buildInvoiceDocNumber: revision=1 identical to revision omitted", () => {
+  const a = buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-09-21", slotCode: "MN" });
+  const b = buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-09-21", slotCode: "MN", revision: 1 });
+  assert.equal(a, b, "revision:1 must not add a suffix");
+  assert.doesNotMatch(a, /1$/, "no trailing digit on first issue");
+});
+
+test("sc-49 buildInvoiceDocNumber: revision>=2 appends the digit", () => {
+  assert.equal(
+    buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-09-21", slotCode: "MN", revision: 2 }),
+    "KFTXRAZ260921MN2",
+  );
+  assert.equal(
+    buildInvoiceDocNumber({ accountKey: "CIN - AZ", weekStart: "2026-05-25", slotCode: "RH", revision: 3 }),
+    "KFCINAZ260525RH3",
+  );
+});
+
+test("sc-49 buildInvoiceDocNumber: two-char slot (RH) and three-char slot (MIL) both fit", () => {
+  assert.equal(
+    buildInvoiceDocNumber({ accountKey: "CIN - AZ", weekStart: "2026-09-21", slotCode: "RH" }),
+    "KFCINAZ260921RH",
+  );
+  assert.equal(
+    buildInvoiceDocNumber({ accountKey: "TBR - FL", weekStart: "2026-09-21", slotCode: "MIL" }),
+    "KFTBRFL260921MIL",
+  );
+});
+
+test("sc-49 buildInvoiceDocNumber: throws BuildDocNumberError on malformed inputs", () => {
+  // slotCode wrong shape
+  assert.throws(
+    () => buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-09-21", slotCode: "m" }),
+    (err) => err instanceof BuildDocNumberError && err.field === "slotCode",
+  );
+  assert.throws(
+    () => buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-09-21", slotCode: "toolong" }),
+    (err) => err instanceof BuildDocNumberError && err.field === "slotCode",
+  );
+  // slotCode missing
+  assert.throws(
+    () => buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-09-21" }),
+    (err) => err instanceof BuildDocNumberError && err.field === "slotCode",
+  );
+  // weekStart wrong shape
+  assert.throws(
+    () => buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-9-21", slotCode: "MN" }),
+    (err) => err instanceof BuildDocNumberError && err.field === "weekStart",
+  );
+  // revision non-integer
+  assert.throws(
+    () => buildInvoiceDocNumber({ accountKey: "TXR - AZ", weekStart: "2026-09-21", slotCode: "MN", revision: 0 }),
+    (err) => err instanceof BuildDocNumberError && err.field === "revision",
+  );
+  // accountKey empty
+  assert.throws(
+    () => buildInvoiceDocNumber({ accountKey: "", weekStart: "2026-09-21", slotCode: "MN" }),
+    (err) => err instanceof BuildDocNumberError && err.field === "accountKey",
+  );
+});
+
+test("sc-49 computeAccountCode: strips non-alphanumerics + uppercases", () => {
+  assert.equal(computeAccountCode("TXR - AZ"), "TXRAZ");
+  assert.equal(computeAccountCode("CORP"), "CORP");
+  assert.equal(computeAccountCode("TXR - TX - H"), "TXRTXH");
+  assert.equal(computeAccountCode("cin - az"), "CINAZ");
+});
+
+test("sc-49 formatWeekStartYYMMDD: text sort of formatted output is a date sort", () => {
+  assert.equal(formatWeekStartYYMMDD("2026-09-21"), "260921");
+  assert.equal(formatWeekStartYYMMDD("2026-01-05"), "260105");
+  // Date-sort property: chronological order ↔ lexicographic order.
+  const dates = ["2026-01-05", "2026-09-21", "2026-12-31", "2027-01-01"];
+  const codes = dates.map(formatWeekStartYYMMDD);
+  assert.deepEqual([...codes].sort(), codes, "text sort of YYMMDD is a date sort");
+});
+
+// ─── sc-49: parseQboFaultCode ──────────────────────────────────────
+
+test("sc-49 parseQboFaultCode: recognises 6140 duplicate fault", () => {
+  const body = JSON.stringify({
+    Fault: {
+      Error: [{ code: "6140", Message: "Duplicate Document Number Error", Detail: "Doc # XYZ already exists." }],
+    },
+  });
+  const parsed = parseQboFaultCode(body);
+  assert.equal(parsed.code, "6140");
+  assert.match(parsed.message, /Duplicate Document Number/);
+  assert.match(parsed.detail, /already exists/);
+});
+
+test("sc-49 parseQboFaultCode: returns null for non-fault bodies", () => {
+  assert.equal(parseQboFaultCode(null), null);
+  assert.equal(parseQboFaultCode(""), null);
+  assert.equal(parseQboFaultCode("not-json"), null);
+  assert.equal(parseQboFaultCode(JSON.stringify({ Invoice: { Id: "1" } })), null);
+});
+
+// ─── sc-49: 6140 handler branches ──────────────────────────────────
+//
+// Adopt-vs-hard-fail semantics on QBO's Duplicate Document Number
+// fault. Never adopt on customer mismatch.
+
+function make6140Body(docNumber) {
+  return JSON.stringify({
+    Fault: {
+      Error: [{
+        code: "6140",
+        Message: "Duplicate Document Number Error",
+        Detail: `Duplicate Document Number Error : You must specify a different number.  This number ${docNumber} has already been used.`,
+      }],
+    },
+  });
+}
+
+test("sc-49 6140 handler: found invoice matches our customer -> ADOPT (ledger created, return success)", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  const fetchImpl = async () => ({ ok: false, status: 400, body: make6140Body("KFTXRAZ260727MN") });
+  const fetchInvoiceQueryImpl = async () => ({
+    ok: true, status: 200,
+    body: JSON.stringify({
+      QueryResponse: {
+        Invoice: [{
+          Id: "293999",
+          DocNumber: "KFTXRAZ260727MN",
+          CustomerRef: { value: "19000", name: "Texas Rangers - Surprise, AZ" },
+        }],
+      },
+    }),
+  });
+
+  const res = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live" },
+      qboMode: "live",
+      deps: { supa, fetchImpl, fetchInvoiceQueryImpl },
+    },
+  );
+
+  assert.equal(res.status, "created");
+  assert.equal(res.adopted, true, "adopted flag set");
+  assert.equal(res.qboInvoiceId, "293999", "adopted the found QBO Invoice.Id");
+  assert.equal(res.qboDocNumber, "KFTXRAZ260727MN");
+  const rows = supa._dump("sc_export_ledger");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "created");
+  assert.equal(rows[0].qbo_invoice_id, "293999");
+  assert.equal(rows[0].qbo_doc_number, "KFTXRAZ260727MN");
+});
+
+test("sc-49 6140 handler: found invoice on DIFFERENT customer -> HARD FAIL (never adopt)", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  const fetchImpl = async () => ({ ok: false, status: 400, body: make6140Body("KFTXRAZ260727MN") });
+  // The Sebastian case: QBO returned an invoice under our DocNumber
+  // but its CustomerRef is someone else entirely.
+  const fetchInvoiceQueryImpl = async () => ({
+    ok: true, status: 200,
+    body: JSON.stringify({
+      QueryResponse: {
+        Invoice: [{
+          Id: "293706",
+          DocNumber: "KFTXRAZ260727MN",
+          CustomerRef: { value: "99999", name: "Some Other Client" },
+        }],
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => postInvoiceDraft(
+      fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+      {
+        ...BASE_CTX,
+        accountMap: { ...TXR_MAP, qbo_mode: "live" },
+        qboMode: "live",
+        deps: { supa, fetchImpl, fetchInvoiceQueryImpl },
+      },
+    ),
+    (err) => {
+      assert.ok(err instanceof QboPostError);
+      assert.equal(err.faultCode, "6140");
+      assert.match(err.message, /docnumber_conflict/);
+      assert.match(err.message, /TxnId=293706/);
+      assert.match(err.message, /CustomerRef\.value=99999/);
+      return true;
+    },
+  );
+  const rows = supa._dump("sc_export_ledger");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "failed");
+  assert.equal(rows[0].qbo_invoice_id, null, "no invoice_id on hard-fail (we did not adopt)");
+});
+
+test("sc-49 6140 handler: query returns no invoice -> HARD FAIL with distinct error string", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  const fetchImpl = async () => ({ ok: false, status: 400, body: make6140Body("KFTXRAZ260727MN") });
+  const fetchInvoiceQueryImpl = async () => ({
+    ok: true, status: 200, body: JSON.stringify({ QueryResponse: {} }),
+  });
+
+  await assert.rejects(
+    () => postInvoiceDraft(
+      fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+      {
+        ...BASE_CTX,
+        accountMap: { ...TXR_MAP, qbo_mode: "live" },
+        qboMode: "live",
+        deps: { supa, fetchImpl, fetchInvoiceQueryImpl },
+      },
+    ),
+    (err) => {
+      assert.ok(err instanceof QboPostError);
+      assert.equal(err.faultCode, "6140");
+      assert.match(err.message, /docnumber_conflict_not_found/);
+      return true;
+    },
+  );
+});
+
+test("sc-49 6140 handler: retry uses SAME docNumber (deterministic)", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  const captured = [];
+  const fetchImpl = async (_u, _k, p) => {
+    captured.push(p.DocNumber);
+    return { ok: false, status: 500, body: "server error" };
+  };
+
+  await assert.rejects(
+    () => postInvoiceDraft(
+      fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+      {
+        ...BASE_CTX,
+        accountMap: { ...TXR_MAP, qbo_mode: "live" },
+        qboMode: "live",
+        deps: { supa, fetchImpl },
+      },
+    ),
+    QboPostError,
+  );
+  assert.equal(captured.length, 2, "one retry on 5xx");
+  assert.equal(captured[0], "KFTXRAZ260727MN");
+  assert.equal(captured[1], "KFTXRAZ260727MN", "retry re-sends the SAME docNumber (deterministic)");
 });

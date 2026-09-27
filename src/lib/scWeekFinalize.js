@@ -757,6 +757,74 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     }
   }
 
+  // 4c. sc-49 (Kevin ruling 2026-09-26): resolve slot_code + revision
+  // for every invoice slot ONCE, before the post loop. Passed into
+  // postInvoiceDraft via ctx so the adapter's reservation seam does
+  // no I/O (that discipline is what keeps failures upstream of the
+  // seam cheap).
+  //
+  // Fail loudly on missing slot_code: same posture as
+  // buildInvoicePayload's "unmapped service" error - a slot without
+  // a code cannot be invoiced deterministically, and papering over
+  // it here would reintroduce exactly the class of gap sc-49 exists
+  // to close. Test mode skips both lookups (KFT remains counter-based
+  // via sc_invoice_test_number_seq).
+  const slotCodeByInvoiceSlot = new Map();
+  const revisionByInvoiceSlot = new Map();
+  if (qboMode === "live") {
+    for (const sm of serviceMap || []) {
+      if (!sm.slot_code || slotCodeByInvoiceSlot.has(sm.invoice_slot)) continue;
+      slotCodeByInvoiceSlot.set(sm.invoice_slot, sm.slot_code);
+    }
+    const missingSlots = [];
+    for (const invoice of payload.invoices) {
+      const slot = invoice._slot || "main";
+      if (!slotCodeByInvoiceSlot.has(slot)) missingSlots.push(slot);
+    }
+    if (missingSlots.length > 0) {
+      const uniqueMissing = [...new Set(missingSlots)];
+      const opMessage =
+        `The week is finalized but not sent to QuickBooks because ${uniqueMissing.map(s => `slot "${s}"`).join(", ")} on ${accountKey} has no slot_code in sc_qbo_service_map. Kevin or Sebastian must assign a code before it can be retried.`;
+      await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
+      const n2 = await doN2({
+        qboMode,
+        accountKey, weekStart: pairStart, weekEnd: pairEnd,
+        errorText: `${opMessage}\n\nDiagnostic: missing slot_code for [${uniqueMissing.join(", ")}] on ${accountKey}. sc-49 refuses the push. Assign the codes in Studio (sc_qbo_service_map.slot_code, 2-3 uppercase letters, unique per account).`,
+        retryLink: buildRetryLink(accountKey, weekStart),
+        scWeekLink: buildScWeekLink(accountKey, weekStart),
+        attempt: 1,
+        accountMap: resolverAccountMap,
+      });
+      log.warn("[N2 fired][MISSING_SLOT_CODE]", { subject: n2.subject, to: n2.recipients?.to, slackSent: n2.slack?.result?.sent, missingSlots: uniqueMissing });
+      return {
+        pushed: false,
+        failure: { code: "MISSING_SLOT_CODE", message: opMessage, missingSlots: uniqueMissing, n2 },
+      };
+    }
+    // Revision = 1 + count of superseded ledger rows for
+    // (account_key, week_start, invoice_slot). ONLY `superseded`
+    // bumps: a `failed` row must not bump (re-sending the same
+    // number is exactly what makes retry-after-lost-response safe),
+    // and a `created` row cannot be reached because the adapter's
+    // idempotency guard short-circuits before the number is built.
+    const { data: supRows, error: supErr } = await supa
+      .from("sc_export_ledger")
+      .select("invoice_slot")
+      .eq("account_key", accountKey)
+      .eq("week_start", pairStart)
+      .eq("status", "superseded")
+      .eq("is_test", false);
+    if (supErr) throw new Error(`load sc_export_ledger for revision count: ${supErr.message}`);
+    const supCount = new Map();
+    for (const r of supRows || []) {
+      supCount.set(r.invoice_slot, (supCount.get(r.invoice_slot) || 0) + 1);
+    }
+    for (const invoice of payload.invoices) {
+      const slot = invoice._slot || "main";
+      revisionByInvoiceSlot.set(slot, 1 + (supCount.get(slot) || 0));
+    }
+  }
+
   // 5. Post each invoice slot. PR-F: qboMode read from
   // accountMap.qbo_mode drives the per-mode fence. Test mode routes
   // to 22463 with markers; live mode routes to the account's mapped
@@ -775,6 +843,7 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   const isTest = qboMode === "test";
   for (const invoice of payload.invoices) {
     try {
+      const invoiceSlot = invoice._slot || "main";
       const result = await post(invoice, {
         qboMode,
         accountKey,
@@ -783,6 +852,12 @@ export async function runFinalizeEffects(ctx, deps = {}) {
         weekEnd:     pairEnd,
         cadenceUnit: accountMap.cadence,
         createdBy:   submitterEmail || "sc-finalize",
+        // sc-49: live-only. Test mode ignores these; the adapter
+        // requires slotCode on live pushes and throws otherwise
+        // (last-defense fence - this loop should have surfaced any
+        // missing code above).
+        slotCode:    qboMode === "live" ? slotCodeByInvoiceSlot.get(invoiceSlot) : undefined,
+        revision:    qboMode === "live" ? revisionByInvoiceSlot.get(invoiceSlot) : undefined,
         deps:        { supa },
       });
       // 2026-09-23 (FIX 1): no-op branch. The adapter honestly

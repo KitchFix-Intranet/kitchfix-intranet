@@ -60,7 +60,7 @@ function makeSeedTables({ map = TXR_MAP, people = [] } = {}) {
     sc_qbo_service_map: [
       { service_id: "svc-1", account_key: map.account_key, qbo_item_id: "3338",
         qbo_line_description: "TXR-AZ - Regular Snack", aggregate_group: null,
-        invoice_slot: "main", tax_override: null, line_desc_style: null, active: true },
+        invoice_slot: "main", slot_code: "MN", tax_override: null, line_desc_style: null, active: true },
     ],
     sc_daily_revenue: [
       { service_date: "2026-07-27", service_id: "svc-1", service_name: "Regular Snack",
@@ -480,7 +480,7 @@ test("biweekly close-week: multi-account rows on same date resolve correctly (re
       sc_qbo_service_map: [
         { service_id: "svc-1", account_key: "CIN - AZ", qbo_item_id: "3338",
           qbo_line_description: "CIN-AZ - Regular Snack", aggregate_group: null,
-          invoice_slot: "main", tax_override: null, line_desc_style: null, active: true },
+          invoice_slot: "main", slot_code: "MN", tax_override: null, line_desc_style: null, active: true },
       ],
       sc_daily_revenue: revenueRows,
       sc_week_finalize: [{ id: "fin-row-1", account_key: "CIN - AZ", week_start: closeMonday, status: "finalized", finalized_by: "leader@kitchfix.com" }],
@@ -706,5 +706,143 @@ test("no-op (FIX 1): sc_week_finalize row stays 'finalized' (D3 ruling)", async 
   await runFinalizeEffects(baseCtx(), deps);
   assert.equal(supa._dump("sc_week_finalize")[0].status, "finalized",
     "D3 ruling: the operator did finalize; the row records their action");
+});
+
+// ─── sc-49: slot_code + revision threading (2026-09-26) ────────────
+//
+// The finalize path resolves slot_code from sc_qbo_service_map and
+// computes revision from the ledger BEFORE calling postInvoiceDraft;
+// the adapter's reservation seam does no I/O. These tests cover the
+// threading + the missing-slot-code loud fail + the revision
+// discipline (only superseded bumps).
+
+test("sc-49: slot_code + revision passed through to postInvoiceDraft ctx", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const supa = makeSupaMock({ tables: makeSeedTables({ map: liveMap }) });
+
+  let postCtx = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async (_p, ctx) => {
+      postCtx = ctx;
+      return {
+        wasNoOp: false, ledgerRowId: "led-1",
+        qboInvoiceId: "INV-1", qboDocNumber: "KFTXRAZ260727MN",
+        status: "created",
+      };
+    },
+    fireN1: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "", html: "", email: { result: "sent" }, slack: { result: { sent: true } },
+    }),
+    fireN2: () => { throw new Error("N2 must not fire"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  const result = await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(result.pushed, true);
+  assert.equal(postCtx.slotCode, "MN", "seed's slot_code=MN threads into ctx");
+  assert.equal(postCtx.revision, 1, "no prior superseded rows -> revision 1");
+});
+
+test("sc-49: superseded ledger row bumps revision to 2", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const seedTables = makeSeedTables({ map: liveMap });
+  // Seed a prior superseded row for the SAME (account, week, slot).
+  seedTables.sc_export_ledger = [{
+    id: "led-prior",
+    account_key: "TXR - AZ",
+    week_start: "2026-07-27",
+    invoice_slot: "main",
+    status: "superseded",
+    is_test: false,
+    qbo_doc_number: "KFTXRAZ260727MN",
+    qbo_invoice_id: "INV-prior",
+    attempt: 1,
+  }];
+  const supa = makeSupaMock({ tables: seedTables });
+
+  let postCtx = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async (_p, ctx) => {
+      postCtx = ctx;
+      return { wasNoOp: false, ledgerRowId: "led-2", qboInvoiceId: "INV-2", qboDocNumber: "KFTXRAZ260727MN2", status: "created" };
+    },
+    fireN1: async () => ({ recipients: { to: [KEVIN_EMAIL], cc: [] }, subject: "", html: "", email: { result: "sent" }, slack: { result: { sent: true } } }),
+    fireN2: () => { throw new Error("N2 must not fire"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(postCtx.revision, 2, "one superseded row -> revision 2");
+});
+
+test("sc-49: FAILED ledger row does NOT bump revision (retry-safe)", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const seedTables = makeSeedTables({ map: liveMap });
+  // A prior failed row for the same key. This is exactly the case
+  // that makes retry-after-lost-response safe: same DocNumber resent,
+  // QBO's duplicate fault is the safety net. Bumping the revision
+  // here would defeat that.
+  seedTables.sc_export_ledger = [{
+    id: "led-failed",
+    account_key: "TXR - AZ",
+    week_start: "2026-07-27",
+    invoice_slot: "main",
+    status: "failed",
+    is_test: false,
+    qbo_doc_number: "KFTXRAZ260727MN",
+    qbo_invoice_id: null,
+    attempt: 1,
+  }];
+  const supa = makeSupaMock({ tables: seedTables });
+
+  let postCtx = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async (_p, ctx) => {
+      postCtx = ctx;
+      return { wasNoOp: false, ledgerRowId: "led-2", qboInvoiceId: "INV-2", qboDocNumber: "KFTXRAZ260727MN", status: "created" };
+    },
+    fireN1: async () => ({ recipients: { to: [KEVIN_EMAIL], cc: [] }, subject: "", html: "", email: { result: "sent" }, slack: { result: { sent: true } } }),
+    fireN2: () => { throw new Error("N2 must not fire"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(postCtx.revision, 1,
+    "failed rows must not bump - same DocNumber is exactly what makes retry safe");
+});
+
+test("sc-49: missing slot_code on an active service map row -> loud MISSING_SLOT_CODE + N2", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const seedTables = makeSeedTables({ map: liveMap });
+  // Strip slot_code from the seed to simulate a Studio state where
+  // someone added a slot but forgot to assign a code.
+  seedTables.sc_qbo_service_map = seedTables.sc_qbo_service_map.map(
+    (r) => ({ ...r, slot_code: null })
+  );
+  const supa = makeSupaMock({ tables: seedTables });
+
+  let n2Args = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: () => { throw new Error("postInvoiceDraft must NOT be reached on missing slot_code"); },
+    fireN1: () => { throw new Error("N1 must NOT fire on missing slot_code"); },
+    fireN2: async (args) => {
+      n2Args = args;
+      return { recipients: { to: [KEVIN_EMAIL], cc: [] }, subject: "", html: "", slack: { result: { sent: true } }, email: { result: "sent" } };
+    },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  const result = await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(result.pushed, false);
+  assert.equal(result.failure.code, "MISSING_SLOT_CODE");
+  assert.deepEqual(result.failure.missingSlots, ["main"]);
+  assert.ok(n2Args, "N2 fires so Kevin sees the operator-facing message");
+  assert.equal(supa._dump("sc_week_finalize")[0].status, "push_failed",
+    "finalize row transitions to push_failed - week is finalized but not sent");
 });
 

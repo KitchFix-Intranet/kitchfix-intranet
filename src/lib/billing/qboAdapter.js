@@ -102,42 +102,70 @@
 // the base and URL-encodes the realm. Splitting them lets Josh
 // rotate proxy hosting without touching realm and vice versa.
 //
-// ─── SC-generated DocNumber (sc-48, Kevin ruling 2026-09-18) ──────
+// ─── SC-generated DocNumber (sc-49, Kevin ruling 2026-09-26) ──────
 //
 // Invoices posted by this adapter carry a DocNumber the SC owns:
-//   live mode -> KF000000001, KF000000002, ... from
-//                sc_invoice_number_seq (Postgres sequence).
+//   live mode -> deterministic, derived from the invoice's own
+//                identity via buildInvoiceDocNumber:
+//                  KF{accountCode}{YYMMDD}{slotCode}{revision?}
+//                e.g. KFTXRAZ260921MN (first issue),
+//                     KFTXRAZ260921MN2 (after one supersede).
+//                No sequence, no counter. Same inputs always produce
+//                the same number, so a retry after a lost response
+//                re-sends the same DocNumber and QBO's duplicate
+//                fault (code 6140) is the safety net rather than a
+//                second real invoice.
 //   test mode -> KFT000000001, KFT000000002, ... from
-//                sc_invoice_test_number_seq. Distinct sequence so
-//                gaps caused by Kevin running tests never appear in
-//                the live audit trail.
+//                sc_invoice_test_number_seq (sc-48). Kept counter-
+//                based because Kevin re-runs tests against the same
+//                (account, week, slot); a deterministic test number
+//                would collide with itself on the second run.
 //
-// The reservation seam is deliberate: reserveInvoiceDocNumber is
-// called AFTER env validation and AFTER the customer-id fence,
-// IMMEDIATELY before the first doHttp POST. Every step upstream of
-// that seam is a step that can fail on non-QBO reasons (config bug,
-// missing env, validation error) - burning a live number on any of
-// those would create a gap the auditor cannot explain. Fence-
-// rejected rows continue to write qbo_doc_number=null.
+// Why deterministic on live: the sc-48 sequence shared a namespace
+// with QBO's own auto-increment. Any manual invoice created in the
+// QBO UI silently took our next number (2026-09-26: Sebastian's
+// manual invoice consumed KF000000005 before Liz's push tried to).
+// A number derived from (account, week, slot, revision) cannot
+// collide with a counter because it is not one.
 //
-// Once reserved, the KF number is burned. PostgreSQL sequence
-// semantics: nextval advances on rollback. That matches Kevin's
-// burn-on-failure ruling: an auditor accepts gaps caused by failed
-// pushes; auditors do not accept duplicate DocNumbers. Failed and
-// 2xx-non-JSON ledger rows now record the burned KF value so every
-// consumed number appears in exactly one ledger row with an outcome
-// attached.
+// What deterministic gains besides collision-safety:
+//   1. Nothing to burn on failure - failed rows record the same
+//      number the next attempt will use, so re-submits are exactly
+//      that: the same number resent.
+//   2. Gaps disappear as a class - no sequence, no gaps.
+//   3. Retry-after-lost-response is now safe: two POSTs with the
+//      same DocNumber either both succeed (QBO idempotent by
+//      DocNumber via the 6140 fault) or the second is refused. The
+//      client is never double-billed.
 //
-// Echo assertion (Kevin ruling 2026-09-18): the QBO create response
-// echoes DocNumber back. If the echoed value differs from the value
-// we sent, that is a silent-override signal - either the tenant's
-// "Custom transaction numbers" preference is off (verified ON at
-// build time but could flip), or QBO's API rejected the sent value
-// for some other reason and defaulted. We halt on mismatch, write a
-// failed row with the burned KF number, and route through the
-// existing N2 notification path so Kevin sees it immediately. The
-// current code has no such check because it has never sent a
-// DocNumber to compare.
+// The 6140 handler (Kevin ruling 2026-09-26): on a non-ok POST with
+// QBO fault code 6140 (Duplicate Document Number), read the invoice
+// QBO already has under that number.
+//   - CustomerRef matches our account's qbo_customer_id: adopt.
+//     Our own POST landed and the response was lost; record the
+//     ledger row as 'created' with the found qbo_invoice_id and
+//     return success.
+//   - CustomerRef is a different customer: hard fail. Someone else
+//     took our number (the Sebastian case). Ledger 'failed' with
+//     error text naming the conflicting TxnId + customer; N2 fires.
+//   - Not found: hard fail with a distinct error string.
+// Never adopt on customer mismatch.
+//
+// Legacy sequence sc-48 (sc_invoice_number_seq) is RETIRED but not
+// dropped. KF000000001..004 issued from it stay in the ledger; the
+// sequence is left in place with a COMMENT ON SEQUENCE naming its
+// retirement so audit continues to name a real object. See
+// docs/GOTCHAS.md for the "KF000000005 is not ours" entry.
+//
+// Echo assertion (sc-48, Kevin ruling 2026-09-18): the QBO create
+// response echoes DocNumber back. If the echoed value differs from
+// the value we sent, that is a silent-override signal - either the
+// tenant's "Custom transaction numbers" preference is off (verified
+// ON at build time but could flip), or QBO's API rejected the sent
+// value for some other reason and defaulted. We halt on mismatch,
+// write a failed row with the sent value + echoed value, and route
+// through the existing N2 notification path so Kevin sees it
+// immediately.
 
 import crypto from "node:crypto";
 import { getServiceClient } from "@/lib/supabase";
@@ -202,6 +230,18 @@ export function composeCustomerUrl(proxyBase, realmId, customerId) {
   if (!customerId) throw new Error("composeCustomerUrl: customerId required");
   const stripped = String(proxyBase).replace(/\/+$/, "");
   return `${stripped}/v3/company/${encodeURIComponent(realmId)}/customer/${encodeURIComponent(customerId)}?minorversion=75`;
+}
+
+// sc-49: URL for the QBO query endpoint. Used to look up whoever
+// holds a DocNumber when we hit a 6140 duplicate fault, and to
+// answer the audit question "which invoice does this DocNumber
+// belong to" without adding another entity endpoint.
+export function composeQueryUrl(proxyBase, realmId, queryText) {
+  if (!proxyBase) throw new Error("composeQueryUrl: proxyBase required");
+  if (!realmId)   throw new Error("composeQueryUrl: realmId required");
+  if (!queryText) throw new Error("composeQueryUrl: queryText required");
+  const stripped = String(proxyBase).replace(/\/+$/, "");
+  return `${stripped}/v3/company/${encodeURIComponent(realmId)}/query?query=${encodeURIComponent(queryText)}&minorversion=75`;
 }
 
 // ─── Errors (named so callers can branch cleanly) ─────────────────
@@ -361,36 +401,104 @@ async function writeLedgerRow(supa, row) {
   return data.id;
 }
 
-// sc-48: reserve the next SC-generated DocNumber from the appropriate
-// sequence (live vs test) and format it as the string that will land
-// in QBO and in sc_export_ledger.qbo_doc_number.
+// sc-48 test path: reserve the next KFT DocNumber from the test
+// sequence. Kept counter-based (Kevin ruling 2026-09-26): Kevin re-
+// runs tests against the same (account, week, slot), so a
+// deterministic test number would collide with itself. sc-49
+// switched only the live path.
 //
-// PostgreSQL sequence semantics guarantee two properties:
-//   1. Uniqueness under concurrent callers - nextval() serialises
-//      across transactions without application-layer locking.
-//   2. Advances on rollback - a reserved number is burned regardless
-//      of whether the surrounding transaction commits. That is the
-//      whole point (Kevin ruling: burn on failure, not return).
-//
-// Two sequences (Kevin ruling 2026-09-18):
-//   isTest === false -> sc_invoice_number_seq          -> KF000000001
-//   isTest === true  -> sc_invoice_test_number_seq     -> KFT000000001
-// Distinct so a test row cannot be mistaken for a real invoice in
-// the ledger or in QuickBooks.
-//
-// Called EXACTLY ONCE per postInvoiceDraft attempt, from the
-// reservation seam between env validation and the first doHttp POST.
-// See the "SC-generated DocNumber" block in the file header for the
-// rationale on seam placement.
+// PostgreSQL sequence semantics: nextval() serialises across
+// concurrent callers and advances on rollback. That was load-bearing
+// for the sc-48 live sequence (uniqueness under duplicate-refuse);
+// for the test path it just means the ledger sees monotonically-
+// increasing KFT numbers.
 export async function reserveInvoiceDocNumber(supa, isTest) {
-  const rpc = isTest ? "nextval_sc_invoice_test_number" : "nextval_sc_invoice_number";
+  if (!isTest) {
+    throw new Error(
+      "reserveInvoiceDocNumber: live path retired at sc-49; use buildInvoiceDocNumber for live pushes."
+    );
+  }
+  const rpc = "nextval_sc_invoice_test_number";
   const { data, error } = await supa.rpc(rpc);
   if (error) throw new Error(`reserveInvoiceDocNumber(${rpc}): ${error.message}`);
   if (data == null || !Number.isFinite(Number(data))) {
     throw new Error(`reserveInvoiceDocNumber(${rpc}): non-numeric sequence value ${JSON.stringify(data)}`);
   }
-  const prefix = isTest ? "KFT" : "KF";
-  return `${prefix}${String(Number(data)).padStart(9, "0")}`;
+  return `KFT${String(Number(data)).padStart(9, "0")}`;
+}
+
+// sc-49: pure function. Live DocNumber derived from the invoice's
+// own identity - no I/O, no sequence, no counter. Same inputs
+// always produce the same output. Format:
+//
+//   KF{accountCode}{YYMMDD}{slotCode}{revision?}
+//
+// Example: KFTXRAZ260921MN   (TXR - AZ, week 2026-09-21, slot MN, first issue)
+//          KFTXRAZ260921MN2  (same slot after one supersede)
+//
+// accountKey drives accountCode: strip non-alphanumerics + uppercase.
+// The 14 current account_keys all map to codes that are 4-6 chars,
+// distinct, and no code is a prefix of another - so undelimited
+// concatenation is unambiguous. Block C of the migration re-asserts
+// this at apply time.
+//
+// weekStart is the service-week Monday (biweekly: the pair start).
+// Formatted YYMMDD so a text sort is a date sort. The number must
+// match the week_start the ledger writes or idempotency misses.
+//
+// slotCode is an explicit 2-3 uppercase-letter column on
+// sc_qbo_service_map (sc-49 migration). Application layer refuses
+// to invoice a slot with a NULL code - fail loudly upstream of the
+// reservation seam, do not paper over here.
+//
+// revision omits the suffix on first issue (1). Suffix appears from
+// revision 2 upward, incremented ONLY by superseded ledger rows
+// (Kevin ruling): a failed row does NOT bump - re-sending the same
+// number is exactly what makes retry-after-lost-response safe, and
+// a created row cannot be reached because the idempotency guard
+// short-circuits before this call.
+//
+// Throws BuildDocNumberError (named for callers to branch on) if any
+// input is missing or malformed. Missing slotCode surfaces here as
+// the last defense; scWeekFinalize is expected to fail loudly first.
+export class BuildDocNumberError extends Error {
+  constructor(message, field) {
+    super(`buildInvoiceDocNumber: ${message}`);
+    this.name = "BuildDocNumberError";
+    this.field = field || null;
+  }
+}
+
+export function computeAccountCode(accountKey) {
+  if (typeof accountKey !== "string" || !accountKey.trim()) {
+    throw new BuildDocNumberError(`accountKey required (got ${JSON.stringify(accountKey)})`, "accountKey");
+  }
+  const code = accountKey.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (!code) {
+    throw new BuildDocNumberError(`accountKey ${JSON.stringify(accountKey)} produced empty code`, "accountKey");
+  }
+  return code;
+}
+
+export function formatWeekStartYYMMDD(weekStart) {
+  if (typeof weekStart !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    throw new BuildDocNumberError(`weekStart must be ISO YYYY-MM-DD (got ${JSON.stringify(weekStart)})`, "weekStart");
+  }
+  return weekStart.slice(2, 4) + weekStart.slice(5, 7) + weekStart.slice(8, 10);
+}
+
+export function buildInvoiceDocNumber({ accountKey, weekStart, slotCode, revision }) {
+  const code = computeAccountCode(accountKey);
+  const yy   = formatWeekStartYYMMDD(weekStart);
+  if (typeof slotCode !== "string" || !/^[A-Z]{2,3}$/.test(slotCode)) {
+    throw new BuildDocNumberError(`slotCode must match /^[A-Z]{2,3}$/ (got ${JSON.stringify(slotCode)})`, "slotCode");
+  }
+  const rev = revision == null ? 1 : Number(revision);
+  if (!Number.isInteger(rev) || rev < 1) {
+    throw new BuildDocNumberError(`revision must be a positive integer (got ${JSON.stringify(revision)})`, "revision");
+  }
+  const suffix = rev > 1 ? String(rev) : "";
+  return `KF${code}${yy}${slotCode}${suffix}`;
 }
 
 // Sum cents from the payload's Line[] Amount values. UnitPrice x Qty
@@ -477,6 +585,61 @@ async function readCustomerBillEmail({ proxyBase, realmId, apiKey, customerId, a
   return addr.trim();
 }
 
+// sc-49: parse a QBO error body and extract the first Fault Error's
+// code + message. QBO returns
+//   { Fault: { Error: [{ code: "6140", Message: "...", Detail: "..." }] } }
+// on rejection. Returns { code, message, detail } or null if the body
+// is not a parseable QBO fault. Never throws.
+export function parseQboFaultCode(body) {
+  if (body == null) return null;
+  const text = typeof body === "string" ? body : String(body);
+  if (!text.trim().startsWith("{")) return null;
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return null; }
+  const err = parsed?.Fault?.Error?.[0] || parsed?.fault?.error?.[0];
+  if (!err) return null;
+  const code = err.code || err.Code || null;
+  return {
+    code:    code == null ? null : String(code),
+    message: err.Message || err.message || null,
+    detail:  err.Detail  || err.detail  || null,
+  };
+}
+
+// sc-49: read the QBO invoice that currently holds a given
+// DocNumber, so the 6140 handler can branch on whether that invoice
+// is ours (adopt) or someone else's (hard fail). Same shape as
+// readCustomerBillEmail - never throws, returns the invoice object
+// on success or null on any failure (not found, HTTP error, timeout,
+// network). Uses the QBO query endpoint:
+//   SELECT * FROM Invoice WHERE DocNumber = '<val>'
+async function readInvoiceByDocNumber({ proxyBase, realmId, apiKey, docNumber, fetchImpl }) {
+  if (!docNumber) {
+    console.warn(`[qboAdapter] invoice lookup skipped: no docNumber`);
+    return null;
+  }
+  const safe = String(docNumber).replace(/'/g, "");
+  const url = composeQueryUrl(proxyBase, realmId,
+    `SELECT * FROM Invoice WHERE DocNumber = '${safe}'`);
+  const res = await fetchImpl(url, apiKey);
+  if (!res.ok) {
+    console.warn(`[qboAdapter] invoice lookup failed for docNumber=${docNumber} status=${res.status}`);
+    return null;
+  }
+  let parsed;
+  try { parsed = JSON.parse(res.body); }
+  catch (err) {
+    console.warn(`[qboAdapter] invoice lookup parse failed for docNumber=${docNumber}: ${err?.message || String(err)}`);
+    return null;
+  }
+  const inv = parsed?.QueryResponse?.Invoice?.[0] || null;
+  if (!inv) {
+    console.warn(`[qboAdapter] invoice lookup returned no rows for docNumber=${docNumber}`);
+    return null;
+  }
+  return inv;
+}
+
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -504,11 +667,25 @@ function sleep(ms) {
  * @param {string}   ctx.weekEnd     ISO closing Sunday of the real week.
  * @param {string}   ctx.cadenceUnit 'weekly' | 'biweekly'.
  * @param {string}   ctx.createdBy   Actor identity for the ledger.
- * @param {Object}   [ctx.deps]      { supa, fetchImpl } for testing.
+ * @param {string}   [ctx.slotCode]  sc-49: slot code for the live
+ *                                    DocNumber, e.g. 'MN'. Required
+ *                                    on live pushes; ignored in test
+ *                                    mode (KFT stays counter-based).
+ *                                    scWeekFinalize threads this from
+ *                                    sc_qbo_service_map.slot_code.
+ * @param {number}   [ctx.revision]  sc-49: revision integer for the
+ *                                    live DocNumber. 1 (default) omits
+ *                                    the suffix; >=2 appends the digit.
+ *                                    scWeekFinalize computes this from
+ *                                    the count of `superseded` ledger
+ *                                    rows for (account, week, slot).
+ * @param {Object}   [ctx.deps]      { supa, fetchImpl, fetchCustomerImpl,
+ *                                    fetchInvoiceQueryImpl } for testing.
  *
  * @returns {Promise<{
  *   wasNoOp: boolean, ledgerRowId: string, qboInvoiceId?: string,
- *   qboDocNumber?: string, status: 'created'|'test'|'failed'
+ *   qboDocNumber?: string, status: 'created'|'test'|'failed',
+ *   adopted?: boolean
  * }>}
  */
 export async function postInvoiceDraft(payload, ctx) {
@@ -536,6 +713,17 @@ export async function postInvoiceDraft(payload, ctx) {
   if (ctx.qboMode === "live" && !ctx?.accountMap?.qbo_class_id) {
     throw new Error(
       "postInvoiceDraft: live mode requires ctx.accountMap.qbo_class_id (per-line ClassRef seed)."
+    );
+  }
+  // sc-49: slotCode required on live push. scWeekFinalize reads it
+  // from sc_qbo_service_map.slot_code and threads it via ctx; we
+  // never query for it here (the reservation-seam design property is
+  // that nothing that can fail sits AT the seam). This throw is the
+  // last defense; the finalize layer is expected to fail loudly
+  // first with an operator-language error.
+  if (ctx.qboMode === "live" && !ctx?.slotCode) {
+    throw new Error(
+      "postInvoiceDraft: live mode requires ctx.slotCode (sc_qbo_service_map.slot_code). See sc-49."
     );
   }
 
@@ -680,15 +868,33 @@ export async function postInvoiceDraft(payload, ctx) {
     if (billEmail) outgoing.BillEmail = { Address: billEmail };
   }
 
-  // ─── sc-48: reserve DocNumber immediately before the POST ─────
-  // This is the reservation seam. Every upstream stage (arg
-  // validation, idempotency, test-marking, strip, fence, snapshot,
-  // env, customer read) can fail without burning a number. From
-  // here on, the number is consumed regardless of the POST outcome
-  // (Kevin ruling: burn on failure). The retry-on-5xx below reuses
-  // the SAME docNumber - a 5xx is a retry within one attempt, not
-  // a new attempt.
-  const docNumber = await reserveInvoiceDocNumber(supa, isTest);
+  // ─── DocNumber: build (live) or reserve (test) ────────────────
+  // sc-49 (Kevin ruling 2026-09-26):
+  //   Live: deterministic - buildInvoiceDocNumber({accountKey,
+  //     weekStart, slotCode, revision}). No I/O, no counter. The
+  //     same inputs always produce the same number, so a retry
+  //     after a lost response re-sends the same DocNumber and QBO's
+  //     duplicate fault (6140) is the safety net.
+  //   Test: still counter-based - reserveInvoiceDocNumber(supa, true)
+  //     against sc_invoice_test_number_seq. Kevin re-runs tests
+  //     against the same (account, week, slot); a deterministic
+  //     test number would collide with itself.
+  //
+  // Reservation-seam discipline: buildInvoiceDocNumber is pure, so
+  // the seam is now the POST itself. All the properties the sc-48
+  // header names still hold - nothing that can fail sits between
+  // number resolution and the network. The retry-on-5xx below
+  // reuses the SAME docNumber (which under sc-49 is deterministic
+  // anyway) - a 5xx is a retry within one attempt, not a new
+  // attempt.
+  const docNumber = isTest
+    ? await reserveInvoiceDocNumber(supa, true)
+    : buildInvoiceDocNumber({
+        accountKey: ctx.accountKey,
+        weekStart:  ctx.weekStart,
+        slotCode:   ctx.slotCode,
+        revision:   ctx.revision == null ? 1 : ctx.revision,
+      });
   outgoing.DocNumber = docNumber;
 
   // Hash AFTER DocNumber injection so it fingerprints the actual
@@ -706,6 +912,86 @@ export async function postInvoiceDraft(payload, ctx) {
 
   // ─── Write ledger + return ────────────────────────────────────
   if (!attemptRes.ok) {
+    // sc-49: handle QBO duplicate-DocNumber fault (code 6140) before
+    // recording a plain failure. Look up whoever holds our DocNumber.
+    //   - Ours (CustomerRef matches account's qbo_customer_id):
+    //     ADOPT. Our POST landed and the response was lost; write
+    //     the ledger as 'created' with the found qbo_invoice_id and
+    //     return success. This is what makes retry-after-lost-
+    //     response safe.
+    //   - Someone else's: HARD FAIL with an error string naming the
+    //     conflicting TxnId + customer. Never adopt on mismatch.
+    //   - Not found: HARD FAIL with a distinct error string.
+    // Test-mode 6140 does not adopt: the test path is counter-based
+    // and a 6140 there would mean the test sequence collided with
+    // itself, which is a distinct kind of bug (bump the sequence).
+    const fault = parseQboFaultCode(attemptRes.body);
+    if (!isTest && fault?.code === "6140") {
+      const queryFetch = ctx.deps?.fetchInvoiceQueryImpl
+        ?? (ctx.deps?.fetchImpl ? null : doGetCustomer);
+      const foundInvoice = queryFetch
+        ? await readInvoiceByDocNumber({
+            proxyBase, realmId, apiKey,
+            docNumber, fetchImpl: queryFetch,
+          })
+        : null;
+      const ourCustomerId  = String(ctx.accountMap?.qbo_customer_id || "");
+      const foundCustomerId = String(foundInvoice?.CustomerRef?.value || "");
+      const foundInvoiceId  = String(foundInvoice?.Id || "");
+      if (foundInvoice && ourCustomerId && foundCustomerId === ourCustomerId) {
+        // Adopt.
+        const ledgerRowId = await writeLedgerRow(supa, {
+          account_key:        ctx.accountKey,
+          week_start:         ctx.weekStart,
+          week_end:           ctx.weekEnd,
+          cadence_unit:       ctx.cadenceUnit,
+          invoice_slot:       invoiceSlot,
+          payload_hash:       hash,
+          qbo_invoice_id:     foundInvoiceId,
+          qbo_doc_number:     docNumber,
+          pretax_total_cents: pretaxCents,
+          status:             "created",
+          attempt,
+          error:              null,
+          is_test:            false,
+          created_by:         ctx.createdBy,
+        });
+        console.info(`[qboAdapter] 6140 adopted for ${ctx.accountKey} week=${ctx.weekStart} slot=${invoiceSlot} docNumber=${docNumber} qboInvoiceId=${foundInvoiceId}`);
+        return {
+          wasNoOp:      false,
+          adopted:      true,
+          ledgerRowId,
+          qboInvoiceId: foundInvoiceId,
+          qboDocNumber: docNumber,
+          status:       "created",
+        };
+      }
+      // Hard-fail: name the conflict so N2 carries the whole story.
+      const errorText = foundInvoice
+        ? `docnumber_conflict: QBO error 6140 - ${docNumber} is assigned to TxnId=${foundInvoiceId} for CustomerRef.value=${foundCustomerId || "?"} which does not match our qbo_customer_id=${ourCustomerId || "?"}. Adopt refused. QBO fault: ${fault?.message || ""}`
+        : `docnumber_conflict_not_found: QBO error 6140 for ${docNumber} but query returned no matching Invoice. QBO fault: ${fault?.message || ""}`;
+      const ledgerRowId = await writeLedgerRow(supa, {
+        account_key:        ctx.accountKey,
+        week_start:         ctx.weekStart,
+        week_end:           ctx.weekEnd,
+        cadence_unit:       ctx.cadenceUnit,
+        invoice_slot:       invoiceSlot,
+        payload_hash:       hash,
+        qbo_invoice_id:     null,
+        qbo_doc_number:     docNumber,
+        pretax_total_cents: pretaxCents,
+        status:             "failed",
+        attempt,
+        error:              errorText.slice(0, 4000),
+        is_test:            false,
+        created_by:         ctx.createdBy,
+      });
+      const err = new QboPostError(attemptRes.status, errorText);
+      err.ledgerRowId = ledgerRowId;
+      err.faultCode = "6140";
+      throw err;
+    }
+
     const ledgerRowId = await writeLedgerRow(supa, {
       account_key:        ctx.accountKey,
       week_start:         ctx.weekStart,
@@ -714,10 +1000,10 @@ export async function postInvoiceDraft(payload, ctx) {
       invoice_slot:       invoiceSlot,
       payload_hash:       hash,
       qbo_invoice_id:     null,
-      // sc-48: KF number was reserved before this POST attempt, so
-      // it is burned regardless of the outcome. Record it here so
-      // the auditor can trace what happened to KF000000042 - it
-      // was attempted, QBO rejected/errored, invoice never issued.
+      // sc-49: DocNumber is deterministic on the live path, so a
+      // failed row records the same number the next attempt will
+      // rebuild - no "burned number" to explain. Recorded here for
+      // auditor trace.
       qbo_doc_number:     docNumber,
       pretax_total_cents: pretaxCents,
       status:             "failed",
@@ -824,6 +1110,9 @@ export const _internals = {
   stripInternalMarkers,
   sumPretaxCents,
   composeInvoiceUrl,
+  composeCustomerUrl,
+  composeQueryUrl,
   allowedCustomerIdsFor,
   doPost,
+  readInvoiceByDocNumber,
 };

@@ -9,6 +9,23 @@
 
 ## Incident record
 
+### 2026-09-26 · `KF000000005` is not ours · SC invoice DocNumbers now deterministic (sc-49)
+
+`KF000000001`..`KF000000004` are SC-generated (sc-48 sequence). **`KF000000005` is not ours.** Sebastian created an invoice manually in the QBO UI on/around 2026-09-25 and QBO auto-filled our next sequence number. It is a real invoice for a different client. It is not a missing SC invoice, and it is why the SC set jumps from 004 directly to the sc-49 format (`KF{accountCode}{YYMMDD}{slotCode}{revision?}`, e.g. `KFTXRAZ260921MN`). Retired sequence: `sc_invoice_number_seq` (left in place with a `COMMENT ON SEQUENCE` marking retirement so audit continues to name a real object).
+
+**Root cause.** Our `sc_invoice_number_seq` and QBO's own next-invoice-number auto-increment share one namespace with no coordination. Every manual QBO invoice created after one of ours silently takes our next number; the next SC push then fails with QBO error `6140 Duplicate Document Number`. Liz's TXR - AZ week-of-9/21 push hit it Saturday.
+
+**The fix (sc-49, Kevin ruling 2026-09-26).** Live DocNumbers derive from the invoice's own identity via `buildInvoiceDocNumber({ accountKey, weekStart, slotCode, revision })` in `src/lib/billing/qboAdapter.js`. Pure function, no counter. Test mode keeps the KFT sequence (Kevin re-runs tests against the same key; a deterministic test number would collide with itself).
+
+**Two format epochs, separable by shape:**
+
+- `^KF\d{9}$` -> legacy sc-48, a **closed set of five**: `KF000000001`..`KF000000005`. Of those, only 001-004 are ours. **005 is Sebastian's manual invoice for a different client.**
+- `^KF[A-Z]{4,6}\d{6}[A-Z]{2,3}\d?$` -> sc-49 and after, always ours.
+
+**Auditor guidance.** In a year, do not read the 004 -> `KFTXRAZ260921MN` jump as a lost invoice. Point the auditor at this entry.
+
+**Retry-after-lost-response is now safe.** A deterministic number means POST #2 sends the same DocNumber POST #1 tried; QBO's 6140 fault is our safety net. The 6140 handler in `postInvoiceDraft` queries the invoice under that number and adopts it (writing `status='created'`) only if the CustomerRef matches our `qbo_customer_id`. Different customer -> hard fail with the conflict named.
+
 ### 2026-09-17 · Rippling overwrites in place · reading `_latest` and applying it to a past week restates history
 
 **The general rule.** Rippling mutates records in place. When a worker's compensation changes (raise, title change, department move, etc.), Rippling updates the same record ID with the new values and a new `effective_date`. **The prior state is not preserved on their side.** Our nightly snapshots into `rippling_raw_*` are the only place the pre-change values survive - `rippling_raw_compensations` has both the 2026-08-19 pre-raise snapshot AND the 2026-09-08 post-raise snapshot for the same `rippling_id`, but the `_latest` view returns only the most recent one.
