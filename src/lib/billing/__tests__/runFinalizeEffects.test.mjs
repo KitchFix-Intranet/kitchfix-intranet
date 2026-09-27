@@ -49,7 +49,7 @@ function baseCtx({ accountKey = "TXR - AZ", weekStart = "2026-07-27" } = {}) {
   };
 }
 
-function makeSeedTables({ map = TXR_MAP, people = [] } = {}) {
+function makeSeedTables({ map = TXR_MAP, people = [], slotCodes = null } = {}) {
   return {
     // sc-46 (#1161): N1/chase recipients derive from `people`, not from
     // sc_qbo_account_map.salaried_manager_emails. Tests that expect a
@@ -62,6 +62,12 @@ function makeSeedTables({ map = TXR_MAP, people = [] } = {}) {
         qbo_line_description: "TXR-AZ - Regular Snack", aggregate_group: null,
         invoice_slot: "main", tax_override: null, line_desc_style: null, active: true },
     ],
+    // sc-49b (2026-09-26): slot_code lives on its own table. Default
+    // seed: one row for the account's `main` slot with code MN. Tests
+    // that need to exercise the missing-code branch pass slotCodes:[].
+    sc_invoice_slot_codes: slotCodes === null
+      ? [{ account_key: map.account_key, invoice_slot: "main", slot_code: "MN" }]
+      : slotCodes,
     sc_daily_revenue: [
       { service_date: "2026-07-27", service_id: "svc-1", service_name: "Regular Snack",
         account_key: map.account_key, is_flat_fee: false, is_tax_free: false,
@@ -482,6 +488,9 @@ test("biweekly close-week: multi-account rows on same date resolve correctly (re
           qbo_line_description: "CIN-AZ - Regular Snack", aggregate_group: null,
           invoice_slot: "main", tax_override: null, line_desc_style: null, active: true },
       ],
+      sc_invoice_slot_codes: [
+        { account_key: "CIN - AZ", invoice_slot: "main", slot_code: "MN" },
+      ],
       sc_daily_revenue: revenueRows,
       sc_week_finalize: [{ id: "fin-row-1", account_key: "CIN - AZ", week_start: closeMonday, status: "finalized", finalized_by: "leader@kitchfix.com" }],
       sc_day_metadata: [
@@ -706,5 +715,236 @@ test("no-op (FIX 1): sc_week_finalize row stays 'finalized' (D3 ruling)", async 
   await runFinalizeEffects(baseCtx(), deps);
   assert.equal(supa._dump("sc_week_finalize")[0].status, "finalized",
     "D3 ruling: the operator did finalize; the row records their action");
+});
+
+// ─── sc-49: slot_code + revision threading (2026-09-26) ────────────
+//
+// The finalize path reads slot_code from sc_invoice_slot_codes
+// (sc-49b: dedicated table, one row per (account_key, invoice_slot),
+// PK enforces one-code-per-slot) and computes revision from the
+// ledger BEFORE calling postInvoiceDraft; the adapter's reservation
+// seam does no I/O. These tests cover the threading + the missing-
+// slot-code loud fail + the revision discipline (only superseded
+// bumps) + the two-different-slots-same-account case that the
+// prior (v1) schema silently mis-ordered.
+
+test("sc-49: slot_code + revision passed through to postInvoiceDraft ctx", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const supa = makeSupaMock({ tables: makeSeedTables({ map: liveMap }) });
+
+  let postCtx = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async (_p, ctx) => {
+      postCtx = ctx;
+      return {
+        wasNoOp: false, ledgerRowId: "led-1",
+        qboInvoiceId: "INV-1", qboDocNumber: "KFTXRAZ260727MN",
+        status: "created",
+      };
+    },
+    fireN1: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "", html: "", email: { result: "sent" }, slack: { result: { sent: true } },
+    }),
+    fireN2: () => { throw new Error("N2 must not fire"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  const result = await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(result.pushed, true);
+  assert.equal(postCtx.slotCode, "MN", "seed's slot_code=MN threads into ctx");
+  assert.equal(postCtx.revision, 1, "no prior superseded rows -> revision 1");
+});
+
+test("sc-49: superseded ledger row bumps revision to 2", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const seedTables = makeSeedTables({ map: liveMap });
+  // Seed a prior superseded row for the SAME (account, week, slot).
+  seedTables.sc_export_ledger = [{
+    id: "led-prior",
+    account_key: "TXR - AZ",
+    week_start: "2026-07-27",
+    invoice_slot: "main",
+    status: "superseded",
+    is_test: false,
+    qbo_doc_number: "KFTXRAZ260727MN",
+    qbo_invoice_id: "INV-prior",
+    attempt: 1,
+  }];
+  const supa = makeSupaMock({ tables: seedTables });
+
+  let postCtx = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async (_p, ctx) => {
+      postCtx = ctx;
+      return { wasNoOp: false, ledgerRowId: "led-2", qboInvoiceId: "INV-2", qboDocNumber: "KFTXRAZ260727MN2", status: "created" };
+    },
+    fireN1: async () => ({ recipients: { to: [KEVIN_EMAIL], cc: [] }, subject: "", html: "", email: { result: "sent" }, slack: { result: { sent: true } } }),
+    fireN2: () => { throw new Error("N2 must not fire"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(postCtx.revision, 2, "one superseded row -> revision 2");
+});
+
+test("sc-49: FAILED ledger row does NOT bump revision (retry-safe)", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  const seedTables = makeSeedTables({ map: liveMap });
+  // A prior failed row for the same key. This is exactly the case
+  // that makes retry-after-lost-response safe: same DocNumber resent,
+  // QBO's duplicate fault is the safety net. Bumping the revision
+  // here would defeat that.
+  seedTables.sc_export_ledger = [{
+    id: "led-failed",
+    account_key: "TXR - AZ",
+    week_start: "2026-07-27",
+    invoice_slot: "main",
+    status: "failed",
+    is_test: false,
+    qbo_doc_number: "KFTXRAZ260727MN",
+    qbo_invoice_id: null,
+    attempt: 1,
+  }];
+  const supa = makeSupaMock({ tables: seedTables });
+
+  let postCtx = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: async (_p, ctx) => {
+      postCtx = ctx;
+      return { wasNoOp: false, ledgerRowId: "led-2", qboInvoiceId: "INV-2", qboDocNumber: "KFTXRAZ260727MN", status: "created" };
+    },
+    fireN1: async () => ({ recipients: { to: [KEVIN_EMAIL], cc: [] }, subject: "", html: "", email: { result: "sent" }, slack: { result: { sent: true } } }),
+    fireN2: () => { throw new Error("N2 must not fire"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(postCtx.revision, 1,
+    "failed rows must not bump - same DocNumber is exactly what makes retry safe");
+});
+
+test("sc-49: missing slot_code (no row in sc_invoice_slot_codes) -> loud MISSING_SLOT_CODE + N2", async () => {
+  const liveMap = { ...TXR_MAP, qbo_mode: "live" };
+  // Simulate a Studio state where someone added a slot to
+  // sc_qbo_service_map but forgot to insert its code into
+  // sc_invoice_slot_codes.
+  const seedTables = makeSeedTables({ map: liveMap, slotCodes: [] });
+  const supa = makeSupaMock({ tables: seedTables });
+
+  let n2Args = null;
+  const deps = {
+    supa,
+    postInvoiceDraft: () => { throw new Error("postInvoiceDraft must NOT be reached on missing slot_code"); },
+    fireN1: () => { throw new Error("N1 must NOT fire on missing slot_code"); },
+    fireN2: async (args) => {
+      n2Args = args;
+      return { recipients: { to: [KEVIN_EMAIL], cc: [] }, subject: "", html: "", slack: { result: { sent: true } }, email: { result: "sent" } };
+    },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  const result = await runFinalizeEffects(baseCtx(), deps);
+  assert.equal(result.pushed, false);
+  assert.equal(result.failure.code, "MISSING_SLOT_CODE");
+  assert.deepEqual(result.failure.missingSlots, ["main"]);
+  assert.ok(n2Args, "N2 fires so Kevin sees the operator-facing message");
+  assert.equal(supa._dump("sc_week_finalize")[0].status, "push_failed",
+    "finalize row transitions to push_failed - week is finalized but not sent");
+});
+
+// sc-49b (2026-09-26): two distinct slots on one account, each with
+// its own code, both invoiced in the same finalize. The v1 schema
+// silently mis-ordered this - the UPDATE loop stopped at the first
+// row it saw for a given (account, slot) pair even though multiple
+// services shared the pair, so a badly-edited row could ripple into
+// the wrong DocNumber. The dedicated table + PK removes the ambiguity;
+// this test pins the correct behavior.
+test("sc-49b: two slots on one account -> each receives its own slot_code (no ordering ambiguity)", async () => {
+  const liveCinMap = { ...CIN_MAP, qbo_mode: "live" };
+  const supa = makeSupaMock({ tables: {
+    people: [],
+    sc_qbo_account_map: [liveCinMap],
+    sc_qbo_service_map: [
+      { service_id: "svc-main",  account_key: "CIN - AZ", qbo_item_id: "3300",
+        qbo_line_description: "REDS MiLB - Meal Service", aggregate_group: null,
+        invoice_slot: "main",  tax_override: null, line_desc_style: null, active: true },
+      { service_id: "svc-rehab", account_key: "CIN - AZ", qbo_item_id: "3327",
+        qbo_line_description: "REDS Rehab - Meal Service", aggregate_group: null,
+        invoice_slot: "rehab", tax_override: null, line_desc_style: null, active: true },
+    ],
+    sc_invoice_slot_codes: [
+      { account_key: "CIN - AZ", invoice_slot: "main",  slot_code: "MN" },
+      { account_key: "CIN - AZ", invoice_slot: "rehab", slot_code: "RH" },
+    ],
+    sc_daily_revenue: [
+      // CIN - AZ is biweekly; anchor is 2026-05-31, so 2026-07-13 is Week 1
+      // and 2026-07-20 is the close-week (Week 2). buildInvoicePayload
+      // requires the span to cover both weeks in the pair, so seed one
+      // row per slot per week.
+      { service_date: "2026-07-14", service_id: "svc-main",  service_name: "MiLB - Meal Service",
+        account_key: "CIN - AZ", is_flat_fee: false, is_tax_free: false, is_non_revenue: false,
+        actual_count: 10, actual_price_at_date: 5.89, price_at_date: 5.89,
+        period: "8", week_label: "Week 1", has_actuals: true, has_projection: false },
+      { service_date: "2026-07-14", service_id: "svc-rehab", service_name: "Rehab - Meal Service",
+        account_key: "CIN - AZ", is_flat_fee: false, is_tax_free: false, is_non_revenue: false,
+        actual_count:  5, actual_price_at_date: 6.50, price_at_date: 6.50,
+        period: "8", week_label: "Week 1", has_actuals: true, has_projection: false },
+      { service_date: "2026-07-21", service_id: "svc-main",  service_name: "MiLB - Meal Service",
+        account_key: "CIN - AZ", is_flat_fee: false, is_tax_free: false, is_non_revenue: false,
+        actual_count: 10, actual_price_at_date: 5.89, price_at_date: 5.89,
+        period: "8", week_label: "Week 2", has_actuals: true, has_projection: false },
+      { service_date: "2026-07-21", service_id: "svc-rehab", service_name: "Rehab - Meal Service",
+        account_key: "CIN - AZ", is_flat_fee: false, is_tax_free: false, is_non_revenue: false,
+        actual_count:  5, actual_price_at_date: 6.50, price_at_date: 6.50,
+        period: "8", week_label: "Week 2", has_actuals: true, has_projection: false },
+    ],
+    sc_day_metadata: [
+      { account_key: "CIN - AZ", service_date: "2026-07-13", period: "8", week_label: "Week 1" },
+      { account_key: "CIN - AZ", service_date: "2026-07-14", period: "8", week_label: "Week 1" },
+      { account_key: "CIN - AZ", service_date: "2026-07-20", period: "8", week_label: "Week 2" },
+      { account_key: "CIN - AZ", service_date: "2026-07-21", period: "8", week_label: "Week 2" },
+    ],
+    sc_week_finalize: [{
+      id: "fin-row-1", account_key: "CIN - AZ", week_start: "2026-07-20",
+      status: "finalized", finalized_by: "leader@kitchfix.com",
+    }],
+    sc_export_ledger: [],
+  } });
+
+  const seenCtxBySlot = new Map();
+  const deps = {
+    supa,
+    postInvoiceDraft: async (payload, ctx) => {
+      seenCtxBySlot.set(payload._slot, { slotCode: ctx.slotCode, revision: ctx.revision });
+      return {
+        wasNoOp: false,
+        ledgerRowId: `led-${payload._slot}`,
+        qboInvoiceId: `INV-${payload._slot}`,
+        qboDocNumber: `KFCINAZ260713${ctx.slotCode}`,
+        status: "created",
+      };
+    },
+    fireN1: async () => ({
+      recipients: { to: [KEVIN_EMAIL], cc: [] },
+      subject: "", html: "", email: { result: "sent" }, slack: { result: { sent: true } },
+    }),
+    fireN2: () => { throw new Error("N2 must not fire"); },
+    logger: { info: () => {}, warn: () => {} },
+  };
+
+  const result = await runFinalizeEffects(
+    baseCtx({ accountKey: "CIN - AZ", weekStart: "2026-07-20" }),
+    deps,
+  );
+  assert.equal(result.pushed, true);
+  assert.equal(seenCtxBySlot.size, 2, "both slots invoiced");
+  assert.equal(seenCtxBySlot.get("main").slotCode,  "MN",
+    "main slot must receive its own code MN (not swapped, not shared)");
+  assert.equal(seenCtxBySlot.get("rehab").slotCode, "RH",
+    "rehab slot must receive its own code RH");
 });
 

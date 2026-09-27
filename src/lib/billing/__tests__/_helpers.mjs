@@ -82,6 +82,18 @@ export const CIN_AZ_SERVICE_MAP = [
   { service_id: "c667d4e5-db72-4e37-9da8-06342881e76f", account_key: "CIN - AZ", qbo_item_id: "3327", qbo_line_description: "Continental Plus",          aggregate_group: null,            invoice_slot:"rehab", tax_override: null, line_desc_style: "plain_name" },
 ];
 
+// sc-49b (2026-09-26): slot_code lives on sc_invoice_slot_codes,
+// one row per (account_key, invoice_slot). Codes here match the
+// migration seed exactly so tests exercise the real strings a
+// live push would send to QBO.
+export const TXR_AZ_SLOT_CODES = [
+  { account_key: "TXR - AZ", invoice_slot: "main", slot_code: "MN" },
+];
+export const CIN_AZ_SLOT_CODES = [
+  { account_key: "CIN - AZ", invoice_slot: "main",  slot_code: "MN" },
+  { account_key: "CIN - AZ", invoice_slot: "rehab", slot_code: "RH" },
+];
+
 // Name -> preferred service_id used when reversing an aggregate
 // description back into synthetic SC rows. The alphabetical mismatch
 // (Dinner < Lunch) makes this deterministic-lookup safer than a
