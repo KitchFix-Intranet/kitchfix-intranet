@@ -13,7 +13,7 @@
 
 **Why the first sc-49 migration blocked.** The initial attempt added `slot_code` to `sc_qbo_service_map` with a partial unique index on `(account_key, slot_code)`. Block B's seed UPDATE then set nine rows to `('TXR - AZ', 'MN')` and the index refused, rolling back the whole transaction. No damage - the migration never applied - but it could not apply as written.
 
-**Why this was a modeling error, not a SQL error.** `sc_qbo_service_map` is one row per SERVICE, not per slot. On 2026-09-26 there were 9 active rows for `(TXR - AZ, main)`, 4 for `(CIN - AZ, rehab)`, etc. - 48 rows across 16 distinct `(account_key, invoice_slot)` pairs. `slot_code` is an attribute of the slot, so putting it on a per-service table cannot express the two rules that have to hold:
+**Why this was a modeling error, not a SQL error.** `sc_qbo_service_map` is one row per SERVICE, not per slot. On 2026-09-26 there were 9 active rows for `(TXR - AZ, main)`, 4 for `(CIN - AZ, rehab)`, etc. - 49 rows across 16 distinct `(account_key, invoice_slot)` pairs. `slot_code` is an attribute of the slot, so putting it on a per-service table cannot express the two rules that have to hold:
 
 1. one `invoice_slot` has exactly one `slot_code`
 2. one `slot_code` belongs to exactly one `invoice_slot`

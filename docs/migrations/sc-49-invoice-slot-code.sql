@@ -22,7 +22,7 @@
 -- The first attempt at this migration put `slot_code` directly on
 -- sc_qbo_service_map. That table is one row per SERVICE, not per
 -- slot - live counts on 2026-09-26 include 9 rows for
--- (TXR - AZ, main), 4 rows for (CIN - AZ, rehab), etc. 48 rows,
+-- (TXR - AZ, main), 4 rows for (CIN - AZ, rehab), etc. 49 rows,
 -- 16 distinct (account_key, invoice_slot) pairs.
 --
 -- The rule that has to hold is bidirectional, per account:
@@ -96,7 +96,7 @@ ORDER BY account_key, invoice_slot;
 
 -- Why a dedicated table: the row counts above are per-service, not
 -- per-slot. This query prints the duplicate structure so the reason
--- for the redesign is visible in the preflight output. Expected: 48
+-- for the redesign is visible in the preflight output. Expected: 49
 -- total active rows across the 16 pairs above.
 SELECT COUNT(*) AS total_active_service_rows
 FROM sc_qbo_service_map
