@@ -763,6 +763,13 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   // no I/O (that discipline is what keeps failures upstream of the
   // seam cheap).
   //
+  // slot_code lives on sc_invoice_slot_codes (sc-49b, 2026-09-26).
+  // The first attempt put it on sc_qbo_service_map; that table is
+  // per-service, not per-slot (9 rows for TXR-AZ 'main', 4 for
+  // CIN-AZ 'rehab', etc.), so the PK there could not express the
+  // one-code-per-slot invariant. See docs/GOTCHAS.md entry
+  // "slot_code lives on sc_invoice_slot_codes, not sc_qbo_service_map".
+  //
   // Fail loudly on missing slot_code: same posture as
   // buildInvoicePayload's "unmapped service" error - a slot without
   // a code cannot be invoiced deterministically, and papering over
@@ -772,9 +779,16 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   const slotCodeByInvoiceSlot = new Map();
   const revisionByInvoiceSlot = new Map();
   if (qboMode === "live") {
-    for (const sm of serviceMap || []) {
-      if (!sm.slot_code || slotCodeByInvoiceSlot.has(sm.invoice_slot)) continue;
-      slotCodeByInvoiceSlot.set(sm.invoice_slot, sm.slot_code);
+    const { data: codeRows, error: codeErr } = await supa
+      .from("sc_invoice_slot_codes")
+      .select("invoice_slot, slot_code")
+      .eq("account_key", accountKey);
+    if (codeErr) throw new Error(`load sc_invoice_slot_codes: ${codeErr.message}`);
+    // No dedupe branch: the PK (account_key, invoice_slot) guarantees
+    // one row per slot. A .has() guard here would be dead code hiding
+    // a broken invariant if the PK ever slipped.
+    for (const row of codeRows || []) {
+      slotCodeByInvoiceSlot.set(row.invoice_slot, row.slot_code);
     }
     const missingSlots = [];
     for (const invoice of payload.invoices) {
@@ -784,12 +798,12 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     if (missingSlots.length > 0) {
       const uniqueMissing = [...new Set(missingSlots)];
       const opMessage =
-        `The week is finalized but not sent to QuickBooks because ${uniqueMissing.map(s => `slot "${s}"`).join(", ")} on ${accountKey} has no slot_code in sc_qbo_service_map. Kevin or Sebastian must assign a code before it can be retried.`;
+        `The week is finalized but not sent to QuickBooks because ${uniqueMissing.map(s => `slot "${s}"`).join(", ")} on ${accountKey} has no slot_code in sc_invoice_slot_codes. Kevin or Sebastian must assign a code before it can be retried.`;
       await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
       const n2 = await doN2({
         qboMode,
         accountKey, weekStart: pairStart, weekEnd: pairEnd,
-        errorText: `${opMessage}\n\nDiagnostic: missing slot_code for [${uniqueMissing.join(", ")}] on ${accountKey}. sc-49 refuses the push. Assign the codes in Studio (sc_qbo_service_map.slot_code, 2-3 uppercase letters, unique per account).`,
+        errorText: `${opMessage}\n\nDiagnostic: missing slot_code for [${uniqueMissing.join(", ")}] on ${accountKey}. sc-49 refuses the push. Add a row to sc_invoice_slot_codes in Studio (2-3 uppercase letters, unique per account).`,
         retryLink: buildRetryLink(accountKey, weekStart),
         scWeekLink: buildScWeekLink(accountKey, weekStart),
         attempt: 1,

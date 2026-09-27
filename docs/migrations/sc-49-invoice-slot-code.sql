@@ -17,16 +17,42 @@
 -- slot code + optional revision. See docs/GOTCHAS.md for the full
 -- rationale.
 --
--- WHAT THIS MIGRATION ADDS
--- sc_qbo_service_map.slot_code: 2-3 uppercase chars, unique within
--- an account. Application concatenates it into the DocNumber. Test
--- mode continues to use the KFT sequence (sc-48); only the live
--- KF path becomes deterministic.
+-- ─── WHY A DEDICATED TABLE (sc-49b, 2026-09-26) ─────────────────
 --
--- Live sequence sc_invoice_number_seq is RETIRED after this ships
--- but NOT dropped - it is the only record of how KF000000001..004
--- were issued. Retirement is expressed via a COMMENT ON SEQUENCE
--- in Block B.
+-- The first attempt at this migration put `slot_code` directly on
+-- sc_qbo_service_map. That table is one row per SERVICE, not per
+-- slot - live counts on 2026-09-26 include 9 rows for
+-- (TXR - AZ, main), 4 rows for (CIN - AZ, rehab), etc. 48 rows,
+-- 16 distinct (account_key, invoice_slot) pairs.
+--
+-- The rule that has to hold is bidirectional, per account:
+--   1. one invoice_slot has exactly one slot_code
+--   2. one slot_code belongs to exactly one invoice_slot
+-- Break (1) and the DocNumber depends on which row the query
+-- returns first. Break (2) and two different slots collide on the
+-- same DocNumber - reintroducing the sc-49 problem one level down.
+--
+-- Neither rule is expressible as a unique index on
+-- sc_qbo_service_map (per-service, so duplicates by design). The
+-- attribute belongs on a slot-keyed table.
+--
+-- ─── WHAT THIS MIGRATION ADDS ───────────────────────────────────
+--
+-- sc_invoice_slot_codes: one row per (account_key, invoice_slot).
+--   PK       (account_key, invoice_slot)  - enforces rule 1
+--   UNIQUE   (account_key, slot_code)     - enforces rule 2
+--   CHECK    slot_code ~ '^[A-Z]{2,3}$'   - enforces shape
+--   NOT NULL slot_code                    - no backfill window
+--
+-- Studio-managed like sc_qbo_service_map / sc_qbo_account_map. No
+-- writer in src/; new slots get a row by hand in Studio.
+--
+-- Sequence sc_invoice_number_seq (sc-48) is RETIRED but NOT dropped
+-- - it is the only record of how KF000000001..004 were issued.
+-- Retirement is expressed via COMMENT ON SEQUENCE in Block B.
+-- sc_invoice_test_number_seq remains in active use for the KFT
+-- test path (Kevin re-runs tests against the same key; a
+-- deterministic test number would collide with itself).
 --
 -- CONSUMERS
 -- src/lib/billing/qboAdapter.js:buildInvoiceDocNumber (pure function).
@@ -35,8 +61,8 @@
 -- slot_code itself (reservation-seam discipline: no I/O at the seam).
 --
 -- Three-block Studio pattern (preflight / main / postflight).
--- Idempotent: block B's ADD COLUMN IF NOT EXISTS, DO $$ BEGIN ...
--- and CREATE INDEX IF NOT EXISTS are no-ops after the first apply.
+-- Idempotent: Block B's CREATE TABLE IF NOT EXISTS and ON CONFLICT
+-- DO NOTHING are no-ops after the first apply.
 -- ═══════════════════════════════════════════════════════════════════
 
 
@@ -44,41 +70,41 @@
 -- BLOCK A: preflight (READ-ONLY - safe to re-run)
 -- ═══════════════════════════════════════════════════════════════════
 
--- Confirm sc_qbo_service_map exists (guardrail).
+-- Confirm the new table does NOT exist yet. Expected: zero rows.
 SELECT table_name
 FROM information_schema.tables
 WHERE table_schema = 'public'
-  AND table_name = 'sc_qbo_service_map';
+  AND table_name   = 'sc_invoice_slot_codes';
 
--- Confirm slot_code column does NOT exist yet. Expected: zero rows.
-SELECT column_name, data_type, is_nullable
+-- Confirm sc_qbo_service_map.slot_code does NOT exist. The prior
+-- migration attempt would have added the column here; assert its
+-- absence so a partial earlier apply surfaces immediately. Expected:
+-- zero rows.
+SELECT column_name
 FROM information_schema.columns
 WHERE table_schema = 'public'
   AND table_name   = 'sc_qbo_service_map'
   AND column_name  = 'slot_code';
 
--- Confirm the partial unique index does NOT exist yet. Expected: zero rows.
-SELECT indexname
-FROM pg_indexes
-WHERE schemaname = 'public'
-  AND tablename  = 'sc_qbo_service_map'
-  AND indexname  = 'sc_qbo_service_map_slot_code_uniq';
-
--- Show the 16 (account_key, invoice_slot) pairs the seed will cover.
--- Expected exactly these 16 rows on 2026-09-26 (Chat-Claude verified).
--- Adding a row to sc_qbo_service_map after this preflight but before
--- Block B's UPDATE means the postflight NULL-slot_code check will fail;
--- re-run this preflight if the count differs from 16.
-SELECT account_key, invoice_slot, COUNT(*) AS active_rows
+-- Show the 16 distinct (account_key, invoice_slot) pairs Block B
+-- will seed. Expected exactly these 16 rows on 2026-09-26.
+SELECT account_key, invoice_slot, COUNT(*) AS service_rows
 FROM sc_qbo_service_map
 WHERE active = true
 GROUP BY account_key, invoice_slot
 ORDER BY account_key, invoice_slot;
 
--- Account-code prefix guard preview. Computed here so we can eyeball
--- it before Block B and so Block C can re-run the same check as an
--- assertion. Expected: zero rows returned (no code is a prefix of any
--- other code in the current 14 account_keys).
+-- Why a dedicated table: the row counts above are per-service, not
+-- per-slot. This query prints the duplicate structure so the reason
+-- for the redesign is visible in the preflight output. Expected: 48
+-- total active rows across the 16 pairs above.
+SELECT COUNT(*) AS total_active_service_rows
+FROM sc_qbo_service_map
+WHERE active = true;
+
+-- Account-code prefix guard preview. Computed here so the assertion
+-- in Block C can re-run the same check. Expected: zero rows (no code
+-- is a prefix of any other code in the current 14 account_keys).
 WITH codes AS (
   SELECT DISTINCT
          account_key,
@@ -99,62 +125,60 @@ JOIN codes b
 
 BEGIN;
 
--- 1. Add the column. Nullable during backfill; NOT NULL is not
--- enforced at column level because a new sc_qbo_service_map row
--- inserted before someone assigns its slot_code would then fail on
--- INSERT; instead the postflight asserts every active row is filled
--- and the application refuses to invoice a slot with a NULL code
--- (fail-loudly upstream of the reservation seam).
-ALTER TABLE sc_qbo_service_map
-  ADD COLUMN IF NOT EXISTS slot_code TEXT;
+-- 1. Table.
+CREATE TABLE IF NOT EXISTS sc_invoice_slot_codes (
+  account_key  TEXT        NOT NULL,
+  invoice_slot TEXT        NOT NULL,
+  slot_code    TEXT        NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  changed_at   TIMESTAMPTZ,
+  CONSTRAINT sc_invoice_slot_codes_pkey
+    PRIMARY KEY (account_key, invoice_slot),
+  CONSTRAINT sc_invoice_slot_codes_shape
+    CHECK (slot_code ~ '^[A-Z]{2,3}$'),
+  CONSTRAINT sc_invoice_slot_codes_code_uniq
+    UNIQUE (account_key, slot_code)
+);
 
--- 2. CHECK constraint: 2-3 uppercase letters. Idempotent via
--- pg_constraint lookup - repeat runs are no-ops.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'sc_qbo_service_map_slot_code_shape'
-  ) THEN
-    ALTER TABLE sc_qbo_service_map
-      ADD CONSTRAINT sc_qbo_service_map_slot_code_shape
-      CHECK (slot_code IS NULL OR slot_code ~ '^[A-Z]{2,3}$');
-  END IF;
-END $$;
+-- 2. Seed the 16 (account, slot, code) tuples. Codes repeat across
+-- accounts (MN on three; MIL/MLB on two each) - intended, uniqueness
+-- is per-account. ON CONFLICT DO NOTHING makes re-apply a no-op.
+INSERT INTO sc_invoice_slot_codes (account_key, invoice_slot, slot_code) VALUES
+  ('TXR - AZ', 'main',        'MN'),
+  ('CIN - AZ', 'main',        'MN'),
+  ('CIN - AZ', 'rehab',       'RH'),
+  ('TBR - FL', 'main',        'MN'),
+  ('TBR - FL', 'milb',        'MIL'),
+  ('TBR - FL', 'mlb',         'MLB'),
+  ('TBJ - FL', 'catering',    'CAT'),
+  ('TBJ - FL', 'florida-ops', 'FLO'),
+  ('TBJ - FL', 'media-meals', 'MED'),
+  ('TBJ - FL', 'milb',        'MIL'),
+  ('TBJ - FL', 'milb-pantry', 'MIP'),
+  ('TBJ - FL', 'mlb',         'MLB'),
+  ('TBJ - FL', 'mlb-pantry',  'MLP'),
+  ('TBJ - FL', 'scout-meals', 'SCT'),
+  ('TBJ - FL', 'single-a',    'SGA'),
+  ('TBJ - FL', 'ssm',         'SSM')
+ON CONFLICT (account_key, invoice_slot) DO NOTHING;
 
--- 3. Partial unique index. Uniqueness is per account and only
--- applies when slot_code is set (nullable during backfill windows).
-CREATE UNIQUE INDEX IF NOT EXISTS sc_qbo_service_map_slot_code_uniq
-  ON sc_qbo_service_map (account_key, slot_code)
-  WHERE slot_code IS NOT NULL;
+-- 3. Grants. New tables do not inherit sibling privileges - sc-47
+-- notify-1 lesson, and sc-48 Block C exists because of it. RLS is
+-- OFF on the sibling tables (sc_qbo_service_map, sc_qbo_account_map,
+-- sc_export_ledger); match that here - do not enable RLS on this
+-- table. Read only for the service client; INSERT/UPDATE stays
+-- Studio-only because nothing in src/ writes it today.
+GRANT SELECT ON sc_invoice_slot_codes TO service_role;
 
--- 4. Seed the 16 currently-active (account, invoice_slot) pairs.
--- Codes repeat across accounts (MN on three; MIL/MLB on two each) -
--- that is intended, uniqueness is per-account. UPDATE not INSERT so
--- re-running Block B is a no-op after the first apply.
-UPDATE sc_qbo_service_map SET slot_code = 'MN'  WHERE account_key = 'TXR - AZ' AND invoice_slot = 'main'        AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MN'  WHERE account_key = 'CIN - AZ' AND invoice_slot = 'main'        AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'RH'  WHERE account_key = 'CIN - AZ' AND invoice_slot = 'rehab'       AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MN'  WHERE account_key = 'TBR - FL' AND invoice_slot = 'main'        AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MIL' WHERE account_key = 'TBR - FL' AND invoice_slot = 'milb'        AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MLB' WHERE account_key = 'TBR - FL' AND invoice_slot = 'mlb'         AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'CAT' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'catering'    AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'FLO' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'florida-ops' AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MED' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'media-meals' AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MIL' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'milb'        AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MIP' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'milb-pantry' AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MLB' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'mlb'         AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'MLP' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'mlb-pantry'  AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'SCT' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'scout-meals' AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'SGA' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'single-a'    AND active = true AND slot_code IS NULL;
-UPDATE sc_qbo_service_map SET slot_code = 'SSM' WHERE account_key = 'TBJ - FL' AND invoice_slot = 'ssm'         AND active = true AND slot_code IS NULL;
+-- 4. Comments. Name the consumers so a future reader knows where
+-- this row is read + what breaks if it is missing.
+COMMENT ON TABLE sc_invoice_slot_codes IS
+  'sc-49b (2026-09-26): 2-3 letter slot code per (account_key, invoice_slot). Feeds src/lib/billing/qboAdapter.js:buildInvoiceDocNumber via ctx.slotCode threaded by src/lib/scWeekFinalize.js. A slot without a row here cannot be invoiced - scWeekFinalize refuses the push with MISSING_SLOT_CODE + N2. Studio-managed; no writer in src/. Uniqueness is per-account, so codes repeat across accounts by design (MN on three; MIL/MLB on two each).';
 
--- 5. Column comment naming the consumers.
-COMMENT ON COLUMN sc_qbo_service_map.slot_code IS
-  'Slot code appended to the SC-generated DocNumber (sc-49). 2-3 uppercase letters, unique per account_key. Feeds src/lib/billing/qboAdapter.js:buildInvoiceDocNumber. Nullable to allow adding a slot then assigning a code in Studio; qboAdapter refuses to invoice a slot with a NULL code.';
+COMMENT ON COLUMN sc_invoice_slot_codes.slot_code IS
+  'The 2-3 uppercase letters appended to the sc-49 DocNumber, e.g. KFTXRAZ260921MN where MN is this column. Unique within an account (rule 2 - two different slots must never produce the same DocNumber).';
 
--- 6. Mark the live sequence retired. sc-48's sc_invoice_number_seq
+-- 5. Mark the live sequence retired. sc-48's sc_invoice_number_seq
 -- stays in place because it is the only record of how KF000000001..004
 -- were issued; the retirement is a comment, not a DROP.
 COMMENT ON SEQUENCE sc_invoice_number_seq IS
@@ -167,49 +191,74 @@ COMMIT;
 -- BLOCK C: postflight (READ-ONLY - safe to re-run)
 -- ═══════════════════════════════════════════════════════════════════
 
--- Column present + nullable.
+-- Table exists with expected columns.
 SELECT column_name, data_type, is_nullable
 FROM information_schema.columns
 WHERE table_schema = 'public'
-  AND table_name   = 'sc_qbo_service_map'
-  AND column_name  = 'slot_code';
+  AND table_name   = 'sc_invoice_slot_codes'
+ORDER BY ordinal_position;
 
--- CHECK constraint present with the expected regex.
-SELECT conname, pg_get_constraintdef(oid) AS def
+-- All three constraints present.
+SELECT conname, contype, pg_get_constraintdef(oid) AS def
 FROM pg_constraint
-WHERE conname = 'sc_qbo_service_map_slot_code_shape';
+WHERE conname IN (
+  'sc_invoice_slot_codes_pkey',
+  'sc_invoice_slot_codes_shape',
+  'sc_invoice_slot_codes_code_uniq'
+)
+ORDER BY conname;
 
--- Partial unique index present.
-SELECT indexname, indexdef
-FROM pg_indexes
-WHERE schemaname = 'public'
-  AND tablename  = 'sc_qbo_service_map'
-  AND indexname  = 'sc_qbo_service_map_slot_code_uniq';
+-- Exactly 16 rows seeded.
+SELECT COUNT(*) AS n_rows FROM sc_invoice_slot_codes;
 
--- Every active row now has a slot_code. Expected: zero rows.
-SELECT account_key, invoice_slot, id
-FROM sc_qbo_service_map
-WHERE active = true
-  AND slot_code IS NULL
-ORDER BY account_key, invoice_slot;
+-- Every distinct (account_key, invoice_slot) active in
+-- sc_qbo_service_map has a code. This is the check that would have
+-- caught the sc-49 (v1) schema error. Expected: zero rows.
+SELECT s.account_key, s.invoice_slot
+FROM (
+  SELECT DISTINCT account_key, invoice_slot
+  FROM sc_qbo_service_map
+  WHERE active = true
+) s
+LEFT JOIN sc_invoice_slot_codes c
+  USING (account_key, invoice_slot)
+WHERE c.slot_code IS NULL
+ORDER BY s.account_key, s.invoice_slot;
 
--- Uniqueness within an account holds. Expected: zero rows.
+-- No (account_key, slot_code) duplicates. Expected: zero rows (the
+-- UNIQUE constraint would have refused Block B, but this query is
+-- the check that names the failure mode.).
 SELECT account_key, slot_code, COUNT(*) AS n
-FROM sc_qbo_service_map
-WHERE active = true
-  AND slot_code IS NOT NULL
+FROM sc_invoice_slot_codes
 GROUP BY account_key, slot_code
 HAVING COUNT(*) > 1
 ORDER BY account_key, slot_code;
 
--- Full slot_code inventory for review.
+-- Full inventory for review.
 SELECT account_key, invoice_slot, slot_code
-FROM sc_qbo_service_map
-WHERE active = true
+FROM sc_invoice_slot_codes
 ORDER BY account_key, invoice_slot;
 
--- Account-code prefix guard (assertion form). No code should be a
--- prefix of another. Expected: zero rows.
+-- service_role has SELECT. Missing SELECT means the intranet client
+-- reads zero rows and every live push falls to MISSING_SLOT_CODE +
+-- N2. sc-47's notify-1 shipped without this grant and failed at the
+-- first insert; do not repeat.
+SELECT r.rolname AS grantee,
+       string_agg(p.privilege_type, ', ' ORDER BY p.privilege_type) AS grants
+FROM pg_class c
+JOIN pg_namespace n     ON n.oid = c.relnamespace
+JOIN LATERAL aclexplode(c.relacl) p ON true
+JOIN pg_roles r         ON r.oid = p.grantee
+WHERE c.relkind = 'r'
+  AND n.nspname = 'public'
+  AND c.relname = 'sc_invoice_slot_codes'
+  AND r.rolname = 'service_role'
+GROUP BY r.rolname;
+
+-- Expected: one row, service_role with SELECT.
+
+-- Account-code prefix guard (assertion form). No account code should
+-- be a prefix of another. Expected: zero rows.
 WITH codes AS (
   SELECT DISTINCT
          account_key,
@@ -224,7 +273,7 @@ JOIN codes b
  AND b.code LIKE a.code || '%';
 
 -- Confirm sc_invoice_number_seq is still in place (retirement is a
--- comment, not a DROP) so audit continues to name a real object.
+-- comment, not a DROP) and that the retirement comment took.
 SELECT sequence_name, last_value
 FROM (
   SELECT 'sc_invoice_number_seq'      AS sequence_name, last_value FROM sc_invoice_number_seq
@@ -233,5 +282,4 @@ FROM (
 ) s
 ORDER BY sequence_name;
 
--- Confirm the retired-sequence comment took.
-SELECT obj_description('sc_invoice_number_seq'::regclass, 'pg_class') AS comment;
+SELECT obj_description('sc_invoice_number_seq'::regclass, 'pg_class') AS retirement_comment;

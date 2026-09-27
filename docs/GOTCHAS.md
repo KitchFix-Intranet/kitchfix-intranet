@@ -9,6 +9,26 @@
 
 ## Incident record
 
+### 2026-09-26 · `slot_code` lives on `sc_invoice_slot_codes`, not on `sc_qbo_service_map`
+
+**Why the first sc-49 migration blocked.** The initial attempt added `slot_code` to `sc_qbo_service_map` with a partial unique index on `(account_key, slot_code)`. Block B's seed UPDATE then set nine rows to `('TXR - AZ', 'MN')` and the index refused, rolling back the whole transaction. No damage - the migration never applied - but it could not apply as written.
+
+**Why this was a modeling error, not a SQL error.** `sc_qbo_service_map` is one row per SERVICE, not per slot. On 2026-09-26 there were 9 active rows for `(TXR - AZ, main)`, 4 for `(CIN - AZ, rehab)`, etc. - 48 rows across 16 distinct `(account_key, invoice_slot)` pairs. `slot_code` is an attribute of the slot, so putting it on a per-service table cannot express the two rules that have to hold:
+
+1. one `invoice_slot` has exactly one `slot_code`
+2. one `slot_code` belongs to exactly one `invoice_slot`
+
+Dropping or widening the unique index leaves both rules unenforced; a bad Studio edit could then make the DocNumber depend on row ordering or collide two slots on the same number - the sc-49 problem, one level down.
+
+**Fix (sc-49b).** New table `sc_invoice_slot_codes`, one row per `(account_key, invoice_slot)`:
+
+- PK `(account_key, invoice_slot)` enforces rule 1
+- UNIQUE `(account_key, slot_code)` enforces rule 2
+- CHECK `slot_code ~ '^[A-Z]{2,3}$'` enforces shape
+- `NOT NULL slot_code` - no backfill window; a row exists only once someone assigns a code
+
+**Rule.** Do not re-add `slot_code` to `sc_qbo_service_map`. If a new slot appears, add a row to `sc_invoice_slot_codes` in Studio. `scWeekFinalize.js` refuses the push with `MISSING_SLOT_CODE + N2` if a slot on an invoicing week has no code row.
+
 ### 2026-09-26 · `KF000000005` is not ours · SC invoice DocNumbers now deterministic (sc-49)
 
 `KF000000001`..`KF000000004` are SC-generated (sc-48 sequence). **`KF000000005` is not ours.** Sebastian created an invoice manually in the QBO UI on/around 2026-09-25 and QBO auto-filled our next sequence number. It is a real invoice for a different client. It is not a missing SC invoice, and it is why the SC set jumps from 004 directly to the sc-49 format (`KF{accountCode}{YYMMDD}{slotCode}{revision?}`, e.g. `KFTXRAZ260921MN`). Retired sequence: `sc_invoice_number_seq` (left in place with a `COMMENT ON SEQUENCE` marking retirement so audit continues to name a real object).
