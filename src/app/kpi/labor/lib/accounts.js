@@ -44,16 +44,26 @@ export const STATIC_RDO_DISPLAY = { East: "S. Lynch", West: "R. Moore" };
 //
 // Overview Phase 4 (2026-08-31): pnl_overview flips to enabled=true
 // with path /kpi/overview per KPI_MASTER_SCOPE.md §7 build phase 4
-// ("landing PR"). Overview is the P&L landing section; labor and
-// purchasing remain reachable via the section dropdown from any
-// board. TopNav's /kpi link re-points to /kpi/overview in the same
-// PR so the KPI entry point lands on Overview by default.
+// ("landing PR"). Overview is the P&L landing section; TopNav's /kpi
+// link re-points to /kpi/overview so the KPI entry point lands on
+// Overview by default.
+//
+// Kevin ruling 2026-09-28. Labor and Purchasing are hidden from the
+// dropdown - the Overview carries the daily story, so the menu offers
+// one real destination. Both stay `enabled: true` and keep their
+// `path`: the routes remain reachable via the Overview cost-line
+// drill-downs (CostLines.js:85 links 3100 -> /kpi/labor and 3200/3400/
+// 3500 -> /kpi/purchasing) and by direct URL. `enabled: true` is what
+// tells Shell.js:80 to resolve the active-label lookup and print
+// "Labor" / "Purchasing" in the Section control on those routes;
+// marking them enabled:false would render the boards under a SOON
+// tag. The `hidden` flag is menu-only.
 export const SECTIONS = [
-  { key: "pnl_overview", label: "P&L Overview", enabled: true,  path: "/kpi/overview"   },
-  { key: "labor",        label: "Labor",        enabled: true,  path: "/kpi/labor"      },
-  { key: "purchasing",   label: "Purchasing",   enabled: true,  path: "/kpi/purchasing" },
-  { key: "sga",          label: "SG&A",         enabled: false                          },
-  { key: "travel",       label: "Travel",       enabled: false                          },
+  { key: "pnl_overview", label: "P&L Overview", enabled: true,  path: "/kpi/overview"                  },
+  { key: "labor",        label: "Labor",        enabled: true,  path: "/kpi/labor",      hidden: true },
+  { key: "purchasing",   label: "Purchasing",   enabled: true,  path: "/kpi/purchasing", hidden: true },
+  { key: "sga",          label: "SG&A",         enabled: false                                        },
+  { key: "travel",       label: "Travel",       enabled: false                                        },
 ];
 
 // Preset date keys (client-resolvable). Same values the loader's

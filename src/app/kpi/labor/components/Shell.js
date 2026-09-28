@@ -77,7 +77,11 @@ function SectionMenu({ activeKey }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-  const active = SECTIONS.find(s => s.key === activeKey) || SECTIONS[1];
+  // Kevin ruling 2026-09-28. Fallback moves from SECTIONS[1] (labor)
+  // to SECTIONS[0] (pnl_overview). Positional fallback only happened
+  // to be right while labor sat second; with labor hidden and unknown
+  // keys resolving here, pnl_overview is the correct default.
+  const active = SECTIONS.find(s => s.key === activeKey) || SECTIONS[0];
   return (
     <div className="kpi-secmenu" ref={rootRef}>
       <button
@@ -92,7 +96,7 @@ function SectionMenu({ activeKey }) {
       </button>
       {open && (
         <div className="kpi-cmd-pop" role="menu" aria-label="Section">
-          {SECTIONS.map(s => {
+          {SECTIONS.filter(s => !s.hidden).map(s => {
             const isActive = s.key === activeKey;
             const className = `kpi-cmd-pop-item ${s.enabled ? "" : "ghost"} ${isActive ? "on" : ""}`;
             // Enabled + has path + NOT the current section -> real Link
