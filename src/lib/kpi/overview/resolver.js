@@ -445,6 +445,11 @@ function sumRangeRevenueByLine({ perPeriod, lineCodes }) {
  * @param {string} args.revSource          'planned' | 'sc'
  * @param {boolean} args.includeSalary
  * @param {object} args.caller             { role, scope, can_see_salary }
+ *                                          `can_see_salary` here is the
+ *                                          account-aware verdict for
+ *                                          `accountKey` (canSeeSalary(caller,
+ *                                          accountKey) at the route), not
+ *                                          the raw kpi_roles column value.
  * @param {string} args.today              ISO YYYY-MM-DD
  * @param {boolean} [args.debugTiming]     when true, includes _debug.timings
  *

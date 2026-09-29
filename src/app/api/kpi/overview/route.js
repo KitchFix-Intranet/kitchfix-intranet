@@ -195,7 +195,14 @@ export async function GET(request) {
     });
   }
 
-  // Role gate for salary.
+  // Role gate for salary. Kevin ruling 2026-09-29 (training feedback):
+  // site_managers do not see the hourly/salary toggle on the Overview.
+  // canSeeSalary(caller, account) already returns false for a
+  // site_manager on any account (roleGate.js has an explicit
+  // "site_manager: never, even for their own" branch). The bug was
+  // one line down at the resolver call, where a re-derived
+  // can_see_salary from the raw caller object shadowed this
+  // account-aware value.
   //
   // Overview polish PR 2026-09-01 (R-40 A1): the rev_source URL
   // parameter was retired - Revenue picks SC actuals automatically
@@ -227,7 +234,18 @@ export async function GET(request) {
       accountKey: account,
       range,
       includeSalary,
-      caller: { ...caller, can_see_salary: caller.can_see_salary !== false },
+      // `can_see_salary` on the caller passed to the resolver means
+      // "can see salary FOR THIS ACCOUNT", not the raw kpi_roles
+      // column value. Rule 3 (site_leader) and Rule 4 (site_manager)
+      // in roleGate.js return { role, scope } with no can_see_salary
+      // key at all; the previous `caller.can_see_salary !== false`
+      // fallback resolved `undefined !== false` to true and rendered
+      // the toggle on the Overview for a site_manager. Passing
+      // salaryAvailable (already account-aware, already computed
+      // above) hands the resolver the value that matches the fetch.
+      // resolver.js:488 (`salaryAvailable: caller?.can_see_salary
+      // === true`) is the only reader besides JSDoc.
+      caller: { ...caller, can_see_salary: salaryAvailable },
       today,
       debugTiming,
     });
