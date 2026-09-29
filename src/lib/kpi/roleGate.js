@@ -57,10 +57,11 @@ function normEmail(e) {
 // the named cohort below resolves to a role. Everyone else resolves
 // null and the route returns 403, exactly as an unknown caller would.
 //
-// The cohort is nine people plus Kevin - R-160 opens CIN - AZ and
-// TXR - AZ for training. Every email lowercase; normEmail() trims +
-// lowercases at compare time so a mixed-case entry here would never
-// match (M3 failure mode recorded in the spec).
+// The cohort is ten people plus Kevin - R-160 opened CIN - AZ and
+// TXR - AZ for training; CIN - OH joins 2026-09-29. Every email
+// lowercase; normEmail() trims + lowercases at compare time so a
+// mixed-case entry here would never match (M3 failure mode recorded
+// in the spec).
 //
 // TO OPEN THE BOARD to every role the four-role model admits: set
 // KPI_PREVIEW_ONLY = false. That single edit restores the full model
@@ -83,6 +84,7 @@ export const KPI_PREVIEW_ALLOWLIST = [
   "e.randall@kitchfix.com",
   "a.lacy@kitchfix.com",
   "a.hughes@kitchfix.com",
+  "k.atherton@kitchfix.com",
 ];
 
 /**
