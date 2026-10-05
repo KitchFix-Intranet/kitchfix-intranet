@@ -79,10 +79,12 @@ import {
   loadOverviewBudgets,
   loadInventoryAdjustments,
   loadScDailyRevenue,
+  loadScDailyRevenueCarveOut,
   derivePeriodState,
   derivePeriodSpendSettled,
   capBeforeToday,
 } from "./pnl-loader.js";
+import { SC_LINE_CARVE_OUTS } from "@/lib/kpi/shared/periodBasis.js";
 
 // R-67 constant + computePeriodRevenueByLine now live in
 // src/lib/kpi/shared/periodBasis.js (see imports above). Local
@@ -647,6 +649,26 @@ export async function resolveOverview({
     willBeRunningSinglePeriod
       ? loadSalaryActuals(supa, members, rng.start, rng.end)
       : Promise.resolve(null),
+    // R-SC-CARVE (Kevin ruling 2026-10-05). Sibling SC read scoped
+    // to the SC_LINE_CARVE_OUTS entries that intersect `members`.
+    // Narrows the service_id IN-list to the carve-out groups; a
+    // range with no matching member returns `{ data: new Map() }`
+    // without querying sc_services. Shape:
+    //   Map<account, Map<lineCode, Map<day, amount>>>
+    (() => {
+      const applicable = new Map();
+      for (const m of members) {
+        const co = SC_LINE_CARVE_OUTS.get(m);
+        if (co) applicable.set(m, co);
+      }
+      if (applicable.size === 0) return Promise.resolve({ data: new Map() });
+      return loadScDailyRevenueCarveOut(supa, {
+        carveOuts: applicable,
+        start: rng.start,
+        end: effectiveEndISO,
+        today,
+      });
+    })(),
   ]));
   const [
     periodStatusResp, accountFlagsResp, overviewBudgetsResp, pnlResp,
@@ -655,6 +677,7 @@ export async function resolveOverview({
     salaryBudgetsResp, salaryActualsResp,
     dirResp, purchFreshness, invAdjResp,
     railWkBasisResp, railLaborActualsResp, railSalaryActualsResp,
+    scCarveOutResp,
   ] = layer1;
 
   const errs = [];
@@ -663,6 +686,7 @@ export async function resolveOverview({
   if (overviewBudgetsResp.error) errs.push({ scope: "kpi_budgets_overview", error: overviewBudgetsResp.error });
   if (pnlResp.error) errs.push({ scope: "pnl_actuals", error: pnlResp.error });
   if (scResp.error) errs.push({ scope: "sc_daily_revenue", error: scResp.error });
+  if (scCarveOutResp?.error) errs.push({ scope: scCarveOutResp.scope || "sc_daily_revenue_carve_out", error: scCarveOutResp.error });
   if (laborActualsResp.error) errs.push({ scope: "labor_actuals", error: laborActualsResp.error });
   for (const r of memberBudgetResults || []) {
     if (r.error) errs.push({ scope: r.scope || "member_budget", error: r.error });
@@ -691,6 +715,7 @@ export async function resolveOverview({
   const overviewBudgets = overviewBudgetsResp.data;
   const pnl = pnlResp.data;
   const scByAcct = scResp.data;
+  const scCarveOutByAcct = scCarveOutResp?.data || new Map();
   const laborActuals = laborActualsResp.data;
   const memberBudgets = new Map();
   for (let i = 0; i < members.length; i += 1) {
@@ -879,6 +904,7 @@ export async function resolveOverview({
     overviewBudgets,
     pnl,
     scByAcct,
+    scCarveOutByAcct,
     revSource: effRevSource,
   });
   const revenueByLine = sumRangeRevenueByLine({

@@ -40,6 +40,7 @@ import {
   loadPnlActuals,
   loadOverviewBudgets,
   loadScDailyRevenue,
+  loadScDailyRevenueCarveOut,
   loadPeriodStatus,
   loadAccountFlags,
   derivePeriodState,
@@ -53,6 +54,7 @@ export {
   loadPnlActuals,
   loadOverviewBudgets,
   loadScDailyRevenue,
+  loadScDailyRevenueCarveOut,
   loadPeriodStatus,
   loadAccountFlags,
   derivePeriodState,
@@ -61,6 +63,31 @@ export {
 
 export const CONTRACTUAL_ACCRUAL_LINES = new Set(["2200", "2300", "2600"]);
 const FISCAL_YEAR = 2026;
+
+// Kevin ruling 2026-10-05. TBR - FL only.
+// Service groups whose SC revenue books to a line other than 2400.1.
+// At TBR - FL the Service Calendar carries three service groups:
+// Major League, Minor League, Boys & Girls Club. The SC loader
+// collapses every service's daily revenue into one per-day total, so
+// without this carve-out all three groups land on 2400.1 Meal service
+// (home). Kevin: the TBR catering budget IS projected B&G revenue, so
+// B&G actuals belong on 2200 and the accrual that stood in for them
+// does not. The picker also removes a double-count that resulted from
+// B&G dollars sitting inside 2400.1 while the 2200 accrual still ran.
+//
+// Keyed by account then by service GROUP name. Groups rename far less
+// often than services, so the carve-out survives a service rename
+// inside the group but intentionally breaks if the group itself is
+// renamed - that is a signal the operator moved revenue intentionally,
+// and the carve-out should be reviewed.
+//
+// A hardcoded constant, not a config table, on purpose: same posture
+// as KPI_PREVIEW_ALLOWLIST in roleGate.js. Kevin merges through
+// GitHub Desktop and wants this visible in a diff, not hidden
+// elsewhere.
+export const SC_LINE_CARVE_OUTS = new Map([
+  ["TBR - FL", new Map([["Boys & Girls Club", "2200"]])],
+]);
 
 // ─── Formulas (folded in from batr.js) ─────────────────────────────
 //
@@ -231,6 +258,12 @@ export function computeContractualAccrualByPeriod({ overviewBudgets, members, pe
 //   3. R-67 contractual accrual (2200/2300/2600)    every account, per line
 //   4. not_reported                                  never budget-as-actual
 
+// Optional `scCarveOutByAcct` carries per-(account, lineCode) daily
+// SC revenue for groups whose SC revenue books to a line other than
+// 2400.1 (see SC_LINE_CARVE_OUTS). Shape:
+//   Map<account, Map<lineCode, Map<day, amount>>>
+// When absent (or empty for an account), every existing caller
+// behaves byte-identically to the pre-carve-out picker.
 export function computePeriodRevenueByLine({
   members,
   periods,
@@ -240,6 +273,7 @@ export function computePeriodRevenueByLine({
   overviewBudgets,
   pnl,
   scByAcct,
+  scCarveOutByAcct,
   revSource,
 }) {
   const perPeriod = new Map();
@@ -272,14 +306,52 @@ export function computePeriodRevenueByLine({
         } else if (src.source === "sc_daily_revenue") {
           try { assertScReadAllowed({ accountKey: m, revSource, accountFlags: flags }); }
           catch (e) { throw e; }
-          if (line === "2400.1") {
+          // R-SC-CARVE (Kevin ruling 2026-10-05). The carve-out map
+          // (SC_LINE_CARVE_OUTS, loaded via loadScDailyRevenueCarveOut)
+          // moves specific service groups' daily SC revenue off 2400.1
+          // and onto their target line. TBR - FL Boys & Girls Club ->
+          // 2200 is the only entry today.
+          //
+          // Two effects on this branch:
+          //   - A carve-out TARGET line (e.g., 2200 for TBR - FL) reads
+          //     its daily total from the carve-out map and MUST NOT
+          //     also pick up the CONTRACTUAL_ACCRUAL_LINES accrual.
+          //     Kevin: the catering budget WAS the projection of B&G
+          //     revenue; the SC actual replaces the accrual, it does
+          //     not stack on it.
+          //   - 2400.1 reads the normal SC total MINUS every carved-
+          //     out day for the same account. B&G services landed on
+          //     sc_daily_revenue tagged with their own service_id, so
+          //     scByAcct already contains their dollars - without the
+          //     subtraction, the fix would double-count B&G in 2400.1
+          //     and 2200.
+          const carveLineMap = scCarveOutByAcct?.get(m)?.get(line);
+          if (carveLineMap) {
+            const pStart = periodStartISO(p);
+            const pEnd = periodEndISO(p);
+            for (const [day, amt] of carveLineMap) {
+              if (day >= pStart && day <= pEnd) {
+                bucket.amount += Number(amt);
+                bucket.any_actual = true;
+              }
+            }
+            bucket.sources.add("sc_daily_revenue");
+          } else if (line === "2400.1") {
             const byDate = scByAcct.get(m);
             if (byDate) {
               const pStart = periodStartISO(p);
               const pEnd = periodEndISO(p);
+              const carveByLine = scCarveOutByAcct?.get(m);
               for (const [day, amt] of byDate) {
                 if (day >= pStart && day <= pEnd) {
-                  bucket.amount += Number(amt);
+                  let carveSum = 0;
+                  if (carveByLine) {
+                    for (const [, perLineByDay] of carveByLine) {
+                      const c = perLineByDay.get(day);
+                      if (c) carveSum += Number(c);
+                    }
+                  }
+                  bucket.amount += Number(amt) - carveSum;
                   bucket.any_actual = true;
                 }
               }
@@ -287,7 +359,11 @@ export function computePeriodRevenueByLine({
             bucket.sources.add("sc_daily_revenue");
           } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
             // R-67: EVERY account, per line. budget × completeWeeks/4.
-            // Closed period => 4/4 = full budget.
+            // Closed period => 4/4 = full budget. Carve-out targets
+            // short-circuited above - the SC actual stands in for the
+            // accrual, so this branch runs only on accounts without a
+            // carve-out for `line` (every account for 2300/2600, and
+            // every account except TBR - FL for 2200).
             const pStart = periodStartISO(p);
             const pEnd = periodEndISO(p);
             const amtRaw = overviewBudgets.get(line)?.get(m)?.get(p);
