@@ -17,26 +17,34 @@ import { APPROVAL_TRACKING_START } from "./approvalsTracking.js";
 import { fetchAllOffset, fetchAllKeyset } from "../rippling/paginate.js";
 import { classifyBucket, loadBaseHourlyWages, HOLIDAY_DOUBLE_RATE_RATIO } from "./earningBucket.js";
 
-// Guard ceilings · Kevin ruling 2026-10-05 (holiday reclassification).
-// Both derives emit `reclassified` and `unevaluable` counts on every
-// run. A sudden jump past either ceiling fails the step rather than
-// writing silently - the hours_regular > 48 assert cannot see a
-// holiday-to-regular relabel because it lands at exactly the 40-hour
-// cap, which is why the 2026-10-02 Rippling behavior change shipped
-// quietly for three days.
+// Guard ceilings · Kevin ruling 2026-10-05 (holiday reclassification,
+// updated post-review). Both derives emit `reclassified` and
+// `unevaluable` on every run. A jump past either ceiling fails the
+// step rather than writing silently - the hours_regular > 48 assert
+// cannot see a holiday-to-regular relabel because it lands at exactly
+// the 40-hour cap, which is why the 2026-10-02 Rippling behavior
+// change shipped quietly for three days.
 //
-// Baselines measured 2026-10-05 against live presence (6,375 attributed
-// pay-segments):
-//   reclassified = 5   · the five documented holiday relabels
-//   unevaluable  = 0   · every attributed worker currently resolves to
-//                        a base hourly wage via rippling_raw_
-//                        compensations_latest DEFAULT type
+// Baselines measured 2026-10-05 against the derive's actual input
+// (raw pay_segments + presence + dedupePaySegments + attribute):
+//   reclassified          = 5   · the five documented holiday relabels
+//   unevaluable segments  = 0
+//   distinct unevaluable  = 0   · every one of the 94 attributed live
+//     workers              workers has at least one DEFAULT comp row
+//                          with a usable hourly_wage. 155 workers in
+//                          the full comp table have multiple rows
+//                          (DEFAULT + VARIED or similar);
+//                          loadBaseHourlyWages's skip-on-null-wage loop
+//                          keeps the DEFAULT wage set regardless of
+//                          iteration order.
 //
-// Ceilings carry visible headroom: a doubling of the reclassified
-// count or a sudden emergence of unevaluable segments should both
-// trigger a halt + reporter investigation.
+// UNEVALUABLE_WORKERS_CEILING is on DISTINCT WORKERS, not segments.
+// A segment count grows every night those workers log shifts; the
+// worker count only moves when payroll setup changes (a new hire
+// routed to a VARIED-only comp entity, a worker reclassified out of
+// DEFAULT). That is exactly the event worth alarming on.
 const RECLASSIFIED_CEILING = 10;
-const UNEVALUABLE_CEILING = 100;
+const UNEVALUABLE_WORKERS_CEILING = 3;
 //
 // Design decisions this file encodes (playbook v0.7):
 //
@@ -475,9 +483,13 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   }
 
   // Holiday reclassification counters, scoped to this run. Emitted after
-  // the segment loop; threshold-checked after emission.
+  // the segment loop; threshold-checked after emission. `unevaluable`
+  // is tracked at both segment and worker grain - the ceiling is on
+  // DISTINCT WORKERS (see UNEVALUABLE_WORKERS_CEILING above) because
+  // segments grow with shifts and only setup changes move workers.
   let reclassifiedCount = 0;
   let unevaluableCount = 0;
+  const unevaluableWorkerIds = new Set();
   const reclassifiedLog = [];
   for (const seg of paySegs) {
     const p = seg.payload || {};
@@ -524,6 +536,7 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
     }
     if (verdict.unevaluable) {
       unevaluableCount++;
+      if (workerId) unevaluableWorkerIds.add(workerId);
     }
     // Unmapped names also feed earning_type_unmapped so the operator
     // sees the backlog. classifyBucket returns `premium_other` for a
@@ -551,12 +564,12 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   for (const r of reclassifiedLog) {
     log(`  reclassified ${r.external_id}  ${r.account_key}  ${r.segment_date}  ratio=${r.ratio.toFixed(4)}  was=${r.et_name}`);
   }
-  log(`holiday reclassify: ${unevaluableCount} regular-mapped segments were unevaluable (no base wage) (ceiling ${UNEVALUABLE_CEILING})`);
+  log(`holiday reclassify: ${unevaluableWorkerIds.size} distinct workers unevaluable (${unevaluableCount} regular-mapped segments) (worker ceiling ${UNEVALUABLE_WORKERS_CEILING})`);
   if (reclassifiedCount > RECLASSIFIED_CEILING) {
     throw new Error(`holiday reclassify: ceiling exceeded · reclassified=${reclassifiedCount} ceiling=${RECLASSIFIED_CEILING} · Rippling may have changed behavior; stop + reporter investigate before trusting output`);
   }
-  if (unevaluableCount > UNEVALUABLE_CEILING) {
-    throw new Error(`holiday reclassify: unevaluable ceiling exceeded · unevaluable=${unevaluableCount} ceiling=${UNEVALUABLE_CEILING} · a growing count of regular-mapped segments without a base wage silently skips the holiday upgrade; stop + investigate`);
+  if (unevaluableWorkerIds.size > UNEVALUABLE_WORKERS_CEILING) {
+    throw new Error(`holiday reclassify: unevaluable-worker ceiling exceeded · distinct_workers=${unevaluableWorkerIds.size} ceiling=${UNEVALUABLE_WORKERS_CEILING} · segments=${unevaluableCount} · a worker without a usable base wage silently skips the holiday upgrade; new VARIED-only comp entity or payroll setup change likely - stop + investigate`);
   }
 
   // ── 9. Second pass: time-entries -> entry_count, hours_without_dollars,

@@ -37,12 +37,14 @@ import { dedupePaySegments } from "../src/lib/labor/paySegmentDedupe.js";
 import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
 import { classifyBucket, loadBaseHourlyWages } from "../src/lib/labor/earningBucket.js";
 
-// Kevin ruling 2026-10-05. Guard ceilings match the weekly derive's -
-// one classifier, one set of thresholds. See src/lib/labor/
-// deriveActuals.js for baseline + rationale. Both derives fail the
-// step on ceiling exceedance.
+// Kevin ruling 2026-10-05 (updated post PR-1233 review). Guard
+// ceilings match the weekly derive's - one classifier, one set of
+// thresholds. See src/lib/labor/deriveActuals.js for baselines +
+// rationale. UNEVALUABLE_WORKERS_CEILING is on distinct workers (not
+// segments) because segments grow with shifts and setup changes move
+// workers. Both derives fail the step on ceiling exceedance.
 const RECLASSIFIED_CEILING = 10;
-const UNEVALUABLE_CEILING = 100;
+const UNEVALUABLE_WORKERS_CEILING = 3;
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -261,6 +263,7 @@ function getBucket(account_key, worker_id, work_date, line_code) {
 
 let skippedCorp = 0, skippedContainer = 0, skippedUnattr = 0, skippedOutOfWindow = 0, skippedNoDate = 0, skippedBelowFloor = 0;
 let reclassifiedCount = 0, unevaluableCount = 0;
+const unevaluableWorkerIds = new Set();
 const reclassifiedLog = [];
 for (const seg of paySegs) {
   const p = seg.payload || {};
@@ -304,7 +307,10 @@ for (const seg of paySegs) {
       et_name: etName,
     });
   }
-  if (verdict.unevaluable) unevaluableCount++;
+  if (verdict.unevaluable) {
+    unevaluableCount++;
+    if (workerId) unevaluableWorkerIds.add(workerId);
+  }
   switch (verdict.bucket) {
     case "regular":
       b.hours_regular += hrs;
@@ -329,13 +335,13 @@ console.log(`  holiday reclassify: ${reclassifiedCount} segments regular -> doub
 for (const r of reclassifiedLog) {
   console.log(`    reclassified ${r.external_id}  ${r.account_key}  ${r.segment_date}  ratio=${r.ratio.toFixed(4)}  was=${r.et_name}`);
 }
-console.log(`  holiday reclassify: ${unevaluableCount} regular-mapped segments were unevaluable (no base wage) (ceiling ${UNEVALUABLE_CEILING})`);
+console.log(`  holiday reclassify: ${unevaluableWorkerIds.size} distinct workers unevaluable (${unevaluableCount} regular-mapped segments) (worker ceiling ${UNEVALUABLE_WORKERS_CEILING})`);
 if (reclassifiedCount > RECLASSIFIED_CEILING) {
   console.error(`holiday reclassify: ceiling exceeded · reclassified=${reclassifiedCount} ceiling=${RECLASSIFIED_CEILING} · Rippling may have changed behavior; stop + reporter investigate before trusting output`);
   process.exit(2);
 }
-if (unevaluableCount > UNEVALUABLE_CEILING) {
-  console.error(`holiday reclassify: unevaluable ceiling exceeded · unevaluable=${unevaluableCount} ceiling=${UNEVALUABLE_CEILING} · a growing count of regular-mapped segments without a base wage silently skips the holiday upgrade; stop + investigate`);
+if (unevaluableWorkerIds.size > UNEVALUABLE_WORKERS_CEILING) {
+  console.error(`holiday reclassify: unevaluable-worker ceiling exceeded · distinct_workers=${unevaluableWorkerIds.size} ceiling=${UNEVALUABLE_WORKERS_CEILING} · segments=${unevaluableCount} · a worker without a usable base wage silently skips the holiday upgrade; new VARIED-only comp entity or payroll setup change likely - stop + investigate`);
   process.exit(2);
 }
 
