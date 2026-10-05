@@ -251,9 +251,15 @@ function computeVisibleColumns({ grouped, mode }) {
     holiday: anyHoliday,
     // Unapproved default: on in aggregate view, adaptive in single.
     unpriced: mode === "aggregate" ? true : anyUnapproved,
-    // OT column always renders per V9-17 spec (single = Rate + Dollars,
-    // aggregate = Unpriced + Rate + Dollars, both include OT).
-    ot: true,
+    // Kevin ruling 2026-10-05 (table polish). Adaptive on OT - the
+    // column was gated to always render per the V9-17 spec, but the
+    // anyOT scan declared at :242/:247 was never read. On ranges
+    // where no account crossed the OT threshold the column rendered
+    // a full "-" strip on every row for a signal that is absent. The
+    // header + four data cells (band, grand total, week row, child
+    // row) now key on this flag; the colSpan calc for the zero-labor
+    // placeholder (:848) adapts too.
+    ot: anyOT,
     // Rate column always renders per V9-15 (every tier).
     rate: true,
   };
@@ -722,6 +728,10 @@ export function WeekTable({
   const showHoliday = !!columns.holiday;
   const showUnpriced = !!columns.unpriced;
   const showRate = !!columns.rate;
+  // Kevin ruling 2026-10-05 (table polish). OT becomes adaptive on
+  // the anyOT scan at :247 (previously declared + set but never
+  // read). Column hides when every (band, week) is at 0 OT.
+  const showOT = !!columns.ot;
 
   // V25-6 Share column - separate from Dollars; renders in aggregate
   // mode only (worker rows carry no share). Kept in every row so the
@@ -731,7 +741,7 @@ export function WeekTable({
   const numCols = 2 /* label + vs budget */
                 + (showShare ? 1 : 0)
                 + 1 /* hours */
-                + 1 /* OT */
+                + (showOT ? 1 : 0)
                 + (showHoliday ? 1 : 0)
                 + (showUnpriced ? 1 : 0)
                 + (showRate ? 1 : 0)
@@ -827,7 +837,7 @@ export function WeekTable({
                 <th className="kpi-tbl-vbcol">vs adjusted</th>
                 {showShare && <th className="kpi-tbl-shrcol">Share</th>}
                 <th>Hours</th>
-                <th>OT 1.5&times;</th>
+                {showOT && <th>OT 1.5&times;</th>}
                 {showHoliday && <th>Holiday 2&times;</th>}
                 {showUnpriced && <th>Unapproved</th>}
                 {showRate && <th>{rateHeaderLabel}</th>}
@@ -845,7 +855,7 @@ export function WeekTable({
                 // board does not know why a period is empty and
                 // should not claim.
                 if (g.zero_labor) {
-                  const cols = 5 + (showShare ? 1 : 0) + (showHoliday ? 1 : 0) + (showUnpriced ? 1 : 0) + (showRate ? 1 : 0);
+                  const cols = 4 + (showOT ? 1 : 0) + (showShare ? 1 : 0) + (showHoliday ? 1 : 0) + (showUnpriced ? 1 : 0) + (showRate ? 1 : 0);
                   return (
                     <tr key={g.key} className="kpi-tbl-zero-period">
                       <td>FY{g.fiscal_year} · PERIOD {g.period_no}</td>
@@ -917,7 +927,7 @@ export function WeekTable({
                     expandedWeeks={expandedWeeks}
                     onToggleWeek={onToggleWeek}
                     onPickAccount={onPickAccount}
-                    columns={{ showHoliday, showUnpriced, showRate, showShare }}
+                    columns={{ showHoliday, showUnpriced, showRate, showShare, showOT }}
                     excludedSet={excludedSet}
                     redact={redact}
                     rateBasisHourlyOnly={rateBasisHourlyOnly}
@@ -945,7 +955,9 @@ export function WeekTable({
                 </td>
                 {showShare && <td className="kpi-tbl-shrcol" />}
                 <td className="num">{fmtHrs((grandTotal?.hours_regular || 0) + (grandTotal?.hours_overtime || 0) + (grandTotal?.hours_double_time || 0))}</td>
-                <td className="num">{(grandTotal?.hours_overtime || 0) > 0.004 ? fmtHrs(grandTotal.hours_overtime) : "–"}</td>
+                {showOT && (
+                  <td className="num">{(grandTotal?.hours_overtime || 0) > 0.004 ? fmtHrs(grandTotal.hours_overtime) : "–"}</td>
+                )}
                 {showHoliday && (
                   <td className="num">{(grandTotal?.hours_double_time || 0) > 0.004 ? fmtHrs(grandTotal.hours_double_time) : "–"}</td>
                 )}
@@ -1005,7 +1017,7 @@ function FragmentRows({
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
-  const { showHoliday, showUnpriced, showRate, showShare } = columns;
+  const { showHoliday, showUnpriced, showRate, showShare, showOT } = columns;
   const rate = band.rate;
 
   return (
@@ -1047,7 +1059,7 @@ function FragmentRows({
         </td>
         {showShare && <td className="kpi-tbl-shrcol" />}
         <td className="num">{fmtHrs(band.totals.hours)}</td>
-        <td className={`num ${band.totals.ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.ot > 0.004 ? fmtHrs(band.totals.ot) : "–"}</td>
+        {showOT && <td className={`num ${band.totals.ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.ot > 0.004 ? fmtHrs(band.totals.ot) : "–"}</td>}
         {showHoliday && <td className={`num ${band.totals.hol > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.hol > 0.004 ? fmtHrs(band.totals.hol) : "–"}</td>}
         {showUnpriced && <td className={`num ${band.totals.unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.unpriced > 0.004 ? fmtHrs(band.totals.unpriced) : "–"}</td>}
         {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
@@ -1111,22 +1123,24 @@ function FragmentRows({
                   aria-expanded={weekOpen ? "true" : "false"}
                   data-wk={w.week_start}
                 >
-                  <span className="kpi-tbl-chev">{weekOpen ? "⌄" : "›"}</span>
-                  {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
-                  <OTTag ot={w.hours_overtime} />
-                  {/* HS FB1 hotfix 2026-08-25: ExceptionChip now fires
-                      on BOTH single and aggregate modes. Pre-fix it
-                      was gated on mode === "single" and the aggregate
-                      weeks (which carry draft_hours summed across
-                      members per page.js:359) never got a V42 chip.
-                      Kevin fixture: ALL view week 08/17 has 196.39
-                      draft hours + closed - now flags state 3a. The
-                      site-count "N sites unpriced" chip stays on
-                      aggregate as an additional coverage signal. */}
-                  <ExceptionChip severity={sev} week={w} todayISO={todayISO} />
-                  {mode === "aggregate" && exceptionMemberCount > 0 && (
-                    <span className="kpi-tbl-flag kpi-flag-warn">⚠ {exceptionMemberCount} site{exceptionMemberCount === 1 ? "" : "s"} unpriced</span>
-                  )}
+                  <span className="kpi-tbl-weekbtn-main">
+                    <span className="kpi-tbl-chev">{weekOpen ? "⌄" : "›"}</span>
+                    {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
+                    <OTTag ot={w.hours_overtime} />
+                  </span>
+                  {/* Kevin ruling 2026-10-05 (table polish). The
+                      ExceptionChip + aggregate `sites unpriced` chip
+                      move out of the main line and become a quiet
+                      sub-line under the date, matching Purchasing's
+                      row shape. Column one stops being wide and row
+                      heights even out. Severity-fires-on-both-modes
+                      note from HS FB1 2026-08-25 still holds. */}
+                  <span className="kpi-tbl-weekbtn-sub">
+                    <ExceptionChip severity={sev} week={w} todayISO={todayISO} />
+                    {mode === "aggregate" && exceptionMemberCount > 0 && (
+                      <span className="kpi-tbl-flag kpi-flag-warn">⚠ {exceptionMemberCount} site{exceptionMemberCount === 1 ? "" : "s"} unpriced</span>
+                    )}
+                  </span>
                 </button>
               </td>
               <td>
@@ -1142,7 +1156,7 @@ function FragmentRows({
               </td>
               {showShare && <td className="kpi-tbl-shrcol" />}
               <td className="num">{fmtHrs(hrs)}</td>
-              <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>
+              {showOT && <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>}
               {showHoliday && <td className={`num ${w.hours_double_time > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_double_time > 0.004 ? fmtHrs(w.hours_double_time) : "–"}</td>}
               {/* HS FB1 hotfix 2026-08-25: week-row Unapproved column
                   reads draft_hours (approval-status). Pre-fix, closed
@@ -1184,7 +1198,7 @@ function FragmentRows({
 }
 
 function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFromRollup, weekInProgress, redact }) {
-  const { showHoliday, showUnpriced, showRate, showShare } = columns;
+  const { showHoliday, showUnpriced, showRate, showShare, showOT } = columns;
   const sharePct = weekAmount > 0 ? Math.max(0, Math.min(100, (child.amount / weekAmount) * 100)) : 0;
   const rate = blendedRate({ dollars: child.amount, hours: child.hours });
   const sev = child.coverage_state;
@@ -1273,7 +1287,7 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFro
         )
       )}
       <td className="num">{fmtHrs(child.hours)}</td>
-      <td className={`num ${child.hours_ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_ot > 0.004 ? fmtHrs(child.hours_ot) : "–"}</td>
+      {showOT && <td className={`num ${child.hours_ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_ot > 0.004 ? fmtHrs(child.hours_ot) : "–"}</td>}
       {showHoliday && <td className={`num ${child.hours_holiday > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_holiday > 0.004 ? fmtHrs(child.hours_holiday) : "–"}</td>}
       {showUnpriced && <td className={`num ${child.hours_unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_unpriced > 0.004 ? fmtHrs(child.hours_unpriced) : "–"}</td>}
       {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
