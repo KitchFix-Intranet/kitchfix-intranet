@@ -169,6 +169,13 @@
 
 import crypto from "node:crypto";
 import { getServiceClient } from "@/lib/supabase";
+import { SEBASTIAN_EMAIL, AR_EMAIL } from "@/lib/billing/recipients";
+
+// sc-52 (Kevin ruling 2026-10-05): every live SC invoice Bccs the KitchFix
+// billing pair. These are the same two addresses QBO auto-fills on manually
+// created invoices, so an SC invoice and a hand-made one now carry the same
+// internal copies. Imported rather than re-typed - one source per address.
+export const INVOICE_BCC = [SEBASTIAN_EMAIL, AR_EMAIL];
 
 // ─── Fences ───────────────────────────────────────────────────────
 // PR-F: per-mode fence. Test mode allows ONLY the ZZ TEST customer;
@@ -866,6 +873,26 @@ export async function postInvoiceDraft(payload, ctx) {
       fetchImpl: customerFetch,
     });
     if (billEmail) outgoing.BillEmail = { Address: billEmail };
+
+    // sc-52: Cc + Bcc. QBO attaches its stored customer defaults only when
+    // QBO itself creates the invoice - an API create bypasses that path and
+    // "Review and send" does not back-fill it. The defaults are not readable
+    // through the Customer API (verified across 6 minorversions), so we carry
+    // them: Bcc is the constant KitchFix pair, Cc is the client's own AP
+    // address from sc_qbo_account_map.qbo_bill_email_cc.
+    //
+    // A missing Cc is NOT fatal - omit it and push anyway. Deliberately the
+    // opposite of sc-49's missing-slot_code refusal: a bad slot code means a
+    // wrong invoice number, a missing Cc means one fewer copy of a correct
+    // invoice.
+    const ccRaw = ctx.accountMap?.qbo_bill_email_cc;
+    const cc = typeof ccRaw === "string" ? ccRaw.trim() : "";
+    if (cc) {
+      outgoing.BillEmailCc = { Address: cc };
+    } else {
+      console.warn(`[qboAdapter] no qbo_bill_email_cc for ${ctx.accountKey || "?"} - BillEmailCc omitted`);
+    }
+    outgoing.BillEmailBcc = { Address: INVOICE_BCC.join(", ") };
   }
 
   // ─── DocNumber: build (live) or reserve (test) ────────────────
