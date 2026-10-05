@@ -1714,12 +1714,40 @@
    this scope only, so the labor page's own .kpi-tbl-wrap outside
    a fold keeps its card. .kpi-tbl-scroll untouched - its
    overflow: auto is what stops the page scrolling sideways at
-   narrow widths. */
+   narrow widths.
+
+   Kevin ruling 2026-10-05 ("full bleed, so the table IS the
+   card"). The remaining 14.4px gutter on both sides was coming
+   from .kpi-ov-cb's side padding, measurable on the live DOM as
+   a 15.5px seam between band edge and card edge. The wrapper now
+   negative-margins out of .kpi-ov-cb's inline + bottom padding
+   so the table reaches the card's inner edge. Container padding
+   stays intact for its OTHER children (warn strips, footnotes
+   that should keep their inset). The wrapper carries overflow:
+   hidden from kpi.css:3392, so a bottom-only radius clips the
+   tinted total row onto the card's curve. No overflow:hidden on
+   the fold card itself - HelpPop opens below the collapsed
+   header and would be clipped. */
 .kpi-app .kpi-ov-fold-card .kpi-tbl-wrap {
   background: transparent;
   border: 0;
-  border-radius: 0;
+  border-radius: 0 0 var(--kpi-card-r) var(--kpi-card-r);
   box-shadow: none;
+  margin-left: calc(var(--kpi-sp-4) * -1);
+  margin-right: calc(var(--kpi-sp-4) * -1);
+  margin-bottom: calc(var(--kpi-sp-4) * -1);
+}
+/* Same bleed for the Purchasing fold. Its wrapper + scroll roles
+   are combined on one div (.kpi-ov-cp-led-scroll at
+   current-period.css:906, overflow-y: auto); Labor splits them
+   across .kpi-tbl-wrap + .kpi-tbl-scroll. Scoped to the fold so
+   the standalone PurchasingLedger (.kpi-ov-cp-led-card) is
+   unaffected - that page has its own card chrome by design. */
+.kpi-app .kpi-ov-fold-card .kpi-ov-cp-led-scroll {
+  border-radius: 0 0 var(--kpi-card-r) var(--kpi-card-r);
+  margin-left: calc(var(--kpi-sp-4) * -1);
+  margin-right: calc(var(--kpi-sp-4) * -1);
+  margin-bottom: calc(var(--kpi-sp-4) * -1);
 }
 /* Consolidation PR 1 · commit 4 (2026-09-22). WeekTable renders
    .kpi-tbar unconditionally. boardKind="single_period_in_progress"
