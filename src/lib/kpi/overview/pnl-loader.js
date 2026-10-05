@@ -350,6 +350,104 @@ export async function loadScDailyRevenue(supa, { members, start, end, today }) {
   return { data: out };
 }
 
+// ─── sc_daily_revenue carve-out reader (R-SC-CARVE, 2026-10-05) ─────
+//
+// Sibling to loadScDailyRevenue. Resolves `carveOuts` group names to
+// service_ids via sc_services joined to sc_service_groups, then sums
+// sc_daily_revenue for just those services into
+//   Map<account, Map<lineCode, Map<day, amount>>>
+//
+// The output carries lineCode so the picker in periodBasis.js knows
+// which line to populate when the carve-out branch fires. Today
+// TBR - FL has one entry (Boys & Girls Club -> 2200); the per-line
+// nesting keeps the shape future-safe if a second group ever carves
+// to a different line without reworking the loader.
+//
+// Guards match loadScDailyRevenue exactly: NOT is_non_revenue on
+// sc_daily_revenue rows (§5.10), capBeforeToday upper bound (future
+// days carry projected counts), and the stable (account_key,
+// service_date, service_id) order chain for pagination.
+//
+// Resolution rules:
+//   - By group NAME, not service name. Services get renamed; groups
+//     do not. A service added to the group after the fact
+//     automatically joins the carve-out.
+//   - No `active = true` filter on sc_services or sc_service_groups.
+//     Historical dollars tagged with a service_id that is now
+//     inactive still carve - the dollars landed when the service was
+//     active, and verified history reads pnl_actuals anyway (the
+//     picker only consults this map when src.source === "sc_daily_
+//     revenue").
+export async function loadScDailyRevenueCarveOut(supa, { carveOuts, start, end, today }) {
+  if (!carveOuts || carveOuts.size === 0) return { data: new Map() };
+  const effectiveEnd = today ? capBeforeToday(end, today) : end;
+  if (!effectiveEnd || effectiveEnd < start) return { data: new Map() };
+
+  const accounts = [...carveOuts.keys()];
+
+  // Resolve (account, service_id) -> lineCode via group lookup. Join
+  // sc_services to sc_service_groups and keep only services whose
+  // group_name appears in the account's carve-out map.
+  const svcToLine = new Map();   // Map<acct, Map<service_id, lineCode>>
+  for (const acctChunk of chunk(accounts, IN_CHUNK)) {
+    const q = await supa
+      .from("sc_services")
+      .select("id, account_key, sc_service_groups!inner(group_name)")
+      .in("account_key", acctChunk);
+    if (q.error) return { error: q.error, scope: "sc_services_carve_out_resolve" };
+    for (const r of q.data || []) {
+      const acct = r.account_key;
+      const grpName = r.sc_service_groups?.group_name;
+      if (!grpName) continue;
+      const lineCode = carveOuts.get(acct)?.get(grpName);
+      if (!lineCode) continue;
+      if (!svcToLine.has(acct)) svcToLine.set(acct, new Map());
+      svcToLine.get(acct).set(r.id, lineCode);
+    }
+  }
+  if (svcToLine.size === 0) return { data: new Map() };
+
+  const serviceIds = [];
+  for (const m of svcToLine.values()) for (const id of m.keys()) serviceIds.push(id);
+
+  const out = new Map();  // Map<acct, Map<lineCode, Map<day, amount>>>
+  for (const svcChunk of chunk(serviceIds, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const q = await supa
+        .from("sc_daily_revenue")
+        .select("account_key, service_date, service_id, actual_revenue, is_non_revenue")
+        .in("service_id", svcChunk)
+        .gte("service_date", start)
+        .lte("service_date", effectiveEnd)
+        .not("is_non_revenue", "is", true)
+        // Same stable order chain as loadScDailyRevenue - the
+        // (account_key, service_date, service_id) triple uniquely
+        // identifies a sc_daily_revenue row.
+        .order("account_key")
+        .order("service_date")
+        .order("service_id")
+        .range(from, from + PS_DEFAULT - 1);
+      if (q.error) return { error: q.error, scope: "sc_daily_revenue_carve_out" };
+      const rows = q.data || [];
+      for (const r of rows) {
+        const acct = String(r.account_key);
+        const lineCode = svcToLine.get(acct)?.get(r.service_id);
+        if (!lineCode) continue;
+        if (!out.has(acct)) out.set(acct, new Map());
+        const perAcct = out.get(acct);
+        if (!perAcct.has(lineCode)) perAcct.set(lineCode, new Map());
+        const perLine = perAcct.get(lineCode);
+        const day = r.service_date;
+        perLine.set(day, (perLine.get(day) || 0) + Number(r.actual_revenue || 0));
+      }
+      if (rows.length < PS_DEFAULT) break;
+      from += PS_DEFAULT;
+    }
+  }
+  return { data: out };
+}
+
 // ─── Period state resolver (derived + record) ───────────────────────
 //
 // Combines calendar-derived close (periods.js periodEndISO) with the
