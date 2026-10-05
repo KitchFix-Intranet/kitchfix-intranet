@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   resolveRecipients,
   NOTIFICATION_TYPES,
-  KEVIN_EMAIL, SEBASTIAN_EMAIL, JOE_EMAIL, JOSH_EMAIL, AP_EMAIL,
+  KEVIN_EMAIL, SEBASTIAN_EMAIL, JOE_EMAIL, JOSH_EMAIL, AR_EMAIL,
 } from "../recipients.js";
 
 // ─── F2: test-mode returns Kevin only, for every (notification, account) ──
@@ -73,9 +73,10 @@ test("F3 N1: static + salaried + submitter + RDO + AP (all TO)", () => {
   });
   // #1164 (2026-09-17): Joe + Josh dropped from the hardcoded N1 list.
   // They remain exported constants for other notification types.
-  // 2026-09-24: AP_EMAIL added to N1 only (not N2 / N3.reminder / N3.urgent).
+  // 2026-09-24: the AR mailbox added to N1 only (not N2 / N3.reminder /
+  // N3.urgent). Renamed AP_EMAIL -> AR_EMAIL 2026-10-05, see recipients.js.
   assert.deepEqual([...out.to].sort(), [
-    SEBASTIAN_EMAIL, KEVIN_EMAIL, AP_EMAIL,
+    SEBASTIAN_EMAIL, KEVIN_EMAIL, AR_EMAIL,
     "l.ochoa@kitchfix.com", "chef2@kitchfix.com",
     "site.leader@kitchfix.com",
     "s.lynch@kitchfix.com",
