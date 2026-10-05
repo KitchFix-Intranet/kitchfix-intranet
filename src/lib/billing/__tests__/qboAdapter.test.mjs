@@ -26,8 +26,10 @@ import {
   formatWeekStartYYMMDD,
   BuildDocNumberError,
   parseQboFaultCode,
+  INVOICE_BCC,
   _internals,
 } from "../qboAdapter.js";
+import { SEBASTIAN_EMAIL, AR_EMAIL } from "../recipients.js";
 import { makeSupaMock } from "./_supa-mock.mjs";
 
 // sc-48: real QBO echoes the sent DocNumber back in the create
@@ -920,4 +922,127 @@ test("sc-49 6140 handler: retry uses SAME docNumber (deterministic)", async () =
   assert.equal(captured.length, 2, "one retry on 5xx");
   assert.equal(captured[0], "KFTXRAZ260727MN");
   assert.equal(captured[1], "KFTXRAZ260727MN", "retry re-sends the SAME docNumber (deterministic)");
+});
+
+// ─── sc-52: BillEmailCc + BillEmailBcc on live pushes ─────────────
+//
+// QBO stores per-customer Cc/Bcc defaults that it auto-fills on
+// manual UI create. The API create bypasses that path, so the SC
+// invoice goes out empty-handed. The defaults are not readable
+// through the Customer API (sc-50 round-2 verified), so we carry
+// them: Cc per account via sc_qbo_account_map.qbo_bill_email_cc,
+// Bcc as the KitchFix constant INVOICE_BCC. Live mode only - test
+// pushes must not Cc/Bcc real people.
+//
+// These tests inject fetchCustomerImpl so the gated block runs;
+// the Cc/Bcc wiring sits inside the same `if (!isTest && customerFetch)`
+// guard as the BillEmail read.
+
+test("sc-52 Cc/Bcc: live push with qbo_bill_email_cc set -> BillEmailCc + BillEmailBcc on payload", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => { captured = p; return okEcho("LIVE-CC-1", p); };
+  const fetchCustomerImpl = async () => ({
+    ok: true, status: 200,
+    body: JSON.stringify({ Customer: { Id: "19000" } }),  // no PrimaryEmailAddr; BillEmail omit is fine
+  });
+
+  const res = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live", qbo_bill_email_cc: "accountspayable@texasrangers.com" },
+      qboMode: "live",
+      deps: { supa, fetchImpl, fetchCustomerImpl },
+    },
+  );
+
+  assert.equal(res.status, "created");
+  assert.equal(captured.BillEmailCc?.Address, "accountspayable@texasrangers.com",
+    "Cc copied from accountMap.qbo_bill_email_cc");
+  assert.equal(captured.BillEmailBcc?.Address, `${SEBASTIAN_EMAIL}, ${AR_EMAIL}`,
+    "Bcc is the KitchFix constant pair, comma-joined");
+});
+
+test("sc-52 Cc/Bcc: live push with qbo_bill_email_cc NULL -> BillEmailCc absent, BillEmailBcc still present", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => { captured = p; return okEcho("LIVE-CC-2", p); };
+  const fetchCustomerImpl = async () => ({
+    ok: true, status: 200,
+    body: JSON.stringify({ Customer: { Id: "19000" } }),
+  });
+
+  const res = await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live", qbo_bill_email_cc: null },
+      qboMode: "live",
+      deps: { supa, fetchImpl, fetchCustomerImpl },
+    },
+  );
+
+  assert.equal(res.status, "created", "push proceeds despite missing Cc (non-fatal)");
+  assert.equal(captured.BillEmailCc, undefined,
+    "no BillEmailCc on the payload when the column is null");
+  assert.equal(captured.BillEmailBcc?.Address, `${SEBASTIAN_EMAIL}, ${AR_EMAIL}`,
+    "Bcc is still set - internal copy always goes out");
+});
+
+test("sc-52 Cc/Bcc: live push with qbo_bill_email_cc = '   ' whitespace -> treated as null", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => { captured = p; return okEcho("LIVE-CC-3", p); };
+  const fetchCustomerImpl = async () => ({
+    ok: true, status: 200,
+    body: JSON.stringify({ Customer: { Id: "19000" } }),
+  });
+
+  await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      accountMap: { ...TXR_MAP, qbo_mode: "live", qbo_bill_email_cc: "   \t  " },
+      qboMode: "live",
+      deps: { supa, fetchImpl, fetchCustomerImpl },
+    },
+  );
+
+  assert.equal(captured.BillEmailCc, undefined,
+    "whitespace-only Cc must be treated as missing - do not send BillEmailCc:{Address:'   '} to QBO");
+  assert.equal(captured.BillEmailBcc?.Address, `${SEBASTIAN_EMAIL}, ${AR_EMAIL}`);
+});
+
+test("sc-52 Cc/Bcc: test-mode push -> neither BillEmailCc nor BillEmailBcc on payload", async () => {
+  // Test pushes route to ZZ TEST (22463) and must never Cc or Bcc real
+  // people. The gating `if (!isTest && ...)` block the sc-52 wiring
+  // sits inside prevents both fields on test-mode.
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => { captured = p; return okEcho("TEST-CC-1", p); };
+
+  await postInvoiceDraft(
+    fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }),
+    {
+      ...BASE_CTX,
+      // Even with a Cc set on the account map, test mode must suppress.
+      accountMap: { ...TXR_MAP, qbo_mode: "test", qbo_bill_email_cc: "accountspayable@texasrangers.com" },
+      qboMode: "test",
+      deps: { supa, fetchImpl },
+    },
+  );
+
+  assert.equal(captured.BillEmailCc,  undefined, "BillEmailCc must not be sent in test mode");
+  assert.equal(captured.BillEmailBcc, undefined, "BillEmailBcc must not be sent in test mode");
+});
+
+test("sc-52 Cc/Bcc: INVOICE_BCC equals [SEBASTIAN_EMAIL, AR_EMAIL] (not hardcoded literals)", () => {
+  // Guards against someone re-typing the addresses later. The one-source
+  // discipline is the whole reason the constant exists; this test holds
+  // the discipline in place against drift.
+  assert.deepEqual(INVOICE_BCC, [SEBASTIAN_EMAIL, AR_EMAIL]);
+  assert.equal(INVOICE_BCC.length, 2);
+  // String-level sanity: joined form matches what the payload will send.
+  assert.equal(INVOICE_BCC.join(", "), `${SEBASTIAN_EMAIL}, ${AR_EMAIL}`);
 });
