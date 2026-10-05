@@ -3435,18 +3435,32 @@
 .kpi-tbl-ot { color: var(--amber-600); font-weight: 700; }
 
 /* Period band (V9-8) - data row, sticky under header (V9-11).
-   V36 - collapsed bands lose their steel-blue fill so the eight
-   period rows do not compete with the cards. The only tinted band
-   is the one the user has open; the tint means "expanded" now, not
-   "band". The :has() selector reads aria-expanded on the chevron. */
+   Kevin ruling 2026-10-05 (artifact "KPI Tables · Band System",
+   board "Direction C · two-tier band, tinted"): TIER 1 period band
+   is navy-50 with a 2px navy-700 rule above and NO dark fill. A
+   band separates; it does not compete with the data it organizes.
+   This base rule is the only one; the PR-1222 fold-panel navy-900
+   override that competed with surface-card was removed in the same
+   commit (one source, one place). Same tier is used by Labor's
+   period band, Labor's total row, and the Purchasing period footer.
+
+   Row height --kpi-row resolves to 36px at the default 0.9 scale.
+   Label is 11.25 body 800 mixed case (navy-900); value cells
+   (`.num`) bump to 13.5 medium 800. Numeric cells inherit the
+   row's weight and background from this rule. */
 .kpi-tbl-band > td {
-  background: var(--surface-card);
-  border-top: 1px solid var(--n-300);
+  background: var(--navy-50);
+  color: var(--navy-900);
+  font-weight: 800;
+  font-size: var(--kpi-t-body);
+  border-top: 2px solid var(--navy-700);
   border-bottom: 1px solid var(--n-100);
-  font-weight: 800; font-size: var(--kpi-t-body);
-  color: var(--n-900);
+  height: var(--kpi-row);
   position: sticky; top: var(--hdr); z-index: 10;
   transition: background 0.12s;
+}
+.kpi-tbl-band > td.num {
+  font-size: var(--kpi-t-medium);
 }
 /* 2026-08-26 polish round 2 item 6 - zero-labor period row. Single
    muted row rather than a full expandable band with subtotals; the
@@ -3464,17 +3478,15 @@
   font-style: italic;
 }
 .kpi-tbl-zero-period-msg { color: var(--text-subtle); }
-.kpi-tbl-band:hover > td { background: var(--n-100); }
-/* V36 - the open band is the only tinted row. The class rule is
-   the primary trigger (WeekTable.js toggles .kpi-tbl-band-open
-   alongside aria-expanded); the :has() rule is a defensive twin so
-   the tint applies even if the class shim ever falls out. Split into
-   separate rule blocks (grouping the two selectors caused older
-   engines to drop the whole rule silently on the :has() half). */
+.kpi-tbl-band:hover > td { background: var(--navy-100); }
+/* Open state keeps a one-step lift (navy-50 -> navy-100) + a 3px
+   navy-700 left rail so the expanded band reads distinct from its
+   siblings. Light fill only - Kevin's "no dark fill anywhere" rule
+   covers navy-700/800/900, not the step above the base. The :has()
+   twin stays as a defensive fallback for engines that drop the
+   class shim. */
 .kpi-tbl-band.kpi-tbl-band-open > td {
   background: var(--navy-100);
-  border-top-color: var(--navy-bd);
-  color: var(--navy-700);
 }
 .kpi-tbl-band.kpi-tbl-band-open > td:first-child {
   box-shadow: inset 3px 0 0 var(--navy-700);
@@ -3482,8 +3494,6 @@
 .kpi-tbl-band.kpi-tbl-band-open:hover > td { background: var(--navy-100); }
 .kpi-tbl-band:has(> td .kpi-tbl-bandbtn[aria-expanded="true"]) > td {
   background: var(--navy-100);
-  border-top-color: var(--navy-bd);
-  color: var(--navy-700);
 }
 .kpi-tbl-band:has(> td .kpi-tbl-bandbtn[aria-expanded="true"]) > td:first-child {
   box-shadow: inset 3px 0 0 var(--navy-700);
@@ -3504,8 +3514,8 @@
 }
 .kpi-tbl-bandbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-bandsub {
-  font-weight: 500; font-size: var(--kpi-t-label);
-  color: var(--n-600); margin-left: var(--kpi-sp-3);
+  font-weight: 500; font-size: var(--kpi-t-meta);
+  color: var(--navy-500); margin-left: var(--kpi-sp-3);
   letter-spacing: 0;
 }
 
@@ -3522,14 +3532,40 @@
 .kpi-tbl-week:hover > td { background: var(--n-100); }
 /* V35-4 - same hover as the band button; the week chevron opens the
    worker table and needs the same "clickable" cue. */
+/* Kevin ruling 2026-10-05 (table polish). Week button becomes a
+   two-line layout: date on top, optional ExceptionChip + aggregate
+   "N sites unpriced" chip on a quiet sub-line underneath. The old
+   render stacked the chips inline on the right of the date, which
+   widened column one and made row heights inconsistent across the
+   table. Column one is now stable; chip presence changes row
+   height by one sub-line, not by column width. */
 .kpi-tbl-weekbtn {
-  display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   background: transparent; border: 0; color: inherit;
   font: inherit; font-weight: 600; cursor: pointer;
   width: 100%; text-align: left;
   padding: var(--kpi-sp-1) var(--kpi-sp-2);
   border-radius: var(--kpi-ctl-r);
 }
+.kpi-tbl-weekbtn-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+}
+.kpi-tbl-weekbtn-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  /* Line up the sub-line roughly under the date, past the chevron
+     cluster (15px chev + sp-2 gap). The sub-line's own chip pills
+     drop their default margin-left so they tuck tight. */
+  padding-left: calc(15px + var(--kpi-sp-2));
+}
+.kpi-tbl-weekbtn-sub:empty { display: none; }
+.kpi-tbl-weekbtn-sub .kpi-tbl-flag { margin-left: 0; }
 .kpi-tbl-weekbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-chev {
   display: inline-block; width: 15px;
@@ -3696,34 +3732,31 @@
    on the page, not the least). Selectors are prefixed with `.kpi-tbl
    tbody` to beat `.kpi-tbl tbody td:first-child { color: var(--n-900) }`
    which was silently winning on the label cell. */
-/* V30-1 - table total row at MEDIUM (15). Was body (12.5). Label
-   cell keeps its uppercase tracking + LABEL size so it reads as an
-   eyebrow for the numeric cells. */
+/* Kevin ruling 2026-10-05 (band system). The table total row is
+   TIER 1 - same treatment as the period band two rows above
+   holding the same figures. Prior render was a third treatment
+   (navy-900 fill + white text + label-size uppercase) that read
+   as a different concept than the band it summed; the band and
+   total now share one visual language. Dark overrides on
+   .kpi-vb-d-*, .kpi-tbl-nil, and .kpi-vb-bar deleted - they
+   existed to re-establish contrast against the dark fill. */
 .kpi-tbl tbody .kpi-tbl-total > td {
-  background: var(--navy-900);
-  color: #FFFFFF;
+  background: var(--navy-50);
+  color: var(--navy-900);
   font-weight: 800;
   font-size: var(--kpi-t-medium);
-  height: var(--kpi-row-2l);
   border: 0;
+  border-top: 2px solid var(--navy-700);
+  height: var(--kpi-row);
   position: sticky; bottom: 0; z-index: 15;
 }
 .kpi-tbl tbody .kpi-tbl-total > td:first-child {
-  color: #FFFFFF;
-  letter-spacing: 0.08em;
-  font-size: var(--kpi-t-label);
-  text-transform: uppercase;
+  color: var(--navy-900);
+  letter-spacing: 0;
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  text-transform: none;
 }
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-good { color: #8BE0A4; }
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-bad  { color: #FCA5A5; }
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-mute,
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-neut { color: #FFFFFF; }
-.kpi-tbl tbody .kpi-tbl-total .kpi-tbl-nil   { color: #FFFFFF; }
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar { background: rgba(255, 255, 255, 0.18); }
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > i { background: #8BE0A4; }
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > i.kpi-vb-fill-over,
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > .kpi-vb-over { background: #FCA5A5; }
-.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > .kpi-vb-tick { background: #FFFFFF; }
 
 /* V25-19 - `Names hidden` chip sits on the WEEK column header when
    redact=1 and worker rows are actually visible. Neutral treatment,
@@ -3752,6 +3785,14 @@
 .kpi-vb {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-3);
 }
+/* Kevin ruling 2026-10-05 (table polish). vs-adjusted micro-bars
+   (~44x4px) retired. The bar encoded magnitude by color + a sliver
+   of width - the only chart element in either table - and the
+   delta number sits right beside it already doing the job. Keep
+   the component intact and the CSS below so the no-bar render
+   degrades gracefully in callers that still expect .kpi-vb-bar in
+   the DOM; this rule is the only one applied in production. */
+.kpi-tbl .kpi-vb-bar { display: none; }
 .kpi-vb-bar {
   width: var(--kpi-vb-bar); height: var(--kpi-sp-2);
   border-radius: 3px;

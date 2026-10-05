@@ -1791,63 +1791,13 @@
   box-shadow: none;
 }
 
-/* Editorial (2026-09-25) · Labor fold takes the same grammar as
-   Purchasing. Period band goes solid navy on the settled state and
-   navy-700 when it is the currently running period, matching the
-   Purchasing week band. Rail on rows that need attention retunes
-   from amber-600 to amber-500 to align with the Purchasing rail
-   (same signal, same colour token). Scoped to the fold panel so the
-   standalone Labor page still ships its V36 grammar - the standalone
-   page has different visual context (its own header, its own rules)
-   and its own rulings; the Editorial pass only touches the fold. */
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td {
-  background: var(--navy-900);
-  color: var(--n-0);
-  border-top: 1px solid var(--navy-800);
-  border-bottom: 1px solid var(--navy-800);
-}
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band:hover > td {
-  background: var(--navy-800);
-}
-/* Running (in-progress) period band lifts one step to navy-700 so the
-   band that is not yet closed reads distinct against the settled
-   ones. WeekTable does not carry a data-in-progress attribute on the
-   band today, so this scopes via the same `isPeriodInProgress`
-   condition as the label render: the band is running iff the current
-   week is within its bounds, which today the panel infers from
-   containing an open band (that heuristic breaks for closed periods
-   the user has expanded). Correct scoping needs a WeekTable JSX prop
-   change; for this PR the settled navy applies to all bands and the
-   open state keeps its existing navy-100 lift on the OPEN band. */
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td {
-  background: var(--navy-100);
-  color: var(--navy-700);
-}
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open:hover > td {
-  background: var(--navy-100);
-}
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td:first-child {
-  box-shadow: inset 3px 0 0 var(--navy-700);
-}
-/* The band button + its sub-label sit inside the td; both need to
-   pick up the white text against navy. The chevron uses text-subtle
-   which reads dim on navy - restate it. */
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-bandbtn { color: var(--n-0); }
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-bandsub { color: var(--navy-200); }
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-chev   { color: var(--navy-200); }
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band > td .kpi-tbl-bandbtn:hover {
-  background: var(--navy-800);
-  color: var(--n-0);
-}
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td .kpi-tbl-bandbtn,
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td .kpi-tbl-bandsub,
-.kpi-app .kpi-ov-fold-panel .kpi-tbl-band.kpi-tbl-band-open > td .kpi-tbl-chev {
-  color: var(--navy-700);
-}
-/* Rail alignment. Purchasing rail is amber-500; Labor's existing
-   .kpi-tbl-attn rail is amber-600. Retune the fold-scoped rail so
-   the two tables carry the same edge - one colour token for "row
-   needs work", regardless of subject. */
+/* Kevin ruling 2026-10-05 (band system). PR-1222's fold-panel navy-900
+   override on .kpi-tbl-band was folded into the base rule at
+   kpi.css:3442 (one source, one place). The standalone Labor page and
+   the Overview fold now share the same tier-1 treatment. The amber
+   rail retune (amber-600 -> amber-500) for exception rows survives as
+   a fold-scoped tune so the two tables inside the fold carry the same
+   edge color token. */
 .kpi-app .kpi-ov-fold-panel .kpi-tbl-attn > td:first-child {
   box-shadow: inset 3px 0 0 var(--amber-500);
 }

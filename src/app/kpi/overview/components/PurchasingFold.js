@@ -123,18 +123,17 @@ function typeLabel(r) {
   if (r.source === "rippling_spend")      return "Card";
   return "—";
 }
-// Sub-line rendered under the vendor name. Cards flag "Needs coding"
-// (warn tone); coded cards render nothing. Invoices render their
-// captured status (Submitted / Returned) in a neutral tone. Bill.com
-// / upload rows have no status field, so no sub-line.
+// Sub-line rendered under the vendor name. Kevin ruling 2026-10-05:
+// a sub-line here doubles the row height for the whole table, so
+// restrict it to EXCEPTION states only. "Submitted" is retired - it
+// renders on effectively every invoice row and the label is almost
+// always identical. "Needs coding" moves inline next to the vendor
+// name (see JSX render below) so the row stays one line. "Returned"
+// kept as a sub-line because it IS an exception the operator must
+// read.
 function statusSub(r) {
-  if (r.source === "rippling_spend") {
-    return r.uncodedLines > 0 ? { text: "Needs coding", warn: true } : null;
-  }
-  if (r.source === "invoice_submissions") {
-    if (r.status === "returned") return { text: "Returned", warn: false };
-    if (r.status === "sent")     return { text: "Submitted", warn: false };
-    return null;
+  if (r.source === "invoice_submissions" && r.status === "returned") {
+    return { text: "Returned", warn: false };
   }
   return null;
 }
@@ -534,6 +533,9 @@ function PurchasingWeekBand({ band, showVehicle }) {
                     <span className="kpi-ov-cp-led-sga" title="Invoice included SG&A lines that are not part of COGS; the row total is the COGS portion.">
                       {" "}SG&amp;A {fmt0(r.sga_removed)}
                     </span>
+                  )}
+                  {rail && (
+                    <span className="kpi-ov-pf-vneedscoding">Needs coding</span>
                   )}
                 </span>
                 {sub && (

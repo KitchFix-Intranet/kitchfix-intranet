@@ -988,13 +988,26 @@
   background: var(--navy-50);
   color: var(--navy-700);
 }
+/* Kevin ruling 2026-10-05 (band system, TIER 1). Period footer on
+   the Purchasing fold matches Labor's total row: navy-50 fill, 2px
+   navy-700 rule above, 36px row, label 11.25 body 800 navy-900
+   mixed case (no uppercase), value cells 13.5 medium 800. */
 .kpi-app .kpi-ov-cp-led-foot td {
+  background: var(--navy-50);
+  color: var(--navy-900);
   font-weight: 800;
-  background: var(--cp-tot-bg);
+  font-size: var(--kpi-t-medium);
   border-top: 2px solid var(--navy-700);
   border-bottom: none;
+  height: var(--kpi-row);
   padding-top: 10px;
   padding-bottom: 11px;
+}
+.kpi-app .kpi-ov-cp-led-foot td.kpi-ov-cp-led-l {
+  font-size: var(--kpi-t-body);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--navy-900);
 }
 .kpi-app .kpi-ov-cp-led-footnote {
   padding: 10px 18px;
@@ -1037,38 +1050,31 @@
    summing the week. Three states: settled (past), in-progress
    (contains today), ahead (future).
 
-   Editorial (2026-09-25). Bands go solid navy - against the navy
-   dashboard header and the navy period-total rule, the prior grey
-   band read as absence. White text; the week total (rightmost cell)
-   sizes up to --kpi-t-medium to read as the summary. The running
-   week keeps a compact amber dot + "in progress" tag in amber-200
-   rather than a full amber wash - a wash on every current-week band
-   would drown out the transaction rows it is meant to summarise. */
+   Kevin ruling 2026-10-05 (band system, TIER 2). Week bands lose
+   their dark fill: navy-50 base, 1px navy-100 hairline above AND
+   below, label 9px kpi-t-label 800 uppercase 0.4px tracking in
+   navy-700. ~26px row. Keeps the in-progress amber dot + tag so the
+   running week stays distinct without a full amber wash.
+   The settled / in-progress / ahead state differentiation is now
+   carried by the tag only - the band fill itself is one color across
+   all three. */
 .kpi-app .kpi-ov-pf-wband td {
   font-size: var(--kpi-t-label);
   font-weight: 800;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  padding: 6px 14px;
-  background: var(--navy-900);
-  color: var(--n-0);
-  border-top: 1px solid var(--navy-800);
-  border-bottom: 1px solid var(--navy-800);
+  padding: 8px 14px;
+  background: var(--navy-50);
+  color: var(--navy-700);
+  border-top: 1px solid var(--navy-100);
+  border-bottom: 1px solid var(--navy-100);
 }
 .kpi-app .kpi-ov-pf-wband td.kpi-ov-cp-led-l {
   padding-left: 18px;
   text-align: left;
 }
-.kpi-app .kpi-ov-pf-wband-run td {
-  background: var(--navy-700);
-}
-.kpi-app .kpi-ov-pf-wband-ahead td {
-  background: var(--navy-900);
-  color: var(--navy-200);
-  font-weight: 700;
-}
 .kpi-app .kpi-ov-pf-wband-label {
-  color: var(--n-0);
+  color: var(--navy-700);
 }
 .kpi-app .kpi-ov-pf-wband-tag {
   display: inline-flex;
@@ -1079,10 +1085,10 @@
   font-weight: 800;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: var(--amber-200);
+  color: var(--amber-600);
 }
 .kpi-app .kpi-ov-pf-wband-tag-ahead {
-  color: var(--navy-200);
+  color: var(--navy-500);
 }
 .kpi-app .kpi-ov-pf-wband-dot {
   width: 6px;
@@ -1090,11 +1096,6 @@
   border-radius: 50%;
   background: var(--amber-500);
   display: inline-block;
-}
-.kpi-app .kpi-ov-pf-wband-total {
-  font-size: var(--kpi-t-medium);
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 /* Editorial (2026-09-25) · Fold-scoped overrides for the shared
@@ -1148,6 +1149,19 @@
 }
 .kpi-app .kpi-ov-pf-vsub-warn {
   color: var(--amber-700);
+}
+/* Kevin ruling 2026-10-05 (table polish). "Needs coding" moves off
+   the sub-line and sits inline next to the vendor name so the row
+   stays one line. Real text (not an icon), --kpi-t-meta in amber-
+   600, encoded by more than color so colour-blind operators still
+   get the signal. The 3px amber rail on the row stays. */
+.kpi-app .kpi-ov-pf-vneedscoding {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  color: var(--amber-600);
+  letter-spacing: 0.2px;
 }
 
 /* Editorial · money + charge-number cells sit in the mono family so
