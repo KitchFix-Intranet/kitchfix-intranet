@@ -1975,8 +1975,16 @@ async function sweepSupersededUncoded({ dryRun }) {
   const ARTIFACT_DIR = path.join(path.dirname(__sweepFilename), "probes", "artifacts");
   if (!fs.existsSync(ARTIFACT_DIR)) fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
   const REVERSAL_PATH = path.join(ARTIFACT_DIR, "r148b_reversal.json");
+  // Kevin ruling 2026-10-05 (nightly fix). Default moved off
+  // ~/Downloads/ (which does not exist on the GitHub runner at
+  // /home/runner/) onto ARTIFACT_DIR, which is created on demand two
+  // lines above. R148B_REVIEW_PATH env override is preserved so a
+  // local run can still drop the file in Downloads. See the write
+  // block below for the non-fatal wrap - the review file is a
+  // convenience artifact for humans; losing it must not fail the
+  // sync.
   const REVIEW_PATH = process.env.R148B_REVIEW_PATH
-    || path.join(homedir(), "Downloads", "kf-r148b-review.json");
+    || path.join(ARTIFACT_DIR, "kf-r148b-review.json");
   const reversal = {
     brief_ref: "R-148B · Kevin ruling 2026-09-24 (mechanism confirmed)",
     schema_version: 2,
@@ -2002,8 +2010,20 @@ async function sweepSupersededUncoded({ dryRun }) {
       coded_twin_count: r.coded_twin_count,
     })),
   };
-  fs.writeFileSync(REVIEW_PATH, JSON.stringify(review, null, 2));
-  console.log(`[r148b] wrote reversal ${REVERSAL_PATH} + review ${REVIEW_PATH} before writes`);
+  // Kevin ruling 2026-10-05: review write is non-fatal. The reversal
+  // file above is the one that matters for undo; the review file is a
+  // convenience for a human reading after the fact. If REVIEW_PATH is
+  // somewhere unwritable (bad env override, missing parent dir on an
+  // overridden path, etc.) we warn and continue - the sweep is
+  // allowed to fall only on its own invariants.
+  let reviewWritten = false;
+  try {
+    fs.writeFileSync(REVIEW_PATH, JSON.stringify(review, null, 2));
+    reviewWritten = true;
+  } catch (e) {
+    console.warn(`[r148b] review write FAILED (non-fatal) · path=${REVIEW_PATH} · ${e.message}`);
+  }
+  console.log(`[r148b] wrote reversal ${REVERSAL_PATH}${reviewWritten ? ` + review ${REVIEW_PATH}` : " · review skipped"} before writes`);
 
   // DELETE-then-INSERT-marker per row. Sequential for isolation - on any
   // failure we know exactly which row broke; already-processed rows are
@@ -2198,8 +2218,13 @@ async function sweepCardAuthorizations({ dryRun }) {
   const ARTIFACT_DIR = path.join(path.dirname(__sweepFilename), "probes", "artifacts");
   if (!fs.existsSync(ARTIFACT_DIR)) fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
   const REVERSAL_PATH = path.join(ARTIFACT_DIR, "r148d_reversal.json");
+  // Kevin ruling 2026-10-05 (nightly fix). Same default move as the
+  // R-148B site above - ~/Downloads/ does not exist on the GitHub
+  // runner, and this REVIEW_PATH would have crashed R-148D the first
+  // night its sweep had rows to write. R148D_REVIEW_PATH env override
+  // preserved. Write below is non-fatal.
   const REVIEW_PATH = process.env.R148D_REVIEW_PATH
-    || path.join(homedir(), "Downloads", "kf-r148d-review.json");
+    || path.join(ARTIFACT_DIR, "kf-r148d-review.json");
   const reversal = {
     brief_ref: "R-148D · Kevin ruling 2026-09-24",
     schema_version: 1,
@@ -2221,8 +2246,15 @@ async function sweepCardAuthorizations({ dryRun }) {
       parent_hex: r.parentHex,
     })),
   };
-  fs.writeFileSync(REVIEW_PATH, JSON.stringify(review, null, 2));
-  console.log(`[r148d] wrote reversal ${REVERSAL_PATH} + review ${REVIEW_PATH} before writes`);
+  // Non-fatal review write, same pattern as R-148B above.
+  let reviewWritten = false;
+  try {
+    fs.writeFileSync(REVIEW_PATH, JSON.stringify(review, null, 2));
+    reviewWritten = true;
+  } catch (e) {
+    console.warn(`[r148d] review write FAILED (non-fatal) · path=${REVIEW_PATH} · ${e.message}`);
+  }
+  console.log(`[r148d] wrote reversal ${REVERSAL_PATH}${reviewWritten ? ` + review ${REVIEW_PATH}` : " · review skipped"} before writes`);
 
   let swept = 0, deleted = 0, inserted = 0;
   const failures = [];
