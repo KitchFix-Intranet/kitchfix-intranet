@@ -15,6 +15,36 @@ import { DOLLAR_COVERAGE_FLOOR } from "../kpi/floors.js";
 import { dedupePaySegments } from "./paySegmentDedupe.js";
 import { APPROVAL_TRACKING_START } from "./approvalsTracking.js";
 import { fetchAllOffset, fetchAllKeyset } from "../rippling/paginate.js";
+import { classifyBucket, loadBaseHourlyWages, HOLIDAY_DOUBLE_RATE_RATIO } from "./earningBucket.js";
+
+// Guard ceilings · Kevin ruling 2026-10-05 (holiday reclassification,
+// updated post-review). Both derives emit `reclassified` and
+// `unevaluable` on every run. A jump past either ceiling fails the
+// step rather than writing silently - the hours_regular > 48 assert
+// cannot see a holiday-to-regular relabel because it lands at exactly
+// the 40-hour cap, which is why the 2026-10-02 Rippling behavior
+// change shipped quietly for three days.
+//
+// Baselines measured 2026-10-05 against the derive's actual input
+// (raw pay_segments + presence + dedupePaySegments + attribute):
+//   reclassified          = 5   · the five documented holiday relabels
+//   unevaluable segments  = 0
+//   distinct unevaluable  = 0   · every one of the 94 attributed live
+//     workers              workers has at least one DEFAULT comp row
+//                          with a usable hourly_wage. 155 workers in
+//                          the full comp table have multiple rows
+//                          (DEFAULT + VARIED or similar);
+//                          loadBaseHourlyWages's skip-on-null-wage loop
+//                          keeps the DEFAULT wage set regardless of
+//                          iteration order.
+//
+// UNEVALUABLE_WORKERS_CEILING is on DISTINCT WORKERS, not segments.
+// A segment count grows every night those workers log shifts; the
+// worker count only moves when payroll setup changes (a new hire
+// routed to a VARIED-only comp entity, a worker reclassified out of
+// DEFAULT). That is exactly the event worth alarming on.
+const RECLASSIFIED_CEILING = 10;
+const UNEVALUABLE_WORKERS_CEILING = 3;
 //
 // Design decisions this file encodes (playbook v0.7):
 //
@@ -231,6 +261,16 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
     "merged_earning_type_name, multiplier, bucket");
   const earningMap = new Map(emRows.map(m => [m.merged_earning_type_name, m]));
 
+  // Base hourly wage per worker, read from rippling_raw_compensations_
+  // latest. Powers the holiday-reclassification check in classifyBucket
+  // (regular -> double_time when estimated_hourly_rate / base_wage >=
+  // HOLIDAY_DOUBLE_RATE_RATIO). VARIED workers have null hourly_wage by
+  // design and are not in this map; their regular-mapped segments will
+  // land as `unevaluable` from the classifier - counted and ceiling-
+  // guarded, never silently passed.
+  const baseHourlyWages = await loadBaseHourlyWages(supa);
+  log(`  base hourly wages resolved for ${baseHourlyWages.size} workers`);
+
   // ── 3. Raw data ──────────────────────────────────────────────
   // 2026-08-27 - `_latest` DISTINCT ON views now paginated via keyset
   // on rippling_id. See src/lib/rippling/paginate.js for the incident
@@ -442,6 +482,15 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
     return b;
   }
 
+  // Holiday reclassification counters, scoped to this run. Emitted after
+  // the segment loop; threshold-checked after emission. `unevaluable`
+  // is tracked at both segment and worker grain - the ceiling is on
+  // DISTINCT WORKERS (see UNEVALUABLE_WORKERS_CEILING above) because
+  // segments grow with shifts and only setup changes move workers.
+  let reclassifiedCount = 0;
+  let unevaluableCount = 0;
+  const unevaluableWorkerIds = new Set();
+  const reclassifiedLog = [];
   for (const seg of paySegs) {
     const p = seg.payload || {};
     const workerId = p.owner_role?.id;
@@ -469,23 +518,58 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
 
     const etName = p.merged_earning_type_name || null;
     const mapEntry = etName ? earningMap.get(etName) : null;
-    if (!mapEntry) {
-      bucket.hours_premium_other += hrs;
-      bucket.dollarsPremiumOtherX10000 += amtInt;
-      if (etName) bumpUnmapped(etName, seg);
-    } else if (mapEntry.bucket === "regular") {
-      bucket.hours_regular += hrs;
-      bucket.dollarsRegularX10000 += amtInt;
-    } else if (mapEntry.bucket === "overtime") {
-      bucket.hours_overtime += hrs;
-      bucket.dollarsOvertimeX10000 += amtInt;
-    } else if (mapEntry.bucket === "double_time") {
-      bucket.hours_double_time += hrs;
-      bucket.dollarsDoubleTimeX10000 += amtInt;
-    } else {
-      bucket.hours_premium_other += hrs;
-      bucket.dollarsPremiumOtherX10000 += amtInt;
+    const baseWage = baseHourlyWages.get(workerId) ?? null;
+    const verdict = classifyBucket({
+      segmentPayload: p,
+      mapEntry,
+      baseHourlyWage: baseWage,
+    });
+    if (verdict.reclassified) {
+      reclassifiedCount++;
+      reclassifiedLog.push({
+        external_id: p.external_id || null,
+        account_key: attr.account_key,
+        segment_date: segDate,
+        ratio: verdict.ratio,
+        et_name: etName,
+      });
     }
+    if (verdict.unevaluable) {
+      unevaluableCount++;
+      if (workerId) unevaluableWorkerIds.add(workerId);
+    }
+    // Unmapped names also feed earning_type_unmapped so the operator
+    // sees the backlog. classifyBucket returns `premium_other` for a
+    // null mapEntry; the unmapped-table upsert path stays here.
+    if (!mapEntry && etName) bumpUnmapped(etName, seg);
+    switch (verdict.bucket) {
+      case "regular":
+        bucket.hours_regular += hrs;
+        bucket.dollarsRegularX10000 += amtInt;
+        break;
+      case "overtime":
+        bucket.hours_overtime += hrs;
+        bucket.dollarsOvertimeX10000 += amtInt;
+        break;
+      case "double_time":
+        bucket.hours_double_time += hrs;
+        bucket.dollarsDoubleTimeX10000 += amtInt;
+        break;
+      default:
+        bucket.hours_premium_other += hrs;
+        bucket.dollarsPremiumOtherX10000 += amtInt;
+    }
+  }
+  log(`holiday reclassify: ${reclassifiedCount} segments regular -> double_time (ceiling ${RECLASSIFIED_CEILING})`);
+  for (const r of reclassifiedLog) {
+    log(`  reclassified ${r.external_id}  ${r.account_key}  ${r.segment_date}  ratio=${r.ratio.toFixed(4)}  was=${r.et_name}`);
+  }
+  log(`holiday reclassify: ${unevaluableWorkerIds.size} distinct workers unevaluable (${unevaluableCount} regular-mapped segments) (worker ceiling ${UNEVALUABLE_WORKERS_CEILING})`);
+  if (reclassifiedCount > RECLASSIFIED_CEILING) {
+    throw new Error(`holiday reclassify: ceiling exceeded · reclassified=${reclassifiedCount} ceiling=${RECLASSIFIED_CEILING} · Rippling may have changed behavior; stop + reporter investigate before trusting output`);
+  }
+  if (unevaluableWorkerIds.size > UNEVALUABLE_WORKERS_CEILING) {
+    throw new Error(`holiday reclassify: unevaluable-worker ceiling exceeded · distinct_workers=${unevaluableWorkerIds.size} ceiling=${UNEVALUABLE_WORKERS_CEILING} · segments=${unevaluableCount} · a worker without a usable base wage silently skips the holiday upgrade; new VARIED-only comp entity or payroll setup change likely - stop + investigate`);
   }
 
   // ── 9. Second pass: time-entries -> entry_count, hours_without_dollars,

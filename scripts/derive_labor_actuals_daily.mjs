@@ -35,6 +35,16 @@ import { createClient } from "@supabase/supabase-js";
 import { FY_START_ISO } from "../src/app/kpi/labor/lib/periods.js";
 import { dedupePaySegments } from "../src/lib/labor/paySegmentDedupe.js";
 import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
+import { classifyBucket, loadBaseHourlyWages } from "../src/lib/labor/earningBucket.js";
+
+// Kevin ruling 2026-10-05 (updated post PR-1233 review). Guard
+// ceilings match the weekly derive's - one classifier, one set of
+// thresholds. See src/lib/labor/deriveActuals.js for baselines +
+// rationale. UNEVALUABLE_WORKERS_CEILING is on distinct workers (not
+// segments) because segments grow with shifts and setup changes move
+// workers. Both derives fail the step on ceiling exceedance.
+const RECLASSIFIED_CEILING = 10;
+const UNEVALUABLE_WORKERS_CEILING = 3;
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -149,6 +159,12 @@ const deptById = new Map();
 for (const d of deptMap) deptById.set(d.department_id, d);
 console.log(`  earning_types=${earningMap.size} workers=${workers.length} depts=${deptById.size}`);
 
+// Kevin ruling 2026-10-05. Base hourly wage per worker drives the
+// classifier's holiday upgrade. See src/lib/labor/earningBucket.js for
+// the rule.
+const baseHourlyWages = await loadBaseHourlyWages(supa);
+console.log(`  base hourly wages resolved for ${baseHourlyWages.size} workers`);
+
 // 2026-09-17 classifier fix - mirror of the accountToHourlyLine rule
 // shipped in src/lib/labor/deriveActuals.js the same day. The prior
 // attribute() below copied `d.pnl_line` verbatim, so an hourly worker
@@ -246,6 +262,9 @@ function getBucket(account_key, worker_id, work_date, line_code) {
 }
 
 let skippedCorp = 0, skippedContainer = 0, skippedUnattr = 0, skippedOutOfWindow = 0, skippedNoDate = 0, skippedBelowFloor = 0;
+let reclassifiedCount = 0, unevaluableCount = 0;
+const unevaluableWorkerIds = new Set();
+const reclassifiedLog = [];
 for (const seg of paySegs) {
   const p = seg.payload || {};
   const workerId = p.owner_role?.id;
@@ -272,25 +291,59 @@ for (const seg of paySegs) {
 
   const etName = p.merged_earning_type_name || null;
   const mapEntry = etName ? earningMap.get(etName) : null;
-  if (!mapEntry) {
-    b.hours_premium_other += hrs;
-    b.dollars_premium_other += amt;
-  } else if (mapEntry.bucket === "regular") {
-    b.hours_regular += hrs;
-    b.dollars_regular += amt;
-  } else if (mapEntry.bucket === "overtime") {
-    b.hours_overtime += hrs;
-    b.dollars_overtime += amt;
-  } else if (mapEntry.bucket === "double_time") {
-    b.hours_double_time += hrs;
-    b.dollars_double_time += amt;
-  } else {
-    b.hours_premium_other += hrs;
-    b.dollars_premium_other += amt;
+  const baseWage = baseHourlyWages.get(workerId) ?? null;
+  const verdict = classifyBucket({
+    segmentPayload: p,
+    mapEntry,
+    baseHourlyWage: baseWage,
+  });
+  if (verdict.reclassified) {
+    reclassifiedCount++;
+    reclassifiedLog.push({
+      external_id: p.external_id || null,
+      account_key: attr.account_key,
+      segment_date: segDate,
+      ratio: verdict.ratio,
+      et_name: etName,
+    });
+  }
+  if (verdict.unevaluable) {
+    unevaluableCount++;
+    if (workerId) unevaluableWorkerIds.add(workerId);
+  }
+  switch (verdict.bucket) {
+    case "regular":
+      b.hours_regular += hrs;
+      b.dollars_regular += amt;
+      break;
+    case "overtime":
+      b.hours_overtime += hrs;
+      b.dollars_overtime += amt;
+      break;
+    case "double_time":
+      b.hours_double_time += hrs;
+      b.dollars_double_time += amt;
+      break;
+    default:
+      b.hours_premium_other += hrs;
+      b.dollars_premium_other += amt;
   }
 }
 console.log(`  buckets: ${buckets.size}`);
 console.log(`  skipped: corp=${skippedCorp} container=${skippedContainer} unattr=${skippedUnattr} out_of_window=${skippedOutOfWindow} no_date=${skippedNoDate} below_floor=${skippedBelowFloor}`);
+console.log(`  holiday reclassify: ${reclassifiedCount} segments regular -> double_time (ceiling ${RECLASSIFIED_CEILING})`);
+for (const r of reclassifiedLog) {
+  console.log(`    reclassified ${r.external_id}  ${r.account_key}  ${r.segment_date}  ratio=${r.ratio.toFixed(4)}  was=${r.et_name}`);
+}
+console.log(`  holiday reclassify: ${unevaluableWorkerIds.size} distinct workers unevaluable (${unevaluableCount} regular-mapped segments) (worker ceiling ${UNEVALUABLE_WORKERS_CEILING})`);
+if (reclassifiedCount > RECLASSIFIED_CEILING) {
+  console.error(`holiday reclassify: ceiling exceeded · reclassified=${reclassifiedCount} ceiling=${RECLASSIFIED_CEILING} · Rippling may have changed behavior; stop + reporter investigate before trusting output`);
+  process.exit(2);
+}
+if (unevaluableWorkerIds.size > UNEVALUABLE_WORKERS_CEILING) {
+  console.error(`holiday reclassify: unevaluable-worker ceiling exceeded · distinct_workers=${unevaluableWorkerIds.size} ceiling=${UNEVALUABLE_WORKERS_CEILING} · segments=${unevaluableCount} · a worker without a usable base wage silently skips the holiday upgrade; new VARIED-only comp entity or payroll setup change likely - stop + investigate`);
+  process.exit(2);
+}
 
 // ─── 5. Build rows (round ONLY here) ────────────────────────────────
 const derivedAt = new Date().toISOString();
