@@ -177,9 +177,13 @@ async function main() {
       }
       if (cols.right) {
         // Kevin ruling final-presentation (2026-09-03) item 4: chart
-        // moves back into the right column below cost-lines, always
-        // open. Right column carries [cost-lines, chart].
-        const expectedRight = ["cost-lines", "chart"];
+        // sat in the right column below cost-lines. 2026-10-06 update:
+        // week-grain chart retired; single-period views emit chart=
+        // null and the right column holds only [cost-lines] on CP /
+        // NP. Multi-period / FYTD still carries the chart.
+        const expectedRight = cols.right.includes("chart")
+          ? ["cost-lines", "chart"]
+          : ["cost-lines"];
         if (JSON.stringify(cols.right) !== JSON.stringify(expectedRight)) {
           fail(`${c.name} @${viewport}`, `right column kids=${JSON.stringify(cols.right)} != ${JSON.stringify(expectedRight)}`);
         }

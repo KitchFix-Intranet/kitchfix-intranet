@@ -1,21 +1,27 @@
 "use client";
 // src/app/kpi/overview/components/Chart.js
 //
-// Element 6. Cost of goods sold vs budget.
+// Element 6. Cost of goods sold vs budget. **Period grain only** as
+// of Kevin ruling 2026-10-06. The week-grain variant was retired
+// because WeekRail.js above it already renders an honest week-by-
+// week cost view that reads per-week target from each week's own
+// revenue, hatches the trailing week with an explicit invoice-lag
+// rule, and marks not-yet-landed weeks - all four things the week-
+// grain chart lacked. Two surfaces computing the same idea from
+// different inputs and disagreeing was the fracture GOTCHAS.md §9B
+// names.
 //
 //   - Bars are spend. Bar colour carries the comparison to budget:
-//     green under, red over. The week grain also draws a horizontal
-//     weekly-budget line inside its plot.
-//   - FYTD (grain='period'): one bar per fiscal period; running period
-//     hatched; hover shows Spent / Budget / Under-or-Over.
-//   - Single period (grain='week'): one bar per fiscal week; unstarted
-//     week renders as a dashed placeholder (never a $0); running week
-//     hatched or a small filled bar depending on state.
+//     green under, red over.
+//   - Multi-period / FYTD (grain='period'): one bar per fiscal
+//     period; running period hatched.
+//   - Single-period views emit chart=null from the resolver and this
+//     component renders nothing.
 //
-// Payload contract (§5.4 anatomy 6 + resolver §17):
-//   chart.grain: 'period' | 'week'
-//   chart.series[]: [{ period_no|week_start, state, spent, budget }]
-//   chart.weekly_budget: number|null (week grain only)
+// Payload contract (resolver §17):
+//   chart === null                    on single-period ranges
+//   chart.grain: 'period'             on multi-period / FYTD ranges
+//   chart.series[]: [{ period_no, state, spent, budget }]
 //
 // Numbers arrive raw from the payload; the client only formats them
 // for display and picks bar sizing. This is presentation, not compute.
@@ -189,176 +195,23 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
   );
 }
 
-function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = false }) {
-  const wkB = Number(weeklyBudget || 0);
-  const spends = series.map(s => Number(s.spent || 0));
-  // PR-2 item 17 (2026-09-02): scale to max * 1.16. See period-grain
-  // Chart for the reasoning; week-grain applies the same rule.
-  const mx = Math.max(wkB, ...spends, 1) * 1.16;
-  const totalWeeks = series.length;
-  const closedCount = series.filter(s => s.state === "closed").length;
-  const hasRunning = series.some(s => s.state === "in_progress");
-
-  const fmtWeekLabel = (ws, we) => {
-    const [wy, wm, wd] = ws.split("-");
-    const [ey, em, ed] = we.split("-");
-    return `${wm}/${wd} – ${em}/${ed}`;
-  };
-
-  // Item 13 (Kevin 2026-09-02 language pass): tooltip removed. The
-  // axis + bar colour carry the signal.
-
-  // Kevin ruling 2026-09-03 (simplified-layout): `bare` mode drops
-  // the outer card + header when the fold shell owns them.
-  //
-  // Kevin CC prompt 2026-09-10 item 3. Dashed target line + "budget
-  // $X / wk" legend removed - Kevin's ruling matches the period-
-  // grain removal from #1073: bar height and bar colour carry the
-  // verdict on their own axis, and the line has no shared scale
-  // with the bars so it reads as misleading. `wkB` (weekly budget)
-  // stays in scope - the per-bar good/bad classSuffix below still
-  // compares to it as the numeric target; only the visual line +
-  // its legend are gone.
-  const bars = (
-    <div className="kpi-ov-bars kpi-ov-bars-inset">
-      {series.map((s, i) => {
-        const val = Number(s.spent || 0);
-        if (s.state === "not_started") {
-          return (
-            <i
-              key={i}
-              className="kpi-ov-bar kpi-ov-bar-dash"
-              data-kpi-ov-bar-state="not_started"
-              data-kpi-ov-week-start={s.week_start}
-            />
-          );
-        }
-        const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
-        // Kevin CC prompt 2026-09-09 item 1. A closed week whose
-        // invoices are still arriving hatches, whatever its variance
-        // vs budget. The bar treatment must not disagree with the
-        // WeekRail card's "Invoices still arriving" caveat under the
-        // same week - the two answer the same question. Rule (in
-        // resolver.js): closed week && (today's fiscal-week Monday -
-        // week Monday) >= 14 days. On Current period + Next period
-        // this reduces to `running_week_no - week_no >= 2` by
-        // construction; on Last period + Current year it correctly
-        // hatches the just-closed week whose invoices are still
-        // landing (P9 week 4 on 2026-09-09).
-        const invoicesStillArriving = s.state === "closed" && s.invoices_landed === false;
-        const classSuffix =
-          s.state === "in_progress" ? "kpi-ov-bar-hatch"
-          : invoicesStillArriving ? "kpi-ov-bar-hatch"
-          : val <= wkB ? "kpi-ov-bar-good"
-          : "kpi-ov-bar-over";
-        return (
-          <i
-            key={i}
-            className={`kpi-ov-bar ${classSuffix}`}
-            style={{ height: `${hgt}%` }}
-            data-kpi-ov-bar-state={s.state}
-            data-kpi-ov-bar-invoices-landed={s.invoices_landed ? "1" : "0"}
-            data-kpi-ov-week-start={s.week_start}
-          />
-        );
-      })}
-    </div>
-  );
-  const axis = (
-    <div className="kpi-ov-axis">
-      {series.map((s, i) => (
-        <span key={i}>
-          Week {i + 1}
-          <small>{fmtWeekLabel(s.week_start, s.week_end)}</small>
-          {/* Kevin Prompt 1 item 1d (2026-09-04): the in-progress week
-              shows its live figure with "so far" rather than the word
-              "running" - the operator already reads the running week
-              separately, so show what it says. Not-started weeks still
-              render the dash placeholder. Closed weeks render their
-              spend with the good/bad verdict. */}
-          <span className={`kpi-ov-amt ${s.state === "closed" ? (Number(s.spent || 0) <= (wkB || 0) ? "kpi-ov-good" : "kpi-ov-bad") : "kpi-ov-nb"}`}>
-            {s.state === "not_started" ? "- starts later"
-              : s.state === "in_progress" ? (
-                <>{fmtMoney(Number(s.spent || 0))} <i className="kpi-ov-chart-sofar" data-kpi-ov="chart-week-sofar">so far</i></>
-              )
-              : fmtMoney(Number(s.spent || 0))}
-          </span>
-        </span>
-      ))}
-    </div>
-  );
-  const runningNote = hasRunning && runningWeekNo != null ? (
-    <div className="kpi-ov-gl" data-kpi-ov="chart-running-note">
-      week {runningWeekNo} in progress, not yet counted
-    </div>
-  ) : null;
-  if (bare) {
-    return (
-      <div className="kpi-ov-cb" data-kpi-ov="chart" data-kpi-ov-grain="week">
-        {runningNote}
-        {bars}
-        {axis}
-      </div>
-    );
-  }
-  return (
-    <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="week">
-      <div className="kpi-ov-ch">
-        <span className="kpi-ov-eb">Cost of goods sold, week by week</span>
-        {/* Kevin CC prompt 2026-09-10 item 3. Dashed weekly-budget
-            line + its "line is the weekly budget" caption removed
-            (matches the period-grain removal from #1073). Subtitle
-            names the source; the help body no longer references a
-            line that isn't drawn. */}
-        <span className="kpi-ov-gl">labour and purchases, live to date</span>
-        <HelpPop
-          id="overview-chart-week"
-          title="Cost of goods sold by week"
-          body={
-            <p>
-              Green is under the weekly budget, red is over. Unstarted weeks show a dash, not a zero - a week that has not begun cannot be judged. Weeks in progress are hatched.
-            </p>
-          }
-        />
-        <span className={`kpi-ov-pill ${closedCount < totalWeeks ? "kpi-ov-pill-warn" : "kpi-ov-pill-neutral"}`}>
-          {closedCount} of {totalWeeks} weeks closed
-        </span>
-        {hasRunning && runningWeekNo != null && (
-          <span className="kpi-ov-gl" data-kpi-ov="chart-running-note">
-            week {runningWeekNo} in progress, not yet counted
-          </span>
-        )}
-      </div>
-      <div className="kpi-ov-cb">
-        {bars}
-        {axis}
-      </div>
-    </div>
-  );
-}
-
 // Kevin ruling 2026-09-03 (simplified-layout): the chart moves to
 // the bottom of the board and renders as a fold. Both P&L + Chart
 // are folds; neither is open by default. `open` + `onToggle` optional
 // so the portfolio branch (no fold state wired) still renders inline.
 export default function Chart({ chart, revenueModel, open, onToggle }) {
+  // Single-period ranges now emit chart=null from the resolver (Kevin
+  // ruling 2026-10-06, week-grain retirement). The resolver's non-null
+  // chart is always grain='period', so this component always renders
+  // the period-grain variant and only needs to guard against empty
+  // / missing series.
   if (!chart || !Array.isArray(chart.series) || chart.series.length === 0) {
     return null;
   }
-  // Portfolio branch (no fold props): render the full self-contained
-  // card, unchanged from pre-2026-09-03.
   if (typeof onToggle !== "function") {
-    return chart.grain === "period"
-      ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} />
-      : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} />;
+    // Portfolio branch: self-contained card.
+    return <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} />;
   }
-  const body = chart.grain === "period"
-    ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} bare />
-    : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} bare />;
-
-  const grainLabel = chart.grain === "period"
-    ? "period by period"
-    : "week by week";
   return (
     <div
       className={`kpi-ov-card kpi-ov-card-cogs kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
@@ -372,15 +225,11 @@ export default function Chart({ chart, revenueModel, open, onToggle }) {
         onClick={onToggle}
         aria-expanded={open ? "true" : "false"}
       >
-        <span className="kpi-ov-eb">Cost of goods sold, {grainLabel}</span>
-        <span className="kpi-ov-gl">
-          {chart.grain === "period"
-            ? "bars are spend"
-            : "bars are spend · line is the budget"}
-        </span>
+        <span className="kpi-ov-eb">Cost of goods sold, period by period</span>
+        <span className="kpi-ov-gl">bars are spend</span>
         <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
       </button>
-      {open && body}
+      {open && <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} bare />}
     </div>
   );
 }

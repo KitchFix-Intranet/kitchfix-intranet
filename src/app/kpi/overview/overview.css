@@ -674,15 +674,9 @@
   font-size: var(--kpi-t-meta);
   margin-top: 2px;
 }
-/* Kevin Prompt 1 item 1d (2026-09-04): "so far" label on the
-   in-progress week's live spend. Navy, upright (despite the <i>
-   tag), same size as the amount it sits next to. */
-.kpi-app .kpi-ov-axis .kpi-ov-chart-sofar {
-  font-style: normal;
-  color: var(--navy-700);
-  font-weight: 700;
-  margin-left: 4px;
-}
+/* Kevin ruling 2026-10-06: .kpi-ov-chart-sofar retired alongside
+   ChartWeekGrain. Was the "so far" label on the in-progress week's
+   live spend, which only the week-grain axis emitted. */
 
 .kpi-app .kpi-ov-legend {
   display: flex;
