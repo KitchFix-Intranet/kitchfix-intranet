@@ -1044,18 +1044,18 @@ export function WeekTable({
                     had the clipped-hours drift this ruling exists to
                     remove. */}
                 <td className="num">{(grandTotal?.hours_regular || 0) > 0.004 ? fmtHrs(grandTotal.hours_regular) : "–"}</td>
-                <td className="num">{fmt$(grandTotal?.dollars_regular || 0)}</td>
+                <td className="num">{(grandTotal?.hours_regular || 0) > 0.004 ? fmt$(grandTotal?.dollars_regular || 0) : "–"}</td>
                 {showOT && <>
                   <td className="num">{(grandTotal?.hours_overtime || 0) > 0.004 ? fmtHrs(grandTotal.hours_overtime) : "–"}</td>
-                  <td className="num">{fmt$(grandTotal?.dollars_overtime || 0)}</td>
+                  <td className="num">{(grandTotal?.hours_overtime || 0) > 0.004 ? fmt$(grandTotal?.dollars_overtime || 0) : "–"}</td>
                 </>}
                 {showHoliday && <>
                   <td className="num">{(grandTotal?.hours_double_time || 0) > 0.004 ? fmtHrs(grandTotal.hours_double_time) : "–"}</td>
-                  <td className="num">{fmt$(grandTotal?.dollars_double_time || 0)}</td>
+                  <td className="num">{(grandTotal?.hours_double_time || 0) > 0.004 ? fmt$(grandTotal?.dollars_double_time || 0) : "–"}</td>
                 </>}
                 {showPremium && <>
                   <td className="num">{(grandTotal?.hours_premium_other || 0) > 0.004 ? fmtHrs(grandTotal.hours_premium_other) : "–"}</td>
-                  <td className="num">{fmt$(grandTotal?.dollars_premium_other || 0)}</td>
+                  <td className="num">{(grandTotal?.hours_premium_other || 0) > 0.004 ? fmt$(grandTotal?.dollars_premium_other || 0) : "–"}</td>
                 </>}
                 {/* HS FB1 hotfix 2026-08-25: grand-total Unapproved
                     column reads draft_hours (approval-status). Same
@@ -1146,18 +1146,18 @@ function FragmentRows({
             (hrs, $) pairs. Rate column is `mixed` because a period
             aggregates many workers. */}
         <td className="num">{(band.totals.hours_regular || 0) > 0.004 ? fmtHrs(band.totals.hours_regular) : "–"}</td>
-        <td className="num">{fmt$(band.totals.dollars_regular || 0)}</td>
+        <td className="num">{(band.totals.hours_regular || 0) > 0.004 ? fmt$(band.totals.dollars_regular || 0) : "–"}</td>
         {showOT && <>
           <td className={`num ${band.totals.ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.ot > 0.004 ? fmtHrs(band.totals.ot) : "–"}</td>
-          <td className="num">{fmt$(band.totals.dollars_overtime || 0)}</td>
+          <td className="num">{band.totals.ot > 0.004 ? fmt$(band.totals.dollars_overtime || 0) : "–"}</td>
         </>}
         {showHoliday && <>
           <td className={`num ${band.totals.hol > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.hol > 0.004 ? fmtHrs(band.totals.hol) : "–"}</td>
-          <td className="num">{fmt$(band.totals.dollars_double_time || 0)}</td>
+          <td className="num">{band.totals.hol > 0.004 ? fmt$(band.totals.dollars_double_time || 0) : "–"}</td>
         </>}
         {showPremium && <>
           <td className="num">{(band.totals.hours_premium_other || 0) > 0.004 ? fmtHrs(band.totals.hours_premium_other) : "–"}</td>
-          <td className="num">{fmt$(band.totals.dollars_premium_other || 0)}</td>
+          <td className="num">{(band.totals.hours_premium_other || 0) > 0.004 ? fmt$(band.totals.dollars_premium_other || 0) : "–"}</td>
         </>}
         {showUnpriced && <td className={`num ${band.totals.unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.unpriced > 0.004 ? fmtHrs(band.totals.unpriced) : "–"}</td>}
         {showRate && <td className="num"><span className="kpi-tbl-mixed">mixed</span></td>}
@@ -1249,18 +1249,18 @@ function FragmentRows({
                   Rate column is `mixed` because a week row aggregates
                   every worker who worked that week. */}
               <td className="num">{(w.hours_regular || 0) > 0.004 ? fmtHrs(w.hours_regular) : "–"}</td>
-              <td className="num">{fmt$(w.dollars_regular || 0)}</td>
+              <td className="num">{(w.hours_regular || 0) > 0.004 ? fmt$(w.dollars_regular || 0) : "–"}</td>
               {showOT && <>
                 <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>
-                <td className="num">{fmt$(w.dollars_overtime || 0)}</td>
+                <td className="num">{w.hours_overtime > 0.004 ? fmt$(w.dollars_overtime || 0) : "–"}</td>
               </>}
               {showHoliday && <>
                 <td className={`num ${w.hours_double_time > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_double_time > 0.004 ? fmtHrs(w.hours_double_time) : "–"}</td>
-                <td className="num">{fmt$(w.dollars_double_time || 0)}</td>
+                <td className="num">{w.hours_double_time > 0.004 ? fmt$(w.dollars_double_time || 0) : "–"}</td>
               </>}
               {showPremium && <>
                 <td className="num">{(w.hours_premium_other || 0) > 0.004 ? fmtHrs(w.hours_premium_other) : "–"}</td>
-                <td className="num">{fmt$(w.dollars_premium_other || 0)}</td>
+                <td className="num">{(w.hours_premium_other || 0) > 0.004 ? fmt$(w.dollars_premium_other || 0) : "–"}</td>
               </>}
               {/* HS FB1 hotfix 2026-08-25: week-row Unapproved column
                   reads draft_hours (approval-status). Pre-fix, closed
@@ -1407,18 +1407,18 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFro
           shipped workerWeekRates map; account rows (aggregate mode)
           render `mixed` because the row sums multiple workers. */}
       <td className="num">{(child.hours_regular || 0) > 0.004 ? fmtHrs(child.hours_regular) : "–"}</td>
-      <td className="num">{fmt$(child.dollars_regular || 0)}</td>
+      <td className="num">{(child.hours_regular || 0) > 0.004 ? fmt$(child.dollars_regular || 0) : "–"}</td>
       {showOT && <>
         <td className={`num ${child.hours_ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_ot > 0.004 ? fmtHrs(child.hours_ot) : "–"}</td>
-        <td className="num">{fmt$(child.dollars_overtime || 0)}</td>
+        <td className="num">{child.hours_ot > 0.004 ? fmt$(child.dollars_overtime || 0) : "–"}</td>
       </>}
       {showHoliday && <>
         <td className={`num ${child.hours_holiday > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_holiday > 0.004 ? fmtHrs(child.hours_holiday) : "–"}</td>
-        <td className="num">{fmt$(child.dollars_double_time || 0)}</td>
+        <td className="num">{child.hours_holiday > 0.004 ? fmt$(child.dollars_double_time || 0) : "–"}</td>
       </>}
       {showPremium && <>
         <td className="num">{(child.hours_premium_other || 0) > 0.004 ? fmtHrs(child.hours_premium_other) : "–"}</td>
-        <td className="num">{fmt$(child.dollars_premium_other || 0)}</td>
+        <td className="num">{(child.hours_premium_other || 0) > 0.004 ? fmt$(child.dollars_premium_other || 0) : "–"}</td>
       </>}
       {showUnpriced && <td className={`num ${child.hours_unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_unpriced > 0.004 ? fmtHrs(child.hours_unpriced) : "–"}</td>}
       {showRate && (

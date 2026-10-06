@@ -197,12 +197,24 @@ export function buildGrouped(weekAggregates, rangeSelectionEarly, board) {
     // the WeekTable grand-total Unapproved column reads it (via the
     // grand fold below). Same pattern as the WeekTable band/week
     // switch from hours_without_dollars -> draft_hours.
-    const s = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0 };
+    // Kevin ruling 2026-10-06 PR-1238 follow-up. Carry bucket dollars
+    // on the period subtotal so buildGrand can roll them up to the
+    // grand-total row (which was reading undefined and rendering
+    // $0.00 across all three bucket $ cells).
+    const s = {
+      hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
+      dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
+      amount: 0, hours_without_dollars: 0, draft_hours: 0,
+    };
     for (const w of g.weeks) {
       s.hours_regular       += w.hours_regular;
       s.hours_overtime      += w.hours_overtime;
       s.hours_double_time   += w.hours_double_time;
       s.hours_premium_other += w.hours_premium_other;
+      s.dollars_regular       += w.dollars_regular       || 0;
+      s.dollars_overtime      += w.dollars_overtime      || 0;
+      s.dollars_double_time   += w.dollars_double_time   || 0;
+      s.dollars_premium_other += w.dollars_premium_other || 0;
       s.amount              += w.amount;
       s.hours_without_dollars += w.hours_without_dollars;
       s.draft_hours           += w.draft_hours || 0;
@@ -330,7 +342,17 @@ export function buildGrand(grouped, today, avgRate) {
   // spent = costed + unpriced + unapproved. Follows the same
   // running-period exclusion the amount + hours totals do.
   const rate = avgRate ?? null;
-  const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0, hatched: 0 };
+  // Kevin ruling 2026-10-06 PR-1238 follow-up. Grand total now
+  // carries per-bucket hours + dollars so WeekTable's grand-total
+  // row can render (hrs, $) pairs that sum to the Total cell.
+  // Pre-fix shape omitted dollars_* + hours_premium_other, so the
+  // row showed $0.00 for every bucket while the Total summed
+  // correctly from grandTotal.amount.
+  const g = {
+    hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
+    dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
+    amount: 0, hours_without_dollars: 0, draft_hours: 0, hatched: 0,
+  };
   const currentP = periodOfDate(today);
   for (const period of grouped) {
     const isRunning = period.groupHint?.kind === "period"
@@ -340,6 +362,11 @@ export function buildGrand(grouped, today, avgRate) {
     g.hours_regular       += period.subtotal.hours_regular;
     g.hours_overtime      += period.subtotal.hours_overtime;
     g.hours_double_time   += period.subtotal.hours_double_time;
+    g.hours_premium_other += period.subtotal.hours_premium_other || 0;
+    g.dollars_regular       += period.subtotal.dollars_regular       || 0;
+    g.dollars_overtime      += period.subtotal.dollars_overtime      || 0;
+    g.dollars_double_time   += period.subtotal.dollars_double_time   || 0;
+    g.dollars_premium_other += period.subtotal.dollars_premium_other || 0;
     g.amount              += period.subtotal.amount;
     g.hours_without_dollars += period.subtotal.hours_without_dollars;
     g.draft_hours           += period.subtotal.draft_hours || 0;

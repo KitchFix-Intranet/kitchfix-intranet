@@ -3417,6 +3417,15 @@
   padding: 0 var(--kpi-sp-4);
   border-bottom: 1px solid var(--n-300);
   white-space: nowrap;
+  /* Kevin ruling 2026-10-06 PR-1238 follow-up P3. The grouped 2-row
+     header has single-row labels (Week, vs adjusted, Share, Unapproved,
+     Hourly rate, Total) using rowSpan=2, and bucket group labels
+     (Regular, OT 1.5x, Holiday 2x) in the top row with (hrs, $) in
+     the bottom. vertical-align: bottom pins every single-row header
+     to the same baseline as the hrs / $ sub-headers so the four
+     peer labels (WEEK, VS ADJUSTED, HOURLY RATE, TOTAL) stop reading
+     at two different heights. */
+  vertical-align: bottom;
 }
 .kpi-tbl thead th:first-child { text-align: left; }
 .kpi-tbl-lcol { width: 30%; }
@@ -3489,7 +3498,13 @@
   position: sticky; top: var(--hdr); z-index: 10;
   transition: background 0.12s;
 }
-.kpi-tbl-band > td.num {
+/* Kevin ruling 2026-10-06 PR-1238 follow-up P1. Medium (13.5) is the
+   hero size and belongs to the row's one most important number - the
+   final Total cell. Adding bucket (hrs, $) pairs to the band would
+   have widened the previous `.num` selector to every numeric cell;
+   restrict to the LAST .num cell per band row so bucket cells return
+   to --kpi-t-body (11.25) and only Total stays at --kpi-t-medium. */
+.kpi-tbl-band > td.num:last-child {
   font-size: var(--kpi-t-medium);
 }
 /* 2026-08-26 polish round 2 item 6 - zero-labor period row. Single
@@ -3770,15 +3785,23 @@
    total now share one visual language. Dark overrides on
    .kpi-vb-d-*, .kpi-tbl-nil, and .kpi-vb-bar deleted - they
    existed to re-establish contrast against the dark fill. */
+/* Kevin ruling 2026-10-06 PR-1238 follow-up P1. Same restriction as
+   .kpi-tbl-band above: medium belongs to the Total cell only. The
+   label cell (first-child) gets --kpi-t-body via the first-child
+   rule below. Every intermediate .num cell inherits --kpi-t-body
+   from the base `.kpi-tbl tbody td` rule. */
 .kpi-tbl tbody .kpi-tbl-total > td {
   background: var(--navy-50);
   color: var(--navy-900);
   font-weight: 800;
-  font-size: var(--kpi-t-medium);
+  font-size: var(--kpi-t-body);
   border: 0;
   border-top: 2px solid var(--navy-700);
   height: var(--kpi-row);
   position: sticky; bottom: 0; z-index: 15;
+}
+.kpi-tbl tbody .kpi-tbl-total > td:last-child {
+  font-size: var(--kpi-t-medium);
 }
 .kpi-tbl tbody .kpi-tbl-total > td:first-child {
   color: var(--navy-900);
