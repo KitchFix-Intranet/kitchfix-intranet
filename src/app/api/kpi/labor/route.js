@@ -76,6 +76,7 @@ import {
   foldPerStandSplits,
 } from "@/lib/labor/homestandResolver.js";
 import { foldPreFloorEstimates } from "@/lib/labor/preFloorEstimator.js";
+import { loadWorkerWeekRates } from "@/lib/labor/workerWeekRates.js";
 // Overview Phase 2 PR-1 (2026-08-31) - pure move. paginateActuals,
 // resolveMemberBudget, buildPriorPeriodComparison + V37_REVENUE_FLEX_ACCOUNTS
 // now live in src/lib/labor/loaders.js so the overview KPI seat can
@@ -982,6 +983,16 @@ export async function GET(request) {
     // counts dedupe by person (email) not employment spell (worker_id).
     const workerToEmail = buildWorkerToEmail(workerMeta);
 
+    // Kevin ruling 2026-10-06. Per-worker-per-week HOURLY RATE
+    // resolved by reading `estimated_hourly_rate` off the stamp
+    // Rippling writes on each live pay segment (via presence +
+    // paySegmentDedupe), joined to actualsRows' own week_start so
+    // the keys match what WeekTable sees. Shipped as a plain object
+    // under `worker_week_rates`; client looks up by
+    // `${worker_id}|${week_start}`. See lib/labor/workerWeekRates.js
+    // for the mid-week-raise tie-break and why reads do not fall
+    // back to compensations_latest or divide dollars by hours.
+    const workerWeekRatesAgg = await loadWorkerWeekRates(supa, { actualsRows });
     let body = {
       ok: true,
       filters: { account, start, end },
@@ -989,6 +1000,7 @@ export async function GET(request) {
       actuals: actualsRows,
       unattributed: (unattr.data || []).filter(() => true),
       workers: workerMeta,
+      worker_week_rates: Object.fromEntries(workerWeekRatesAgg.rates),
       derive_freshness: {
         last_walk_at: freshness.last_walk_at,
         // Step 2 ride-along 2026-08-29: `last_walk_ids_seen` removed.
@@ -1741,6 +1753,11 @@ export async function GET(request) {
   // week batr fallback has data.
   recomputeVerdictFromPanel(boardSingle);
 
+  // Kevin ruling 2026-10-06. Shipped-on-wire worker-week rates for
+  // the single-account path. See the aggregate body above for the
+  // mechanism; both branches use the same helper so there is one
+  // source of truth for the rate.
+  const workerWeekRatesSingle = await loadWorkerWeekRates(supa, { actualsRows: actuals.data });
   let bodySingle = {
     ok: true,
     filters: { account, start, end },
@@ -1748,6 +1765,7 @@ export async function GET(request) {
     actuals: actuals.data,
     unattributed: unattr.data.filter(() => true),
     workers: workerMeta,
+    worker_week_rates: Object.fromEntries(workerWeekRatesSingle.rates),
     derive_freshness,
     unmapped_names: unmapped.data || [],
     account_periods,

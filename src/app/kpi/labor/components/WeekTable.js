@@ -240,11 +240,13 @@ function computeVisibleColumns({ grouped, mode }) {
   let anyHoliday = false;
   let anyUnapproved = false;
   let anyOT = false;
+  let anyPremium = false;
   for (const g of grouped) {
     for (const w of g.weeks) {
       if ((w.hours_double_time || 0) > 0.004) anyHoliday = true;
       if ((w.draft_hours || 0) > 0.004) anyUnapproved = true;
       if ((w.hours_overtime || 0) > 0.004) anyOT = true;
+      if ((w.hours_premium_other || 0) > 0.004) anyPremium = true;
     }
   }
   return {
@@ -260,15 +262,24 @@ function computeVisibleColumns({ grouped, mode }) {
     // row) now key on this flag; the colSpan calc for the zero-labor
     // placeholder (:848) adapts too.
     ot: anyOT,
+    // Kevin ruling 2026-10-06 (dollars-per-bucket). Premium carries
+    // the same adaptive gate as OT and Holiday. Zero on every FY2026
+    // row today; conditional so a future non-zero row cannot silently
+    // break the dollar-partition tie (reg + ot + holiday + premium =
+    // amount).
+    premium: anyPremium,
     // Rate column always renders per V9-15 (every tier).
     rate: true,
   };
 }
 
-function blendedRate({ dollars, hours }) {
-  if (!hours || hours <= 0) return null;
-  return dollars / hours;
-}
+// Kevin ruling 2026-10-06 (hourly-rate drift). The blendedRate helper
+// used to divide a row's dollars by its hours to produce the rate
+// cell. Both sides are clipped by labor_actuals' numeric(10,2), so
+// the quotient drifted a cent per segment. Retired; rows now read
+// the stamped segment rate from the payload-shipped workerWeekRates
+// map (worker rows) or render `mixed` (band/week/total/account rows
+// that aggregate multiple workers).
 
 // V9-16 OT flag on a row containing OT hours.
 function OTTag({ ot }) {
@@ -356,9 +367,20 @@ function aggregateChildrenForWeek(week, weekBudgetsByWeekStart, memberByWeekAndA
     rows.push({
       kind: "account",
       account_key,
+      week_start: week.week_start,
       hours: agg.hours,
       hours_ot: agg.ot,
       hours_holiday: agg.hol,
+      // Kevin ruling 2026-10-06. Per-bucket hours + dollars so the
+      // aggregate ChildRow renders (hrs, $) pairs that tie to Total.
+      hours_regular: agg.hours_regular,
+      hours_overtime: agg.hours_overtime,
+      hours_double_time: agg.hours_double_time,
+      hours_premium_other: agg.hours_premium_other,
+      dollars_regular: agg.dollars_regular,
+      dollars_overtime: agg.dollars_overtime,
+      dollars_double_time: agg.dollars_double_time,
+      dollars_premium_other: agg.dollars_premium_other,
       // HS FB1 hotfix 2026-08-25: hours_unpriced now carries draft_hours
       // (approval-status). Field name kept for minimum-diff churn; the
       // rendering path (ChildRow -> Unapproved column) reads this key.
@@ -386,10 +408,23 @@ function workerChildrenForWeek(week, workers) {
     .map(r => ({
       kind: "worker",
       worker_id: r.worker_id,
+      week_start: week.week_start,
       title: workers?.[r.worker_id]?.title || null,
       number: workers?.[r.worker_id]?.number,
       display_name: workers?.[r.worker_id]?.display_name,
       hours: Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0),
+      // Kevin ruling 2026-10-06. Per-bucket hours + dollars on the
+      // child so ChildRow can render (hrs, $) pairs that tie to the
+      // row's Total. hours_ot / hours_holiday / hours_unpriced
+      // kept for the legacy OTTag + anomaly chip wiring.
+      hours_regular: Number(r.hours_regular || 0),
+      hours_overtime: Number(r.hours_overtime || 0),
+      hours_double_time: Number(r.hours_double_time || 0),
+      hours_premium_other: Number(r.hours_premium_other || 0),
+      dollars_regular: Number(r.dollars_regular || 0),
+      dollars_overtime: Number(r.dollars_overtime || 0),
+      dollars_double_time: Number(r.dollars_double_time || 0),
+      dollars_premium_other: Number(r.dollars_premium_other || 0),
       hours_ot: Number(r.hours_overtime || 0),
       hours_holiday: Number(r.hours_double_time || 0),
       // HS FB1 hotfix 2026-08-25: worker-row Unapproved column now
@@ -443,6 +478,10 @@ export function WeekTable({
                                    //   controls hidden on `single_period_in_progress`. Other
                                    //   kinds (multi_period Current year, single_period_closed
                                    //   Last period) keep the toolbar - approved surfaces.
+  workerWeekRates = null,          // Kevin 2026-10-06 - Map-like { "worker_id|week_start":
+                                   //   rate } shipped by the labor route. Child rows read
+                                   //   their rate from here; band / week / total rows render
+                                   //   "mixed". When absent (older callers), the cell is "–".
 }) {
   // V40 BUG 1 - table Rate column, when salary is on, must show the
   // SAME hourly rate the cards show. blendedRate(amount, hours) here
@@ -550,7 +589,17 @@ export function WeekTable({
   // Falls back to raw only when no week in the band has per-week batr
   // (older routes / boards without the shared-basis attachment).
   const periodTotals = useMemo(() => grouped.map(g => {
-    const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0, hatched: 0 };
+    const t = {
+      hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0, hourly_amount: 0, hatched: 0,
+      // Kevin ruling 2026-10-06. Per-bucket hours + dollars accumulated
+      // alongside the legacy aggregate fields so the band row can
+      // render Regular / OT / Holiday / Premium pairs that tie to the
+      // Total column. Legacy `t.ot` / `t.hol` kept intact (OTTag at
+      // :1085 and `w.hours_overtime > 0.004` severity checks still
+      // read them).
+      hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
+      dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
+    };
     const states = [];
     let periodBudget = null;
     let weeksInBand = 0;
@@ -560,6 +609,14 @@ export function WeekTable({
       t.hours += (w.hours_regular || 0) + (w.hours_overtime || 0) + (w.hours_double_time || 0);
       t.ot += w.hours_overtime || 0;
       t.hol += w.hours_double_time || 0;
+      t.hours_regular     += w.hours_regular       || 0;
+      t.hours_overtime    += w.hours_overtime      || 0;
+      t.hours_double_time += w.hours_double_time   || 0;
+      t.hours_premium_other += w.hours_premium_other || 0;
+      t.dollars_regular     += w.dollars_regular       || 0;
+      t.dollars_overtime    += w.dollars_overtime      || 0;
+      t.dollars_double_time += w.dollars_double_time   || 0;
+      t.dollars_premium_other += w.dollars_premium_other || 0;
       // HS FB1 hotfix 2026-08-25: band-total Unapproved column shows
       // draft_hours (approval-status) not hours_without_dollars.
       t.unpriced += w.draft_hours || 0;
@@ -732,20 +789,31 @@ export function WeekTable({
   // the anyOT scan at :247 (previously declared + set but never
   // read). Column hides when every (band, week) is at 0 OT.
   const showOT = !!columns.ot;
+  // Kevin ruling 2026-10-06 (dollars-per-bucket). Premium carries
+  // the same adaptive gate as OT and Holiday; zero on every FY2026
+  // row today, kept conditionally so a future non-zero cannot
+  // silently break the four-dollar-bucket -> amount tie.
+  const showPremium = !!columns.premium;
 
-  // V25-6 Share column - separate from Dollars; renders in aggregate
+  // V25-6 Share column - separate from Total; renders in aggregate
   // mode only (worker rows carry no share). Kept in every row so the
   // column reads as one column top to bottom.
   const showShare = aggregateMode;
 
+  // Kevin ruling 2026-10-06 (dollars-per-bucket). Regular / OT /
+  // Holiday / Premium each span (hrs, $) under a grouped header.
+  // Regular is always visible (even at zero), matching the design
+  // canvas - the hours cell is a dash in that case, not the whole
+  // pair collapsing.
   const numCols = 2 /* label + vs budget */
                 + (showShare ? 1 : 0)
-                + 1 /* hours */
-                + (showOT ? 1 : 0)
-                + (showHoliday ? 1 : 0)
+                + 2 /* regular hrs + $ */
+                + (showOT      ? 2 : 0)
+                + (showHoliday ? 2 : 0)
+                + (showPremium ? 2 : 0)
                 + (showUnpriced ? 1 : 0)
                 + (showRate ? 1 : 0)
-                + 1 /* dollars */;
+                + 1 /* total */;
 
   return (
     <>
@@ -819,7 +887,7 @@ export function WeekTable({
           <table className="kpi-tbl">
             <thead>
               <tr>
-                <th className="kpi-tbl-lcol">
+                <th className="kpi-tbl-lcol" rowSpan={2}>
                   Week
                   {/* V25-19 - `Names hidden` chip sits on the WEEK header when
                       the table is in Numbers mode and worker rows are actually
@@ -834,14 +902,32 @@ export function WeekTable({
                     >Names hidden</button>
                   )}
                 </th>
-                <th className="kpi-tbl-vbcol">vs adjusted</th>
-                {showShare && <th className="kpi-tbl-shrcol">Share</th>}
-                <th>Hours</th>
-                {showOT && <th>OT 1.5&times;</th>}
-                {showHoliday && <th>Holiday 2&times;</th>}
-                {showUnpriced && <th>Unapproved</th>}
-                {showRate && <th>{rateHeaderLabel}</th>}
-                <th>Dollars</th>
+                <th className="kpi-tbl-vbcol" rowSpan={2}>vs adjusted</th>
+                {showShare && <th className="kpi-tbl-shrcol" rowSpan={2}>Share</th>}
+                {/* Kevin ruling 2026-10-06 (dollars-per-bucket). Regular,
+                    OT and Holiday each span (hrs, $) under a grouped
+                    header. Premium conditional for forward safety -
+                    zero on every FY2026 row today, but the pair rides
+                    on the wire so a future non-zero cannot silently
+                    break the four-bucket -> amount tie. The Hourly
+                    rate column header is now unconditional - the
+                    pre-fix `rateBasisHourlyOnly ? HOURLY RATE : RATE`
+                    ternary was retired alongside the dollars-over-
+                    hours division that gave the number its drift. */}
+                <th colSpan={2} className="kpi-tbl-grpcol">Regular</th>
+                {showOT      && <th colSpan={2} className="kpi-tbl-grpcol">OT 1.5&times;</th>}
+                {showHoliday && <th colSpan={2} className="kpi-tbl-grpcol">Holiday 2&times;</th>}
+                {showPremium && <th colSpan={2} className="kpi-tbl-grpcol">Premium</th>}
+                {showUnpriced && <th rowSpan={2}>Unapproved</th>}
+                {showRate && <th rowSpan={2}>Hourly rate</th>}
+                <th rowSpan={2}>Total</th>
+              </tr>
+              <tr>
+                <th className="kpi-tbl-subcol">hrs</th>
+                <th className="kpi-tbl-subcol">$</th>
+                {showOT      && <><th className="kpi-tbl-subcol">hrs</th><th className="kpi-tbl-subcol">$</th></>}
+                {showHoliday && <><th className="kpi-tbl-subcol">hrs</th><th className="kpi-tbl-subcol">$</th></>}
+                {showPremium && <><th className="kpi-tbl-subcol">hrs</th><th className="kpi-tbl-subcol">$</th></>}
               </tr>
             </thead>
             <tbody>
@@ -855,7 +941,7 @@ export function WeekTable({
                 // board does not know why a period is empty and
                 // should not claim.
                 if (g.zero_labor) {
-                  const cols = 4 + (showOT ? 1 : 0) + (showShare ? 1 : 0) + (showHoliday ? 1 : 0) + (showUnpriced ? 1 : 0) + (showRate ? 1 : 0);
+                  const cols = numCols - 1;  // numCols includes the label; cols is the span for the placeholder msg
                   return (
                     <tr key={g.key} className="kpi-tbl-zero-period">
                       <td>FY{g.fiscal_year} · PERIOD {g.period_no}</td>
@@ -892,18 +978,12 @@ export function WeekTable({
                   : inProgress
                     ? { mode: "in_progress", spent: totals.amount, budget: periodBudget }
                     : { mode: "closed", spent: totals.amount, budget: periodBudget };
-                // Kevin CC prompt 2026-09-09 (post-#1099). Per-period
-                // rate = this period's hourly $ / this period's
-                // hourly hours. `totals.hourly_amount` excludes
-                // salary rows by week (see periodTotals useMemo).
-                // Identical in both toggle states because salary
-                // rows contribute 0 to both sides. Replaces the
-                // prior `displayRate(...)` which flattened every
-                // band to the range-level hourlyRate on the +salary
-                // path.
-                const rate = totals.hours > 0
-                  ? Math.round((totals.hourly_amount / totals.hours) * 100) / 100
-                  : null;
+                // Kevin ruling 2026-10-06. The per-period rate cell
+                // renders `mixed` because a band aggregates many
+                // workers. The dollars-over-hours division that lived
+                // here is retired (hours are clipped to 2dp by the
+                // schema; dividing clipped hours into unclipped
+                // dollars drifts a cent per segment).
                 const bandLabel = isMonth ? g.groupLabel : `FY2026 · PERIOD ${g.period_no}`;
                 return (
                   <FragmentRows
@@ -912,7 +992,7 @@ export function WeekTable({
                       groupKey: g.key, isMonth, period_no: g.period_no,
                       monthIndex: g.groupHint?.kind === "month" ? g.groupHint.monthIndex : null,
                       label: bandLabel, subLabel: bandSubLabel,
-                      totals, rate,
+                      totals,
                       periodBudget, vs: bandVs,
                       exceptionWeekCount, inProgress, bandSeverity,
                     }}
@@ -927,7 +1007,8 @@ export function WeekTable({
                     expandedWeeks={expandedWeeks}
                     onToggleWeek={onToggleWeek}
                     onPickAccount={onPickAccount}
-                    columns={{ showHoliday, showUnpriced, showRate, showShare, showOT }}
+                    columns={{ showHoliday, showUnpriced, showRate, showShare, showOT, showPremium }}
+                    workerWeekRates={workerWeekRates}
                     excludedSet={excludedSet}
                     redact={redact}
                     rateBasisHourlyOnly={rateBasisHourlyOnly}
@@ -954,13 +1035,28 @@ export function WeekTable({
                   />
                 </td>
                 {showShare && <td className="kpi-tbl-shrcol" />}
-                <td className="num">{fmtHrs((grandTotal?.hours_regular || 0) + (grandTotal?.hours_overtime || 0) + (grandTotal?.hours_double_time || 0))}</td>
-                {showOT && (
+                {/* Kevin ruling 2026-10-06. Regular / OT / Holiday /
+                    Premium each render as (hrs, $) pairs. Grand-total
+                    row aggregates many workers; "Hourly rate" column
+                    renders `mixed` because there is no single rate
+                    for a sum across workers. The pre-fix computed
+                    rate (grandTotal.amount / sum-of-bucket-hours)
+                    had the clipped-hours drift this ruling exists to
+                    remove. */}
+                <td className="num">{(grandTotal?.hours_regular || 0) > 0.004 ? fmtHrs(grandTotal.hours_regular) : "–"}</td>
+                <td className="num">{fmt$(grandTotal?.dollars_regular || 0)}</td>
+                {showOT && <>
                   <td className="num">{(grandTotal?.hours_overtime || 0) > 0.004 ? fmtHrs(grandTotal.hours_overtime) : "–"}</td>
-                )}
-                {showHoliday && (
+                  <td className="num">{fmt$(grandTotal?.dollars_overtime || 0)}</td>
+                </>}
+                {showHoliday && <>
                   <td className="num">{(grandTotal?.hours_double_time || 0) > 0.004 ? fmtHrs(grandTotal.hours_double_time) : "–"}</td>
-                )}
+                  <td className="num">{fmt$(grandTotal?.dollars_double_time || 0)}</td>
+                </>}
+                {showPremium && <>
+                  <td className="num">{(grandTotal?.hours_premium_other || 0) > 0.004 ? fmtHrs(grandTotal.hours_premium_other) : "–"}</td>
+                  <td className="num">{fmt$(grandTotal?.dollars_premium_other || 0)}</td>
+                </>}
                 {/* HS FB1 hotfix 2026-08-25: grand-total Unapproved
                     column reads draft_hours (approval-status). Same
                     switch as the band / week / child rows. */}
@@ -968,20 +1064,7 @@ export function WeekTable({
                   <td className="num">{(grandTotal?.draft_hours || 0) > 0.004 ? fmtHrs(grandTotal.draft_hours) : "–"}</td>
                 )}
                 {showRate && (
-                  <td className="num">{(() => {
-                    const hrs = (grandTotal?.hours_regular || 0) + (grandTotal?.hours_overtime || 0) + (grandTotal?.hours_double_time || 0);
-                    // Kevin CC prompt 2026-09-09 (post-#1099). Grand-
-                    // total rate = range's hourly $ / range's hourly
-                    // hours. On the +salary path the route ships
-                    // this as `salary.blended_rate_hourly` (=
-                    // board.avg_rate post-#1099); on the hourly
-                    // path there are no salary rows so blendedRate
-                    // on grandTotal.amount is already correct.
-                    const r = rateBasisHourlyOnly
-                      ? hourlyRate
-                      : blendedRate({ dollars: grandTotal?.amount || 0, hours: hrs });
-                    return r != null ? `$${r.toFixed(2)}` : "–";
-                  })()}</td>
+                  <td className="num"><span className="kpi-tbl-mixed">mixed</span></td>
                 )}
                 <td className="num">{fmt$((grandTotal?.amount || 0) + (grandTotal?.hatched || 0))}</td>
               </tr>
@@ -1014,11 +1097,12 @@ function FragmentRows({
                          //   board.avg_rate. Multiplies unpriced_hrs +
                          //   draft_hours per week to fold hatched
                          //   dollars into the per-week Dollars cell.
+  workerWeekRates,       // Kevin 2026-10-06 - threaded to ChildRow for
+                         //   the hourly-rate lookup.
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
-  const { showHoliday, showUnpriced, showRate, showShare, showOT } = columns;
-  const rate = band.rate;
+  const { showHoliday, showUnpriced, showRate, showShare, showOT, showPremium } = columns;
 
   return (
     <>
@@ -1058,11 +1142,25 @@ function FragmentRows({
           />
         </td>
         {showShare && <td className="kpi-tbl-shrcol" />}
-        <td className="num">{fmtHrs(band.totals.hours)}</td>
-        {showOT && <td className={`num ${band.totals.ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.ot > 0.004 ? fmtHrs(band.totals.ot) : "–"}</td>}
-        {showHoliday && <td className={`num ${band.totals.hol > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.hol > 0.004 ? fmtHrs(band.totals.hol) : "–"}</td>}
+        {/* Kevin ruling 2026-10-06. Band row renders per-bucket
+            (hrs, $) pairs. Rate column is `mixed` because a period
+            aggregates many workers. */}
+        <td className="num">{(band.totals.hours_regular || 0) > 0.004 ? fmtHrs(band.totals.hours_regular) : "–"}</td>
+        <td className="num">{fmt$(band.totals.dollars_regular || 0)}</td>
+        {showOT && <>
+          <td className={`num ${band.totals.ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.ot > 0.004 ? fmtHrs(band.totals.ot) : "–"}</td>
+          <td className="num">{fmt$(band.totals.dollars_overtime || 0)}</td>
+        </>}
+        {showHoliday && <>
+          <td className={`num ${band.totals.hol > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.hol > 0.004 ? fmtHrs(band.totals.hol) : "–"}</td>
+          <td className="num">{fmt$(band.totals.dollars_double_time || 0)}</td>
+        </>}
+        {showPremium && <>
+          <td className="num">{(band.totals.hours_premium_other || 0) > 0.004 ? fmtHrs(band.totals.hours_premium_other) : "–"}</td>
+          <td className="num">{fmt$(band.totals.dollars_premium_other || 0)}</td>
+        </>}
         {showUnpriced && <td className={`num ${band.totals.unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.unpriced > 0.004 ? fmtHrs(band.totals.unpriced) : "–"}</td>}
-        {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
+        {showRate && <td className="num"><span className="kpi-tbl-mixed">mixed</span></td>}
         <td className="num">{fmt$((band.totals.amount || 0) + (band.totals.hatched || 0))}</td>
       </tr>
       {periodOpen && weeks.map(w => {
@@ -1097,20 +1195,12 @@ function FragmentRows({
             ? { mode: "in_progress", spent: w.amount, budget: weekBudget }
             : { mode: "closed", spent: w.amount, budget: weekBudget };
         const hrs = (w.hours_regular || 0) + (w.hours_overtime || 0) + (w.hours_double_time || 0);
-        // Kevin CC prompt 2026-09-09 (post-#1099). Per-week rate =
-        // this week's hourly $ / this week's hourly hours. On the
-        // hourly path `salaryAmountsByWeek` is empty so `w.amount`
-        // is already hourly-only and the subtraction is a no-op.
-        // On +salary, subtract this week's salary $ from the
-        // merged amount. Identical result in both toggle states -
-        // the rate never contains salary, so the toggle cannot
-        // move it. Replaces the prior flat `hourlyRate` fallback
-        // that read the range figure on every week.
-        const wkSalary = salaryAmountsByWeek.get(w.week_start) || 0;
-        const wkHourlyAmount = Number(w.amount || 0) - wkSalary;
-        const rate = hrs > 0
-          ? Math.round((wkHourlyAmount / hrs) * 100) / 100
-          : null;
+        // Kevin ruling 2026-10-06. Week row renders `mixed` because
+        // it aggregates every worker on that week. The dollars-over-
+        // hours division that lived here is retired (clipped-hours
+        // drift). `hrs` kept for OTTag + ExceptionChip call sites
+        // that read it as a scalar; nothing on the row consumes a
+        // computed rate anymore.
         const weekOpen = expandedWeeks.has(w.week_start);
         return (
           <>
@@ -1155,16 +1245,30 @@ function FragmentRows({
                 />
               </td>
               {showShare && <td className="kpi-tbl-shrcol" />}
-              <td className="num">{fmtHrs(hrs)}</td>
-              {showOT && <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>}
-              {showHoliday && <td className={`num ${w.hours_double_time > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_double_time > 0.004 ? fmtHrs(w.hours_double_time) : "–"}</td>}
+              {/* Kevin ruling 2026-10-06. Per-bucket (hrs, $) pairs.
+                  Rate column is `mixed` because a week row aggregates
+                  every worker who worked that week. */}
+              <td className="num">{(w.hours_regular || 0) > 0.004 ? fmtHrs(w.hours_regular) : "–"}</td>
+              <td className="num">{fmt$(w.dollars_regular || 0)}</td>
+              {showOT && <>
+                <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>
+                <td className="num">{fmt$(w.dollars_overtime || 0)}</td>
+              </>}
+              {showHoliday && <>
+                <td className={`num ${w.hours_double_time > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_double_time > 0.004 ? fmtHrs(w.hours_double_time) : "–"}</td>
+                <td className="num">{fmt$(w.dollars_double_time || 0)}</td>
+              </>}
+              {showPremium && <>
+                <td className="num">{(w.hours_premium_other || 0) > 0.004 ? fmtHrs(w.hours_premium_other) : "–"}</td>
+                <td className="num">{fmt$(w.dollars_premium_other || 0)}</td>
+              </>}
               {/* HS FB1 hotfix 2026-08-25: week-row Unapproved column
                   reads draft_hours (approval-status). Pre-fix, closed
                   weeks with 196.39 draft hours rendered "–" because
                   the cell was reading hours_without_dollars which is
                   0 when drafts are already priced. */}
               {showUnpriced && <td className={`num ${(w.draft_hours || 0) > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{(w.draft_hours || 0) > 0.004 ? fmtHrs(w.draft_hours) : "–"}</td>}
-              {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
+              {showRate && <td className="num"><span className="kpi-tbl-mixed">mixed</span></td>}
               <td className="num">{fmt$((Number(w.amount) || 0) + weekHatchedDollars(w, avgRate).total)}</td>
             </tr>
             {weekOpen && mode === "single" && workerChildrenForWeek(w, workers).map(c => (
@@ -1176,6 +1280,7 @@ function FragmentRows({
                 columns={columns}
                 onPickAccount={null}
                 redact={redact}
+                workerWeekRates={workerWeekRates}
               />
             ))}
             {weekOpen && mode === "aggregate" && aggregateChildrenForWeek(w, weekBudgetsByWeekStart, memberByWeekAndAcct).map(c => (
@@ -1188,6 +1293,7 @@ function FragmentRows({
                 onPickAccount={onPickAccount}
                 excludedFromRollup={excludedSet?.has(c.account_key)}
                 weekInProgress={inProgress}
+                workerWeekRates={workerWeekRates}
               />
             ))}
           </>
@@ -1197,10 +1303,20 @@ function FragmentRows({
   );
 }
 
-function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFromRollup, weekInProgress, redact }) {
-  const { showHoliday, showUnpriced, showRate, showShare, showOT } = columns;
+function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFromRollup, weekInProgress, redact, workerWeekRates }) {
+  const { showHoliday, showUnpriced, showRate, showShare, showOT, showPremium } = columns;
   const sharePct = weekAmount > 0 ? Math.max(0, Math.min(100, (child.amount / weekAmount) * 100)) : 0;
-  const rate = blendedRate({ dollars: child.amount, hours: child.hours });
+  // Kevin ruling 2026-10-06. Hourly rate on a worker child row is the
+  // stamped segment rate for (worker, week), looked up on the payload-
+  // shipped workerWeekRates map (built by lib/labor/workerWeekRates.
+  // js from live pay_segments). Account child rows aggregate many
+  // workers - no single rate exists, so they render `mixed` too.
+  // Division of dollars-by-clipped-hours is retired; the pre-fix
+  // `blendedRate(child.amount, child.hours)` cost a cent of drift
+  // per segment and could not be checked against anything.
+  const rateFromMap = (mode === "worker" && child.worker_id && child.week_start && workerWeekRates)
+    ? workerWeekRates[`${child.worker_id}|${child.week_start}`]
+    : null;
   const sev = child.coverage_state;
   const showExceptionChip = sev !== "complete" && sev !== "no_labor";
   // V29-10 - worker rows have THREE elements in descending weight in
@@ -1286,11 +1402,32 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFro
           <td className="kpi-tbl-shrcol" />
         )
       )}
-      <td className="num">{fmtHrs(child.hours)}</td>
-      {showOT && <td className={`num ${child.hours_ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_ot > 0.004 ? fmtHrs(child.hours_ot) : "–"}</td>}
-      {showHoliday && <td className={`num ${child.hours_holiday > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_holiday > 0.004 ? fmtHrs(child.hours_holiday) : "–"}</td>}
+      {/* Kevin ruling 2026-10-06. Per-bucket (hrs, $) pairs on every
+          child row. Worker rows look up their rate from the payload-
+          shipped workerWeekRates map; account rows (aggregate mode)
+          render `mixed` because the row sums multiple workers. */}
+      <td className="num">{(child.hours_regular || 0) > 0.004 ? fmtHrs(child.hours_regular) : "–"}</td>
+      <td className="num">{fmt$(child.dollars_regular || 0)}</td>
+      {showOT && <>
+        <td className={`num ${child.hours_ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_ot > 0.004 ? fmtHrs(child.hours_ot) : "–"}</td>
+        <td className="num">{fmt$(child.dollars_overtime || 0)}</td>
+      </>}
+      {showHoliday && <>
+        <td className={`num ${child.hours_holiday > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_holiday > 0.004 ? fmtHrs(child.hours_holiday) : "–"}</td>
+        <td className="num">{fmt$(child.dollars_double_time || 0)}</td>
+      </>}
+      {showPremium && <>
+        <td className="num">{(child.hours_premium_other || 0) > 0.004 ? fmtHrs(child.hours_premium_other) : "–"}</td>
+        <td className="num">{fmt$(child.dollars_premium_other || 0)}</td>
+      </>}
       {showUnpriced && <td className={`num ${child.hours_unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_unpriced > 0.004 ? fmtHrs(child.hours_unpriced) : "–"}</td>}
-      {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
+      {showRate && (
+        <td className="num">
+          {mode === "worker"
+            ? (rateFromMap != null ? `$${rateFromMap.toFixed(2)}` : "–")
+            : <span className="kpi-tbl-mixed">mixed</span>}
+        </td>
+      )}
       <td className="num">{fmt$(child.amount)}</td>
     </tr>
   );

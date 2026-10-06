@@ -218,6 +218,10 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
                 boardKind="single_period_in_progress"
                 workers={labor.workers}
                 actuals={labor.actuals || []}
+                /* Kevin ruling 2026-10-06. Shared with the labor page
+                   via the same labor payload field - the fold's
+                   WeekTable needs the rate map too. */
+                workerWeekRates={labor?.worker_week_rates || null}
                 redact={false}
                 workerRoster={[]}
                 selectedWorkers={null}

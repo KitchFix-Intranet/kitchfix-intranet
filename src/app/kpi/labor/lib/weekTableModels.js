@@ -73,6 +73,12 @@ export function buildMemberByWeekAndAcct(actuals, mode) {
     const cur = per.get(key) || {
       amount: 0, hours: 0, ot: 0, hol: 0,
       unpriced: 0, draft_hours: 0,
+      // Kevin ruling 2026-10-06. Per-bucket hours + dollars so the
+      // aggregate ChildRow can render (hrs, $) pairs that tie to its
+      // Total. Legacy aggregate fields (hours/ot/hol) kept intact for
+      // OTTag + severity gating.
+      hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
+      dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
       anomaly_no_clockout: 0, anomaly_under_1h: 0, anomaly_over_16h: 0,
       states: [],
     };
@@ -80,6 +86,14 @@ export function buildMemberByWeekAndAcct(actuals, mode) {
     cur.hours += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
     cur.ot += Number(r.hours_overtime || 0);
     cur.hol += Number(r.hours_double_time || 0);
+    cur.hours_regular       += Number(r.hours_regular       || 0);
+    cur.hours_overtime      += Number(r.hours_overtime      || 0);
+    cur.hours_double_time   += Number(r.hours_double_time   || 0);
+    cur.hours_premium_other += Number(r.hours_premium_other || 0);
+    cur.dollars_regular       += Number(r.dollars_regular       || 0);
+    cur.dollars_overtime      += Number(r.dollars_overtime      || 0);
+    cur.dollars_double_time   += Number(r.dollars_double_time   || 0);
+    cur.dollars_premium_other += Number(r.dollars_premium_other || 0);
     cur.unpriced += Number(r.hours_without_dollars || 0);
     cur.draft_hours += Number(r.draft_hours || 0);
     cur.anomaly_no_clockout += Number(r.anomaly_no_clockout || 0);

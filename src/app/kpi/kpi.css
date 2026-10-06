@@ -3421,6 +3421,36 @@
 .kpi-tbl thead th:first-child { text-align: left; }
 .kpi-tbl-lcol { width: 30%; }
 .kpi-tbl-vbcol { width: 19%; }
+
+/* Kevin ruling 2026-10-06 (dollars-per-bucket). Grouped 2-row header:
+   Regular / OT 1.5x / Holiday 2x / Premium each span (hrs, $) under a
+   centered group label. The subcolumn row carries the hrs / $ labels
+   at a quieter weight so the pair reads as one object.
+   Non-bucket columns (Week, vs adjusted, Share, Unapproved, Hourly
+   rate, Total) use rowSpan={2} in the JSX; their vertical centering
+   is CSS-driven. */
+.kpi-tbl thead th.kpi-tbl-grpcol {
+  text-align: center;
+  border-bottom: 0;
+}
+.kpi-tbl thead th.kpi-tbl-subcol {
+  font-weight: 500;
+  color: var(--n-500);
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  padding-top: 0;
+  padding-bottom: 2px;
+  top: var(--hdr);
+}
+/* `mixed` renders in band / week / grand-total / account-child rate
+   cells (any aggregation across workers). Quiet italic muted meta -
+   on the design canvas it reads as "not applicable here" without
+   drawing the eye the way a number would. */
+.kpi-tbl-mixed {
+  font-style: italic;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
 .kpi-tbl tbody td {
   padding: 0 var(--kpi-sp-4);
   height: var(--row);
