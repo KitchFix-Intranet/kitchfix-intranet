@@ -3422,15 +3422,11 @@
   padding: 0 var(--kpi-sp-3);
   border-bottom: 1px solid var(--n-300);
   white-space: nowrap;
-  /* Kevin ruling 2026-10-06 PR-1238 follow-up P3. The grouped 2-row
-     header has single-row labels (Week, vs adjusted, Share, Unapproved,
-     Hourly rate, Total) using rowSpan=2, and bucket group labels
-     (Regular, OT 1.5x, Holiday 2x) in the top row with (hrs, $) in
-     the bottom. vertical-align: bottom pins every single-row header
-     to the same baseline as the hrs / $ sub-headers so the four
-     peer labels (WEEK, VS ADJUSTED, HOURLY RATE, TOTAL) stop reading
-     at two different heights. */
-  vertical-align: bottom;
+  /* Kevin ruling 2026-10-06 (header grouping, direction B). The header
+     is ONE row now - every column carries its own label, so there is no
+     second baseline to pin anything to and vertical-align is moot. The
+     grpcol / subcol rules that styled the retired group and sub rows are
+     deleted below. */
 }
 .kpi-tbl thead th:first-child { text-align: left; }
 /* Kevin ruling 2026-10-06 (label width follow-up). The fixed percentages
@@ -3446,26 +3442,6 @@
 .kpi-tbl-lcol { width: auto; }
 .kpi-tbl-vbcol { width: auto; }
 
-/* Kevin ruling 2026-10-06 (dollars-per-bucket). Grouped 2-row header:
-   Regular / OT 1.5x / Holiday 2x / Premium each span (hrs, $) under a
-   centered group label. The subcolumn row carries the hrs / $ labels
-   at a quieter weight so the pair reads as one object.
-   Non-bucket columns (Week, vs adjusted, Share, Unapproved, Hourly
-   rate, Total) use rowSpan={2} in the JSX; their vertical centering
-   is CSS-driven. */
-.kpi-tbl thead th.kpi-tbl-grpcol {
-  text-align: center;
-  border-bottom: 0;
-}
-.kpi-tbl thead th.kpi-tbl-subcol {
-  font-weight: 500;
-  color: var(--n-500);
-  letter-spacing: 0.03em;
-  text-transform: lowercase;
-  padding-top: 0;
-  padding-bottom: 2px;
-  top: var(--hdr);
-}
 /* `mixed` renders in band / week / grand-total / account-child rate
    cells (any aggregation across workers). Quiet italic muted meta -
    on the design canvas it reads as "not applicable here" without
