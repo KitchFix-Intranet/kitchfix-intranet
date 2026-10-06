@@ -102,10 +102,17 @@ export default function NewHireWizard({ bootstrapData, Drafts, Formatter, onNavi
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
+      // Derive raw team_key so the API can route location-aware CC
+      // (getManagerChain). form.operation is "${key} - ${name}"; the
+      // key alone is what accounts.team_key stores.
+      const matchedLoc = (bootstrapData?.locations || []).find(
+        (l) => `${l.key} - ${l.name}` === form.operation
+      );
+      const locationKey = matchedLoc ? matchedLoc.key : "";
       const res = await fetch("/api/people", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "submit-newhire", form: { ...form, submitterEmail: bootstrapData.userEmail } }),
+        body: JSON.stringify({ action: "submit-newhire", form: { ...form, locationKey, submitterEmail: bootstrapData.userEmail } }),
       });
       const data = await res.json();
       if (data.success) {
