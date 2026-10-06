@@ -4619,3 +4619,613 @@ body:has(.pp-app) {
     padding: 7px 8px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   People Directory (DirectoryView.js)
+   Prefix: pp-dir-
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pp-dir-card {
+  padding: 24px;
+}
+
+.pp-dir-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.pp-dir-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  flex-shrink: 0;
+}
+
+.pp-dir-title {
+  font-family: var(--pp-font-head);
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0;
+  color: var(--pp-navy);
+}
+
+.pp-dir-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 13px;
+  color: var(--pp-grey);
+}
+
+.pp-dir-loading {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--pp-grey);
+  font-size: 14px;
+}
+
+/* ─── Region pills ─── */
+.pp-dir-region-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.pp-dir-region-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--pp-white);
+  color: var(--pp-navy);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 999px;
+  font-family: var(--pp-font-body);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.pp-dir-region-pill:hover {
+  background: var(--pp-purple-soft);
+  border-color: var(--pp-purple-mid);
+}
+
+.pp-dir-region-pill--active {
+  background: var(--pp-navy);
+  color: var(--pp-white);
+  border-color: var(--pp-navy);
+}
+
+.pp-dir-region-pill--active:hover {
+  background: var(--pp-navy);
+  border-color: var(--pp-navy);
+}
+
+.pp-dir-region-pill-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 2px 7px;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pp-dir-region-pill--active .pp-dir-region-pill-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--pp-white);
+}
+
+/* ─── Site selector ─── */
+.pp-dir-site-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pp-dir-site-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--pp-grey);
+  text-transform: uppercase;
+}
+
+.pp-dir-site-select {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--pp-white);
+  color: var(--pp-navy);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 10px;
+  font-family: var(--pp-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+.pp-dir-site-select:focus {
+  outline: 2px solid var(--pp-purple);
+  outline-offset: 1px;
+}
+
+/* ─── Site banner ─── */
+.pp-dir-site-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  background: var(--pp-purple-soft);
+  border-radius: 12px;
+  border: 1px solid var(--pp-purple-mid);
+  margin-bottom: 16px;
+}
+
+.pp-dir-site-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--pp-font-head);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--pp-navy);
+}
+
+.pp-dir-site-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--pp-grey);
+  font-weight: 600;
+}
+
+.pp-dir-stat strong {
+  color: var(--pp-navy);
+  font-weight: 800;
+}
+
+.pp-dir-stat-sep {
+  color: var(--pp-grey-border);
+  font-weight: 700;
+}
+
+/* ─── Split layout ─── */
+.pp-dir-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pp-dir-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pp-dir-section-head {
+  font-family: var(--pp-font-head);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--pp-grey);
+  text-transform: uppercase;
+  margin: 4px 0 0 0;
+}
+
+.pp-dir-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ─── Roster row (manager tier - interactive) ─── */
+.pp-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--pp-white);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--pp-font-body);
+  color: var(--pp-navy);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+
+.pp-dir-row--manager:hover {
+  border-color: var(--pp-purple-mid);
+  background: var(--pp-purple-soft);
+}
+
+.pp-dir-row--selected,
+.pp-dir-row--selected:hover {
+  border-color: var(--pp-purple);
+  background: var(--pp-purple-soft);
+  box-shadow: var(--pp-shadow-card);
+}
+
+/* ─── Slim row (hourly, not interactive as a button) ─── */
+.pp-dir-row--hourly {
+  cursor: default;
+  padding: 8px 12px;
+  background: #fafbfc;
+}
+
+.pp-dir-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pp-dir-row-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pp-navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-dir-row-role {
+  font-size: 12px;
+  color: var(--pp-grey);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-dir-row-chev {
+  color: var(--pp-grey);
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.pp-dir-row-contacts {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pp-dir-icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--pp-grey);
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pp-dir-icon-link:hover {
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+}
+
+/* ─── Avatars ─── */
+.pp-dir-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--pp-white);
+  font-family: var(--pp-font-head);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.pp-dir-avatar--slim {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+}
+
+.pp-dir-avatar--lg {
+  width: 60px;
+  height: 60px;
+  font-size: 20px;
+}
+
+/* ─── Detail pane ─── */
+.pp-dir-detail {
+  min-width: 0;
+}
+
+.pp-dir-empty-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  background: #fafbfc;
+  border: 1px dashed var(--pp-grey-border);
+  border-radius: 12px;
+  color: var(--pp-grey);
+  text-align: center;
+  font-size: 13px;
+}
+
+.pp-dir-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+}
+
+.pp-dir-empty-site {
+  padding: 24px;
+  text-align: center;
+  color: var(--pp-grey);
+  background: #fafbfc;
+  border: 1px dashed var(--pp-grey-border);
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+/* ─── Manager card (detail pane contents) ─── */
+.pp-dir-manager-card {
+  background: var(--pp-white);
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: var(--pp-shadow-card);
+}
+
+.pp-dir-manager-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pp-dir-manager-id {
+  min-width: 0;
+}
+
+.pp-dir-manager-name {
+  font-family: var(--pp-font-head);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--pp-navy);
+  margin: 0;
+}
+
+.pp-dir-manager-role {
+  font-size: 13px;
+  color: var(--pp-grey);
+  margin: 2px 0 0 0;
+}
+
+/* ─── Badges ─── */
+.pp-dir-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pp-dir-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.pp-dir-badge--leader {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.pp-dir-badge--manager {
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+}
+
+.pp-dir-badge--salaried {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* ─── Contact list in manager card ─── */
+.pp-dir-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pp-dir-contact-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pp-grey-border);
+}
+
+.pp-dir-contact-row:last-child {
+  border-bottom: none;
+}
+
+.pp-dir-contact-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--pp-purple-soft);
+  color: var(--pp-purple);
+  flex-shrink: 0;
+}
+
+.pp-dir-contact-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pp-dir-contact-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--pp-grey);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.pp-dir-contact-value {
+  font-size: 14px;
+  color: var(--pp-navy);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.pp-dir-contact-value--link {
+  color: var(--pp-blue);
+  text-decoration: none;
+}
+
+.pp-dir-contact-value--link:hover {
+  text-decoration: underline;
+}
+
+/* ─── Notification routing callout ─── */
+.pp-dir-routing {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+}
+
+.pp-dir-routing-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #ffedd5;
+  color: #c2410c;
+  flex-shrink: 0;
+}
+
+.pp-dir-routing-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+
+.pp-dir-routing-text {
+  font-size: 13px;
+  color: #7c2d12;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* ─── Action buttons ─── */
+.pp-dir-detail-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.pp-dir-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+/* ─── Mobile (floor-first, 375px) ─── */
+@media (max-width: 820px) {
+  .pp-dir-split {
+    grid-template-columns: 1fr;
+  }
+
+  .pp-dir-detail {
+    order: -1;
+  }
+}
+
+@media (max-width: 540px) {
+  .pp-dir-card {
+    padding: 18px;
+  }
+
+  .pp-dir-title {
+    font-size: 20px;
+  }
+
+  .pp-dir-region-pill {
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+
+  .pp-dir-site-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .pp-dir-site-select {
+    width: 100%;
+  }
+
+  .pp-dir-site-banner {
+    padding: 14px;
+  }
+
+  .pp-dir-manager-card {
+    padding: 16px;
+  }
+
+  .pp-dir-avatar--lg {
+    width: 52px;
+    height: 52px;
+    font-size: 18px;
+  }
+
+  .pp-dir-manager-name {
+    font-size: 17px;
+  }
+}

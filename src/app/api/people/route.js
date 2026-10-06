@@ -29,6 +29,7 @@ import { readSheetSA, appendRowSA, updateRangeSA, updateCellByRowColSA, clearRan
 // reads it anymore.
 import { getNotificationRecipients } from "@/lib/notifications/getNotificationRecipients";
 import { getManagerChain } from "@/lib/notifications/getManagerChain";
+import { getServiceClient } from "@/lib/supabase";
 import {
   getSubmissions,
   getSubmissionByToken,
@@ -588,6 +589,119 @@ if (action === "bootstrap") {
 
       history.sort((a, b) => new Date(b.date) - new Date(a.date));
       return NextResponse.json({ success: true, history });
+    }
+
+    // ─── Directory: active roster grouped by region + site ───
+    // Reads ACTIVE rows from `people` (Rippling-synced), joins region
+    // from `accounts`, and enriches slack handles from `contacts`
+    // (email-indexed). Returns flat arrays; client groups by region
+    // and team.
+    if (action === "directory") {
+      const supa = getServiceClient();
+
+      // Paginate defensively - people has >1000 rows total; ACTIVE
+      // filter cuts to ~73 today but could grow.
+      const peopleRows = [];
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supa
+          .from("people")
+          .select(
+            "worker_id, display_name, title, account_key, is_corp, " +
+            "is_manager, is_salaried, is_site_leader, worker_class, " +
+            "work_email, personal_email, phone, site_leader_note"
+          )
+          .eq("status", "ACTIVE")
+          .range(from, from + PAGE - 1);
+        if (error) throw new Error(`[directory] people read: ${error.message}`);
+        peopleRows.push(...data);
+        if (data.length < PAGE) break;
+      }
+
+      const [{ data: accounts, error: accErr }, { data: contactRows, error: ctErr }] =
+        await Promise.all([
+          supa
+            .from("accounts")
+            .select("team_key, name, region, active")
+            .eq("active", true),
+          supa
+            .from("contacts")
+            .select("email, slack_handle, slack_user_id, role, is_site_leader"),
+        ]);
+      if (accErr) throw new Error(`[directory] accounts: ${accErr.message}`);
+      if (ctErr)  throw new Error(`[directory] contacts: ${ctErr.message}`);
+
+      // Email-indexed slack lookup
+      const slackByEmail = new Map();
+      for (const c of contactRows || []) {
+        const key = String(c.email || "").toLowerCase().trim();
+        if (!key) continue;
+        slackByEmail.set(key, {
+          slack_handle: c.slack_handle || "",
+          slack_user_id: c.slack_user_id || "",
+          contacts_role: c.role || "",
+        });
+      }
+
+      const people = peopleRows.map((p) => {
+        const key = String(p.work_email || "").toLowerCase().trim();
+        const s = slackByEmail.get(key) || {};
+        return {
+          worker_id: p.worker_id,
+          display_name: p.display_name || "",
+          title: p.title || "",
+          team_key: p.account_key || "",
+          is_corp: !!p.is_corp,
+          is_manager: !!p.is_manager,
+          is_salaried: !!p.is_salaried,
+          is_site_leader: !!p.is_site_leader,
+          worker_class: p.worker_class || "",
+          work_email: p.work_email || "",
+          personal_email: p.personal_email || "",
+          phone: p.phone || "",
+          site_leader_note: p.site_leader_note || "",
+          slack_handle: s.slack_handle || "",
+          slack_user_id: s.slack_user_id || "",
+        };
+      });
+
+      // Headcount per team (ACTIVE only). Teams with 0 ACTIVE drop out.
+      const headByTeam = new Map();
+      for (const p of people) {
+        if (!p.team_key) continue;
+        headByTeam.set(p.team_key, (headByTeam.get(p.team_key) || 0) + 1);
+      }
+
+      const regionOrder = { East: 0, West: 1, CORP: 2 };
+      const teams = (accounts || [])
+        .filter((a) => headByTeam.has(a.team_key))
+        .map((a) => ({
+          team_key: a.team_key,
+          name: a.name || a.team_key,
+          region: a.region || "",
+          headcount: headByTeam.get(a.team_key) || 0,
+        }))
+        .sort((a, b) => {
+          const ra = regionOrder[a.region] ?? 99;
+          const rb = regionOrder[b.region] ?? 99;
+          if (ra !== rb) return ra - rb;
+          return a.name.localeCompare(b.name);
+        });
+
+      const regionMap = new Map();
+      for (const t of teams) {
+        if (!regionMap.has(t.region)) {
+          regionMap.set(t.region, { name: t.region, team_count: 0, headcount: 0 });
+        }
+        const r = regionMap.get(t.region);
+        r.team_count++;
+        r.headcount += t.headcount;
+      }
+      const regions = [...regionMap.values()].sort(
+        (a, b) => (regionOrder[a.name] ?? 99) - (regionOrder[b.name] ?? 99)
+      );
+
+      return NextResponse.json({ success: true, regions, teams, people });
     }
 
     // ─── Draft: Load ───
