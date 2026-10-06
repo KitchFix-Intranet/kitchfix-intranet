@@ -1164,6 +1164,26 @@
   letter-spacing: 0.2px;
 }
 
+/* Kevin ruling 2026-10-06: the transaction-number cell links to the
+   stamped PDF for post-cutover invoice_submissions rows. The anchor
+   must look identical to an unlinked number at rest - these tables
+   were deliberately calmed in PRs 1228 + 1229. Inherits color +
+   weight from its parent cell; underline appears on hover and focus
+   only. Focus ring uses the --focus-ring-color token. */
+.kpi-app .kpi-ov-pf-numlink {
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.kpi-app .kpi-ov-pf-numlink:hover { text-decoration: underline; }
+.kpi-app .kpi-ov-pf-numlink:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset, 2px);
+  text-decoration: underline;
+  border-radius: 2px;
+}
+
 /* Editorial · money + charge-number cells sit in the mono family so
    the digits align on their columns. Text (vendor, type, sub-lines,
    week-band labels) stays Inter. Scoped to the Fold's table so the

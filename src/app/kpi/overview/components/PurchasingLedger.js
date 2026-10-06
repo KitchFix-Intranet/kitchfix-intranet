@@ -407,7 +407,23 @@ export default function PurchasingLedger({ actuals, cardCharges, vendorRollup, r
                         <td className="kpi-ov-cp-led-l">{short(r.txn_date)} · {r.gl_line_code || "not coded"}</td>
                         <td colSpan="4" className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">
                           {label}
-                          {r.invoice_number ? ` · #${r.invoice_number}` : ""}
+                          {r.invoice_number ? (
+                            <>
+                              {" · "}
+                              {r.source === "invoice_submissions" && r.drive_url_stamped
+                                ? (
+                                  <a
+                                    href={r.drive_url_stamped}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="kpi-ov-pf-numlink"
+                                    aria-label={`Invoice ${r.invoice_number}, opens stamped PDF in a new tab`}
+                                    title="Open stamped PDF (new tab)"
+                                  >{`#${r.invoice_number}`}</a>
+                                )
+                                : `#${r.invoice_number}`}
+                            </>
+                          ) : ""}
                           {r.status && r.status !== "sent" ? ` · ${r.status}` : ""}
                           {r.sga_removed_amount ? (
                             <span className="kpi-ov-cp-led-sga" title="This invoice contained SG&A lines that don't count toward COGS; the row total is the COGS portion.">

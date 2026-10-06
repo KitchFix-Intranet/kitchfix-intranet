@@ -205,7 +205,17 @@ export async function paginateInvoiceSubmissions(supa, { members, start, end, in
     while (true) {
       const q = await supa
         .from("invoice_submissions")
-        .select("id, account_key, vendor_id, vendor_name, invoice_number, invoice_date, total_amount, gl_breakdown, status, type")
+        // Kevin ruling 2026-10-06: carry the Drive links + submitter so
+        // the fold's transaction number can hyperlink to the stamped
+        // PDF. drive_urls is a Postgres text[] (NOT jsonb; from
+        // PostgREST this arrives as a real array - do NOT JSON.parse
+        // like the Sheets-era InvoiceAdmin.js:313 reads). Element 0 is
+        // the stamped PDF, which carries the GL coding that matches
+        // the figures on the board. raw_drive_url rides the wire too
+        // (original photo) but is not rendered yet. submitter_email
+        // ships with it so the uploader name is already on the wire
+        // when Kevin rules on the render.
+        .select("id, account_key, vendor_id, vendor_name, invoice_number, invoice_date, total_amount, gl_breakdown, status, type, drive_urls, raw_drive_url, submitter_email")
         .in("account_key", memberChunk)
         .in("status", ["sent", "returned"])
         .gte("invoice_date", readStart)
@@ -263,6 +273,13 @@ export async function paginateInvoiceSubmissions(supa, { members, start, end, in
         status:             s.status || null,
         sga_removed_amount: Math.round(sgaRemoved * 100) / 100,
         vendor_id:          s.vendor_id || null,
+        // Kevin ruling 2026-10-06: invoice-level fields repeated on
+        // every emitted line of the same invoice (same shape as
+        // invoice_number above). buildTransactions in the Fold groups
+        // lines back by source_bill_id and reads them off any one.
+        drive_url_stamped:  Array.isArray(s.drive_urls) && s.drive_urls.length > 0 ? s.drive_urls[0] : null,
+        drive_url_raw:      s.raw_drive_url || null,
+        submitter_email:    s.submitter_email || null,
       } : {
         source:             "invoice_submissions",
         gl_line_code:       glCode || null,
