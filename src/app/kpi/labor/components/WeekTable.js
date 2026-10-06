@@ -138,6 +138,17 @@ export const WEEK_TABLE_POP_BODY = (
         <tr><td>&ldquo;unpriced&rdquo;</td><td>dollars still coming</td></tr>
       </tbody>
     </table>
+    {/* Kevin ruling 2026-10-06 (header grouping, direction B). The column
+        headers shortened to Reg / OT / Hol and dropped the 1.5x and 2x
+        multipliers they used to carry. The rates live here now. */}
+    <b>The pay buckets:</b>
+    <table className="kpi-hs-pop-table">
+      <tbody>
+        <tr><td>Reg</td><td>base hourly rate</td></tr>
+        <tr><td>OT</td><td>1.5&times; base, past 40 hours in a week</td></tr>
+        <tr><td>Hol</td><td>2&times; base, on a paid holiday</td></tr>
+      </tbody>
+    </table>
     <b>Need attention is the only one that requires a fix</b> - somebody never clocked out, or a punch is under a minute. The others resolve on their own or with an approval.
   </>
 );
@@ -887,7 +898,7 @@ export function WeekTable({
           <table className="kpi-tbl">
             <thead>
               <tr>
-                <th className="kpi-tbl-lcol" rowSpan={2}>
+                <th className="kpi-tbl-lcol">
                   Week
                   {/* V25-19 - `Names hidden` chip sits on the WEEK header when
                       the table is in Numbers mode and worker rows are actually
@@ -902,32 +913,33 @@ export function WeekTable({
                     >Names hidden</button>
                   )}
                 </th>
-                <th className="kpi-tbl-vbcol" rowSpan={2}>vs adjusted</th>
-                {showShare && <th className="kpi-tbl-shrcol" rowSpan={2}>Share</th>}
-                {/* Kevin ruling 2026-10-06 (dollars-per-bucket). Regular,
-                    OT and Holiday each span (hrs, $) under a grouped
-                    header. Premium conditional for forward safety -
-                    zero on every FY2026 row today, but the pair rides
-                    on the wire so a future non-zero cannot silently
-                    break the four-bucket -> amount tie. The Hourly
-                    rate column header is now unconditional - the
-                    pre-fix `rateBasisHourlyOnly ? HOURLY RATE : RATE`
-                    ternary was retired alongside the dollars-over-
-                    hours division that gave the number its drift. */}
-                <th colSpan={2} className="kpi-tbl-grpcol">Regular</th>
-                {showOT      && <th colSpan={2} className="kpi-tbl-grpcol">OT 1.5&times;</th>}
-                {showHoliday && <th colSpan={2} className="kpi-tbl-grpcol">Holiday 2&times;</th>}
-                {showPremium && <th colSpan={2} className="kpi-tbl-grpcol">Premium</th>}
-                {showUnpriced && <th rowSpan={2}>Unapproved</th>}
-                {showRate && <th rowSpan={2}>Hourly rate</th>}
-                <th rowSpan={2}>Total</th>
-              </tr>
-              <tr>
-                <th className="kpi-tbl-subcol">hrs</th>
-                <th className="kpi-tbl-subcol">$</th>
-                {showOT      && <><th className="kpi-tbl-subcol">hrs</th><th className="kpi-tbl-subcol">$</th></>}
-                {showHoliday && <><th className="kpi-tbl-subcol">hrs</th><th className="kpi-tbl-subcol">$</th></>}
-                {showPremium && <><th className="kpi-tbl-subcol">hrs</th><th className="kpi-tbl-subcol">$</th></>}
+                <th className="kpi-tbl-vbcol">vs adjusted</th>
+                {showShare && <th className="kpi-tbl-shrcol">Share</th>}
+                {/* Kevin ruling 2026-10-06 (header grouping, direction B of
+                    three rendered options). The grouped 2-row header is
+                    retired. It never actually grouped: the group-column
+                    rule set border-bottom: 0, so nothing tied a group label
+                    to its two columns - REGULAR floated centered over a
+                    213px span with no rule, tint or divider beneath it.
+                    The second row also put weight-500 `hrs` / `$` on the
+                    same baseline as the weight-800 single-row labels, so
+                    two different kinds of label read as peers. Each bucket
+                    column now carries its own label on one row at one
+                    weight and one alignment. Premium stays conditional for
+                    forward safety - zero on every FY2026 row today, but
+                    the pair rides on the wire so a future non-zero cannot
+                    silently break the four-bucket -> amount tie. The 1.5x
+                    and 2x multipliers left the header strings and moved
+                    into the "?" popover legend (WEEK_TABLE_POP_BODY) so
+                    the rate information is not lost. */}
+                <th>Reg hrs</th>
+                <th>Reg $</th>
+                {showOT      && <><th>OT hrs</th><th>OT $</th></>}
+                {showHoliday && <><th>Hol hrs</th><th>Hol $</th></>}
+                {showPremium && <><th>Prem hrs</th><th>Prem $</th></>}
+                {showUnpriced && <th>Unapproved</th>}
+                {showRate && <th>Hourly rate</th>}
+                <th>Total</th>
               </tr>
             </thead>
             <tbody>
