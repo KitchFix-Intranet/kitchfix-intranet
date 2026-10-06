@@ -6,6 +6,7 @@ const TABS = [
   { id: "newhire", label: "New Hire" },
   { id: "paf", label: "PAF" },
   { id: "incidents", label: "Incidents" },
+  { id: "directory", label: "Directory" },
   { id: "leadership-dugout", label: "Leadership" },
 ];
 
