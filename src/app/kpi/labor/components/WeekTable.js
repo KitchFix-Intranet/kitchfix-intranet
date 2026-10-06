@@ -969,9 +969,14 @@ export function WeekTable({
                     const done = Math.min(totalWeeks, closedCount + 1);
                     return `in progress · ${done} of ${wkUnit(totalWeeks)}`;
                   }
-                  return periodBudget != null
-                    ? `${wkUnit(weeksInBand)} · adjusted ${fmt$(periodBudget)}`
-                    : wkUnit(weeksInBand);
+                  // Kevin ruling 2026-10-06 (label width). The adjusted
+                  // dollar figure left the sub-line. The VS ADJUSTED column
+                  // sits immediately right of this cell and already carries
+                  // the variance against the same budget, so the sub-line was
+                  // spending 105px of a 362px label column to print the
+                  // budget a second time. `periodBudget` is still read by
+                  // bandVs below - only the sub-line copy changed.
+                  return wkUnit(weeksInBand);
                 })();
                 const bandVs = periodBudget == null
                   ? { mode: "muted" }
@@ -1117,16 +1122,28 @@ function FragmentRows({
             <span className="kpi-tbl-chev">{periodOpen ? "⌄" : "›"}</span>
             {band.label}
             <span className="kpi-tbl-bandsub">{band.subLabel}</span>
-            {/* PR-E - band-level OT chip. Completes the pattern PR-D
-                closed at the account level (chip beside the OT column
-                on account child rows). Same rule: if the band totals
-                cross the OT threshold, the chip appears beside the
-                label so the reader does not have to scan the OT
-                column for a signal that is already known. */}
-            <OTTag ot={band.totals.ot} />
-            {band.exceptionWeekCount > 0 && (
-              <span className="kpi-tbl-flag kpi-flag-warn">⚠ {band.exceptionWeekCount} week{band.exceptionWeekCount === 1 ? "" : "s"} unpriced</span>
-            )}
+            {/* Kevin ruling 2026-10-06 (label width). PR-E's band-level OT
+                chip is retired. It was a convenience - the comment said so,
+                "so the reader does not have to scan the OT column" - and the
+                OT column is adaptive, so whenever a band crossed the chip
+                threshold the column was rendered too. 23px of label width for
+                a signal already on the row. The week-row and child-row OTTag
+                call sites stay. */}
+            {/* Kevin ruling 2026-10-06 (label width). The band "N weeks
+                unpriced" chip is retired. Three reasons. (1) The week rows
+                inside this band already render ExceptionChip on their
+                sub-line, which reads the V42 state model and prints
+                per-state copy, glyph and tooltip - strictly richer than this
+                chip's single string. (2) The chip's copy was wrong: the
+                condition is coverage_state !== "complete", which catches
+                hours_only and partial - weeks where hours arrived with no
+                dollars attached. That is a pipeline gap, not a pricing one.
+                (3) It fires on 5 rows of 2,718 in FY2026, two weeks of a
+                41-week year, and its width was charged to all forty rows.
+                `band.exceptionWeekCount` and `band.bandSeverity` stay on the
+                band object; neither renders now. If the collapsed-band signal
+                is wanted back later, bandSeverity is already there and a
+                glyph-only marker costs ~15px instead of ~100px. */}
           </button>
         </td>
         <td>

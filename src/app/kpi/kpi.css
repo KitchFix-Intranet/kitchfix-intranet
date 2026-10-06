@@ -3414,7 +3414,12 @@
   font-size: var(--kpi-t-label); letter-spacing: 0.07em;
   color: var(--n-600); font-weight: 800;
   text-transform: uppercase; text-align: right;
-  padding: 0 var(--kpi-sp-4);
+  /* Kevin ruling 2026-10-06 (label width). sp-4 (14.4) -> sp-3 (10.8) on
+     the two kpi-tbl cell rules only. Ten cells x 2 sides at 14.4 spent
+     288px of a 1205px table on padding while five columns had zero or
+     negative slack. The sp-4 token is untouched - it is read across every
+     other KPI surface. */
+  padding: 0 var(--kpi-sp-3);
   border-bottom: 1px solid var(--n-300);
   white-space: nowrap;
   /* Kevin ruling 2026-10-06 PR-1238 follow-up P3. The grouped 2-row
@@ -3428,8 +3433,18 @@
   vertical-align: bottom;
 }
 .kpi-tbl thead th:first-child { text-align: left; }
-.kpi-tbl-lcol { width: 30%; }
-.kpi-tbl-vbcol { width: 19%; }
+/* Kevin ruling 2026-10-06 (label width follow-up). The fixed percentages
+   are retired. At 30 + 19 these two columns claimed 590px of a 1205px
+   table and held it whether or not their content needed it - measured
+   133px idle in each while four data columns ran negative slack. Both
+   cells are nowrap, so auto table layout sizes each to its widest content
+   and spreads the remainder across the rest. Each class is used on exactly
+   one th in WeekTable.js and nowhere else, so this is contained to the
+   labor week table. If the label column balloons past ~280px on the
+   aggregate or worker-expanded views, cap it with max-width rather than
+   restoring a percentage. */
+.kpi-tbl-lcol { width: auto; }
+.kpi-tbl-vbcol { width: auto; }
 
 /* Kevin ruling 2026-10-06 (dollars-per-bucket). Grouped 2-row header:
    Regular / OT 1.5x / Holiday 2x / Premium each span (hrs, $) under a
@@ -3461,7 +3476,9 @@
   font-weight: 500;
 }
 .kpi-tbl tbody td {
-  padding: 0 var(--kpi-sp-4);
+  /* Kevin ruling 2026-10-06 (label width). sp-4 -> sp-3; see the thead th
+     rule above for rationale + width budget. */
+  padding: 0 var(--kpi-sp-3);
   height: var(--row);
   font-size: var(--kpi-t-body);
   color: var(--n-800);
