@@ -177,6 +177,15 @@ function buildTransactions(rows) {
         type: r.type || null,
         status: r.status || null,
         invoice_number: r.invoice_number || null,
+        // Kevin ruling 2026-10-06: Drive links + submitter uploaded by
+        // the loader at paginateInvoiceSubmissions. drive_url_stamped
+        // is drive_urls[0] (the stamped PDF matching the GL coding).
+        // Fold renders the invoice number as an anchor to this URL;
+        // raw + submitter ship on the wire now so a later rendering
+        // ruling does not need another loader change.
+        drive_url_stamped: r.drive_url_stamped || null,
+        drive_url_raw: r.drive_url_raw || null,
+        submitter_email: r.submitter_email || null,
         txn_date: r.txn_date,
         sga_removed: 0,
         // buckets:
@@ -545,7 +554,20 @@ function PurchasingWeekBand({ band, showVehicle }) {
                 )}
               </td>
               <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{typeLabel(r)}</td>
-              <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{numberLabel(r)}</td>
+              <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">
+                {r.source === "invoice_submissions" && r.drive_url_stamped
+                  ? (
+                    <a
+                      href={r.drive_url_stamped}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="kpi-ov-pf-numlink"
+                      aria-label={r.invoice_number ? `Invoice ${r.invoice_number}, opens stamped PDF in a new tab` : "Invoice, opens stamped PDF in a new tab"}
+                      title="Open stamped PDF (new tab)"
+                    >{numberLabel(r)}</a>
+                  )
+                  : numberLabel(r)}
+              </td>
               <td>{cellCell(r.food)}</td>
               <td>{cellCell(r.packaging)}</td>
               {showVehicle && <td>{cellCell(r.vehicle)}</td>}
