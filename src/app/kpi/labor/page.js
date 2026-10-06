@@ -1181,6 +1181,11 @@ export default function KpiLaborPage() {
           grandTotal={grand}
           boardKind={data?.board?.kind ?? null}
           workers={data.workers}
+          /* Kevin ruling 2026-10-06. Payload-shipped worker-week
+             rates feed the Hourly rate column on worker child rows.
+             Band / week / total / account-child rows render `mixed`
+             regardless of this map. */
+          workerWeekRates={data?.worker_week_rates || null}
           /* PR-C - raw actuals thread so WeekTable's aggregate-child
              pre-aggregation can group by (week_start, account_key)
              directly. Prior code relied on w.worker_rows which was
