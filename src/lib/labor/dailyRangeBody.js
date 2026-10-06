@@ -43,12 +43,15 @@ export async function buildDailyRangeBody(ctx) {
   // 1. Resolve members.
   let members;
   if (V6_PSEUDO_KEYS.has(account)) {
+    // Kevin ruling 2026-10-06: retired accounts (active=false, today
+    // CHI - IL + CIN - FL) are not portfolio members. Mirrors the
+    // filter on resolvePortfolioMembers.
     let memberQ;
     if (account === "ALL") {
-      memberQ = await supa.from("accounts").select("team_key").neq("team_key", "CORP").order("team_key");
+      memberQ = await supa.from("accounts").select("team_key").neq("team_key", "CORP").neq("active", false).order("team_key");
     } else {
       const regionValue = account === "EAST" ? "East" : "West";
-      memberQ = await supa.from("accounts").select("team_key").neq("team_key", "CORP").eq("region", regionValue).order("team_key");
+      memberQ = await supa.from("accounts").select("team_key").neq("team_key", "CORP").neq("active", false).eq("region", regionValue).order("team_key");
     }
     if (memberQ.error) return { error: safeErr("v6_members_daily", memberQ.error) };
     members = (memberQ.data || []).map(r => r.team_key);

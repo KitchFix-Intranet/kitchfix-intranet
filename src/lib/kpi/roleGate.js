@@ -110,7 +110,12 @@ export async function loadRoleGate(supa) {
   if (rolesQ.error && /can_see_salary.*does not exist/i.test(rolesQ.error.message || "")) {
     rolesQ = await supa.from("kpi_roles").select("email, role, scope");
   }
-  const accountsQ = await supa.from("accounts").select("team_key, region");
+  // Kevin ruling 2026-10-06: retired accounts (active=false) do not
+  // appear in the scope-resolution set. A caller whose scope names
+  // one is denied rather than returning an empty view - the deny-
+  // rather-than-empty consequence is intentional, not a regression.
+  // .neq (not .eq true) treats NULL as active to match SC + Academy.
+  const accountsQ = await supa.from("accounts").select("team_key, region").neq("active", false);
   if (rolesQ.error)    return errorGate(`kpi_roles: ${rolesQ.error.message}`);
   if (accountsQ.error) return errorGate(`accounts: ${accountsQ.error.message}`);
 

@@ -132,6 +132,8 @@ function rdoDisplayName(email) {
 // wire (StateSalaried still gates the account page) but is no longer
 // echoed as a folio-row tag (V7-15). Called once per request.
 async function fetchAccountsDirectory(supa) {
+  // Kevin ruling 2026-10-06: retired accounts (active=false, today
+  // CHI - IL + CIN - FL) are not folio members.
   const q = await supa.from("accounts")
     // homestand-redesign 2026-08-26: timezone added so the day-strip
     // caption can convert UTC game_time to local. Owner ruling: NO
@@ -141,6 +143,7 @@ async function fetchAccountsDirectory(supa) {
     // / TXR - TX - V per owner verification 2026-08-26.
     .select("team_key, region, name, city, state, timezone")
     .neq("team_key", "CORP")
+    .neq("active", false)
     .order("team_key");
   if (q.error) return { error: q.error };
   const salaried = new Set(["CIN - KY", "TBJ - NY"]);   // D26 mirror

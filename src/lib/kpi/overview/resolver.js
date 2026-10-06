@@ -221,9 +221,13 @@ async function resolveMembers(supa, account) {
 // small (15 lines, one SELECT), self-contained, and the CORP filter
 // / D17 exclusion are inherited from the labor version.
 async function fetchAccountsDirectoryOv(supa) {
+  // Kevin ruling 2026-10-06: retired accounts (active=false, today
+  // CHI - IL + CIN - FL) are not Overview directory rows. Same filter
+  // as the labor route's fetchAccountsDirectory.
   const q = await supa.from("accounts")
     .select("team_key, region, name, city, state, timezone")
     .neq("team_key", "CORP")
+    .neq("active", false)
     .order("team_key");
   if (q.error) return { error: q.error };
   const salaried = new Set(["CIN - KY", "TBJ - NY"]);
