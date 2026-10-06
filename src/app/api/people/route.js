@@ -28,6 +28,7 @@ import { readSheetSA, appendRowSA, updateRangeSA, updateCellByRowColSA, clearRan
 // place as documented fallback reference; nothing in this file
 // reads it anymore.
 import { getNotificationRecipients } from "@/lib/notifications/getNotificationRecipients";
+import { getManagerChain } from "@/lib/notifications/getManagerChain";
 import {
   getSubmissions,
   getSubmissionByToken,
@@ -316,6 +317,17 @@ async function notify(actionKey, data) {
     const appUrl = process.env.AUTH_URL || "http://localhost:3000";
     const adminRecipients = await getNotificationRecipients(actionKey);
     const submitter = data.submitterEmail;
+
+    // Layer location-based CC on top of the static per-action admin
+    // list. getManagerChain adds the regional director + site leaders
+    // for data.locationKey and strips the submitter. Missing /
+    // unknown locationKey falls back to adminRecipients-only (plus
+    // always-CC pyramid from getManagerChain even without a region).
+    let ccRecipients = [...adminRecipients];
+    if (data.locationKey) {
+      const managerChain = await getManagerChain(data.locationKey, submitter);
+      ccRecipients = [...new Set([...ccRecipients, ...managerChain])];
+    }
     const employeeName = data.employeeName || data.firstName ? `${data.firstName || ""} ${data.lastName || ""}`.trim() : "Unknown";
 
     let template;
@@ -339,16 +351,16 @@ async function notify(actionKey, data) {
     // design - nothing downstream ever depended on admin logging before
     // submitter logging (both were UI display rows only).
     const sends = [];
-    if (adminRecipients.length > 0) {
+    if (ccRecipients.length > 0) {
       const adminHtml = EmailTemplates.wrapper(
         template.body,
         `${appUrl}/people?view=admin`,
         "Reject or Approve",
         "#7c3aed"
       );
-      sends.push(sendEmail(adminRecipients, template.subject, adminHtml, submitter));
+      sends.push(sendEmail(ccRecipients, template.subject, adminHtml, submitter));
     }
-    if (submitter && !adminRecipients.includes(submitter)) {
+    if (submitter && !ccRecipients.includes(submitter)) {
       const userHtml = EmailTemplates.wrapper(
         template.body,
         `${appUrl}/people?view=activity`,
