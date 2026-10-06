@@ -155,10 +155,15 @@ async function main() {
       }
     }
 
-    // Item 4: chart is not a fold + in right column
+    // Item 4: chart is not a fold + in right column.
+    // 2026-10-06 update: week-grain chart retired; single-period views
+    // emit chart=null and render no chart card at all. Chart-missing
+    // is the expected state on CP / NP. If the card IS present, the
+    // original invariants still hold (not a fold, in split-right).
     if (info.chartFoldPresent) fail(c.name, `chart is still a fold`);
-    if (!info.chartCardPresent) fail(c.name, `chart card missing`);
-    if (!info.chartInRight) fail(c.name, `chart not in .kpi-ov-split-right`);
+    if (info.chartCardPresent && !info.chartInRight) {
+      fail(c.name, `chart card present but not in .kpi-ov-split-right`);
+    }
 
     // Item 5: TBJ - FL P9 known case - service charges unreported;
     // revenue total FORECAST = meal service alone ($59,870).

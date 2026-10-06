@@ -1,5 +1,16 @@
 #!/usr/bin/env node
-// scripts/probes/_probe_chart_dashes.mjs
+// RETIRED 2026-10-06 - this probe asserted the chart's bar-colour
+// invariant, which Kevin's ruling retired alongside the week-grain
+// chart itself (two surfaces computing one idea from different
+// inputs; WeekRail replaced it). The surviving period-grain colour
+// invariant is still asserted by _probe_chart_scale.mjs (grain
+// gate at :87) and _probe_language_colour_pass.mjs (grain gate at
+// :139). No net loss of coverage. Early exit so a stale harness
+// that still invokes this file reports PASS instead of running
+// against a chart that no longer renders on single-period views.
+// Delete after the next probe prune.
+process.exit(0);
+// Original body preserved below (unreachable) for history.
 //
 // Kevin ruling cleanup (2026-09-03) item 1 (DEFECT). Permanent probe.
 //

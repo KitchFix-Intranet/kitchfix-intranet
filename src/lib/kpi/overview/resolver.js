@@ -1966,122 +1966,24 @@ export async function resolveOverview({
     buildLever("Vehicle",                "3500", vehicle_actual,    vehicle_budget,    vehicle_budget_to_date_days),
   ];
 
-  // 17. Chart series. Period grain for FYTD; week grain for a single
-  //     period. Weeks come from the purchasing weekly view + labor
-  //     week aggregates.
+  // 17. Chart series.
+  //
+  // Kevin ruling 2026-10-06: the week-grain chart is retired. WeekRail
+  // above it already renders an honest week-by-week cost view that
+  // reads per-week target from each week's own revenue, hatches the
+  // trailing week with an explicit invoice-lag rule, and marks not-
+  // yet-landed weeks - all things the week-grain chart lacked. Two
+  // surfaces computing the same idea from different inputs and
+  // disagreeing was the fracture GOTCHAS.md §9B names.
+  //
+  // Period grain for FYTD / explicit multi-period ranges stays. The
+  // period IS the inventory settling unit, so period-grain does not
+  // have the purchase-timing problem that made week-grain misleading.
+  // Single-period ranges emit chart=null and the client renders
+  // nothing.
   let chart;
   if (rng.kind === "period") {
-    // Week grain. Iterate the weeks in the period and read from both
-    // engines' per-week outputs where present.
-    const laborWeeks = new Map();
-    for (const w of laborBoard?.weeks || []) {
-      laborWeeks.set(w.week_start, Number(w.spent || 0));
-    }
-    // Purchasing weekly per bucket already; sum food+packaging+vehicle
-    // for the aggregate COGS view.
-    const purchWeekMap = new Map();
-    for (const key of ["3200", "3400", "3500"]) {
-      const bucket = purchBoard.buckets[key];
-      if (!bucket?.week_series) continue;
-      for (const w of bucket.week_series) {
-        purchWeekMap.set(w.week_start, (purchWeekMap.get(w.week_start) || 0) + Number(w.amount || 0));
-      }
-    }
-    const weekStarts = weekStartsInRange(rng.start, rng.end);
-    // Kevin PR-B item 5 (2026-09-03): the weekly budget line is drawn
-    // from the ADJUSTED budget (cogs.budget_at_this_revenue) divided
-    // by COMPLETE weeks in the range - same figure the cost card
-    // displays as its target, and the same rule the FYTD per-period
-    // dashes already follow. Prior formula (period_budget / 4) was
-    // off by ~$780/wk on TBJ - FL P9 because it used the un-adjusted
-    // period budget and divided by every week (not just complete
-    // ones). Closed ranges reduce to the same answer (all weeks
-    // complete, revenue is settled).
-    const budAtRev = has_target ? budgetAtThisRevenue(cogsBudget) : null;
-    const closedWeeksCount = weekStarts.filter(ws => {
-      const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * 86400000).toISOString().slice(0, 10);
-      return wEnd < today;
-    }).length;
-    const wkBudget = (budAtRev != null && closedWeeksCount > 0)
-      ? r2(budAtRev / closedWeeksCount)
-      : (laborBoard?.applies && laborBoard.range_budget != null
-          ? r2((laborBoard.range_budget + (purchBoard.totals.buckets_budget || 0)) / weekStarts.length)
-          : null);
-    // Kevin CC prompt 2026-09-09 item 1. A week's invoices are still
-    // arriving until the current fiscal week is 2+ weeks past it -
-    // the exact rule the WeekRail card uses as
-    //   invoices_landed = (running_week_no - week_no) >= 2.
-    // WeekRail only renders on Current period, so the running_week_no
-    // integer form is period-scoped. The chart runs on every range,
-    // so express the same rule in absolute terms: today's fiscal-week
-    // Monday must be >= 14 days after the target week's Monday. The
-    // two forms agree on the current period by construction (weeks
-    // are exactly 7 days, Mondays align). Attaching `invoices_landed`
-    // to each series item lets the client hatch closed-but-still-
-    // arriving weeks without inventing a second definition.
-    const todayDate = new Date(today + "T00:00:00Z");
-    const todayDow = todayDate.getUTCDay(); // 0=Sun ... 6=Sat
-    const todayMondayOffset = todayDow === 0 ? 6 : todayDow - 1;
-    const todayMondayMs = todayDate.getTime() - todayMondayOffset * 86400000;
-    const series = weekStarts.map(ws => {
-      const laborS = laborWeeks.get(ws) || 0;
-      const purchS = purchWeekMap.get(ws) || 0;
-      const total = r2(laborS + purchS);
-      const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * 86400000).toISOString().slice(0, 10);
-      const state = wEnd < today ? "closed" : (ws <= today && today <= wEnd) ? "in_progress" : "not_started";
-      const wStartMs = new Date(ws + "T00:00:00Z").getTime();
-      const invoices_landed = state === "closed" && (todayMondayMs - wStartMs) >= 14 * 86400000;
-      return {
-        week_start: ws,
-        week_end: wEnd,
-        state,
-        invoices_landed,
-        spent: state === "not_started" ? null : total,
-        budget: wkBudget,
-      };
-    });
-    // Kevin ruling this-period (2026-09-03) item 5: the RUNNING week
-    // draws hatched with its partial cost from labor + purchasing
-    // (Service Calendar deliberately does not carry data past effective
-    // end; labor + purchasing do). The cost card stays at closed-weeks
-    // only via R-63 effectiveEndISO capping - so this partial sits
-    // OUTSIDE the tie between closed-bar sum and cost card actual.
-    // Targeted secondary query for the running week only; keeps every
-    // other loader capped and the tie invariant load-bearing.
-    const runningIdx = series.findIndex(s => s.state === "in_progress");
-    if (runningIdx >= 0 && lastCompleteWk && effectiveEndISO < rng.end) {
-      const rw = series[runningIdx];
-      // R-68 (2026-09-04): salary is always composed into the chart
-      // series (labor is always salary-inclusive per Kevin's ruling).
-      const [rwLabor, rwPurch, rwSalary] = await Promise.all([
-        paginateLaborActuals(supa, { members, start: rw.week_start, end: rw.week_end }),
-        paginatePurchasingWeekly(supa, { members, start: rw.week_start, end: rw.week_end }),
-        loadSalaryActuals(supa, members, rw.week_start, rw.week_end),
-      ]);
-      let laborSum = 0;
-      for (const r of (rwLabor.data || [])) laborSum += Number(r.amount || 0);
-      let purchSum = 0;
-      for (const r of (rwPurch.data || [])) {
-        const b = String(r.gl_bucket || "");
-        if (b === "3200" || b === "3400" || b === "3500") {
-          purchSum += Number(r.amount || 0);
-        }
-      }
-      let salarySum = 0;
-      for (const r of (rwSalary.rows || [])) salarySum += Number(r.amount || 0);
-      series[runningIdx] = { ...rw, spent: r2(laborSum + purchSum + salarySum) };
-    }
-    // C13 (2026-09-01): bar hover leads with the period + its dates.
-    // The chart carries the period_no so the tooltip header can read
-    // "Period 9 · Week 2" rather than the standalone "Week 2" the
-    // prior render used - naming the period + the week is what makes
-    // the tooltip legible on FYTD screenshots where the period is
-    // otherwise off-screen.
-    // Item 5 tail: expose the running week's 1-based index so the
-    // chart header can say "week N in progress, not yet counted"
-    // beside the weeks-closed pill.
-    const runningWeekNo = runningIdx >= 0 ? runningIdx + 1 : null;
-    chart = { grain: "week", series, weekly_budget: wkBudget, period_no: rng.period_no, running_week_no: runningWeekNo };
+    chart = null;
   } else {
     // Period grain for FYTD or explicit range - build one point per
     // fiscal period in the range.
