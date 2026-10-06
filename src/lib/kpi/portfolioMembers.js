@@ -29,9 +29,15 @@ export async function resolvePortfolioMembers(supa, pseudoKey) {
   if (!PORTFOLIO_KEYS.has(pseudoKey)) {
     return { data: [], error: { message: `not_a_portfolio_key: ${pseudoKey}` } };
   }
+  // Kevin ruling 2026-10-06: retired accounts (accounts.active=false,
+  // today CHI - IL + CIN - FL) are not portfolio members. .neq (not
+  // .eq true) matches the SC + Academy pattern - NULL treats as
+  // active so a new account inserted without the flag set does not
+  // silently disappear from the dashboard.
   let q = supa.from("accounts")
     .select("team_key, region")
     .neq("team_key", "CORP")
+    .neq("active", false)
     .order("team_key");
   if (pseudoKey !== "ALL") {
     // Region values in PG are capitalized ('East' / 'West').
