@@ -85,6 +85,13 @@ export const KPI_PREVIEW_ALLOWLIST = [
   "a.lacy@kitchfix.com",
   "a.hughes@kitchfix.com",
   "k.atherton@kitchfix.com",
+  // Kevin ruling 2026-10-07. Both already held kpi_roles rows
+  // (role=corporate, scope=null) since 2026-08-19; the preview fence was the
+  // only thing blocking them. Sebastian Castro, Senior Accountant - finance
+  // needs the board to reconcile periods against AP actuals. Brittany
+  // Chernikovich, Director of Culinary, SLT - full corporate access.
+  "s.castro@kitchfix.com",
+  "britt@kitchfix.com",
 ];
 
 /**
