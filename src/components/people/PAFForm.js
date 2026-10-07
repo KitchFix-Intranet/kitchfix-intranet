@@ -1048,6 +1048,18 @@ export default function PAFForm({ bootstrapData, Drafts, Formatter, onNavigate, 
         submitData.travelGrandTotal = pd + sup;
       }
 
+      // Derive raw team_key for locationKey so getManagerChain can
+      // match it against accounts.team_key. The form stores the compound
+      // "key - name" display string; the API needs just the key.
+      // Mirrors the same derivation in NewHireWizard (lines 108-111).
+      const matchedLoc = (bootstrapData?.locations || []).find(
+        (l) => `${l.key} - ${l.name}` === submitData.locationKey
+      );
+      if (matchedLoc) {
+        submitData.locationKey = matchedLoc.key;
+        submitData.locationName = matchedLoc.name;
+      }
+
       const res = await fetch("/api/people", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
