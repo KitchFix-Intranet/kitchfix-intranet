@@ -2430,3 +2430,109 @@
    pln-meter class + its inner <i> selector removed here so no
    future re-use accidentally revives the bar. */
 
+
+/* ── Billed back to club (PR-billback-1, Kevin ruling 2026-10-09) ───
+   BillbackCard replaces the Chart on management-fee + multi-period;
+   BillbackLedger is a bottom fold mirroring LaborLedger's chrome
+   (that half just reuses the .kpi-ov-fold-* + .kpi-ov-cp-led-tbl
+   classes already in this file). The rules below are the new
+   .kpi-ov-bb-* namespace only. */
+
+.kpi-app .kpi-ov-card-bb { border-top: 3px solid var(--navy-700); }
+
+/* Four-cell stat row mirrors CardsRow's visual weight (val reads at
+   the hero size with meta label above and sub below). CSS Grid with
+   minmax(0, 1fr) tracks - plain 1fr keeps a min-content floor, which
+   a 7-figure value in cell #1 will push past and bump a fourth cell
+   to a second row. The explicit 0-min collapses that floor so all
+   four cells sit on one row and long values wrap within their own
+   cell rather than breaking the row. */
+.kpi-app .kpi-ov-bb-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-sp-4, 14.4px);
+}
+.kpi-app .kpi-ov-bb-cell {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--n-50);
+  min-width: 0;
+}
+.kpi-app .kpi-ov-bb-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-bb-val {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--n-900);
+  margin-top: 2px;
+}
+.kpi-app .kpi-ov-bb-sub {
+  font-size: 11px;
+  color: var(--n-500);
+  margin-top: 2px;
+}
+.kpi-app .kpi-ov-bb-arrow {
+  margin-right: 4px;
+  font-weight: 800;
+}
+
+/* Tone cells - billed back is club pass-through so over is "notable",
+   not a loss. Amber on over, green on under, neutral on on / na.
+   Applied to the vs-goal stat cell AND the ledger foot's vs/pct
+   cells. The ledger body cells reuse the same tone classes. */
+.kpi-app .kpi-ov-bb-amber   { background: var(--amber-50); color: var(--amber-600); }
+.kpi-app .kpi-ov-bb-amber .kpi-ov-bb-val { color: var(--amber-600); }
+.kpi-app .kpi-ov-bb-good    { background: var(--green-50); color: var(--green-600); }
+.kpi-app .kpi-ov-bb-good .kpi-ov-bb-val  { color: var(--green-600); }
+.kpi-app .kpi-ov-bb-neutral { background: var(--n-50); color: var(--n-700); }
+
+/* Breakdown chips row. Largest-first; stray gets the amber-attention
+   treatment. */
+.kpi-app .kpi-ov-bb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px 16px;
+}
+.kpi-app .kpi-ov-bb-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--n-100);
+  color: var(--n-800);
+  font-size: 12px;
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-bb-chip-lbl { color: var(--n-700); }
+.kpi-app .kpi-ov-bb-chip-val { font-weight: 800; }
+.kpi-app .kpi-ov-bb-chip-stray {
+  background: var(--amber-50);
+  color: var(--amber-600);
+}
+.kpi-app .kpi-ov-bb-chip-stray .kpi-ov-bb-chip-lbl { color: var(--amber-600); }
+
+/* No-goal state - quiet one-liner inside the card body so the slot
+   still occupies its grid space. */
+.kpi-app .kpi-ov-bb-nogoal {
+  padding: 16px;
+  color: var(--n-500);
+  font-style: italic;
+  font-size: 13px;
+}
+
+/* Ledger table: emphasise the Billed-back column the same way the
+   purchasing fold emphasises its billed-back cell. The foot row sits
+   above the data rows on tone - the ytd verdict wins the eye. */
+.kpi-app .kpi-ov-cp-led-tbl th.kpi-ov-bb-col-emph,
+.kpi-app .kpi-ov-cp-led-tbl td.kpi-ov-bb-col-emph {
+  font-weight: 800;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-bb-foot td { font-weight: 800; }

@@ -87,6 +87,13 @@ import CurrentPeriodReview from "./components/CurrentPeriodReview";
 // below the Full P&L on closed / CY, below CurrentPeriodReview on
 // CP. Server-side canSeeSalary gate holds via the fetch alone.
 import LaborLedger from "./components/LaborLedger";
+// Kevin ruling 2026-10-09 (PR-billback-1). Billed-back-to-club card
+// (replaces Chart in the split-right column for management-fee
+// accounts on multi-period ranges) + its bottom-of-page fold. Both
+// components self-hide when billback is null, so the single-account
+// branch can mount them unconditionally.
+import BillbackCard from "./components/BillbackCard";
+import BillbackLedger from "./components/BillbackLedger";
 // R-150 (2026-09-22). Purchasing detail as a fold, period into weeks
 // into transactions. Mounts beside the labor fold on single-period
 // ranges only; multi-period (Current Year) is R-151 and does not
@@ -438,6 +445,11 @@ export default function KpiOverviewPage() {
   // scope per Kevin). 401/403 land silently in the fold's error
   // state; the Overview above never breaks.
   const [laborLedgerOpen, setLaborLedgerOpen] = useState(false);
+  // Kevin ruling 2026-10-09 (PR-billback-1). Fold state for the
+  // Billed-back-to-club bottom fold on the single-account split
+  // branch. Mounts unconditionally; the ledger self-hides when
+  // billback payload is null (non-MF accounts, single-period ranges).
+  const [billbackLedgerOpen, setBillbackLedgerOpen] = useState(false);
   const [laborLedger, setLaborLedger] = useState(null);
   const [laborLedgerError, setLaborLedgerError] = useState(null);
   // R-150 (2026-09-22). Purchasing fold state + fetch. Single-period
@@ -835,7 +847,17 @@ export default function KpiOverviewPage() {
               </div>
               <div className="kpi-ov-split-right">
                 <CostLines payload={data} previewAccount={data.preview_account} />
-                <Chart chart={data.chart} revenueModel={data.revenue_model} />
+                {/* Kevin ruling 2026-10-09 (PR-billback-1). Management-
+                    fee + multi-period only: BillbackCard replaces the
+                    cost-of-goods period-by-period chart. Every other
+                    account keeps the chart. The resolver ships
+                    billback=null when the gate fails, so the picked
+                    component short-circuits either way; the explicit
+                    revenue_model check keeps the swap readable at the
+                    call site. */}
+                {data.revenue_model === "management_fee"
+                  ? <BillbackCard billback={data.billback} revenueModel={data.revenue_model} />
+                  : <Chart chart={data.chart} revenueModel={data.revenue_model} />}
               </div>
             </div>
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
@@ -848,6 +870,16 @@ export default function KpiOverviewPage() {
               today={today}
               open={laborLedgerOpen}
               onToggle={() => setLaborLedgerOpen(o => !o)}
+            />
+            {/* Kevin ruling 2026-10-09 (PR-billback-1). Billed-back
+                fold mounts beside LaborLedger on the single-account
+                split branch. Self-hides when billback payload is null,
+                so this unconditional mount is safe for non-MF accounts
+                and single-period ranges. */}
+            <BillbackLedger
+              billback={data.billback}
+              open={billbackLedgerOpen}
+              onToggle={() => setBillbackLedgerOpen(o => !o)}
             />
             {/* R-150 · Purchasing fold on Closed / CY single-account
                 branch (the "non-chart" one, chart lives inside the
