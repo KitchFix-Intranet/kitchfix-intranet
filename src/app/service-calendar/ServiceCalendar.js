@@ -298,6 +298,10 @@ function aggregateWorkspaceMetrics(days, { groupBy = "fiscalWeek" } = {}) {
     if (!out.weeks[wk]) {
       out.weeks[wk] = {
         actRev: 0, projRev: 0, actMeals: 0,
+        // sc-58: finalize-confirm total; excludes export_excluded.
+        // Separate from actRev so KPI / week-card displays stay on
+        // real revenue while the guard reconciles against the payload.
+        billableActRev: 0,
         complete: 0, total: 0, needsEntry: 0, overdue: 0,
         serviceDays: 0, serviceDaysEntered: 0,
         gameDays: 0, gameDaysEntered: 0,
@@ -349,6 +353,16 @@ function aggregateWorkspaceMetrics(days, { groupBy = "fiscalWeek" } = {}) {
     // actMeals with a projection-derived zero is a no-op anyway.
     if (day.hasActuals) {
       w.actRev += day.totals?.actualRevenue || 0;
+      // sc-58: parallel accumulation of billable total for the finalize
+      // overlay. Falls back to actRev when the server has not been
+      // redeployed with the new field (older response shape) so the
+      // guard still has a comparable number; a fresh server populates
+      // the narrower value and the overlay reconciles with the payload.
+      w.billableActRev += (
+        typeof day.totals?.billableActualRevenue === "number"
+          ? day.totals.billableActualRevenue
+          : (day.totals?.actualRevenue || 0)
+      );
       for (const ci of Object.keys(day.actual || {})) {
         const av = day.actual[ci];
         if (av != null) w.actMeals += av;

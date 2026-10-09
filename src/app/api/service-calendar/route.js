@@ -312,9 +312,15 @@ function transformDays(orchDays) {
       // loadMonthDataPostgres:608 ({ projectedCount, actualCount,
       // projectedRevenue, actualRevenue }). No runtime guard needed
       // on the client side.
+      //
+      // sc-58: billableActualRevenue additionally excludes services
+      // flagged export_excluded on sc_qbo_service_map. Finalize overlay
+      // consumes it so confirmedPretaxCents matches the payload pretax.
+      // KPI + week-card revenue read actualRevenue (unchanged).
       totals: {
         projectedRevenue: d.totals.projectedRevenue,
         actualRevenue:    d.totals.actualRevenue,
+        billableActualRevenue: d.totals.billableActualRevenue,
       },
       projectedRevenue,
       actualRevenue,
