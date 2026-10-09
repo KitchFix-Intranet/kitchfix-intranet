@@ -2067,42 +2067,17 @@
 /* Auto layout replaces the width: 45% hint - the label column
    claims its min-width and grows as content demands, with numeric
    columns shrinking to their widest value. */
-/* Row is a hover surface for the clickable link inside its label cell.
-   Item 6 (2026-09-03): adopt Labor's --duration-fast + --ease-standard
-   motion tokens so hover fades in/out rather than snapping. */
-.kpi-app .kpi-ov-cl-row {
-  transition: background var(--duration-fast) var(--ease-standard);
-}
-.kpi-app .kpi-ov-cl-row .kpi-ov-cl-go,
-.kpi-app .kpi-ov-cl-row .kpi-ov-cl-lbl {
-  transition: opacity var(--duration-fast) var(--ease-standard),
-              color var(--duration-fast) var(--ease-standard);
-}
-.kpi-app .kpi-ov-cl-row:hover { background: var(--navy-50); }
-.kpi-app .kpi-ov-cl-row:hover .kpi-ov-cl-go { opacity: 1; }
-.kpi-app .kpi-ov-cl-row:hover .kpi-ov-cl-lbl { color: var(--navy-700); }
+/* Kevin ruling 2026-10-09. Cost-line rows no longer link; the hover
+   background, label color shift, trailing arrow and focus ring are
+   retired alongside the <Link>. .kpi-ov-cl-linkarea stays as a plain
+   layout span (name kept so DOM selectors do not break mid-flight). */
 .kpi-app .kpi-ov-cl-linkarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: inherit;
-  text-decoration: none;
-  outline: none;
-}
-/* Item 6 acceptance: visible focus ring on keyboard navigation. */
-.kpi-app .kpi-ov-cl-linkarea:focus-visible {
-  outline: 2px solid var(--navy-700);
-  outline-offset: 2px;
-  border-radius: 3px;
 }
 .kpi-app .kpi-ov-cl-lbl { font-weight: 700; }
-.kpi-app .kpi-ov-cl-go {
-  color: var(--navy-700);
-  font-weight: 800;
-  margin-left: 4px;
-  opacity: 0;
-  transition: opacity .1s;
-}
 .kpi-app .kpi-ov-cl-tot td {
   border-top: 1px solid var(--n-400);
   font-weight: 800;
@@ -2361,13 +2336,10 @@
   padding-right: 8px;
 }
 
-/* Item 6 (2026-09-03): respect prefers-reduced-motion. Hover visuals
-   still fire, just without the fade. Same treatment kpi.css applies to
-   .kpi-acct at line 966. */
+/* Respect prefers-reduced-motion on the fold trigger. The cost-line
+   row / arrow / label transitions silenced here were retired alongside
+   the drill links (2026-10-09); nothing to silence on those selectors. */
 @media (prefers-reduced-motion: reduce) {
-  .kpi-app .kpi-ov-cl-row,
-  .kpi-app .kpi-ov-cl-row .kpi-ov-cl-go,
-  .kpi-app .kpi-ov-cl-row .kpi-ov-cl-lbl,
   .kpi-app .kpi-ov-fold-trigger,
   .kpi-app .kpi-ov-fold-trigger .kpi-ov-fold-cv {
     transition: none;
