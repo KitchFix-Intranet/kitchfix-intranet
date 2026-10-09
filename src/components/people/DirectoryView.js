@@ -28,12 +28,6 @@ const MapPinIcon = ({ size = 14 }) => (
     <circle cx="12" cy="10" r="3" />
   </svg>
 );
-const BellIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-  </svg>
-);
 const Chevron = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 18 15 12 9 6" />
@@ -260,7 +254,7 @@ function matchesSearch(person, needle) {
 function buildRowTags(person, team) {
   const tags = [];
   if (person.is_site_leader) tags.push({ key: "sl", label: "SITE LEADER", tone: "leader" });
-  tags.push({ key: "cls", label: person.is_salaried ? "SALARIED" : "HOURLY", tone: person.is_salaried ? "salaried" : "hourly" });
+  tags.push({ key: "cls", label: person.is_salaried ? "MANAGER" : "ASSOCIATE", tone: person.is_salaried ? "salaried" : "hourly" });
   const regionTag = team?.region ? regionLabel(team.region).toUpperCase() : "";
   const levelTag = team?.level ? team.level.toUpperCase() : "";
   if (regionTag && regionTag !== levelTag) tags.push({ key: "rgn", label: regionTag, tone: "region" });
@@ -271,7 +265,6 @@ function buildRowTags(person, team) {
 export default function DirectoryView({ showToast, bootstrapData }) {
   const [data, setData] = useState(null);
   const [loadErr, setLoadErr] = useState(false);
-  const [region, setRegion] = useState("All");
   const [search, setSearch] = useState("");
   const [selectedTeamKey, setSelectedTeamKey] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -354,7 +347,6 @@ export default function DirectoryView({ showToast, bootstrapData }) {
     return { team, managers: vMgr, team_list: vTeam };
   }, [effectiveSelectedKey, data, teamsByKey, matchByTeam, searchActive]);
 
-  const chooseRegion = (r) => { setRegion(r); };
   const chooseSite = useCallback((teamKey) => {
     setSelectedTeamKey(teamKey);
     setMobileMode("roster");
@@ -396,17 +388,17 @@ export default function DirectoryView({ showToast, bootstrapData }) {
   // Message menu actions
   const messageActions = useMemo(() => {
     if (!data) return null;
-    const salariedWithEmail = data.people.filter((p) => p.is_salaried && p.work_email);
-    const salariedByRegion = (regionName) => {
+    const managersWithEmail = data.people.filter((p) => p.is_salaried && p.work_email);
+    const managersByRegion = (regionName) => {
       const teamsInRegion = new Set(
         data.teams.filter((t) => t.region === regionName).map((t) => t.team_key)
       );
-      return salariedWithEmail.filter((p) => teamsInRegion.has(p.team_key));
+      return managersWithEmail.filter((p) => teamsInRegion.has(p.team_key));
     };
     return {
-      all: salariedWithEmail,
-      east: salariedByRegion("East"),
-      west: salariedByRegion("West"),
+      all: managersWithEmail,
+      east: managersByRegion("East"),
+      west: managersByRegion("West"),
     };
   }, [data]);
 
@@ -445,9 +437,6 @@ export default function DirectoryView({ showToast, bootstrapData }) {
     );
   }
 
-  const allHeadcount = data.regions.reduce((s, r) => s + r.headcount, 0);
-  const showRegion = (name) => region === "All" || region === name;
-
   return (
     <div className="pp-view pp-dir-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
       <div className="pp-card pp-dir-card">
@@ -482,7 +471,7 @@ export default function DirectoryView({ showToast, bootstrapData }) {
                       rel="noopener"
                       onClick={() => setMsgOpen(false)}
                     >
-                      <span>All salaried managers</span>
+                      <span>All managers</span>
                       <span className="pp-dir-msg-count">{messageActions.all.length}</span>
                     </a>
                   )}
@@ -516,7 +505,7 @@ export default function DirectoryView({ showToast, bootstrapData }) {
                     <span className="pp-dir-msg-count">{messageActions.all.length}</span>
                   </button>
                   <p className="pp-dir-msg-hint">
-                    Opens a new Gmail tab. Large lists go in BCC; site lists go in To so reply-all works.
+                    Opens a new Gmail tab. The full list goes in BCC; site lists go in To so reply-all works.
                   </p>
                 </div>
               )}
@@ -539,19 +528,6 @@ export default function DirectoryView({ showToast, bootstrapData }) {
             two panes become a single column with a tree/roster toggle. */}
         <div className={`pp-dir-split pp-dir-split--${mobileMode}`}>
           <aside className="pp-dir-pane pp-dir-pane--tree">
-            <div className="pp-dir-region-pills" role="tablist">
-              <RegionPill label="All" count={allHeadcount} active={region === "All"} onClick={() => chooseRegion("All")} />
-              {data.regions.map((r) => (
-                <RegionPill
-                  key={r.name}
-                  label={regionLabel(r.name)}
-                  count={r.headcount}
-                  active={region === r.name}
-                  onClick={() => chooseRegion(r.name)}
-                />
-              ))}
-            </div>
-
             <div className="pp-dir-search-wrap">
               <span className="pp-dir-search-icon" aria-hidden><SearchIcon /></span>
               <input
@@ -575,7 +551,7 @@ export default function DirectoryView({ showToast, bootstrapData }) {
             </div>
 
             <nav className="pp-dir-tree" aria-label="Sites">
-              {tree.corp && showRegion("CORP") && (() => {
+              {tree.corp && (() => {
                 const site = tree.corp;
                 if (searchActive && !matchByTeam?.has(site.team.team_key)) return null;
                 return (
@@ -589,7 +565,6 @@ export default function DirectoryView({ showToast, bootstrapData }) {
                 );
               })()}
               {tree.regions.map((reg) => {
-                if (!showRegion(reg.name)) return null;
                 const visibleSites = reg.sites.filter((s) =>
                   !searchActive || matchByTeam?.has(s.team.team_key)
                 );
@@ -646,22 +621,6 @@ export default function DirectoryView({ showToast, bootstrapData }) {
         />
       )}
     </div>
-  );
-}
-
-function RegionPill({ label, count, active, onClick }) {
-  return (
-    <button
-      type="button"
-      className={`pp-dir-region-pill${active ? " pp-dir-region-pill--active" : ""}`}
-      onClick={onClick}
-      role="tab"
-      aria-selected={active}
-      aria-label={`${label} - ${count} ${count === 1 ? "person" : "people"}`}
-    >
-      <span className="pp-dir-region-pill-label">{label}</span>
-      <span className="pp-dir-region-pill-count" aria-hidden="true">{count}</span>
-    </button>
   );
 }
 
@@ -779,7 +738,7 @@ function PersonDrawer({ person, team, onClose, isAdmin }) {
 
   const tags = [];
   if (person.is_site_leader) tags.push({ key: "sl", label: "SITE LEADER", tone: "leader" });
-  tags.push({ key: "cls", label: person.is_salaried ? "SALARIED" : "HOURLY", tone: person.is_salaried ? "salaried" : "hourly" });
+  tags.push({ key: "cls", label: person.is_salaried ? "MANAGER" : "ASSOCIATE", tone: person.is_salaried ? "salaried" : "hourly" });
   const regionTag = team?.region ? regionLabel(team.region).toUpperCase() : "";
   const levelTag = team?.level ? team.level.toUpperCase() : "";
   if (regionTag && regionTag !== levelTag) tags.push({ key: "rgn", label: regionTag, tone: "region" });
@@ -924,20 +883,6 @@ function PersonDrawer({ person, team, onClose, isAdmin }) {
           </section>
         )}
 
-        {person.is_site_leader && isAdmin && (
-          <section className="pp-dir-drawer-section">
-            <div className="pp-dir-routing">
-              <div className="pp-dir-routing-icon"><BellIcon /></div>
-              <div className="pp-dir-routing-body">
-                <div className="pp-dir-routing-title">Notification routing</div>
-                <div className="pp-dir-routing-text">
-                  CC&rsquo;d on all People Portal submissions from <strong>{siteName || "this site"}</strong>.
-                  {person.site_leader_note ? <> {person.site_leader_note}</> : null}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
       </aside>
     </div>
   );
