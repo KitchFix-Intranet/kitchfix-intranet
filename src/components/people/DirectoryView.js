@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 
-// ─── Icons (Lucide-style stroke SVG, matches DashboardView convention) ───
+// ─── Icons (Lucide-style stroke SVG) ─────────────────────────────────
 const UsersIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -11,8 +11,8 @@ const UsersIcon = () => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
-const MailIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const MailIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="4" width="20" height="16" rx="2" />
     <path d="m2 7 10 7 10-7" />
   </svg>
@@ -22,8 +22,8 @@ const PhoneIcon = () => (
     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
   </svg>
 );
-const MapPinIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const MapPinIcon = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 10c0 7-8 13-8 13s-8-6-8-13a8 8 0 0 1 16 0z" />
     <circle cx="12" cy="10" r="3" />
   </svg>
@@ -37,6 +37,16 @@ const BellIcon = () => (
 const Chevron = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+const ChevronDown = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+const ChevronLeft = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6" />
   </svg>
 );
 const SearchIcon = () => (
@@ -55,8 +65,31 @@ const GearIcon = () => (
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
+const CalendarIcon = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+const ClockIcon = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="12 7 12 12 15 14" />
+  </svg>
+);
+const CakeIcon = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8" />
+    <path d="M4 16s1.5-2 4-2 2.5 2 4 2 2.5-2 4-2 4 2 4 2" />
+    <path d="M2 21h20" />
+    <path d="M7 8v3" /><path d="M12 8v3" /><path d="M17 8v3" />
+    <path d="M7 4h.01" /><path d="M12 4h.01" /><path d="M17 4h.01" />
+  </svg>
+);
 
-// ─── Helpers (preserved from v1) ───
+// ─── Helpers ─────────────────────────────────────────────────────────
 const initials = (name) =>
   String(name || "?")
     .split(" ")
@@ -81,15 +114,16 @@ function normalizePhone(raw) {
   return { href: `tel:${digits}`, display };
 }
 
-// Gmail compose URL. Comma-separated To, URL-encoded.
-function gmailCompose(emails) {
+// Gmail compose. Comma-separated To (or BCC when bcc=true).
+function gmailCompose(emails, { bcc = false } = {}) {
   const list = (Array.isArray(emails) ? emails : [emails]).filter(Boolean);
   if (list.length === 0) return "";
-  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(list.join(","))}`;
+  const param = bcc ? "bcc" : "to";
+  return `https://mail.google.com/mail/?view=cm&fs=1&${param}=${encodeURIComponent(list.join(","))}`;
 }
 
-// Site-header name: "City, State - Level". CORP has its own "Corporate" label.
 function siteLabel(team) {
+  if (!team) return "";
   if (team.team_key === "CORP") return "Corporate";
   const place = [team.city, team.state].filter(Boolean).join(", ");
   const parts = [place, team.level].filter(Boolean);
@@ -101,7 +135,6 @@ function regionLabel(name) {
   return name;
 }
 
-// Parse YYYY-MM-DD as a local date (avoids UTC-shift). Returns null on bad input.
 function parseStartDate(iso) {
   if (!iso) return null;
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -112,6 +145,10 @@ function parseStartDate(iso) {
 
 function formatLongDate(d) {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function formatMonthDay(d) {
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
 function ordinal(n) {
@@ -125,45 +162,69 @@ function ordinal(n) {
   }
 }
 
-function tenureSummary(startISO) {
-  const start = parseStartDate(startISO);
-  if (!start) return null;
-  const today = new Date();
+// Returns "X months", "X years", "in Y days", etc. from today to target.
+function relativeFuture(target, from = new Date()) {
+  const today = new Date(from);
   today.setHours(0, 0, 0, 0);
+  const t = new Date(target);
+  t.setHours(0, 0, 0, 0);
+  const diffMs = t - today;
+  const days = Math.round(diffMs / (24 * 3600 * 1000));
+  if (days < 0) return "";
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days < 31) return `in ${days} days`;
+  // Months
+  let months = (t.getFullYear() - today.getFullYear()) * 12 + (t.getMonth() - today.getMonth());
+  if (t.getDate() < today.getDate()) months--;
+  if (months < 12) return `in ${months} ${months === 1 ? "month" : "months"}`;
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  if (rem === 0) return `in ${years} ${years === 1 ? "year" : "years"}`;
+  return `in ${years} ${years === 1 ? "year" : "years"}, ${rem} ${rem === 1 ? "month" : "months"}`;
+}
 
-  let years = today.getFullYear() - start.getFullYear();
-  let months = today.getMonth() - start.getMonth();
-  if (today.getDate() < start.getDate()) months--;
+// Returns "X months with KitchFix" / "X years with KitchFix" from a start date.
+function tenureSince(start, from = new Date()) {
+  const today = new Date(from);
+  today.setHours(0, 0, 0, 0);
+  const s = new Date(start);
+  s.setHours(0, 0, 0, 0);
+  let years = today.getFullYear() - s.getFullYear();
+  let months = today.getMonth() - s.getMonth();
+  if (today.getDate() < s.getDate()) months--;
   if (months < 0) { years--; months += 12; }
   years = Math.max(0, years);
   months = Math.max(0, months);
-
-  const nextAnniv = new Date(start.getFullYear() + years + 1, start.getMonth(), start.getDate());
-  const yearNum = years + 1;
-
-  const timeParts = [];
-  if (years > 0) timeParts.push(`${years} ${years === 1 ? "year" : "years"}`);
-  if (months > 0) timeParts.push(`${months} ${months === 1 ? "month" : "months"}`);
-  if (timeParts.length === 0) timeParts.push("under a month");
-
-  return {
-    started:     `Started: ${formatLongDate(start)}`,
-    time:        `Time with KitchFix: ${timeParts.join(", ")}`,
-    anniversary: `Next anniversary: ${formatLongDate(nextAnniv)} (${ordinal(yearNum)} year)`,
-  };
+  const parts = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? "year" : "years"}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? "month" : "months"}`);
+  if (parts.length === 0) parts.push("under a month");
+  return `${parts.join(", ")} with KitchFix`;
 }
 
-// Build the hierarchy: Corp first, then regions East/West with their sites.
+// Next occurrence of a MM-DD birthday from today (uses current or next year).
+function nextBirthdayDate(mmdd, from = new Date()) {
+  const m = String(mmdd || "").match(/^(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const month = Number(m[1]) - 1;
+  const day = Number(m[2]);
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+  const today = new Date(from);
+  today.setHours(0, 0, 0, 0);
+  let candidate = new Date(today.getFullYear(), month, day);
+  if (candidate < today) candidate = new Date(today.getFullYear() + 1, month, day);
+  return candidate;
+}
+
 function buildTree(data) {
   if (!data) return { corp: null, regions: [] };
-
   const peopleByTeam = new Map();
   for (const p of data.people) {
     if (!p.team_key) continue;
     if (!peopleByTeam.has(p.team_key)) peopleByTeam.set(p.team_key, []);
     peopleByTeam.get(p.team_key).push(p);
   }
-
   function splitRoster(list) {
     const managers = list
       .filter((p) => p.is_salaried || p.is_manager || p.is_site_leader)
@@ -176,15 +237,9 @@ function buildTree(data) {
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
     return { managers, team };
   }
-
-  const siteOf = (team) => ({
-    team,
-    roster: splitRoster(peopleByTeam.get(team.team_key) || []),
-  });
-
+  const siteOf = (team) => ({ team, roster: splitRoster(peopleByTeam.get(team.team_key) || []) });
   const corpTeam = data.teams.find((t) => t.region === "CORP") || null;
   const corp = corpTeam ? siteOf(corpTeam) : null;
-
   const regions = [];
   for (const name of ["East", "West"]) {
     const sites = data.teams.filter((t) => t.region === name).map(siteOf);
@@ -195,7 +250,6 @@ function buildTree(data) {
   return { corp, regions };
 }
 
-// Case-insensitive match on display_name or title.
 function matchesSearch(person, needle) {
   if (!needle) return true;
   const n = needle.toLowerCase();
@@ -207,8 +261,10 @@ function buildRowTags(person, team) {
   const tags = [];
   if (person.is_site_leader) tags.push({ key: "sl", label: "SITE LEADER", tone: "leader" });
   tags.push({ key: "cls", label: person.is_salaried ? "SALARIED" : "HOURLY", tone: person.is_salaried ? "salaried" : "hourly" });
-  const level = team?.level || "";
-  if (level) tags.push({ key: "lvl", label: level.toUpperCase(), tone: "level" });
+  const regionTag = team?.region ? regionLabel(team.region).toUpperCase() : "";
+  const levelTag = team?.level ? team.level.toUpperCase() : "";
+  if (regionTag && regionTag !== levelTag) tags.push({ key: "rgn", label: regionTag, tone: "region" });
+  if (levelTag) tags.push({ key: "lvl", label: levelTag, tone: "level" });
   return tags;
 }
 
@@ -217,8 +273,11 @@ export default function DirectoryView({ showToast, bootstrapData }) {
   const [loadErr, setLoadErr] = useState(false);
   const [region, setRegion] = useState("All");
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState(() => new Set());
+  const [selectedTeamKey, setSelectedTeamKey] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [mobileMode, setMobileMode] = useState("tree"); // "tree" | "roster"
+  const msgRef = useRef(null);
 
   const isAdmin = !!bootstrapData?.isAdmin;
 
@@ -228,23 +287,28 @@ export default function DirectoryView({ showToast, bootstrapData }) {
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        if (d.success) setData(d);
-        else setLoadErr(true);
+        if (d.success) {
+          setData(d);
+          // Default selection: CORP (always relevant) if present, else first team
+          const defaultKey = d.teams.find((t) => t.region === "CORP")?.team_key
+            || d.teams[0]?.team_key
+            || null;
+          setSelectedTeamKey(defaultKey);
+        } else {
+          setLoadErr(true);
+        }
       })
       .catch(() => { if (!cancelled) setLoadErr(true); });
     return () => { cancelled = true; };
   }, []);
 
   const tree = useMemo(() => buildTree(data), [data]);
-
   const teamsByKey = useMemo(() => {
     const m = new Map();
     for (const t of data?.teams || []) m.set(t.team_key, t);
     return m;
   }, [data]);
 
-  // Which team_keys match the current search? Used to auto-expand +
-  // filter visible people. Null when search is empty = pass-through.
   const searchActive = search.trim().length > 0;
   const matchByTeam = useMemo(() => {
     if (!searchActive) return null;
@@ -257,47 +321,108 @@ export default function DirectoryView({ showToast, bootstrapData }) {
     return m;
   }, [search, searchActive, data]);
 
-  // When searching, auto-expand matching sites. Union with user-expanded.
-  const effectiveExpanded = useMemo(() => {
-    if (!searchActive || !matchByTeam) return expanded;
-    const out = new Set(expanded);
-    for (const key of matchByTeam.keys()) out.add(key);
-    return out;
-  }, [expanded, searchActive, matchByTeam]);
+  // Effective selection: honor the user's choice when it still matches
+  // the active search, otherwise fall back to the first match. Derived
+  // at render time so no state cascade needed.
+  const effectiveSelectedKey = useMemo(() => {
+    if (!data) return null;
+    if (searchActive && matchByTeam) {
+      if (selectedTeamKey && matchByTeam.has(selectedTeamKey)) return selectedTeamKey;
+      const first = [...matchByTeam.keys()][0];
+      return first || selectedTeamKey;
+    }
+    return selectedTeamKey;
+  }, [data, searchActive, matchByTeam, selectedTeamKey]);
 
-  const toggleSite = useCallback((teamKey) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(teamKey)) next.delete(teamKey);
-      else next.add(teamKey);
-      return next;
-    });
+  const selectedSite = useMemo(() => {
+    if (!effectiveSelectedKey || !data) return null;
+    const team = teamsByKey.get(effectiveSelectedKey);
+    if (!team) return null;
+    const peopleOfTeam = data.people.filter((p) => p.team_key === effectiveSelectedKey);
+    const managers = peopleOfTeam
+      .filter((p) => p.is_salaried || p.is_manager || p.is_site_leader)
+      .sort((a, b) => {
+        if (a.is_site_leader !== b.is_site_leader) return a.is_site_leader ? -1 : 1;
+        return a.display_name.localeCompare(b.display_name);
+      });
+    const teamList = peopleOfTeam
+      .filter((p) => !(p.is_salaried || p.is_manager || p.is_site_leader))
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+    const matchSet = matchByTeam?.get(effectiveSelectedKey) || null;
+    const vMgr = searchActive ? managers.filter((p) => !matchSet || matchSet.has(p.worker_id)) : managers;
+    const vTeam = searchActive ? teamList.filter((p) => !matchSet || matchSet.has(p.worker_id)) : teamList;
+    return { team, managers: vMgr, team_list: vTeam };
+  }, [effectiveSelectedKey, data, teamsByKey, matchByTeam, searchActive]);
+
+  const chooseRegion = (r) => { setRegion(r); };
+  const chooseSite = useCallback((teamKey) => {
+    setSelectedTeamKey(teamKey);
+    setMobileMode("roster");
   }, []);
-
-  const chooseRegion = (r) => {
-    setRegion(r);
-    setSelectedId(null);
-  };
 
   const selectedPerson = useMemo(() => {
     if (!selectedId || !data) return null;
     return data.people.find((p) => p.worker_id === selectedId) || null;
   }, [selectedId, data]);
-
-  const selectedTeam = useMemo(() => {
+  const selectedPersonTeam = useMemo(() => {
     if (!selectedPerson) return null;
     return teamsByKey.get(selectedPerson.team_key) || null;
   }, [selectedPerson, teamsByKey]);
 
   const closeDrawer = useCallback(() => setSelectedId(null), []);
 
-  // Escape key closes drawer
   useEffect(() => {
     if (!selectedId) return;
     const onKey = (e) => { if (e.key === "Escape") closeDrawer(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [selectedId, closeDrawer]);
+
+  // Message menu outside click / Escape
+  useEffect(() => {
+    if (!msgOpen) return;
+    const onDown = (e) => {
+      if (msgRef.current && !msgRef.current.contains(e.target)) setMsgOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setMsgOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [msgOpen]);
+
+  // Message menu actions
+  const messageActions = useMemo(() => {
+    if (!data) return null;
+    const salariedWithEmail = data.people.filter((p) => p.is_salaried && p.work_email);
+    const salariedByRegion = (regionName) => {
+      const teamsInRegion = new Set(
+        data.teams.filter((t) => t.region === regionName).map((t) => t.team_key)
+      );
+      return salariedWithEmail.filter((p) => teamsInRegion.has(p.team_key));
+    };
+    return {
+      all: salariedWithEmail,
+      east: salariedByRegion("East"),
+      west: salariedByRegion("West"),
+    };
+  }, [data]);
+
+  const copyManagerEmails = async () => {
+    if (!messageActions?.all) return;
+    const text = messageActions.all.map((p) => p.work_email).join("; ");
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast && showToast(`Copied ${messageActions.all.length} manager emails`, "success");
+    } catch {
+      showToast && showToast("Clipboard blocked - selecting the list for manual copy", "info");
+      // Fallback: open a prompt so the user can select+copy manually
+      try { window.prompt("Copy manager emails:", text); } catch { /* noop */ }
+    }
+    setMsgOpen(false);
+  };
 
   if (loadErr) {
     return (
@@ -332,122 +457,192 @@ export default function DirectoryView({ showToast, bootstrapData }) {
             <h2 className="pp-dir-title">Directory</h2>
             <p className="pp-dir-subtitle">Active teammates across KitchFix</p>
           </div>
-          {isAdmin && (
-            <button
-              type="button"
-              className="pp-dir-admin-btn"
-              onClick={() => showToast && showToast("Admin editing coming soon.", "info")}
-              aria-label="Admin editing"
-              title="Admin editing"
-            >
-              <GearIcon />
-            </button>
-          )}
+          <div className="pp-dir-header-actions">
+            <div className="pp-dir-msg-wrap" ref={msgRef}>
+              <button
+                type="button"
+                className="pp-dir-msg-btn"
+                onClick={() => setMsgOpen((v) => !v)}
+                aria-haspopup="true"
+                aria-expanded={msgOpen}
+                aria-label="Message managers"
+              >
+                <MailIcon />
+                <span>Message</span>
+                <ChevronDown />
+              </button>
+              {msgOpen && messageActions && (
+                <div className="pp-dir-msg-menu" role="menu">
+                  <h5>Email in Gmail</h5>
+                  {messageActions.all.length > 0 && (
+                    <a
+                      role="menuitem"
+                      href={gmailCompose(messageActions.all.map((p) => p.work_email), { bcc: true })}
+                      target="_blank"
+                      rel="noopener"
+                      onClick={() => setMsgOpen(false)}
+                    >
+                      <span>All salaried managers</span>
+                      <span className="pp-dir-msg-count">{messageActions.all.length}</span>
+                    </a>
+                  )}
+                  {messageActions.east.length > 0 && (
+                    <a
+                      role="menuitem"
+                      href={gmailCompose(messageActions.east.map((p) => p.work_email))}
+                      target="_blank"
+                      rel="noopener"
+                      onClick={() => setMsgOpen(false)}
+                    >
+                      <span>East site managers</span>
+                      <span className="pp-dir-msg-count">{messageActions.east.length}</span>
+                    </a>
+                  )}
+                  {messageActions.west.length > 0 && (
+                    <a
+                      role="menuitem"
+                      href={gmailCompose(messageActions.west.map((p) => p.work_email))}
+                      target="_blank"
+                      rel="noopener"
+                      onClick={() => setMsgOpen(false)}
+                    >
+                      <span>West site managers</span>
+                      <span className="pp-dir-msg-count">{messageActions.west.length}</span>
+                    </a>
+                  )}
+                  <hr />
+                  <button type="button" role="menuitem" onClick={copyManagerEmails}>
+                    <span>Copy all manager emails</span>
+                    <span className="pp-dir-msg-count">{messageActions.all.length}</span>
+                  </button>
+                  <p className="pp-dir-msg-hint">
+                    Opens a new Gmail tab. Large lists go in BCC; site lists go in To so reply-all works.
+                  </p>
+                </div>
+              )}
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                className="pp-dir-admin-btn"
+                onClick={() => showToast && showToast("Admin editing coming soon.", "info")}
+                aria-label="Admin editing"
+                title="Admin editing"
+              >
+                <GearIcon />
+              </button>
+            )}
+          </div>
         </header>
 
-        <div className="pp-dir-region-pills" role="tablist">
-          <RegionPill label="All" count={allHeadcount} active={region === "All"} onClick={() => chooseRegion("All")} />
-          {data.regions.map((r) => (
-            <RegionPill
-              key={r.name}
-              label={regionLabel(r.name)}
-              count={r.headcount}
-              active={region === r.name}
-              onClick={() => chooseRegion(r.name)}
-            />
-          ))}
-        </div>
-
-        <div className="pp-dir-search-wrap">
-          <span className="pp-dir-search-icon" aria-hidden><SearchIcon /></span>
-          <input
-            className="pp-dir-search"
-            type="search"
-            placeholder="Search name or title..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search directory"
-          />
-          {search && (
-            <button
-              type="button"
-              className="pp-dir-search-clear"
-              onClick={() => setSearch("")}
-              aria-label="Clear search"
-            >
-              <CloseIcon />
-            </button>
-          )}
-        </div>
-
-        <div className="pp-dir-tree">
-          {/* Corp - single-level collapsible section */}
-          {tree.corp && showRegion("CORP") && (() => {
-            const site = tree.corp;
-            const matchSet = matchByTeam?.get(site.team.team_key) || null;
-            const vMgr = searchActive ? site.roster.managers.filter((p) => !matchSet || matchSet.has(p.worker_id)) : site.roster.managers;
-            const vTeam = searchActive ? site.roster.team.filter((p) => !matchSet || matchSet.has(p.worker_id)) : site.roster.team;
-            if (searchActive && vMgr.length + vTeam.length === 0) return null;
-            const open = effectiveExpanded.has(site.team.team_key);
-            return (
-              <section className="pp-dir-section pp-dir-section--corp">
-                <SiteGroup
-                  site={site}
-                  open={open}
-                  onToggle={() => toggleSite(site.team.team_key)}
-                  labelOverride="Corporate"
-                  managers={vMgr}
-                  teamList={vTeam}
-                  onPersonClick={(id) => setSelectedId(id)}
+        {/* Two-panel layout: left tree + right roster. Below 720px the
+            two panes become a single column with a tree/roster toggle. */}
+        <div className={`pp-dir-split pp-dir-split--${mobileMode}`}>
+          <aside className="pp-dir-pane pp-dir-pane--tree">
+            <div className="pp-dir-region-pills" role="tablist">
+              <RegionPill label="All" count={allHeadcount} active={region === "All"} onClick={() => chooseRegion("All")} />
+              {data.regions.map((r) => (
+                <RegionPill
+                  key={r.name}
+                  label={regionLabel(r.name)}
+                  count={r.headcount}
+                  active={region === r.name}
+                  onClick={() => chooseRegion(r.name)}
                 />
-              </section>
-            );
-          })()}
+              ))}
+            </div>
 
-          {/* East + West */}
-          {tree.regions.map((reg) => {
-            if (!showRegion(reg.name)) return null;
-            const visibleSites = reg.sites.filter((s) => {
-              if (!searchActive) return true;
-              return matchByTeam?.has(s.team.team_key);
-            });
-            if (searchActive && visibleSites.length === 0) return null;
-            return (
-              <section key={reg.name} className="pp-dir-section">
-                <div className="pp-dir-region-head">
-                  <h3 className="pp-dir-region-head-name">{reg.name}</h3>
-                  <span className="pp-dir-region-head-count">
-                    {reg.headcount} {reg.headcount === 1 ? "person" : "people"} - {visibleSites.length} {visibleSites.length === 1 ? "site" : "sites"}
-                  </span>
-                </div>
-                {visibleSites.map((site) => {
-                  const matchSet = matchByTeam?.get(site.team.team_key) || null;
-                  const vMgr = searchActive ? site.roster.managers.filter((p) => !matchSet || matchSet.has(p.worker_id)) : site.roster.managers;
-                  const vTeam = searchActive ? site.roster.team.filter((p) => !matchSet || matchSet.has(p.worker_id)) : site.roster.team;
-                  const open = effectiveExpanded.has(site.team.team_key);
-                  return (
-                    <SiteGroup
-                      key={site.team.team_key}
-                      site={site}
-                      open={open}
-                      onToggle={() => toggleSite(site.team.team_key)}
-                      managers={vMgr}
-                      teamList={vTeam}
-                      onPersonClick={(id) => setSelectedId(id)}
-                    />
-                  );
-                })}
-              </section>
-            );
-          })}
+            <div className="pp-dir-search-wrap">
+              <span className="pp-dir-search-icon" aria-hidden><SearchIcon /></span>
+              <input
+                className="pp-dir-search"
+                type="search"
+                placeholder="Search name or title..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search directory"
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="pp-dir-search-clear"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                >
+                  <CloseIcon />
+                </button>
+              )}
+            </div>
+
+            <nav className="pp-dir-tree" aria-label="Sites">
+              {tree.corp && showRegion("CORP") && (() => {
+                const site = tree.corp;
+                if (searchActive && !matchByTeam?.has(site.team.team_key)) return null;
+                return (
+                  <TreeSite
+                    key={site.team.team_key}
+                    team={site.team}
+                    labelOverride="Corporate"
+                    selected={effectiveSelectedKey === site.team.team_key}
+                    onClick={() => chooseSite(site.team.team_key)}
+                  />
+                );
+              })()}
+              {tree.regions.map((reg) => {
+                if (!showRegion(reg.name)) return null;
+                const visibleSites = reg.sites.filter((s) =>
+                  !searchActive || matchByTeam?.has(s.team.team_key)
+                );
+                if (visibleSites.length === 0) return null;
+                return (
+                  <div className="pp-dir-tree-region" key={reg.name}>
+                    <h3 className="pp-dir-tree-region-head">{reg.name}</h3>
+                    {visibleSites.map((s) => (
+                      <TreeSite
+                        key={s.team.team_key}
+                        team={s.team}
+                        selected={selectedTeamKey === s.team.team_key}
+                        onClick={() => chooseSite(s.team.team_key)}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+            </nav>
+          </aside>
+
+          <section className="pp-dir-pane pp-dir-pane--roster">
+            {mobileMode === "roster" && (
+              <button
+                type="button"
+                className="pp-dir-mobile-back"
+                onClick={() => setMobileMode("tree")}
+              >
+                <ChevronLeft />
+                <span>Back to sites</span>
+              </button>
+            )}
+            {selectedSite ? (
+              <RosterPanel
+                site={selectedSite}
+                onPersonClick={(id) => setSelectedId(id)}
+              />
+            ) : (
+              <div className="pp-dir-empty-pane">
+                <div className="pp-dir-empty-icon"><UsersIcon /></div>
+                <p>Select a site from the tree to see teammates.</p>
+              </div>
+            )}
+          </section>
         </div>
       </div>
 
       {selectedPerson && (
         <PersonDrawer
           person={selectedPerson}
-          team={selectedTeam}
+          team={selectedPersonTeam}
           onClose={closeDrawer}
+          isAdmin={isAdmin}
         />
       )}
     </div>
@@ -470,28 +665,41 @@ function RegionPill({ label, count, active, onClick }) {
   );
 }
 
-function SiteGroup({ site, open, onToggle, managers, teamList, onPersonClick, labelOverride }) {
-  const emails = [...managers, ...teamList].map((p) => p.work_email).filter(Boolean);
+function TreeSite({ team, labelOverride, selected, onClick }) {
+  const label = labelOverride || siteLabel(team);
+  return (
+    <button
+      type="button"
+      className={`pp-dir-tree-site${selected ? " pp-dir-tree-site--active" : ""}`}
+      onClick={onClick}
+      aria-current={selected ? "true" : undefined}
+    >
+      <span className="pp-dir-tree-site-icon" aria-hidden><MapPinIcon /></span>
+      <span className="pp-dir-tree-site-label">{label}</span>
+      <span className="pp-dir-tree-site-count">{team.headcount}</span>
+    </button>
+  );
+}
+
+function RosterPanel({ site, onPersonClick }) {
+  const { team, managers, team_list } = site;
+  const label = siteLabel(team);
+  const emails = [...managers, ...team_list].map((p) => p.work_email).filter(Boolean);
   const emailHref = gmailCompose(emails);
-  const label = labelOverride || siteLabel(site.team);
-  const visibleCount = managers.length + teamList.length;
+  const totalVisible = managers.length + team_list.length;
 
   return (
-    <div className={`pp-dir-site${open ? " pp-dir-site--open" : ""}`}>
-      <div className="pp-dir-site-head-row">
-        <button
-          type="button"
-          className="pp-dir-site-head"
-          onClick={onToggle}
-          aria-expanded={open}
-        >
-          <span className={`pp-dir-site-chev${open ? " pp-dir-site-chev--open" : ""}`} aria-hidden><Chevron /></span>
-          <span className="pp-dir-site-icon" aria-hidden><MapPinIcon /></span>
-          <span className="pp-dir-site-name">{label}</span>
-          <span className="pp-dir-site-count">
-            {visibleCount} {visibleCount === 1 ? "person" : "people"}
-          </span>
-        </button>
+    <div className="pp-dir-roster">
+      <div className="pp-dir-roster-head">
+        <div className="pp-dir-roster-title-row">
+          <h3 className="pp-dir-roster-title">
+            <MapPinIcon size={16} />
+            <span>{label}</span>
+          </h3>
+          <div className="pp-dir-roster-count">
+            {totalVisible} {totalVisible === 1 ? "person" : "people"}
+          </div>
+        </div>
         {emails.length > 0 && (
           <a
             href={emailHref}
@@ -505,32 +713,32 @@ function SiteGroup({ site, open, onToggle, managers, teamList, onPersonClick, la
           </a>
         )}
       </div>
-      {open && (
-        <div className="pp-dir-site-body">
+
+      {totalVisible === 0 ? (
+        <div className="pp-dir-empty-site">No teammates match the current filters.</div>
+      ) : (
+        <>
           {managers.length > 0 && (
             <>
               <h4 className="pp-dir-section-head">Management ({managers.length})</h4>
               <div className="pp-dir-rows">
                 {managers.map((p) => (
-                  <PersonRow key={p.worker_id} person={p} team={site.team} onClick={() => onPersonClick(p.worker_id)} />
+                  <PersonRow key={p.worker_id} person={p} team={team} onClick={() => onPersonClick(p.worker_id)} />
                 ))}
               </div>
             </>
           )}
-          {teamList.length > 0 && (
+          {team_list.length > 0 && (
             <>
-              <h4 className="pp-dir-section-head">Team ({teamList.length})</h4>
+              <h4 className="pp-dir-section-head">Team ({team_list.length})</h4>
               <div className="pp-dir-rows">
-                {teamList.map((p) => (
-                  <PersonRow key={p.worker_id} person={p} team={site.team} onClick={() => onPersonClick(p.worker_id)} />
+                {team_list.map((p) => (
+                  <PersonRow key={p.worker_id} person={p} team={team} onClick={() => onPersonClick(p.worker_id)} />
                 ))}
               </div>
             </>
           )}
-          {managers.length === 0 && teamList.length === 0 && (
-            <div className="pp-dir-empty-site">No teammates match the current filters.</div>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
@@ -561,11 +769,12 @@ function PersonRow({ person, team, onClick }) {
   );
 }
 
-function PersonDrawer({ person, team, onClose }) {
+function PersonDrawer({ person, team, onClose, isAdmin }) {
   const phone = normalizePhone(person.phone);
-  const email = person.work_email || "";
-  const tenure = tenureSummary(person.start_date);
-  const emailHref = email ? gmailCompose(email) : "";
+  const workEmail = person.work_email || "";
+  const personalEmail = person.personal_email || "";
+  const effectiveEmail = workEmail || personalEmail;
+  const effectiveEmailLabel = workEmail ? "Email" : (personalEmail ? "Personal email" : "");
   const siteName = team ? siteLabel(team) : "";
 
   const tags = [];
@@ -573,9 +782,35 @@ function PersonDrawer({ person, team, onClose }) {
   tags.push({ key: "cls", label: person.is_salaried ? "SALARIED" : "HOURLY", tone: person.is_salaried ? "salaried" : "hourly" });
   const regionTag = team?.region ? regionLabel(team.region).toUpperCase() : "";
   const levelTag = team?.level ? team.level.toUpperCase() : "";
-  // Skip region tag when it duplicates the level tag (CORP people have both set to "CORP").
   if (regionTag && regionTag !== levelTag) tags.push({ key: "rgn", label: regionTag, tone: "region" });
   if (levelTag) tags.push({ key: "lvl", label: levelTag, tone: "level" });
+
+  // Tenure facts
+  const start = parseStartDate(person.start_date);
+  const now = new Date();
+  let factStarted = null;
+  let factAnniv = null;
+  if (start) {
+    const years = Math.max(0, now.getFullYear() - start.getFullYear() - (
+      (now.getMonth() < start.getMonth() || (now.getMonth() === start.getMonth() && now.getDate() < start.getDate())) ? 1 : 0
+    ));
+    const nextAnniv = new Date(start.getFullYear() + years + 1, start.getMonth(), start.getDate());
+    factStarted = { value: formatLongDate(start), sub: tenureSince(start, now) };
+    factAnniv = {
+      value: `${formatLongDate(nextAnniv)} - ${ordinal(years + 1)} year`,
+      sub: relativeFuture(nextAnniv, now),
+    };
+  }
+
+  // Birthday fact
+  let factBirthday = null;
+  const nextBday = nextBirthdayDate(person.birthday, now);
+  if (nextBday) {
+    factBirthday = {
+      value: formatMonthDay(nextBday),
+      sub: relativeFuture(nextBday, now),
+    };
+  }
 
   return (
     <div className="pp-dir-drawer-root" role="dialog" aria-modal="true" aria-label={`${person.display_name} details`}>
@@ -613,31 +848,18 @@ function PersonDrawer({ person, team, onClose }) {
         )}
 
         <section className="pp-dir-drawer-section">
-          <div className="pp-dir-drawer-section-title">Tenure</div>
-          {tenure ? (
-            <div className="pp-dir-tenure">
-              <div>{tenure.started}</div>
-              <div>{tenure.time}</div>
-              <div>{tenure.anniversary}</div>
-            </div>
-          ) : (
-            <div className="pp-dir-tenure pp-dir-tenure--empty">Start date not available</div>
-          )}
-        </section>
-
-        <section className="pp-dir-drawer-section">
           <div className="pp-dir-drawer-section-title">Contact</div>
           <div className="pp-dir-contact-list">
-            {email && (
+            {effectiveEmail && (
               <div className="pp-dir-contact-row">
                 <div className="pp-dir-contact-icon" aria-hidden><MailIcon /></div>
                 <div className="pp-dir-contact-text">
-                  <div className="pp-dir-contact-label">Email</div>
-                  <div className="pp-dir-contact-value">{email}</div>
+                  <div className="pp-dir-contact-label">{effectiveEmailLabel}</div>
+                  <div className="pp-dir-contact-value">{effectiveEmail}</div>
                 </div>
                 <a
                   className="pp-btn pp-btn--primary pp-dir-contact-action"
-                  href={emailHref}
+                  href={gmailCompose(effectiveEmail)}
                   target="_blank"
                   rel="noopener"
                 >
@@ -662,7 +884,47 @@ function PersonDrawer({ person, team, onClose }) {
           </div>
         </section>
 
-        {person.is_site_leader && (
+        {person.start_date && (
+          <section className="pp-dir-drawer-section">
+            <div className="pp-dir-block-title">With KitchFix</div>
+            {factStarted && (
+              <div className="pp-dir-fact">
+                <div className="pp-dir-fact-icon"><CalendarIcon /></div>
+                <div>
+                  <div className="pp-dir-fact-label">Started</div>
+                  <div className="pp-dir-fact-value">{factStarted.value}</div>
+                  <div className="pp-dir-fact-sub">{factStarted.sub}</div>
+                </div>
+              </div>
+            )}
+            {factAnniv && (
+              <div className="pp-dir-fact">
+                <div className="pp-dir-fact-icon"><ClockIcon /></div>
+                <div>
+                  <div className="pp-dir-fact-label">Work anniversary</div>
+                  <div className="pp-dir-fact-value">{factAnniv.value}</div>
+                  <div className="pp-dir-fact-sub">{factAnniv.sub}</div>
+                </div>
+              </div>
+            )}
+            <div className="pp-dir-fact">
+              <div className="pp-dir-fact-icon"><CakeIcon /></div>
+              <div>
+                <div className="pp-dir-fact-label">Birthday</div>
+                {factBirthday ? (
+                  <>
+                    <div className="pp-dir-fact-value">{factBirthday.value}</div>
+                    <div className="pp-dir-fact-sub">{factBirthday.sub}</div>
+                  </>
+                ) : (
+                  <div className="pp-dir-fact-value pp-dir-fact-value--muted">Not in Rippling sync yet</div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {person.is_site_leader && isAdmin && (
           <section className="pp-dir-drawer-section">
             <div className="pp-dir-routing">
               <div className="pp-dir-routing-icon"><BellIcon /></div>

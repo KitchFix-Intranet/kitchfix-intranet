@@ -601,20 +601,45 @@ if (action === "bootstrap") {
 
       // Paginate defensively - people has >1000 rows total; ACTIVE
       // filter cuts to ~73 today but could grow.
+      //
+      // Column resilience: `birthday` is added by migration
+      // people-birthday-column.sql which is applied manually in Studio
+      // (migrations don't auto-apply on deploy). If this code deploys
+      // before the migration runs, the SELECT fails with "column
+      // people.birthday does not exist"; we retry without birthday and
+      // synthesize empty values so the directory keeps working.
+      const SELECT_WITH_BIRTHDAY =
+        "worker_id, display_name, title, account_key, is_corp, " +
+        "is_manager, is_salaried, is_site_leader, worker_class, " +
+        "work_email, personal_email, phone, site_leader_note, start_date, birthday";
+      const SELECT_FALLBACK =
+        "worker_id, display_name, title, account_key, is_corp, " +
+        "is_manager, is_salaried, is_site_leader, worker_class, " +
+        "work_email, personal_email, phone, site_leader_note, start_date";
       const peopleRows = [];
       const PAGE = 1000;
+      let hasBirthday = true;
       for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supa
+        let selectCols = hasBirthday ? SELECT_WITH_BIRTHDAY : SELECT_FALLBACK;
+        let { data, error } = await supa
           .from("people")
-          .select(
-            "worker_id, display_name, title, account_key, is_corp, " +
-            "is_manager, is_salaried, is_site_leader, worker_class, " +
-            "work_email, phone, site_leader_note, start_date"
-          )
+          .select(selectCols)
           .eq("status", "ACTIVE")
           .range(from, from + PAGE - 1);
+        if (error && hasBirthday && /column\s+("|'?)people\.birthday\1\s+does not exist/i.test(error.message)) {
+          hasBirthday = false;
+          selectCols = SELECT_FALLBACK;
+          ({ data, error } = await supa
+            .from("people")
+            .select(selectCols)
+            .eq("status", "ACTIVE")
+            .range(from, from + PAGE - 1));
+        }
         if (error) throw new Error(`[directory] people read: ${error.message}`);
-        peopleRows.push(...data);
+        for (const row of data) {
+          if (!hasBirthday) row.birthday = "";
+          peopleRows.push(row);
+        }
         if (data.length < PAGE) break;
       }
 
@@ -657,7 +682,9 @@ if (action === "bootstrap") {
           is_site_leader: !!p.is_site_leader,
           worker_class: p.worker_class || "",
           work_email: p.work_email || "",
+          personal_email: p.personal_email || "",
           start_date: p.start_date || null,
+          birthday: p.birthday || "",
           phone: p.phone || "",
           site_leader_note: p.site_leader_note || "",
           slack_handle: s.slack_handle || "",
