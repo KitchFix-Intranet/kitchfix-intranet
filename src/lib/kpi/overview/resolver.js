@@ -120,6 +120,7 @@ import { periodOf, periodStartISO, periodEndISO, weekStartsInRange, endOfLastCom
 import { PURCHASING_ENVELOPE_EXCLUSIONS } from "@/lib/accountModels.js";
 import { canonicalSubLine } from "@/lib/purchasing/glRollup.js";
 import { resolveFinanceCloseAdjustment, absorbFinanceCloseIntoSubLines } from "@/lib/kpi/shared/financeCloseAdjustment.js";
+import { buildBillback } from "@/lib/kpi/overview/billback.js";
 
 const FISCAL_YEAR = 2026;
 
@@ -2175,6 +2176,21 @@ export async function resolveOverview({
     chart = { grain: "period", series };
   }
 
+  // 17a-bb. Billed-back-to-club (Kevin ruling 2026-10-09, PR-billback-1).
+  // Management-fee accounts only, multi-period ranges only. Finance
+  // core lives in @/lib/kpi/overview/billback.js (one file, callable
+  // from any surface). Returns null when the gate fails; the client
+  // reads the field and renders nothing on null.
+  const billback = await buildBillback({
+    supa,
+    accountKey,
+    isManagementFee,
+    isMultiPeriod: rng.kind !== "period",
+    todayISO: today,
+    periodStatus,
+    fiscalYear: FISCAL_YEAR,
+  });
+
   // 17b. Week rail (Kevin CC prompt 2026-09-08 item 4). Four cards
   // below the three, showing each week's confirmed / forecast meals
   // + prorated service fee + cost target + cost landed + caveats.
@@ -3909,6 +3925,13 @@ export async function resolveOverview({
     cards,
     levers,
     chart,
+    // Kevin ruling 2026-10-09 (PR-billback-1). Billed-back-to-club
+    // surface for management-fee accounts on multi-period ranges.
+    // Null on non-MF accounts and single-period ranges; client reads
+    // the field and renders the summary card + bottom fold on non-
+    // null, nothing on null. Finance core in @/lib/kpi/overview/
+    // billback.js.
+    billback,
     statement_rows: statementRows,
     // E19 (2026-09-01): total-row period-budget figures the client
     // renders on Total revenue and Total COGS. Prior payload shipped
