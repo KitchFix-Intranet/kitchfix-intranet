@@ -29,14 +29,10 @@ const ArrowRight = () => (
     <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
   </svg>
 );
-const TrophyIcon = () => (
+const DirectoryIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-    <path d="M4 22h16" />
-    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
 
@@ -177,55 +173,24 @@ export default function DashboardView({ counts, hasDraftNH, hasDraftPAF, isAdmin
           </button>
         </div>
 
-        {/* Leadership Dugout Card */}
+        {/* Team Directory Card */}
         <div
           className="pp-card pp-card--interactive"
-          onClick={() => onNavigate("leadership-dugout")}
+          onClick={() => onNavigate("directory")}
         >
           <div className="pp-card-header-row">
-            <div className="pp-icon-box pp-icon-purple"><TrophyIcon /></div>
+            <div className="pp-icon-box pp-icon-blue"><DirectoryIcon /></div>
           </div>
-          <h3 className="pp-card-title">Leadership Dugout</h3>
-          <p className="pp-card-desc">Performance reviews, WOW Plans, scorecards, and the leadership playbook.</p>
+          <h3 className="pp-card-title">Team Directory</h3>
+          <p className="pp-card-desc">Find teammates across every account - names, roles, and contact info.</p>
           <button
             className="pp-card-cta pp-card-cta--primary"
-            onClick={(e) => { e.stopPropagation(); onNavigate("leadership-dugout"); }}
+            onClick={(e) => { e.stopPropagation(); onNavigate("directory"); }}
           >
-            <span>Launch Tool</span>
+            <span>Open Directory</span>
             <ArrowRight />
           </button>
         </div>
-
-        {/* Locked Cards — compact row */}
-                {[
-          { title: "The Academy", desc: "Training modules.", icon: (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" />
-            </svg>
-          )},
-          { title: "The Library", desc: "SOPs and Policies.", icon: (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
-          )},
-          { title: "HR Programs", desc: "Referral bonuses.", icon: (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-          )},
-        ].map((card) => (
-          <div key={card.title} className="pp-card pp-card--locked pp-card--locked-compact">
-            <div className="pp-locked-row">
-              <div className="pp-icon-box-sm pp-icon-grey">{card.icon}</div>
-              <div className="pp-locked-text">
-                <h3 className="pp-card-title" style={{ margin: 0, fontSize: 15 }}>{card.title}</h3>
-                <p className="pp-card-desc" style={{ margin: 0, fontSize: 12 }}>{card.desc}</p>
-              </div>
-              <span className="pp-badge-coming">Q3</span>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
