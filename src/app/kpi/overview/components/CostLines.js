@@ -10,11 +10,10 @@
 //   Line · Spent period to date · Budget at this revenue
 //        · % of rev · Target % · vs target (pt gap over $ delta)
 //
-// Rows are clickable. Labor (3100) navigates to /kpi/labor; food,
-// packaging and vehicle (3200/3400/3500) navigate to /kpi/purchasing.
-// Both carry account, start, end, preview (item 6). Every row
-// navigates - billed-back and inactive rows too. A row that renders
-// is a row that clicks (Kevin's rule).
+// Rows are plain text. Kevin ruling 2026-10-09 removed the drill
+// links to the standalone labor and purchasing pages - the team
+// stays on the Overview. The row still carries line code and label;
+// no anchor, no arrow, no hover affordance.
 //
 // Meter per row: fill = actual / max(actual, batr); dark notch at
 // batr; second grey notch at period_budget only on open ranges
@@ -25,7 +24,6 @@
 // row on every range, to the cent. Permanent probe with seed axis
 // covers this - Kevin's first render failed exactly here.
 
-import Link from "next/link";
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 
 function fmtMoney(n) {
@@ -63,36 +61,11 @@ function gapDollars(delta, goodWord, badWord) {
   return `${abs} ${delta <= 0 ? goodWord : badWord}`;
 }
 
-// Build the destination href for a cost line. Kevin ruling R-68
-// (2026-09-04): the 3100 row is ALWAYS salary-inclusive on the
-// Overview (labor's parent total never moves by toggle - the toggle
-// gates disclosure only). So the drill URL always passes
-// include_salary=1 for 3100, regardless of the payload's toggle
-// state. Otherwise the row shows salary-inclusive $896k and the
-// drill target opens hourly-only $780k - the exact defect item 4
-// of this-period was written to prevent.
-//
-// Also carries end=range_effective_end so the drill queries the
-// same R-63 window the row reads.
-function rowHref({ lineCode, filters, previewAccount, rangeEffectiveEnd }) {
-  const params = new URLSearchParams();
-  if (filters?.account) params.set("account", filters.account);
-  if (filters?.range?.start) params.set("start", filters.range.start);
-  const endToUse = rangeEffectiveEnd || filters?.range?.end;
-  if (endToUse) params.set("end", endToUse);
-  if (previewAccount) params.set("preview", previewAccount);
-  if (lineCode === "3100") params.set("include_salary", "1");
-  const base = lineCode === "3100" ? "/kpi/labor" : "/kpi/purchasing";
-  const qs = params.toString();
-  return qs ? `${base}?${qs}` : base;
-}
-
 // Kevin ruling cleanup (2026-09-03) item 7: Meter component removed.
 // The red/green bar beneath each cost line was noise - the percentages
 // and the verdict colour on % of rev already carry the story.
 
 function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull, rangeEffectiveEnd, showPeriodCols }) {
-  const href = rowHref({ lineCode: row.line_code, filters, previewAccount, rangeEffectiveEnd });
   const isBilledBack = Array.isArray(row.flags) && row.flags.includes("billed_back");
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   // Kevin CC prompt 2026-09-14 (prereq A). A line whose net actual
@@ -146,16 +119,14 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
       data-kpi-ov-inactive={isInactive ? "1" : undefined}
     >
       <td className="l kpi-ov-cl-line">
-        <Link
-          href={href}
-          className="kpi-ov-cl-linkarea"
-          data-kpi-ov="cost-line-link"
-          aria-label={`Open ${row.label} detail`}
-        >
+        {/* Kevin ruling 2026-10-09. Drill links to the standalone labor
+            and purchasing pages removed - the team stays on the Overview.
+            Rows are plain text now: same line code + label, no link, no
+            arrow, no hover affordance. */}
+        <span className="kpi-ov-cl-linkarea" data-kpi-ov="cost-line">
           <span className="kpi-ov-glc kpi-ov-num">{row.line_code}</span>
           <span className="kpi-ov-cl-lbl">{row.label}</span>
-          <span className="kpi-ov-cl-go" aria-hidden="true">→</span>
-        </Link>
+        </span>
         {/* Kevin R-68 item 4 (2026-09-04): vehicle insurance +
             repair-and-maintenance are corporate allocations posted
             straight to the P&L, not visible on bill.com or Rippling.
@@ -509,27 +480,13 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
               const adj = adjustedForRow(r);
               const landed = Number(r.actual || 0);
               const left = adj != null ? adj - landed : null;
-              // Kevin CC prompt 2026-09-09. Restore the shared row
-              // markup - Link.kpi-ov-cl-linkarea wrapping span.kpi-ov-glc
-              // + span.kpi-ov-cl-lbl + span.kpi-ov-cl-go - the pattern
-              // every other range uses via CostRow above. Uses the same
-              // rowHref helper so drill destination is identical:
-              // 3100 -> /kpi/labor?include_salary=1 (parent stays
-              // salary-inclusive per R-68), other codes -> /kpi/purchasing.
-              const href = rowHref({ lineCode: r.line_code, filters, previewAccount, rangeEffectiveEnd });
               return (
                 <tr key={r.line_code} className="kpi-ov-cl-row" data-kpi-ov-line-code={r.line_code}>
                   <td className="l kpi-ov-cl-line">
-                    <Link
-                      href={href}
-                      className="kpi-ov-cl-linkarea"
-                      data-kpi-ov="cost-line-link"
-                      aria-label={`Open ${r.label} detail`}
-                    >
+                    <span className="kpi-ov-cl-linkarea" data-kpi-ov="cost-line">
                       <span className="kpi-ov-glc kpi-ov-num">{r.line_code}</span>
                       <span className="kpi-ov-cl-lbl">{r.label}</span>
-                      <span className="kpi-ov-cl-go" aria-hidden="true">→</span>
-                    </Link>
+                    </span>
                   </td>
                   <td className="kpi-ov-num kpi-ov-nb plan plan-first" data-kpi-ov="cost-line-period-budget">
                     {fmtMoney(r.period_budget) || "—"}
