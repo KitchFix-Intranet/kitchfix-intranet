@@ -37,7 +37,8 @@ function fmtPctWhole(n) {
 }
 
 const TONE_PILL = { over: "kpi-ov-pill-warn", under: "kpi-ov-pill-good", on: "kpi-ov-pill-neutral", na: "kpi-ov-pill-neutral" };
-const TONE_CELL = { over: "kpi-ov-bb-amber", under: "kpi-ov-bb-good", on: "kpi-ov-bb-neutral", na: "kpi-ov-bb-neutral" };
+// over-goal on billed back is amber (notable, not a loss); under green; on/na neutral.
+const TONE_FOOT = { over: "kpi-ov-foot-warn", under: "kpi-ov-foot-good", on: "", na: "" };
 
 const BILLBACK_HELP = (
   <>
@@ -73,7 +74,7 @@ export default function BillbackCard({ billback, revenueModel }) {
   }
 
   const pillCls = TONE_PILL[ytd.tone] || "kpi-ov-pill-neutral";
-  const vsCellCls = TONE_CELL[ytd.tone] || "kpi-ov-bb-neutral";
+  const footToneCls = TONE_FOOT[ytd.tone] || "";
   const arrow = ytd.delta > 0 ? "▲" : ytd.delta < 0 ? "▼" : "";
 
   return (
@@ -86,46 +87,40 @@ export default function BillbackCard({ billback, revenueModel }) {
           {fmtPctWhole(ytd.pct_of_goal_to_date)} of goal
         </span>
       </div>
-      <div className="kpi-ov-cb kpi-ov-bb-stats" data-kpi-ov="billback-stats">
-        <div className="kpi-ov-bb-cell" data-kpi-ov="billback-actual-to-date">
-          <div className="kpi-ov-bb-lbl">
+      <div className="kpi-ov-cb">
+        <div className="kpi-ov-pair" data-kpi-ov="billback-actual-to-date">
+          <span className="kpi-ov-pair-k">
             {through_period ? `Billed back · thru P${through_period}` : "Billed back"}
+          </span>
+          <span className="kpi-ov-pair-v kpi-ov-num kpi-ov-bb-lead">{fmtMoney(ytd.actual_to_date)}</span>
+        </div>
+        <div className="kpi-ov-pair-rule" aria-hidden="true" />
+        <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="billback-goal-to-date">
+          <span className="kpi-ov-pair-k">Goal to date</span>
+          <span className="kpi-ov-pair-v kpi-ov-num">
+            {fmtMoney(ytd.goal_to_date)}
+            <span className="kpi-ov-pair-sub">of {fmtMoney(annual_goal)}</span>
+          </span>
+        </div>
+        <div className={`kpi-ov-foot ${footToneCls}`} data-kpi-ov="billback-vs-goal">
+          <span className="kpi-ov-foot-k">Vs goal</span>
+          <span className="kpi-ov-foot-v">
+            {arrow ? <span aria-hidden="true">{arrow} </span> : null}{fmtMoney(Math.abs(ytd.delta))}
+          </span>
+        </div>
+        {Array.isArray(breakdown) && breakdown.length > 0 && (
+          <div className="kpi-ov-bb-brk" data-kpi-ov="billback-breakdown">
+            {breakdown.map((b, i) => (
+              <span key={b.label} data-kpi-ov-stray={b.stray ? "1" : "0"}>
+                {i > 0 && <span className="kpi-ov-bb-brk-sep"> · </span>}
+                <span className={b.stray ? "kpi-ov-bb-brk-stray" : undefined}>
+                  <b>{fmtMoney(b.amount)}</b> {b.label}
+                </span>
+              </span>
+            ))}
           </div>
-          <div className="kpi-ov-bb-val">{fmtMoney(ytd.actual_to_date)}</div>
-        </div>
-        <div className="kpi-ov-bb-cell" data-kpi-ov="billback-goal-to-date">
-          <div className="kpi-ov-bb-lbl">Goal to date</div>
-          <div className="kpi-ov-bb-val">{fmtMoney(ytd.goal_to_date)}</div>
-          <div className="kpi-ov-bb-sub">of {fmtMoney(annual_goal)} annual</div>
-        </div>
-        <div className={`kpi-ov-bb-cell ${vsCellCls}`} data-kpi-ov="billback-vs-goal">
-          <div className="kpi-ov-bb-lbl">vs goal</div>
-          <div className="kpi-ov-bb-val">
-            <span className="kpi-ov-bb-arrow" aria-hidden="true">{arrow}</span>
-            {fmtMoney(Math.abs(ytd.delta))}
-          </div>
-        </div>
-        <div className="kpi-ov-bb-cell" data-kpi-ov="billback-annual-used">
-          <div className="kpi-ov-bb-lbl">Annual goal used</div>
-          <div className="kpi-ov-bb-val">{fmtPctWhole(ytd.pct_of_annual)}</div>
-          <div className="kpi-ov-bb-sub">{fmtMoney(ytd.goal_remaining)} goal left</div>
-        </div>
+        )}
       </div>
-      {Array.isArray(breakdown) && breakdown.length > 0 && (
-        <div className="kpi-ov-bb-chips" data-kpi-ov="billback-breakdown">
-          {breakdown.map(b => (
-            <span
-              key={b.label}
-              className={`kpi-ov-bb-chip${b.stray ? " kpi-ov-bb-chip-stray" : ""}`}
-              data-kpi-ov="billback-chip"
-              data-kpi-ov-stray={b.stray ? "1" : "0"}
-            >
-              <span className="kpi-ov-bb-chip-lbl">{b.label}</span>
-              <span className="kpi-ov-bb-chip-val">{fmtMoney(b.amount)}</span>
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
