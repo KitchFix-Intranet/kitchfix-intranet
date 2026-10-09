@@ -1307,7 +1307,16 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                 // view - fall back to 0 rather than crash.
                 const singleDaysServed = typeof wm?.complete === "number" ? wm.complete : 0;
                 const singleTotalMeals = typeof wm?.actMeals === "number" ? wm.actMeals : 0;
-                const singlePretaxDollars = typeof wm?.actRev === "number" ? wm.actRev : 0;
+                // sc-58: finalize overlay reads BILLABLE revenue (excludes
+                // services flagged export_excluded on sc_qbo_service_map,
+                // on top of is_non_revenue), so confirmedPretaxCents equals
+                // the payload pretax. Falls back to actRev if the server
+                // response has not been refreshed with the new field;
+                // week-card / KPI displays continue to read wm.actRev
+                // (unchanged real revenue).
+                const singlePretaxDollars = typeof wm?.billableActRev === "number"
+                  ? wm.billableActRev
+                  : (typeof wm?.actRev === "number" ? wm.actRev : 0);
 
                 // Bi-weekly close-week widen (2026-09-16 finalize confirm
                 // fix). The confirm overlay was written when finalize was
@@ -1340,8 +1349,14 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                 const totalMeals = canWidenToPair
                   ? singleTotalMeals + (typeof partnerWm.actMeals === "number" ? partnerWm.actMeals : 0)
                   : singleTotalMeals;
+                // sc-58: partner widen also reads billableActRev so a
+                // biweekly close-week overlay reconciles with the pair's
+                // payload. Same fallback shape as the single-week path.
+                const partnerPretaxDollars = typeof partnerWm?.billableActRev === "number"
+                  ? partnerWm.billableActRev
+                  : (typeof partnerWm?.actRev === "number" ? partnerWm.actRev : 0);
                 const pretaxTotalDollars = canWidenToPair
-                  ? singlePretaxDollars + (typeof partnerWm.actRev === "number" ? partnerWm.actRev : 0)
+                  ? singlePretaxDollars + partnerPretaxDollars
                   : singlePretaxDollars;
                 const totalDays = canWidenToPair ? 14 : 7;
 

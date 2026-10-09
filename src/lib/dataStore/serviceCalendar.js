@@ -790,7 +790,7 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
   // - within default - but TBJ-FL with 21 services * 31 = 651, still
   // under. Paginate anyway so the year-view bug class (PostgREST cap
   // silently dropping rows) can't ever bite this path either.
-  const [viewRows, billingRes, noteEntriesByDate, historyEntriesByDate] = await Promise.all([
+  const [viewRows, billingRes, noteEntriesByDate, historyEntriesByDate, exportExcludedRes] = await Promise.all([
     fetchAllPaginated(
       supa,
       (q) => q
@@ -815,8 +815,21 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
     // F1 (M2): the actuals-history feed powering the Activity ledger's
     // EDIT rows. Same batched-by-range pattern as noteEntries.
     readHistoryEntriesForRange(accountKey, first, last),
+    // sc-58: export-excluded service_ids. Fed into per-service flags
+    // so day.totals.billableActualRevenue drops the same services the
+    // invoice payload drops (buildInvoicePayload line 292). Used ONLY
+    // by the finalize-confirm overlay; day.totals.actualRevenue stays
+    // the full revenue figure for KPI + week-card displays.
+    supa
+      .from("sc_qbo_service_map")
+      .select("service_id")
+      .eq("account_key", accountKey)
+      .eq("active", true)
+      .eq("export_excluded", true),
   ]);
   throwOnError(billingRes.error, "loadMonthData.billing_model");
+  throwOnError(exportExcludedRes.error, "loadMonthData.export_excluded");
+  const exportExcludedSet = new Set((exportExcludedRes.data || []).map((r) => r.service_id));
   const billingModel = billingRes.data?.billing_model || null;
   const hasHomestandScheduleFlag = !!billingRes.data?.has_homestand_schedule;
   const hasScheduleOverlayFlag = !!billingRes.data?.has_schedule_overlay;
@@ -864,6 +877,10 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
       isFlatFee:           !!r.is_flat_fee,
       isTaxFree:           !!r.is_tax_free,
       isNonRevenue:        !!r.is_non_revenue,
+      // sc-58: flagged from sc_qbo_service_map.export_excluded. Only
+      // affects day.totals.billableActualRevenue (finalize overlay);
+      // actualRevenue + KPI figures are unchanged.
+      isExportExcluded:    exportExcludedSet.has(r.service_id),
       projectedCount:      r.projected_count == null ? null : Number(r.projected_count),
       actualCount:         r.actual_count    == null ? null : Number(r.actual_count),
       priceAtDate:         Number(r.price_at_date) || 0,
@@ -910,6 +927,12 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
       let actualCount = 0;
       let projectedRevenue = 0;
       let actualRevenue = 0;
+      // sc-58: billableActualRevenue excludes export_excluded on top of
+      // is_non_revenue, matching buildInvoicePayload's drop at line 292.
+      // Fed to the finalize-confirm overlay so the "amount on screen"
+      // equals the "amount about to bill". Independent of actualRevenue
+      // (KPI / week-card revenue).
+      let billableActualRevenue = 0;
       let hasAnyActuals = false;
       let anyNonZeroAct = false;
       let hasProj = false;
@@ -922,7 +945,11 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
           // before being summed so day totals foot to the visible line
           // amounts in the modal + drill rail + week card.
           projectedRevenue += Math.round((s.projectedRevenue || 0) * 100) / 100;
-          if (s.hasActuals) actualRevenue += Math.round((s.actualRevenue || 0) * 100) / 100;
+          if (s.hasActuals) {
+            const svcActualDollars = Math.round((s.actualRevenue || 0) * 100) / 100;
+            actualRevenue += svcActualDollars;
+            if (!s.isExportExcluded) billableActualRevenue += svcActualDollars;
+          }
         }
         if (s.hasActuals) hasAnyActuals = true;
         if (s.actualCount != null && Number(s.actualCount) > 0) anyNonZeroAct = true;
@@ -942,7 +969,7 @@ async function loadMonthDataPostgres(accountKey, year, month, opts = {}) {
         hasActuals: hasAnyActuals,
         hasProjection: hasProj,
         status,
-        totals: { projectedCount, actualCount, projectedRevenue, actualRevenue },
+        totals: { projectedCount, actualCount, projectedRevenue, actualRevenue, billableActualRevenue },
         // SC-079: per-day ledger, newest first. [] when the day has no
         // entries so the client can render the empty container without
         // a null-check.
