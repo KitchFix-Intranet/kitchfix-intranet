@@ -7,7 +7,6 @@ const TABS = [
   { id: "paf", label: "PAF" },
   { id: "incidents", label: "Incidents" },
   { id: "directory", label: "Directory" },
-  { id: "leadership-dugout", label: "Leadership" },
 ];
 
 export default function PeopleNav({ activeView, onNavigate, isAdmin }) {

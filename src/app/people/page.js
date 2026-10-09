@@ -8,7 +8,6 @@ import NewHireWizard from "@/components/people/NewHireWizard";
 import PAFForm from "@/components/people/PAFForm";
 import IncidentTool from "@/components/people/IncidentTool";
 import DirectoryView from "@/components/people/DirectoryView";
-import LeadershipDugoutTool from "@/components/people/leadership-dugout/LeadershipDugoutTool";
 import AdminQueue from "@/components/people/AdminQueue";
 import ConfirmModal from "@/components/people/ConfirmModal";
 import Toast from "@/components/people/Toast";
@@ -382,14 +381,6 @@ const showToast = useCallback((msgOrObj, type = "success") => {
 
         {view === "directory" && (
           <DirectoryView
-            showToast={showToast}
-          />
-        )}
-
-        {view === "leadership-dugout" && (
-          <LeadershipDugoutTool
-            bootstrapData={bootstrapData}
-            onNavigate={navigate}
             showToast={showToast}
           />
         )}
