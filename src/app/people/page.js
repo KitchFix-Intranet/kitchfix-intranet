@@ -382,6 +382,7 @@ const showToast = useCallback((msgOrObj, type = "success") => {
         {view === "directory" && (
           <DirectoryView
             showToast={showToast}
+            bootstrapData={bootstrapData}
           />
         )}
 

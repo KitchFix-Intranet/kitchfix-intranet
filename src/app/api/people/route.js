@@ -609,7 +609,7 @@ if (action === "bootstrap") {
           .select(
             "worker_id, display_name, title, account_key, is_corp, " +
             "is_manager, is_salaried, is_site_leader, worker_class, " +
-            "work_email, personal_email, phone, site_leader_note"
+            "work_email, phone, site_leader_note, start_date"
           )
           .eq("status", "ACTIVE")
           .range(from, from + PAGE - 1);
@@ -622,7 +622,7 @@ if (action === "bootstrap") {
         await Promise.all([
           supa
             .from("accounts")
-            .select("team_key, name, region, active")
+            .select("team_key, name, region, active, level, city, state")
             .eq("active", true),
           supa
             .from("contacts")
@@ -657,7 +657,7 @@ if (action === "bootstrap") {
           is_site_leader: !!p.is_site_leader,
           worker_class: p.worker_class || "",
           work_email: p.work_email || "",
-          personal_email: p.personal_email || "",
+          start_date: p.start_date || null,
           phone: p.phone || "",
           site_leader_note: p.site_leader_note || "",
           slack_handle: s.slack_handle || "",
@@ -679,6 +679,9 @@ if (action === "bootstrap") {
           team_key: a.team_key,
           name: a.name || a.team_key,
           region: a.region || "",
+          level: a.level || "",
+          city: a.city || "",
+          state: a.state || "",
           headcount: headByTeam.get(a.team_key) || 0,
         }))
         .sort((a, b) => {
