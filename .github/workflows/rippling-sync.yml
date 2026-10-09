@@ -167,7 +167,7 @@ jobs:
       # independent of any labor probe cascading before it.
       - name: Derive salary actuals
         id: derive_salary
-        if: always() && steps.sync.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
+        if: always() && steps.sync.outputs.compensations_ok == 'true' && steps.sync.outputs.workers_ok == 'true' && steps.sync.outputs.users_ok == 'true' && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
           echo "note: hourly derive is separate; failure here isolates to salary"
@@ -214,7 +214,7 @@ jobs:
       # P3 gates that contract on every run.
       - name: Derive people
         id: derive_people
-        if: always() && steps.sync.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
+        if: always() && steps.sync.outputs.workers_ok == 'true' && steps.sync.outputs.users_ok == 'true' && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
           echo "derive_people --source=${SOURCE}"

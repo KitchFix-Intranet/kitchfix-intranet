@@ -464,5 +464,23 @@ console.log("  " + fmtResult("users",         usResult));
 console.log("  " + fmtResult("compensations", cpResult));
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
+// Per-walk outcomes for the workflow. Each derive gates on the walks it
+// actually reads, not on this script's exit code - a labor-endpoint 404
+// must not freeze the people roster or salary derive, which read none of
+// those walks. Emitted even on failure so a partial sync still routes
+// correctly. Local runs (no GITHUB_OUTPUT) skip this silently.
+if (process.env.GITHUB_OUTPUT) {
+  const { appendFileSync } = await import("node:fs");
+  const lines = [
+    `time_entries_ok=${teResult.ok}`,
+    `pay_segments_ok=${psResult.ok}`,
+    `workers_ok=${wkResult.ok}`,
+    `time_entry_zo_ok=${zoResult.ok}`,
+    `users_ok=${usResult.ok}`,
+    `compensations_ok=${cpResult.ok}`,
+  ].join("\n") + "\n";
+  appendFileSync(process.env.GITHUB_OUTPUT, lines);
+}
+
 if (!teResult.ok || !psResult.ok || !wkResult.ok || !zoResult.ok || !usResult.ok || !cpResult.ok) process.exit(2);
 process.exit(0);
