@@ -2440,83 +2440,46 @@
 
 .kpi-app .kpi-ov-card-bb { border-top: 3px solid var(--navy-700); }
 
-/* Four-cell stat row mirrors CardsRow's visual weight (val reads at
-   the hero size with meta label above and sub below). CSS Grid with
-   minmax(0, 1fr) tracks - plain 1fr keeps a min-content floor, which
-   a 7-figure value in cell #1 will push past and bump a fourth cell
-   to a second row. The explicit 0-min collapses that floor so all
-   four cells sit on one row and long values wrap within their own
-   cell rather than breaking the row. */
-.kpi-app .kpi-ov-bb-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--kpi-sp-4, 14.4px);
-}
-.kpi-app .kpi-ov-bb-cell {
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--n-50);
-  min-width: 0;
-}
-.kpi-app .kpi-ov-bb-lbl {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-bb-val {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--n-900);
-  margin-top: 2px;
-}
-.kpi-app .kpi-ov-bb-sub {
-  font-size: 11px;
-  color: var(--n-500);
-  margin-top: 2px;
-}
-.kpi-app .kpi-ov-bb-arrow {
-  margin-right: 4px;
-  font-weight: 800;
-}
+/* Billed-back card body (Kevin ruling 2026-10-09, Direction A). The
+   card mirrors a hero card: eyebrow + pill header, pair rows, a dashed
+   rule, a toned variance foot, and a muted inline by-type breakdown.
+   It reuses the shared .kpi-ov-pair / .kpi-ov-pair-rule / .kpi-ov-foot
+   classes (CardsRow); the only card-specific rules are the foot amber
+   tone and the inline breakdown. The stat-tile + chip rules are retired. */
 
-/* Tone cells - billed back is club pass-through so over is "notable",
-   not a loss. Amber on over, green on under, neutral on on / na.
-   Applied to the vs-goal stat cell AND the ledger foot's vs/pct
-   cells. The ledger body cells reuse the same tone classes. */
+/* Tone bases - SHARED with BillbackLedger (its vs/pct cells + foot row
+   reuse these). Billed back is club pass-through, so over is amber
+   (notable), under green, on/na neutral. Do not remove. */
 .kpi-app .kpi-ov-bb-amber   { background: var(--amber-50); color: var(--amber-600); }
-.kpi-app .kpi-ov-bb-amber .kpi-ov-bb-val { color: var(--amber-600); }
 .kpi-app .kpi-ov-bb-good    { background: var(--green-50); color: var(--green-600); }
-.kpi-app .kpi-ov-bb-good .kpi-ov-bb-val  { color: var(--green-600); }
-.kpi-app .kpi-ov-bb-neutral { background: var(--n-50); color: var(--n-700); }
+.kpi-app .kpi-ov-bb-neutral { background: var(--n-50);     color: var(--n-700); }
 
-/* Breakdown chips row. Largest-first; stray gets the amber-attention
-   treatment. */
-.kpi-app .kpi-ov-bb-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 12px 16px 16px;
-}
-.kpi-app .kpi-ov-bb-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--n-100);
-  color: var(--n-800);
-  font-size: 12px;
+/* Variance foot, amber tone - the over-goal case on billed back.
+   -good / -bad already exist (CardsRow). Over-goal is amber, not red:
+   pass-through the club reimburses, not a loss. */
+.kpi-app .kpi-ov-foot-warn .kpi-ov-foot-v { color: var(--amber-600); }
+
+/* Hero figure pinned to n-900 so the headline value reads as primary
+   and matches the same figure in the ledger foot - not the n-700 the
+   shared .kpi-ov-pair-v inherits by default. Scoped to the billback
+   card so CardsRow's neutral hero values are unaffected. */
+.kpi-app .kpi-ov-bb-lead { color: var(--n-900); }
+
+/* Inline by-type breakdown under the foot. Muted line, amounts dark,
+   largest-first, strays called out amber, separators neutral. */
+.kpi-app .kpi-ov-bb-brk {
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
   font-weight: 600;
+  line-height: 1.6;
 }
-.kpi-app .kpi-ov-bb-chip-lbl { color: var(--n-700); }
-.kpi-app .kpi-ov-bb-chip-val { font-weight: 800; }
-.kpi-app .kpi-ov-bb-chip-stray {
-  background: var(--amber-50);
-  color: var(--amber-600);
-}
-.kpi-app .kpi-ov-bb-chip-stray .kpi-ov-bb-chip-lbl { color: var(--amber-600); }
+.kpi-app .kpi-ov-bb-brk b { color: var(--n-900); font-weight: 700; }
+.kpi-app .kpi-ov-bb-brk-sep { color: var(--n-400); }
+.kpi-app .kpi-ov-bb-brk-stray,
+.kpi-app .kpi-ov-bb-brk-stray b { color: var(--amber-600); }
 
 /* No-goal state - quiet one-liner inside the card body so the slot
    still occupies its grid space. */
