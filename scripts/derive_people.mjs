@@ -4,8 +4,13 @@
 // the department map. Runs nightly after the workers + users walks.
 // Upserts on worker_id with an EXPLICIT column list so the two
 // owner-maintained columns (is_site_leader, site_leader_note) are
-// preserved every run. See docs/migrations/people-1-table.sql for
-// the schema + ownership contract.
+// preserved every run EXCEPT a worker whose account_key changes to
+// a different known account - that worker's is_site_leader is
+// cleared before the upsert, because leadership is account-scoped
+// and does not travel with a worker. Owner sets the new account's
+// leader separately. See the leadersChangingAccount helper and the
+// pre-upsert UPDATE block below. See docs/migrations/people-1-table.sql
+// for the schema + ownership contract.
 //
 // Usage
 //   node --env-file=.env.local scripts/derive_people.mjs --source=nightly
@@ -28,6 +33,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { isSalariedWorker } from "../src/lib/labor/salariedPredicate.js";
 import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
+import { leadersChangingAccount } from "../src/lib/people/leadersChangingAccount.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -83,18 +89,28 @@ async function fetchAllTolerant(table, sel) {
     throw e;
   }
 }
-const [workers, users, deptMap, existingClass] = await Promise.all([
+const [workers, users, deptMap, existingPeople] = await Promise.all([
   // 2026-08-27 - keyset on rippling_id for _latest views. See
   // src/lib/rippling/paginate.js for the incident rationale.
   fetchAllKeyset(supa, "rippling_raw_workers_latest", "rippling_id, payload"),
   fetchAllKeyset(supa, "rippling_raw_users_latest",   "rippling_id, payload"),
   fetchAll("rippling_department_map",     "department_id, account_key, is_container"),
-  fetchAllTolerant("people",              "worker_id, worker_class, worker_class_source"),
+  // account_key + is_site_leader are needed by the clear-on-transfer
+  // pre-step (see leadersChangingAccount + the UPDATE just before the
+  // batch upsert). They are NOT written back through the upsert row
+  // shape - keeping is_site_leader out of the upsert payload is the
+  // owner-preservation contract (probe P3 static leg verifies this).
+  fetchAllTolerant("people",              "worker_id, worker_class, worker_class_source, account_key, is_site_leader"),
 ]);
-console.log(`  workers=${workers.length}  users=${users.length}  dept_map=${deptMap.length}  existing_people=${existingClass.length}`);
+console.log(`  workers=${workers.length}  users=${users.length}  dept_map=${deptMap.length}  existing_people=${existingPeople.length}`);
 const ownerClassByWorker = new Map();
-for (const r of existingClass) {
+const existingByWorker = new Map();
+for (const r of existingPeople) {
   if (r.worker_class_source === "owner") ownerClassByWorker.set(r.worker_id, r.worker_class);
+  existingByWorker.set(r.worker_id, {
+    account_key:    r.account_key || null,
+    is_site_leader: !!r.is_site_leader,
+  });
 }
 console.log(`  owner-marked worker_class rows: ${ownerClassByWorker.size}`);
 
@@ -110,7 +126,12 @@ for (const d of deptMap) deptById.set(d.department_id, d);
 // Explicit column list. is_site_leader + site_leader_note are OMITTED
 // so the upsert's ON CONFLICT DO UPDATE SET only touches non-owner
 // columns; first_seen_at is omitted so the default fires on first
-// INSERT and the value is preserved on updates.
+// INSERT and the value is preserved on updates. The OMITTED columns
+// are preserved every run EXCEPT a worker whose account_key changes
+// to a different known account: that worker's is_site_leader is
+// cleared BEFORE the upsert (leadership is account-scoped; owner
+// sets the new account's leader separately). See the clear-on-
+// transfer block between the shaping loop and the upsert.
 const nowISO = new Date().toISOString();
 const rows = [];
 const exceptionsByReason = new Map();          // reason_code -> count
@@ -224,7 +245,36 @@ if (exceptionsByReason.size > 0) {
   console.log(`  exceptions: none`);
 }
 
-// ─── 3. Upsert ───────────────────────────────────────────────────────
+// ─── 3. Clear is_site_leader for leaders moving to a different account ─
+// Leadership is account-scoped; it does not travel with a worker. The
+// upsert payload omits is_site_leader (owner-preservation contract), so
+// a transferring leader's stale flag would otherwise collide with the
+// destination account's existing leader at the unique index
+// people_one_leader_per_account. Origin incident: 2026-10-09 Stephen
+// Bailey CIN - KY -> TBR - FL, nightly crashed.
+//
+// This UPDATE touches only the specific transferring-leader worker_ids
+// and sets is_site_leader = false. site_leader_note is intentionally
+// NOT cleared - owner cleans that up, we do not guess intent.
+const transferringLeaderIds = leadersChangingAccount(existingByWorker, rows);
+console.log(`  leaders changing account_key (flag will clear): ${transferringLeaderIds.length}`);
+if (args.dryRun) {
+  if (transferringLeaderIds.length > 0) {
+    console.log(`DRY RUN: would clear is_site_leader on ${transferringLeaderIds.length} worker(s)`);
+  }
+} else if (transferringLeaderIds.length > 0) {
+  const clr = await supa
+    .from("people")
+    .update({ is_site_leader: false })
+    .in("worker_id", transferringLeaderIds);
+  if (clr.error) {
+    console.error(`clear-leader update failed: ${clr.error.message}`);
+    process.exit(2);
+  }
+  console.log(`cleared is_site_leader on ${transferringLeaderIds.length} transferring leader(s)`);
+}
+
+// ─── 4. Upsert ───────────────────────────────────────────────────────
 // Batch to keep individual requests small. The upsert list DOES NOT
 // contain is_site_leader / site_leader_note so ON CONFLICT DO UPDATE
 // SET leaves those owner-maintained columns alone. Probe P3 asserts
@@ -243,7 +293,7 @@ if (args.dryRun) {
   console.log(`upserted rows: ${writtenTotal}`);
 }
 
-// ─── 4. Summary counts (no PII) ──────────────────────────────────────
+// ─── 5. Summary counts (no PII) ──────────────────────────────────────
 if (!args.dryRun) {
   // 2026-08-28 pagination sweep: bare .select() capped at 1000 while
   // people has 1,129 rows, so every prior sync log printed truncated
