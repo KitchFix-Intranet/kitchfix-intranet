@@ -5018,6 +5018,46 @@ body:has(.pp-app) {
   color: var(--pp-grey);
   text-transform: uppercase;
   margin: 8px 0 2px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pp-dir-section-head-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-dir-section-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.pp-dir-section-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--pp-grey);
+  border: 1px solid var(--pp-grey-border, #e0e0e0);
+  border-radius: 10px;
+  font-family: var(--pp-font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.pp-dir-section-action-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--pp-navy);
+  border-color: var(--pp-purple-mid, var(--pp-grey-border, #e0e0e0));
 }
 .pp-dir-rows {
   display: flex;

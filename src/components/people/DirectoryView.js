@@ -28,6 +28,12 @@ const MapPinIcon = ({ size = 14 }) => (
     <circle cx="12" cy="10" r="3" />
   </svg>
 );
+const ClipboardIcon = ({ size = 12 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  </svg>
+);
 const Chevron = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 18 15 12 9 6" />
@@ -406,39 +412,6 @@ export default function DirectoryView({ showToast, bootstrapData }) {
     };
   }, [data]);
 
-  // Per-site message actions (visible when a site is selected)
-  const siteActions = useMemo(() => {
-    if (!selectedSite || !messageActions) return null;
-    const { managers, team_list, team } = selectedSite;
-    const eff = messageActions.effectiveEmail;
-    const siteMgrs = managers.filter((p) => eff(p));
-    const siteAssocs = team_list.filter((p) => eff(p));
-    const siteAll = [...siteMgrs, ...siteAssocs];
-    const assocPhones = team_list
-      .map((p) => normalizePhone(p.phone))
-      .filter((ph) => ph.display && ph.display !== "");
-    return {
-      label: siteLabel(team),
-      managers: siteMgrs,
-      associates: siteAssocs,
-      all: siteAll,
-      phones: assocPhones,
-    };
-  }, [selectedSite, messageActions]);
-
-  const copySitePhones = async () => {
-    if (!siteActions?.phones?.length) return;
-    const text = siteActions.phones.map((ph) => ph.display).join(", ");
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast && showToast(`Copied ${siteActions.phones.length} phone numbers`, "success");
-    } catch {
-      showToast && showToast("Clipboard blocked - selecting the list for manual copy", "info");
-      try { window.prompt("Copy phone numbers:", text); } catch { /* noop */ }
-    }
-    setMsgOpen(false);
-  };
-
   if (loadErr) {
     return (
       <div className="pp-view">
@@ -533,57 +506,6 @@ export default function DirectoryView({ showToast, bootstrapData }) {
                       <span>All managers + associates</span>
                       <span className="pp-dir-msg-count">{messageActions.everyone.length}</span>
                     </a>
-                  )}
-                  {siteActions && (
-                    <>
-                      <hr />
-                      <h5>{siteActions.label}</h5>
-                      {siteActions.managers.length > 0 && (
-                        <a
-                          role="menuitem"
-                          href={gmailCompose(siteActions.managers.map((p) => messageActions.effectiveEmail(p)))}
-                          target="_blank"
-                          rel="noopener"
-                          onClick={() => setMsgOpen(false)}
-                        >
-                          <span>{siteActions.label} managers</span>
-                          <span className="pp-dir-msg-count">{siteActions.managers.length}</span>
-                        </a>
-                      )}
-                      {siteActions.associates.length > 0 && (
-                        <a
-                          role="menuitem"
-                          href={gmailCompose(siteActions.associates.map((p) => messageActions.effectiveEmail(p)))}
-                          target="_blank"
-                          rel="noopener"
-                          onClick={() => setMsgOpen(false)}
-                        >
-                          <span>{siteActions.label} associates</span>
-                          <span className="pp-dir-msg-count">{siteActions.associates.length}</span>
-                        </a>
-                      )}
-                      {siteActions.all.length > 0 && (
-                        <a
-                          role="menuitem"
-                          href={gmailCompose(siteActions.all.map((p) => messageActions.effectiveEmail(p)))}
-                          target="_blank"
-                          rel="noopener"
-                          onClick={() => setMsgOpen(false)}
-                        >
-                          <span>All at {siteActions.label}</span>
-                          <span className="pp-dir-msg-count">{siteActions.all.length}</span>
-                        </a>
-                      )}
-                      {siteActions.phones.length > 0 && (
-                        <>
-                          <hr />
-                          <button type="button" role="menuitem" onClick={copySitePhones}>
-                            <span>Copy {siteActions.label} associate numbers</span>
-                            <span className="pp-dir-msg-count">{siteActions.phones.length}</span>
-                          </button>
-                        </>
-                      )}
-                    </>
                   )}
                   <p className="pp-dir-msg-hint">
                     Opens a new Gmail tab. Copy buttons put the list on your clipboard.
@@ -682,6 +604,8 @@ export default function DirectoryView({ showToast, bootstrapData }) {
               <RosterPanel
                 site={selectedSite}
                 onPersonClick={(id) => setSelectedId(id)}
+                effectiveEmail={messageActions?.effectiveEmail}
+                showToast={showToast}
               />
             ) : (
               <div className="pp-dir-empty-pane">
@@ -721,12 +645,32 @@ function TreeSite({ team, labelOverride, selected, onClick }) {
   );
 }
 
-function RosterPanel({ site, onPersonClick }) {
+function RosterPanel({ site, onPersonClick, effectiveEmail, showToast }) {
   const { team, managers, team_list } = site;
   const label = siteLabel(team);
-  const emails = [...managers, ...team_list].map((p) => p.work_email).filter(Boolean);
-  const emailHref = gmailCompose(emails);
   const totalVisible = managers.length + team_list.length;
+
+  // Per-section lists for the inline action buttons. Associates often
+  // only have personal_email; use the handoff's effectiveEmail resolver
+  // (falls back to work_email alone if the prop is missing).
+  const eff = effectiveEmail || ((p) => p.work_email || "");
+  const mgrEmails = managers.map((p) => eff(p)).filter(Boolean);
+  const assocEmails = team_list.map((p) => eff(p)).filter(Boolean);
+  const assocPhones = team_list
+    .map((p) => normalizePhone(p.phone))
+    .filter((ph) => ph.display && ph.display !== "");
+
+  const copyAssocPhones = async () => {
+    if (assocPhones.length === 0) return;
+    const text = assocPhones.map((ph) => ph.display).join(", ");
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast && showToast(`Copied ${assocPhones.length} phone numbers`, "success");
+    } catch {
+      showToast && showToast("Clipboard blocked - selecting the list for manual copy", "info");
+      try { window.prompt("Copy phone numbers:", text); } catch { /* noop */ }
+    }
+  };
 
   return (
     <div className="pp-dir-roster">
@@ -740,18 +684,6 @@ function RosterPanel({ site, onPersonClick }) {
             {totalVisible} {totalVisible === 1 ? "person" : "people"}
           </div>
         </div>
-        {emails.length > 0 && (
-          <a
-            href={emailHref}
-            target="_blank"
-            rel="noopener"
-            className="pp-dir-site-email-btn"
-            aria-label={`Email ${emails.length} people at ${label} via Gmail`}
-          >
-            <MailIcon />
-            <span>Email ({emails.length})</span>
-          </a>
-        )}
       </div>
 
       {totalVisible === 0 ? (
@@ -760,7 +692,23 @@ function RosterPanel({ site, onPersonClick }) {
         <>
           {managers.length > 0 && (
             <>
-              <h4 className="pp-dir-section-head">Management ({managers.length})</h4>
+              <h4 className="pp-dir-section-head">
+                <span className="pp-dir-section-head-label">Management ({managers.length})</span>
+                {mgrEmails.length > 0 && (
+                  <div className="pp-dir-section-actions">
+                    <a
+                      href={gmailCompose(mgrEmails)}
+                      target="_blank"
+                      rel="noopener"
+                      className="pp-dir-section-action-btn"
+                      aria-label={`Email ${mgrEmails.length} managers at ${label} via Gmail`}
+                    >
+                      <MailIcon size={12} />
+                      <span>Email</span>
+                    </a>
+                  </div>
+                )}
+              </h4>
               <div className="pp-dir-rows">
                 {managers.map((p) => (
                   <PersonRow key={p.worker_id} person={p} team={team} onClick={() => onPersonClick(p.worker_id)} />
@@ -770,7 +718,36 @@ function RosterPanel({ site, onPersonClick }) {
           )}
           {team_list.length > 0 && (
             <>
-              <h4 className="pp-dir-section-head">Team ({team_list.length})</h4>
+              <h4 className="pp-dir-section-head">
+                <span className="pp-dir-section-head-label">Team ({team_list.length})</span>
+                {(assocEmails.length > 0 || assocPhones.length > 0) && (
+                  <div className="pp-dir-section-actions">
+                    {assocEmails.length > 0 && (
+                      <a
+                        href={gmailCompose(assocEmails)}
+                        target="_blank"
+                        rel="noopener"
+                        className="pp-dir-section-action-btn"
+                        aria-label={`Email ${assocEmails.length} associates at ${label} via Gmail`}
+                      >
+                        <MailIcon size={12} />
+                        <span>Email</span>
+                      </a>
+                    )}
+                    {assocPhones.length > 0 && (
+                      <button
+                        type="button"
+                        className="pp-dir-section-action-btn"
+                        onClick={copyAssocPhones}
+                        aria-label={`Copy ${assocPhones.length} associate phone numbers at ${label} to clipboard`}
+                      >
+                        <ClipboardIcon size={12} />
+                        <span>Phones</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </h4>
               <div className="pp-dir-rows">
                 {team_list.map((p) => (
                   <PersonRow key={p.worker_id} person={p} team={team} onClick={() => onPersonClick(p.worker_id)} />
