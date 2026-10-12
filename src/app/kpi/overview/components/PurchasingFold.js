@@ -301,6 +301,16 @@ function foldHeaderSummary(payload) {
 export default function PurchasingFold({ payload, error, account, start, end, today, open, onToggle, billbackPeriod }) {
   const actuals = Array.isArray(payload?.actuals) ? payload.actuals : null;
   const headerSummary = foldHeaderSummary(payload);
+  // Kevin ruling 2026-10-12. Purchasing weeks collapse by default; a chevron
+  // on the band row expands that week's transactions. Mirrors the labor
+  // WeekTable disclosure. Set keyed by week_start ISO so toggling preserves
+  // state across re-renders triggered by payload refreshes.
+  const [expandedWeeks, setExpandedWeeks] = useState(() => new Set());
+  const toggleWeek = (wk) => setExpandedWeeks((prev) => {
+    const next = new Set(prev);
+    if (next.has(wk)) next.delete(wk); else next.add(wk);
+    return next;
+  });
 
   const derived = useMemo(() => {
     if (!actuals) return null;
@@ -396,7 +406,7 @@ export default function PurchasingFold({ payload, error, account, start, end, to
 
   return (
     <div
-      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card kpi-ov-fold-panel${open ? " kpi-ov-fold-open" : ""}`}
+      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card kpi-ov-fold-panel kpi-ov-fold-strip-purch${open ? " kpi-ov-fold-open" : ""}`}
       data-kpi-ov="purchasing-ledger"
       data-kpi-ov-open={open ? "1" : "0"}
     >
@@ -414,29 +424,40 @@ export default function PurchasingFold({ payload, error, account, start, end, to
           )}
           <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
         </button>
-        <HelpPop id="qPurchasingFold" title="The purchasing table" body={HELP_BODY} />
       </div>
       {open && (
-        <div className="kpi-ov-cb">
-          {error ? (
-            <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-error">
-              Purchasing detail could not load: {error}
-            </div>
-          ) : !derived ? (
-            <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-loading">
-              Loading purchasing detail…
-            </div>
-          ) : derived.transactions.length === 0 ? (
-            <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-empty">
-              No purchases for this range.
-            </div>
-          ) : (
-            <>
-              <PurchasingTable derived={derived} />
-              <PurchasingGoalRow billbackPeriod={billbackPeriod} />
-            </>
-          )}
-        </div>
+        <>
+          {/* Kevin ruling 2026-10-12. Fold-help moves out of the collapsed
+              header row into a meta line shown only when open - same pattern
+              as PnlStatement + LaborLedger. */}
+          <div className="kpi-ov-fold-meta">
+            <HelpPop id="qPurchasingFold" title="The purchasing table" body={HELP_BODY} />
+          </div>
+          <div className="kpi-ov-cb">
+            {error ? (
+              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-error">
+                Purchasing detail could not load: {error}
+              </div>
+            ) : !derived ? (
+              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-loading">
+                Loading purchasing detail…
+              </div>
+            ) : derived.transactions.length === 0 ? (
+              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-empty">
+                No purchases for this range.
+              </div>
+            ) : (
+              <>
+                <PurchasingTable
+                  derived={derived}
+                  expandedWeeks={expandedWeeks}
+                  onToggleWeek={toggleWeek}
+                />
+                <PurchasingGoalRow billbackPeriod={billbackPeriod} />
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -499,7 +520,7 @@ function PurchasingGoalRow({ billbackPeriod }) {
   );
 }
 
-function PurchasingTable({ derived }) {
+function PurchasingTable({ derived, expandedWeeks, onToggleWeek }) {
   const { uncoded, weekBands, foot, showVehicle } = derived;
   return (
     <>
@@ -523,8 +544,14 @@ function PurchasingTable({ derived }) {
             </tr>
           </thead>
           <tbody>
-            {weekBands.map((band, wi) => (
-              <PurchasingWeekBand key={band.week_start} band={band} showVehicle={showVehicle} />
+            {weekBands.map((band) => (
+              <PurchasingWeekBand
+                key={band.week_start}
+                band={band}
+                showVehicle={showVehicle}
+                open={!!expandedWeeks?.has(band.week_start)}
+                onToggle={() => onToggleWeek?.(band.week_start)}
+              />
             ))}
             <tr className="kpi-ov-cp-led-foot" data-kpi-ov="purchasing-ledger-foot">
               <td className="kpi-ov-cp-led-l" colSpan={3}>Period</td>
@@ -541,7 +568,7 @@ function PurchasingTable({ derived }) {
   );
 }
 
-function PurchasingWeekBand({ band, showVehicle }) {
+function PurchasingWeekBand({ band, showVehicle, open, onToggle }) {
   // Editorial (2026-09-25). Status column retired: leading label
   // columns drop from 4 (vendor + type + status + number) to 3 (vendor
   // + type + number). Both the computed colSpan for empty-week rows
@@ -561,18 +588,33 @@ function PurchasingWeekBand({ band, showVehicle }) {
   const weekTotal = band.food + band.packaging + band.vehicle + band.billed;
   return (
     <>
-      <tr className={`kpi-ov-pf-wband ${stateTag}`} data-kpi-ov="purchasing-week-band" data-week-start={band.week_start} data-week-state={band.state}>
+      <tr className={`kpi-ov-pf-wband ${stateTag}`} data-kpi-ov="purchasing-week-band" data-week-start={band.week_start} data-week-state={band.state} data-kpi-ov-open={open ? "1" : "0"}>
         <td className="kpi-ov-cp-led-l" colSpan={3}>
-          <span className="kpi-ov-pf-wband-label">{`Week · ${dtRange}`}</span>
-          {band.state === "in-progress" && (
-            <span className="kpi-ov-pf-wband-tag">
-              <span className="kpi-ov-pf-wband-dot" aria-hidden="true" />
-              in progress
-            </span>
-          )}
-          {band.state === "ahead" && (
-            <span className="kpi-ov-pf-wband-tag kpi-ov-pf-wband-tag-ahead">ahead</span>
-          )}
+          {/* Kevin ruling 2026-10-12. Week band becomes a chevron toggle;
+              bucket subtotals on this row stay visible so a collapsed
+              week still carries its summary. Mirrors the labor WeekTable
+              week disclosure. Default is collapsed - the containing Set
+              starts empty, so opening the fold shows one row per week
+              with subtotals, and clicking a week reveals its transactions. */}
+          <button
+            type="button"
+            className="kpi-ov-pf-wbandbtn"
+            onClick={onToggle}
+            aria-expanded={open ? "true" : "false"}
+            data-wk={band.week_start}
+          >
+            <span className="kpi-ov-pf-chev" aria-hidden="true">{open ? "⌄" : "›"}</span>
+            <span className="kpi-ov-pf-wband-label">{`Week · ${dtRange}`}</span>
+            {band.state === "in-progress" && (
+              <span className="kpi-ov-pf-wband-tag">
+                <span className="kpi-ov-pf-wband-dot" aria-hidden="true" />
+                in progress
+              </span>
+            )}
+            {band.state === "ahead" && (
+              <span className="kpi-ov-pf-wband-tag kpi-ov-pf-wband-tag-ahead">ahead</span>
+            )}
+          </button>
         </td>
         <td>{fmt0(band.food)}</td>
         <td>{fmt0(band.packaging)}</td>
@@ -580,7 +622,7 @@ function PurchasingWeekBand({ band, showVehicle }) {
         <td className="kpi-ov-cp-led-bb">{fmt0(band.billed)}</td>
         <td className="kpi-ov-pf-wband-total">{fmt0(weekTotal)}</td>
       </tr>
-      {band.rows.length === 0 ? (
+      {open && (band.rows.length === 0 ? (
         <tr className="kpi-ov-cp-led-lrow" data-kpi-ov="purchasing-week-empty">
           <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute" colSpan={colSpan}>No purchases in this week.</td>
         </tr>
@@ -636,7 +678,7 @@ function PurchasingWeekBand({ band, showVehicle }) {
             </tr>
           );
         })
-      )}
+      ))}
     </>
   );
 }
