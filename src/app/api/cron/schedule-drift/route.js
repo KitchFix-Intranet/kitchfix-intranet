@@ -4,37 +4,46 @@ import {
   TRACKED_TEAMS,
   diffSchedule,
   fetchTeamSchedule,
-  formatSlackPayload,
+  filterToAlerting,
+  renderDrift,
+  signatureOf,
+  computeWeeklyDiff,
+  formatWeeklyRecapPayload,
   postSlack,
-  HEARTBEAT_DOW,
 } from "@/lib/scheduleDrift";
 
 // ══════════════════════════════════════════════════════════════════════
-// SCHEDULE-DRIFT WATCHDOG (Stage 1)
-// Schedule: 0 11 * * *  (06:00 ET, before operator day)
+// SCHEDULE-DRIFT WATCHDOG - WEEKLY CHANGE-ONLY RECAP (sc-59, 2026-10-12)
+// Schedule: 0 11 * * 1  (Monday 06:00 Central).
 //
-// Detects nightly drift between the MLB / MiLB Stats API (calendar
-// truth per Kevin's schedule-truth doctrine - see
-// docs/modules/SERVICE_CALENDAR.md) and sc_homestand_schedule for the
-// 8 schedule-bearing accounts. Posts alerts to the #service-calendar
-// Slack channel via SLACK_SC_WEBHOOK_URL.
+// Compares the current scoped drift set (DATE_DRIFT + PHANTOM_IN_DB
+// only) against sc_schedule_drift_state and posts ONLY the delta -
+// new signatures and cleared signatures. A quiet week with no changes
+// posts nothing (fixes the daily-noise regression).
 //
-// ZERO WRITES to schedule / projection / metadata tables. Stage 1 is
-// detect-and-notify only; applying changes stays the manual extract ->
-// migration flow. Stages 2/3 (auto-draft, auto-apply) are PARKED to
-// 2027 review (see SC_STATUS.md parked-projects).
+// Resilience: if the state read/write fails (e.g. migration not yet
+// applied), log a warning and fall back to posting the current scoped
+// list without the diff - never let a state error silence or crash the
+// watch. Once Kevin applies sc-59 in Studio this path stops firing.
 //
-// Auth: mirrors /api/cron/daily - Bearer <CRON_SECRET> in the
-// Authorization header. Vercel Cron sets this automatically.
+// ZERO WRITES to schedule / projection / metadata tables. The state
+// table (sc_schedule_drift_state) is the only write target.
 //
-// Dry-run (auth'd caller): append ?dry=1 to skip the Slack POST and
-// return the payload as JSON. Useful for local ops verification and
-// for the live-proof step of the PR.
+// Auth: Bearer <CRON_SECRET>. Dry-run via ?dry=1 (returns the computed
+// payload without POSTing to Slack and without reconciling state).
 // ══════════════════════════════════════════════════════════════════════
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // 8 API calls + 8 DB reads + Slack post
+export const maxDuration = 60;
+
+function mondayOfRunUtc(nowUtc) {
+  const d = new Date(nowUtc);
+  const dow = d.getUTCDay();          // 0=Sun..6=Sat
+  const isoIdx = (dow + 6) % 7;        // 0=Mon..6=Sun
+  d.setUTCDate(d.getUTCDate() - isoIdx);
+  return d.toISOString().slice(0, 10);
+}
 
 export async function GET(request) {
   const authHeader = request.headers.get("authorization");
@@ -44,83 +53,189 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const isDryRun = searchParams.get("dry") === "1";
-  const forceHeartbeat = searchParams.get("heartbeat") === "1";
-  const runId = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const nowUtc   = new Date();
+  const runId    = nowUtc.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const weekOfIso = mondayOfRunUtc(nowUtc);
+  const runYear   = Number(weekOfIso.slice(0, 4));
   const startMs = Date.now();
 
-  console.log(`[sc-drift] run ${runId} start (dry=${isDryRun}, forceHeartbeat=${forceHeartbeat})`);
-
-  // Central-time day-of-week for the heartbeat gate. The cron fires at
-  // 06:00 ET which is inside the same ET calendar day - so getDay() here
-  // is safe against the UTC midnight edge.
-  const isHeartbeatDay = forceHeartbeat || new Date().getDay() === HEARTBEAT_DOW;
+  console.log(`[sc-drift] weekly run ${runId} start (dry=${isDryRun}, weekOf=${weekOfIso})`);
 
   const supa = getServiceClient();
   const accountResults = [];
 
-  // Fetch each team + diff. Sequential to keep the API load gentle and
-  // to surface failures per-team (a single team's 5xx doesn't kill the
-  // run; the failure lands in the Slack post's failures section).
   for (const team of TRACKED_TEAMS) {
     try {
       const [apiGames, hsRes] = await Promise.all([
-        fetchTeamSchedule(team, { season: 2026 }),
+        fetchTeamSchedule(team, { season: runYear }),
         supa
           .from("sc_homestand_schedule")
           .select("service_date, day_type, opponent, game_pk, game_time, is_doubleheader")
           .eq("account_key", team.account)
-          .gte("service_date", "2026-02-01")
-          .lte("service_date", "2026-11-30")
+          .gte("service_date", `${runYear}-02-01`)
+          .lte("service_date", `${runYear}-11-30`)
           .order("service_date", { ascending: true }),
       ]);
       if (hsRes.error) throw new Error(`hs read: ${hsRes.error.message}`);
       const r = diffSchedule({ apiGames, hsRows: hsRes.data || [], account: team.account });
       accountResults.push({ account: team.account, ...r });
-      console.log(`[sc-drift] ${team.account} :: OK ${r.counts.ok} · drifts ${r.drifts.length} · known ${r.knownGaps.length} · dh ${r.counts.dh} · ppd ${r.counts.ppd}`);
+      console.log(`[sc-drift] ${team.account} :: OK ${r.counts.ok} · drifts ${r.drifts.length} (all kinds) · alerting ${filterToAlerting(r.drifts).length} · known ${r.knownGaps.length}`);
     } catch (e) {
       accountResults.push({ account: team.account, drifts: [], knownGaps: [], counts: {}, error: e.message });
       console.error(`[sc-drift] ${team.account} :: FAILED ${e.message}`);
     }
   }
 
-  const payload = formatSlackPayload({
-    accountResults,
-    isHeartbeat: isHeartbeatDay,
-    runId,
-  });
+  // ─── Build current scoped entries ──────────────────────────────────
+  // Each entry carries signature + rendered display line. renderDrift
+  // returns null for any kind outside ALERTING_KINDS; those were already
+  // filtered, but we also drop null defensively so an unknown shape
+  // can't crash the recap.
+  const currentEntries = [];
+  for (const r of accountResults) {
+    if (r.error) continue;
+    for (const d of filterToAlerting(r.drifts)) {
+      const sig = signatureOf(d);
+      const display = renderDrift(d, runYear);
+      if (!sig || !display) continue;
+      currentEntries.push({
+        signature:   sig,
+        account_key: r.account,
+        kind:        d.kind,
+        display,
+        drift:       d,
+      });
+    }
+  }
+  const failures = accountResults.filter((r) => r.error).map((r) => ({ account: r.account, error: r.error }));
 
-  const totalDrifts = accountResults.reduce((a, r) => a + (r.drifts?.length || 0), 0);
-  const totalKnown  = accountResults.reduce((a, r) => a + (r.knownGaps?.length || 0), 0);
-  const failures    = accountResults.filter(r => r.error).length;
-  const elapsedMs   = Date.now() - startMs;
+  // ─── Read prior state, compute diff, build payload ─────────────────
+  let priorRows = null;
+  let stateReadError = null;
+  try {
+    const stateRes = await supa
+      .from("sc_schedule_drift_state")
+      .select("signature, account_key, kind, display, first_seen, last_seen");
+    if (stateRes.error) throw new Error(stateRes.error.message);
+    priorRows = stateRes.data || [];
+  } catch (e) {
+    stateReadError = e.message;
+    console.warn(`[sc-drift] state read FAILED - falling back to current-list post without diff: ${e.message}`);
+  }
 
+  // Failed-account set drives the CLEARED guard in computeWeeklyDiff:
+  // a prior drift must only be posted / deleted when we successfully
+  // verified its account this run. Otherwise a transient API blip
+  // would false-clear real drifts (and re-alert them next week).
+  const failedAccounts = new Set(accountResults.filter((r) => r.error).map((r) => r.account));
+
+  let payload;
+  let diff = null;
+  if (priorRows !== null) {
+    diff = computeWeeklyDiff({ currentEntries, priorRows, failedAccounts });
+    payload = formatWeeklyRecapPayload({
+      newItems:       diff.newItems,
+      clearedItems:   diff.clearedItems,
+      carryOpenCount: diff.carryOpen,
+      failures,
+      weekOfIso,
+      runId,
+      runYear,
+    });
+  } else {
+    // Resilience fallback: no diff available. Post the current scoped
+    // list as all-new rather than silencing the watch. Avoids the
+    // Kevin-noted failure mode where a missing migration would hide
+    // real drift behind a swallowed state error.
+    payload = formatWeeklyRecapPayload({
+      newItems:       currentEntries,
+      clearedItems:   [],
+      carryOpenCount: 0,
+      failures,
+      weekOfIso,
+      runId,
+      runYear,
+    });
+  }
+
+  // ─── Post + reconcile state (unless dry-run) ───────────────────────
   let slackResult = { posted: false, reason: "" };
+  let reconcile   = { inserts: 0, bumps: 0, deletes: 0, error: null };
+
   if (isDryRun) {
     slackResult = { posted: false, reason: "dry-run" };
   } else {
     slackResult = await postSlack(process.env.SLACK_SC_WEBHOOK_URL, payload);
+    // Reconcile state regardless of post outcome, so a Slack failure
+    // doesn't leave the state frozen in last week's shape. Only
+    // reconcile when we successfully READ prior state and the recap
+    // actually posted (keeps the "silent week -> no state write"
+    // discipline Kevin asked for).
+    if (priorRows !== null && diff && payload.shouldPost) {
+      try {
+        const now = new Date().toISOString();
+        if (diff.reconcile.inserts.length > 0) {
+          const ins = diff.reconcile.inserts.map((r) => ({ ...r, first_seen: now, last_seen: now }));
+          const insRes = await supa.from("sc_schedule_drift_state").insert(ins);
+          if (insRes.error) throw new Error(`inserts: ${insRes.error.message}`);
+          reconcile.inserts = ins.length;
+        }
+        if (diff.reconcile.bumps.length > 0) {
+          const bumpRes = await supa
+            .from("sc_schedule_drift_state")
+            .update({ last_seen: now })
+            .in("signature", diff.reconcile.bumps);
+          if (bumpRes.error) throw new Error(`bumps: ${bumpRes.error.message}`);
+          reconcile.bumps = diff.reconcile.bumps.length;
+        }
+        if (diff.reconcile.deletes.length > 0) {
+          const delRes = await supa
+            .from("sc_schedule_drift_state")
+            .delete()
+            .in("signature", diff.reconcile.deletes);
+          if (delRes.error) throw new Error(`deletes: ${delRes.error.message}`);
+          reconcile.deletes = diff.reconcile.deletes.length;
+        }
+      } catch (e) {
+        reconcile.error = e.message;
+        console.warn(`[sc-drift] state reconcile FAILED (recap posted; state may be stale): ${e.message}`);
+      }
+    }
   }
 
-  console.log(`[sc-drift] run ${runId} done · drifts=${totalDrifts} known=${totalKnown} failures=${failures} elapsed=${elapsedMs}ms slack=${slackResult.posted}${slackResult.reason ? ` (${slackResult.reason})` : ""}`);
+  const elapsedMs = Date.now() - startMs;
+  const currentCount = currentEntries.length;
+  const summary = diff
+    ? { newItems: diff.newItems.length, cleared: diff.clearedItems.length, carryOpen: diff.carryOpen }
+    : { newItems: currentCount, cleared: 0, carryOpen: 0, fallback: true };
+
+  console.log(`[sc-drift] weekly run ${runId} done · current=${currentCount} · ${JSON.stringify(summary)} · failures=${failures.length} · elapsed=${elapsedMs}ms · slack=${slackResult.posted}${slackResult.reason ? ` (${slackResult.reason})` : ""}${stateReadError ? ` · stateRead=FAILED(${stateReadError})` : ""}${reconcile.error ? ` · reconcile=FAILED(${reconcile.error})` : ""}`);
 
   return NextResponse.json({
     success: true,
     runId,
+    weekOf: weekOfIso,
     elapsedMs,
-    counts: { totalDrifts, totalKnown, failures, teams: TRACKED_TEAMS.length },
-    isHeartbeat: isHeartbeatDay,
+    counts: {
+      currentAlerting: currentCount,
+      newItems:        summary.newItems,
+      cleared:         summary.cleared,
+      carryOpen:       summary.carryOpen,
+      failures:        failures.length,
+      teams:           TRACKED_TEAMS.length,
+    },
+    fallbackFromStateError: priorRows === null,
     isDryRun,
     slack: slackResult,
-    // On dry-run OR when there's drift, echo the intended payload so
-    // the caller can inspect. On clean+non-heartbeat production runs,
-    // payload.shouldPost=false and there's nothing to echo.
+    reconcile,
     payload: (isDryRun || payload.shouldPost) ? payload : null,
-    accountResults: isDryRun ? accountResults : accountResults.map(r => ({
-      account: r.account,
-      counts: r.counts,
-      drifts: (r.drifts || []).length,
+    accountResults: isDryRun ? accountResults : accountResults.map((r) => ({
+      account:   r.account,
+      counts:    r.counts,
+      drifts:    (r.drifts || []).length,
+      alerting:  filterToAlerting(r.drifts || []).length,
       knownGaps: (r.knownGaps || []).length,
-      error: r.error || null,
+      error:     r.error || null,
     })),
   });
 }
