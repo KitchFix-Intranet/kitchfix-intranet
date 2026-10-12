@@ -85,32 +85,44 @@ console.log("ADMIN SEED VERIFY");
 console.log("=================");
 
 // ─── Fetch ────────────────────────────────────────────────────────
-// Full table scan on `people` (~1,100 rows is cheap). We query every
-// row because the reverse walk needs to see ANY row with a TRUE
-// permission flag, not just the rows we expect.
+// Full table scan on `people`. Paginated because PostgREST silently
+// caps `.select()` at 1000 rows and the people table is >1,100 - a
+// single unpaginated read truncates and the forward lookup misses
+// anyone beyond the first page (lesson from the first probe run:
+// Kevin + Joe + Mariela all sat past row 1000 by worker_id ordering,
+// and the probe reported them as "not found" when they were there).
 let rows;
 {
-  const { data, error } = await supa.from("people").select(COLUMNS.join(", "));
-  if (error) {
-    // Distinguish "columns absent" (migration not yet applied) from a
-    // real connection error.
-    if (/column\s+("|'?)people\.(is_|paf_|region|incident_notify|is_sc_|is_ops_|is_playbook_)/i.test(error.message)
-     || /does not exist/i.test(error.message)) {
-      console.log("");
-      console.log("MIGRATION NOT APPLIED - the people-2-admin-columns.sql columns are absent.");
-      console.log(`  Supabase error: ${error.message}`);
-      console.log("");
-      console.log("Expected flow:");
-      console.log("  1. Paste docs/migrations/people-2-admin-columns.sql into Supabase Studio");
-      console.log("  2. Re-run this probe");
-      console.log("");
-      console.log("RESULT: MIGRATION NOT APPLIED YET (exit 2)");
-      process.exit(2);
+  rows = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supa
+      .from("people")
+      .select(COLUMNS.join(", "))
+      .range(from, from + PAGE - 1);
+    if (error) {
+      // Distinguish "columns absent" (migration not yet applied) from a
+      // real connection error.
+      if (/column\s+("|'?)people\.(is_|paf_|region|incident_notify|is_sc_|is_ops_|is_playbook_)/i.test(error.message)
+       || /does not exist/i.test(error.message)) {
+        console.log("");
+        console.log("MIGRATION NOT APPLIED - the people-2-admin-columns.sql columns are absent.");
+        console.log(`  Supabase error: ${error.message}`);
+        console.log("");
+        console.log("Expected flow:");
+        console.log("  1. Paste docs/migrations/people-2-admin-columns.sql into Supabase Studio");
+        console.log("  2. Re-run this probe");
+        console.log("");
+        console.log("RESULT: MIGRATION NOT APPLIED YET (exit 2)");
+        process.exit(2);
+      }
+      console.error(`select failed at offset ${from}: ${error.message}`);
+      process.exit(3);
     }
-    console.error(`select failed: ${error.message}`);
-    process.exit(3);
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < PAGE) break;
   }
-  rows = data || [];
 }
 
 // Index by LOWER(work_email) for quick lookups.
