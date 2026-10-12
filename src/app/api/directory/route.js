@@ -11,7 +11,128 @@ import {
   getHeroImages,
   replaceHeroImages,
 } from "@/lib/dataStore";
+import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { getServiceClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
+
+// ─── Stage 3 admin-panel auth helpers ───────────────────────────────
+// Two separate allowlists for two separate concerns:
+//
+//   OPS_LEADERSHIP_SET - panel ACCESS code-level fallback (6 people).
+//     The admin tabs open when the user matches this set OR their DB
+//     `is_ops_leadership` flag is TRUE. Code membership is immunity
+//     against a DB flag that got flipped off by mistake.
+//
+//   SUPER_ADMINS_SET   - toggle PROTECTION code-level allowlist (Kevin
+//     only). When editing a SUPER_ADMIN's row, the `is_ops_leadership`
+//     toggle is disabled in the UI and the API rejects the write.
+//     Narrower than OPS_LEADERSHIP so the other 5 ops-leadership
+//     members can still have their flag flipped through the panel if
+//     their role changes; Kevin alone has structural immunity.
+//
+// Stage 4 moves SUPER_ADMINS to src/lib/admin.js alongside the other
+// allowlists; it lives inline here for now because admin.js is a
+// danger zone this PR deliberately does not touch.
+const OPS_LEADERSHIP_SET = new Set(OPS_LEADERSHIP_EMAILS.map((e) => e.toLowerCase().trim()));
+const SUPER_ADMINS = ["k.fietek@kitchfix.com"];
+const SUPER_ADMINS_SET = new Set(SUPER_ADMINS.map((e) => e.toLowerCase().trim()));
+
+// 19 editable permission columns. Must match the CHECK constraint in
+// docs/migrations/people-3-changelog.sql. The 13 bools and 6 enums are
+// separated so the POST handler can type-check per column.
+const BOOLEAN_COLUMNS = new Set([
+  "is_ops_leadership", "is_sc_access", "is_sc_admin", "is_sc_lock_override",
+  "is_labor_admin", "is_invoice_admin", "is_inv_manager",
+  "can_see_salary", "is_kpi_preview",
+  "is_playbook_owner", "is_sous_preview", "is_hr_admin",
+  "paf_always_cc",
+]);
+const ENUM_COLUMNS = {
+  kpi_role:        new Set([null, "corporate", "rdo"]),
+  opd_access_tier: new Set(["unrestricted", "restricted", "slt"]),
+  incident_notify: new Set(["all", "s4_weekly", "none"]),
+  region:          new Set([null, "East", "West", "CORP"]),
+};
+// kpi_scope and sc_default_account are free-text; validate type only
+const FREE_TEXT_COLUMNS = new Set(["kpi_scope", "sc_default_account"]);
+const EDITABLE_COLUMNS = new Set([
+  ...BOOLEAN_COLUMNS,
+  ...Object.keys(ENUM_COLUMNS),
+  ...FREE_TEXT_COLUMNS,
+]);
+
+// Identity + all 19 permission columns, used by the list action
+const PEOPLE_IDENTITY_COLS = "worker_id, work_email, display_name, title, status";
+const PEOPLE_PERMISSION_COLS = [...EDITABLE_COLUMNS].join(", ");
+
+// Human-readable labels for the Permissions tab dropdown. Kept here
+// so the client can map column name <-> label without round-tripping.
+const COLUMN_LABELS = {
+  is_ops_leadership:   "Ops Leadership",
+  is_sc_access:        "Service Calendar Access",
+  is_sc_admin:         "Service Calendar Admin",
+  is_sc_lock_override: "SC Lock Override",
+  is_labor_admin:      "Labor Admin",
+  is_invoice_admin:    "Invoice Admin",
+  is_inv_manager:      "Inventory Manager",
+  kpi_role:            "KPI Role",
+  kpi_scope:           "KPI Scope",
+  can_see_salary:      "Can See Salary",
+  is_kpi_preview:      "KPI Preview",
+  opd_access_tier:     "Playbook Access Tier",
+  is_playbook_owner:   "Playbook Owner",
+  is_sous_preview:     "Sous Preview",
+  is_hr_admin:         "HR Admin",
+  paf_always_cc:       "PAF Always CC",
+  incident_notify:     "Incident Notifications",
+  region:              "Region",
+  sc_default_account:  "SC Default Account",
+};
+
+// Fetch all ACTIVE people with the permission columns, paginated past
+// the PostgREST 1000-row cap. Returns an array shaped for the API
+// response (not the raw DB row).
+async function fetchActivePeople(supa) {
+  const PAGE = 1000;
+  const out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supa
+      .from("people")
+      .select(`${PEOPLE_IDENTITY_COLS}, ${PEOPLE_PERMISSION_COLS}`)
+      .eq("status", "ACTIVE")
+      .order("display_name", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`[admin-people-list] ${error.message}`);
+    out.push(...(data || []));
+    if ((data || []).length < PAGE) break;
+  }
+  return out;
+}
+
+// Gate for people-admin API actions. Super-admin (code-level) OR
+// is_ops_leadership (DB-level). Session always required.
+async function requirePeopleAdmin(session) {
+  if (!session) return { ok: false, status: 401, reason: "Not authenticated" };
+  const email = session.user?.email?.toLowerCase().trim() || "";
+  if (!email) return { ok: false, status: 401, reason: "Session missing email" };
+
+  // Code-level allowlist first - immune to DB flag mistakes
+  if (OPS_LEADERSHIP_SET.has(email)) {
+    return { ok: true, email, isSuperAdmin: true };
+  }
+  // DB-level flag check
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from("people")
+    .select("is_ops_leadership")
+    .ilike("work_email", email)
+    .maybeSingle();
+  if (error) return { ok: false, status: 500, reason: `people lookup: ${error.message}` };
+  if (data?.is_ops_leadership === true) {
+    return { ok: true, email, isSuperAdmin: false };
+  }
+  return { ok: false, status: 403, reason: "People admin authorization required" };
+}
 // ═══════════════════════════════════════════════════════════════
 // TEAM DIRECTORY API
 // ═══════════════════════════════════════════════════════════════
@@ -146,6 +267,25 @@ export async function GET(request) {
         ? fullName.split(" ")[0]
         : userEmail.split("@")[0].replace(/^\w/, (c) => c.toUpperCase());
 
+      // isPeopleAdmin: separate gate from the directory `isAdmin` above.
+      // Super-admin (OPS_LEADERSHIP_EMAILS code allowlist) OR
+      // people.is_ops_leadership DB flag. See requirePeopleAdmin() for
+      // the full gate used by API actions.
+      let isPeopleAdmin = false;
+      if (OPS_LEADERSHIP_SET.has(userEmail)) {
+        isPeopleAdmin = true;
+      } else if (userEmail) {
+        try {
+          const supa = getServiceClient();
+          const { data } = await supa
+            .from("people")
+            .select("is_ops_leadership")
+            .ilike("work_email", userEmail)
+            .maybeSingle();
+          if (data?.is_ops_leadership === true) isPeopleAdmin = true;
+        } catch { /* non-fatal: assume no admin access */ }
+      }
+
       // contactMap: keyed by safeId(teamKey), values are arrays of
       // API-shape contact objects matching the pre-PR-B handler's
       // contactMap.push({ role, name, email, phone, slack, slackId })
@@ -183,7 +323,91 @@ export async function GET(request) {
         return a.name.localeCompare(b.name);
       });
 
-      return NextResponse.json({ success: true, teams, heroImage, firstName, isAdmin });
+      return NextResponse.json({ success: true, teams, heroImage, firstName, isAdmin, isPeopleAdmin });
+    }
+
+    // ── Stage 3 admin-people-list ────────────────────────────────────
+    // All ACTIVE people + their 19 permission columns. Powers the
+    // People tab. Gate: super-admin or is_ops_leadership.
+    if (action === "admin-people-list") {
+      const authResult = await requirePeopleAdmin(session);
+      if (!authResult.ok) return NextResponse.json({ error: authResult.reason }, { status: authResult.status });
+      const supa = getServiceClient();
+      const rows = await fetchActivePeople(supa);
+      const people = rows.map((r) => {
+        const email = String(r.work_email || "").toLowerCase().trim();
+        return {
+          worker_id:     r.worker_id,
+          work_email:    r.work_email,
+          display_name:  r.display_name,
+          title:         r.title,
+          status:        r.status,
+          is_super_admin: email ? SUPER_ADMINS_SET.has(email) : false,
+          ...Object.fromEntries([...EDITABLE_COLUMNS].map((c) => [c, r[c] ?? null])),
+        };
+      });
+      return NextResponse.json({ success: true, people, columnLabels: COLUMN_LABELS });
+    }
+
+    // ── Stage 3 admin-permissions-view ───────────────────────────────
+    // Reverse lookup: who has permission X? Gate: super-admin or ops.
+    if (action === "admin-permissions-view") {
+      const authResult = await requirePeopleAdmin(session);
+      if (!authResult.ok) return NextResponse.json({ error: authResult.reason }, { status: authResult.status });
+      const column = String(searchParams.get("column") || "").trim();
+      if (!EDITABLE_COLUMNS.has(column)) {
+        return NextResponse.json({ error: `unknown column: ${column}` }, { status: 400 });
+      }
+      const supa = getServiceClient();
+      // Build the query per column type. Booleans: WHERE col = TRUE.
+      // Enums: WHERE col IS NOT NULL AND col != default. Free text:
+      // WHERE col IS NOT NULL AND col != ''.
+      let q = supa
+        .from("people")
+        .select(`${PEOPLE_IDENTITY_COLS}, ${column}`)
+        .eq("status", "ACTIVE");
+      if (BOOLEAN_COLUMNS.has(column)) {
+        q = q.eq(column, true);
+      } else if (column === "incident_notify") {
+        q = q.neq(column, "none");
+      } else if (column === "opd_access_tier") {
+        q = q.neq(column, "unrestricted");
+      } else {
+        // Enum (kpi_role, region) or free text - just non-null.
+        q = q.not(column, "is", null);
+      }
+      const { data, error } = await q.order("display_name", { ascending: true });
+      if (error) return NextResponse.json({ error: `[admin-permissions-view] ${error.message}` }, { status: 500 });
+      const type = BOOLEAN_COLUMNS.has(column) ? "boolean"
+                 : ENUM_COLUMNS[column]       ? "enum"
+                 : "text";
+      const people = (data || []).map((r) => ({
+        worker_id:    r.worker_id,
+        work_email:   r.work_email,
+        display_name: r.display_name,
+        title:        r.title,
+        value:        r[column],
+      }));
+      return NextResponse.json({ success: true, column, type, label: COLUMN_LABELS[column] || column, people });
+    }
+
+    // ── Stage 3 admin-changelog ──────────────────────────────────────
+    // Recent changelog entries, paginated. Gate: super-admin or ops.
+    if (action === "admin-changelog") {
+      const authResult = await requirePeopleAdmin(session);
+      if (!authResult.ok) return NextResponse.json({ error: authResult.reason }, { status: authResult.status });
+      const limitRaw = parseInt(searchParams.get("limit") || "50", 10);
+      const offsetRaw = parseInt(searchParams.get("offset") || "0", 10);
+      const limit = Math.max(1, Math.min(200, Number.isFinite(limitRaw) ? limitRaw : 50));
+      const offset = Math.max(0, Number.isFinite(offsetRaw) ? offsetRaw : 0);
+      const supa = getServiceClient();
+      const { data, error, count } = await supa
+        .from("people_changelog")
+        .select("id, person_email, person_name, column_name, old_value, new_value, reason, changed_by, changed_at", { count: "exact" })
+        .order("changed_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) return NextResponse.json({ error: `[admin-changelog] ${error.message}` }, { status: 500 });
+      return NextResponse.json({ success: true, entries: data || [], total: count ?? (data || []).length, columnLabels: COLUMN_LABELS });
     }
 
     // ── Drive Image Proxy ──
@@ -280,6 +504,115 @@ export async function POST(request) {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
+    const body   = await request.json();
+    const action = body.action;
+
+    // ── Stage 3 admin-people-update ─────────────────────────────────────
+    // Gated on super-admin or is_ops_leadership (NOT the directory
+    // DIRECTORY_ADMIN_EMAILS env var that gates the original 5
+    // directory-admin actions). Lives first so the inner directory gate
+    // never runs for people-admin requests.
+    if (action === "admin-people-update") {
+      const authResult = await requirePeopleAdmin(session);
+      if (!authResult.ok) return NextResponse.json({ error: authResult.reason }, { status: authResult.status });
+
+      const { email, column, value, reason } = body;
+
+      // ─── Validation ───────────────────────────────────────────
+      const emailLc = String(email || "").toLowerCase().trim();
+      if (!emailLc) return NextResponse.json({ error: "email required" }, { status: 400 });
+      if (!column || !EDITABLE_COLUMNS.has(column)) {
+        return NextResponse.json({ error: `unknown column: ${column}` }, { status: 400 });
+      }
+      const reasonTrim = String(reason || "").trim();
+      if (reasonTrim.length === 0) {
+        return NextResponse.json({ error: "reason required (non-empty)" }, { status: 400 });
+      }
+      if (reasonTrim.length > 280) {
+        return NextResponse.json({ error: "reason must be <= 280 chars" }, { status: 400 });
+      }
+      // Type check the value against the column
+      let coerced;
+      if (BOOLEAN_COLUMNS.has(column)) {
+        if (typeof value !== "boolean") {
+          return NextResponse.json({ error: `${column} requires a boolean value` }, { status: 400 });
+        }
+        coerced = value;
+      } else if (ENUM_COLUMNS[column]) {
+        if (value !== null && typeof value !== "string") {
+          return NextResponse.json({ error: `${column} requires a string or null` }, { status: 400 });
+        }
+        if (!ENUM_COLUMNS[column].has(value)) {
+          const allowed = [...ENUM_COLUMNS[column]].map((v) => v === null ? "null" : `'${v}'`).join(", ");
+          return NextResponse.json({ error: `${column} must be one of: ${allowed}` }, { status: 400 });
+        }
+        coerced = value;
+      } else {
+        // Free text
+        if (value !== null && typeof value !== "string") {
+          return NextResponse.json({ error: `${column} requires a string or null` }, { status: 400 });
+        }
+        coerced = value === null ? null : String(value).trim() || null;
+      }
+
+      const supa = getServiceClient();
+
+      // ─── Load current row ───────────────────────────────────
+      const { data: current, error: readErr } = await supa
+        .from("people")
+        .select(`worker_id, work_email, display_name, ${column}`)
+        .ilike("work_email", emailLc)
+        .maybeSingle();
+      if (readErr) return NextResponse.json({ error: `[admin-people-update] read: ${readErr.message}` }, { status: 500 });
+      if (!current) return NextResponse.json({ error: `no person with work_email=${emailLc}` }, { status: 404 });
+
+      // ─── Super-admin guard: can't un-flag is_ops_leadership for
+      // SUPER_ADMINS members through the UI. Narrower than the panel-
+      // access OPS_LEADERSHIP check: the other 5 ops-leadership members
+      // CAN have their flag flipped (role change scenario), but Kevin
+      // has structural immunity so he can never lock himself out of
+      // the ops_leadership gate the whole panel depends on.
+      if (column === "is_ops_leadership" && SUPER_ADMINS_SET.has(emailLc)) {
+        return NextResponse.json({
+          error: "cannot modify super-admin ops leadership flag",
+        }, { status: 403 });
+      }
+
+      const oldValue = current[column] ?? null;
+      if (oldValue === coerced) {
+        return NextResponse.json({ success: true, changed: false, message: "no change" });
+      }
+
+      // ─── Update + changelog ─────────────────────────────────
+      const { error: updErr } = await supa
+        .from("people")
+        .update({ [column]: coerced })
+        .eq("worker_id", current.worker_id);
+      if (updErr) return NextResponse.json({ error: `[admin-people-update] update: ${updErr.message}` }, { status: 500 });
+
+      const { error: logErr } = await supa.from("people_changelog").insert({
+        person_email: current.work_email || emailLc,
+        person_name:  current.display_name || null,
+        column_name:  column,
+        old_value:    oldValue,
+        new_value:    coerced,
+        reason:       reasonTrim,
+        changed_by:   session.user.email,
+      });
+      if (logErr) {
+        // Changelog insert failed but the update landed - report so Kevin
+        // can decide. We do NOT try to roll back the update because the
+        // audit trail is less important than the operational write.
+        console.error("[admin-people-update] changelog insert failed:", logErr.message);
+        return NextResponse.json({
+          success: true,
+          changed: true,
+          changelog_warning: `changelog insert failed: ${logErr.message}`,
+        });
+      }
+      return NextResponse.json({ success: true, changed: true });
+    }
+
     // ── INTERIM ADMIN GATE (PR B1, 2026-05-22) ───────────────────────────
     // Directory is Kevin-only for now via DIRECTORY_ADMIN_EMAILS. See
     // people module's "hr" flag and the inconsistency note documented in
@@ -293,9 +626,6 @@ export async function POST(request) {
     if (!directoryAdmins.includes(requesterEmail)) {
       return NextResponse.json({ error: "Admin authorization required" }, { status: 403 });
     }
-
-    const body   = await request.json();
-    const action = body.action;
 
     // ── admin-update-account ──────────────────────────────────────────────
     // Multi-table write: accounts (incl. folded dir_links URLs) + work_locations.

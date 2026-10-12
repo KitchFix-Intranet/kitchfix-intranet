@@ -1,5 +1,68 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+
+// Stage 3 column grouping for the People tab. Column names match the
+// 19 editable permission columns on `people`.
+const PEOPLE_COL_GROUPS = [
+  { title: 'Permission Flags', cols: [
+    { col: 'is_ops_leadership',   type: 'bool' },
+    { col: 'is_sc_access',        type: 'bool' },
+    { col: 'is_sc_admin',         type: 'bool' },
+    { col: 'is_sc_lock_override', type: 'bool' },
+    { col: 'is_labor_admin',      type: 'bool' },
+    { col: 'is_invoice_admin',    type: 'bool' },
+    { col: 'is_inv_manager',      type: 'bool' },
+  ]},
+  { title: 'KPI', cols: [
+    { col: 'kpi_role',       type: 'enum', options: [null, 'corporate', 'rdo'] },
+    { col: 'kpi_scope',      type: 'text' },
+    { col: 'can_see_salary', type: 'bool' },
+    { col: 'is_kpi_preview', type: 'bool' },
+  ]},
+  { title: 'Content & Tools', cols: [
+    { col: 'opd_access_tier',   type: 'enum', options: ['unrestricted', 'restricted', 'slt'] },
+    { col: 'is_playbook_owner', type: 'bool' },
+    { col: 'is_sous_preview',   type: 'bool' },
+    { col: 'is_hr_admin',       type: 'bool' },
+  ]},
+  { title: 'Notifications', cols: [
+    { col: 'paf_always_cc',   type: 'bool' },
+    { col: 'incident_notify', type: 'enum', options: ['all', 's4_weekly', 'none'] },
+  ]},
+  { title: 'Routing', cols: [
+    { col: 'region',             type: 'enum', options: [null, 'East', 'West', 'CORP'] },
+    { col: 'sc_default_account', type: 'text' },
+  ]},
+];
+const BOOL_COLS = new Set(PEOPLE_COL_GROUPS.flatMap((g) => g.cols.filter((c) => c.type === 'bool').map((c) => c.col)));
+const ALL_PERM_COLS = PEOPLE_COL_GROUPS.flatMap((g) => g.cols.map((c) => c.col));
+function enumOpts(col) {
+  for (const g of PEOPLE_COL_GROUPS) for (const c of g.cols) if (c.col === col && c.options) return c.options;
+  return null;
+}
+function labelFor(col, labels) {
+  return labels?.[col] || col;
+}
+function fmtValue(val) {
+  if (val === null || val === undefined || val === '') return 'not set';
+  if (val === true) return 'ON';
+  if (val === false) return 'OFF';
+  return String(val);
+}
+function relTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  return d.toLocaleDateString();
+}
 
 const LINK_KEYS = [
   'Homestand',
@@ -767,13 +830,446 @@ function HeroTab() {
 }
 
 // ══ MAIN EXPORT ══
-export default function DirectoryAdmin({ teams, onClose }) {
-  const [tab, setTab] = useState('accounts');
+// ═══════════════════════════════════════════════════════════════════
+// Stage 3 - People / Permissions / Changelog tabs
+// ═══════════════════════════════════════════════════════════════════
+
+function PeopleTab({ initialSelectEmail }) {
+  const [people, setPeople] = useState(null);
+  const [labels, setLabels] = useState({});
+  const [search, setSearch] = useState('');
+  // userSelectedEmail reflects an explicit click; the effective
+  // selection also honors the jumped-to email prop and the first
+  // person as the final fallback. Derived at render below.
+  const [userSelectedEmail, setUserSelectedEmail] = useState(null);
+  const [pending, setPending] = useState(null); // { col, newValue, reason }
+  const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
+  const [errMsg, setErrMsg] = useState('');
+
+  // Fetch admin-people-list once on mount. The cancelled-boolean
+  // pattern guards the setState calls if the component unmounts
+  // mid-request; the eslint-disable is for the react-hooks/set-state-
+  // in-effect rule which heuristically flags any setState in an
+  // effect body even when it is inside an async callback (standard
+  // data-fetching effect).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/directory?action=admin-people-list');
+        const d = await r.json();
+        if (cancelled) return;
+        if (!d.success) { setPeople([]); return; }
+        setPeople(d.people || []);
+        setLabels(d.columnLabels || {});
+      } catch {
+        if (!cancelled) setPeople([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!people) return [];
+    const q = search.trim().toLowerCase();
+    const list = q
+      ? people.filter((p) =>
+          (p.display_name || '').toLowerCase().includes(q)
+          || (p.work_email || '').toLowerCase().includes(q)
+          || (p.title || '').toLowerCase().includes(q))
+      : people;
+    return list;
+  }, [people, search]);
+
+  function permCount(p) {
+    return ALL_PERM_COLS.reduce((n, c) => {
+      const v = p[c];
+      if (BOOL_COLS.has(c)) return n + (v === true ? 1 : 0);
+      if (c === 'incident_notify') return n + (v && v !== 'none' ? 1 : 0);
+      if (c === 'opd_access_tier') return n + (v && v !== 'unrestricted' ? 1 : 0);
+      return n + (v != null && v !== '' ? 1 : 0);
+    }, 0);
+  }
+
+  // Effective selection: honor user click first, then the jumped-to
+  // email from the Permissions tab, then fall back to the first row.
+  const effectiveEmail = useMemo(() => {
+    if (userSelectedEmail) return userSelectedEmail;
+    if (initialSelectEmail && people) {
+      const hit = people.find((p) => (p.work_email || '').toLowerCase() === initialSelectEmail.toLowerCase());
+      if (hit) return hit.work_email;
+    }
+    if (people && people.length) return people[0].work_email;
+    return null;
+  }, [userSelectedEmail, initialSelectEmail, people]);
+  const selectedEmail = effectiveEmail;
+  const selected = people?.find((p) => p.work_email === selectedEmail) || null;
+
+  function requestChange(col, newValue) {
+    if (!selected) return;
+    // Super-admin guard: do not allow is_ops_leadership flip for allowlist members
+    if (col === 'is_ops_leadership' && selected.is_super_admin) return;
+    setPending({ col, newValue, reason: '' });
+    setSaveState('idle');
+    setErrMsg('');
+  }
+  async function commitChange() {
+    if (!pending || !selected) return;
+    const reason = pending.reason.trim();
+    if (reason.length === 0) { setErrMsg('Reason is required.'); return; }
+    if (reason.length > 280)   { setErrMsg('Reason must be <= 280 chars.'); return; }
+    setSaveState('saving');
+    setErrMsg('');
+    try {
+      const r = await fetch('/api/directory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'admin-people-update',
+          email:  selected.work_email,
+          column: pending.col,
+          value:  pending.newValue,
+          reason,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        setSaveState('error');
+        setErrMsg(data.error || `HTTP ${r.status}`);
+        return;
+      }
+      // Patch local people list
+      setPeople((prev) => (prev || []).map((p) =>
+        p.work_email === selected.work_email ? { ...p, [pending.col]: pending.newValue } : p
+      ));
+      setSaveState('saved');
+      setTimeout(() => { setPending(null); setSaveState('idle'); }, 700);
+    } catch (e) {
+      setSaveState('error');
+      setErrMsg(e.message || 'network error');
+    }
+  }
+
+  if (!people) return <p className="td-adm-people-loading">Loading people…</p>;
+
+  return (
+    <div className="td-adm-people">
+      <aside className="td-adm-people-list">
+        <input
+          className="td-adm-input td-adm-people-search"
+          type="search"
+          placeholder="Search name, email, title…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search people"
+        />
+        <div className="td-adm-people-rows">
+          {filtered.map((p) => {
+            const sel = selectedEmail === p.work_email;
+            const n = permCount(p);
+            return (
+              <button
+                key={p.work_email || p.worker_id}
+                className={`td-adm-people-row${sel ? ' td-adm-people-row--sel' : ''}`}
+                onClick={() => { setUserSelectedEmail(p.work_email); setPending(null); }}
+              >
+                <div className="td-adm-people-row-main">
+                  <div className="td-adm-people-row-name">
+                    {p.display_name}
+                    {p.is_super_admin && <span className="td-adm-super-pill">SUPER</span>}
+                  </div>
+                  <div className="td-adm-people-row-sub">{p.title || '—'}</div>
+                </div>
+                <span className="td-adm-people-perm-count">{n}</span>
+              </button>
+            );
+          })}
+          {filtered.length === 0 && <p className="td-adm-people-empty">No matches.</p>}
+        </div>
+      </aside>
+
+      <section className="td-adm-people-detail">
+        {selected ? (
+          <>
+            <header className="td-adm-people-head">
+              <div>
+                <h3 className="td-adm-people-name">
+                  {selected.display_name}
+                  {selected.is_super_admin && <span className="td-adm-super-pill">SUPER ADMIN</span>}
+                </h3>
+                <p className="td-adm-people-meta">{selected.title || '—'} · {selected.work_email || 'no work email'}</p>
+                {selected.is_super_admin && (
+                  <p className="td-adm-people-note">Super Admin — access protected by code (SUPER_ADMINS). Ops leadership toggle is disabled.</p>
+                )}
+              </div>
+            </header>
+
+            {PEOPLE_COL_GROUPS.map((g) => (
+              <div key={g.title} className="td-adm-people-group">
+                <h4 className="td-adm-people-group-title">{g.title}</h4>
+                <div className="td-adm-people-rows-grid">
+                  {g.cols.map((c) => {
+                    const val = selected[c.col];
+                    const label = labelFor(c.col, labels);
+                    const disabled = c.col === 'is_ops_leadership' && selected.is_super_admin;
+                    const pendingHere = pending && pending.col === c.col;
+                    return (
+                      <div key={c.col} className={`td-adm-perm-row${pendingHere ? ' td-adm-perm-row--pending' : ''}`}>
+                        <div className="td-adm-perm-row-label">
+                          <span className="td-adm-perm-row-name">{label}</span>
+                          <code className="td-adm-perm-row-col">{c.col}</code>
+                        </div>
+                        <div className="td-adm-perm-row-control">
+                          {c.type === 'bool' && (
+                            <button
+                              type="button"
+                              className={`td-adm-toggle${val ? ' td-adm-toggle--on' : ''}${disabled ? ' td-adm-toggle--disabled' : ''}`}
+                              onClick={() => !disabled && requestChange(c.col, !val)}
+                              disabled={disabled}
+                              aria-pressed={!!val}
+                              aria-label={label}
+                            >
+                              <span className="td-adm-toggle-knob" />
+                              <span className="td-adm-toggle-label">{val ? 'ON' : 'OFF'}</span>
+                            </button>
+                          )}
+                          {c.type === 'enum' && (
+                            <select
+                              className="td-adm-input td-adm-select td-adm-perm-select"
+                              value={val == null ? '' : String(val)}
+                              onChange={(e) => {
+                                const v = e.target.value === '' ? null : e.target.value;
+                                requestChange(c.col, v);
+                              }}
+                            >
+                              {(c.options || []).map((o) => {
+                                const key = o == null ? '__null' : o;
+                                const show = o == null ? '— none —' : o;
+                                return <option key={key} value={o == null ? '' : o}>{show}</option>;
+                              })}
+                            </select>
+                          )}
+                          {c.type === 'text' && (
+                            <input
+                              className="td-adm-input td-adm-perm-text"
+                              type="text"
+                              defaultValue={val || ''}
+                              placeholder="(unset)"
+                              onBlur={(e) => {
+                                const next = e.target.value.trim() || null;
+                                if ((val || null) === next) return;
+                                requestChange(c.col, next);
+                              }}
+                            />
+                          )}
+                        </div>
+                        {pendingHere && (
+                          <div className="td-adm-perm-pending">
+                            <div className="td-adm-perm-pending-head">
+                              <strong>{label}</strong>: {fmtValue(val)} → {fmtValue(pending.newValue)}
+                            </div>
+                            <textarea
+                              className="td-adm-input td-adm-perm-reason"
+                              rows={2}
+                              maxLength={280}
+                              placeholder="Why? (required)"
+                              value={pending.reason}
+                              onChange={(e) => setPending((p) => ({ ...p, reason: e.target.value }))}
+                            />
+                            <div className="td-adm-perm-pending-actions">
+                              <button type="button" className="td-adm-btn-cancel" onClick={() => { setPending(null); setSaveState('idle'); setErrMsg(''); }}>
+                                Cancel
+                              </button>
+                              <button type="button" className="td-adm-btn-save" onClick={commitChange} disabled={saveState === 'saving'}>
+                                {saveState === 'saving' ? 'Saving…' : 'Save'}
+                              </button>
+                              <SaveBadge state={saveState} />
+                              {errMsg && <span className="td-adm-perm-err">{errMsg}</span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <p className="td-adm-people-empty">Select a person to edit their permissions.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function PermissionsTab({ onJumpToPerson }) {
+  const [labels, setLabels] = useState({});
+  const [column, setColumn] = useState('is_ops_leadership');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Hydrate labels once from the people-list action (shares the map).
+  // Cancelled-boolean + eslint disable on the setState: standard
+  // data-fetching effect that the heuristic lint rule flags.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/directory?action=admin-people-list');
+        const d = await r.json();
+        if (cancelled) return;
+        setLabels(d.columnLabels || {});
+      } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Spinner flip is intentional on every column change; the data
+    // load happens in the inner IIFE below.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    (async () => {
+      try {
+        const r = await fetch(`/api/directory?action=admin-permissions-view&column=${encodeURIComponent(column)}`);
+        const d = await r.json();
+        if (cancelled) return;
+        setData(d.success ? d : null);
+        setLoading(false);
+      } catch {
+        if (!cancelled) { setData(null); setLoading(false); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [column]);
+
+  return (
+    <div className="td-adm-perm">
+      <div className="td-adm-perm-head">
+        <label className="td-adm-label">Show people with</label>
+        <select
+          className="td-adm-input td-adm-select"
+          value={column}
+          onChange={(e) => setColumn(e.target.value)}
+        >
+          {ALL_PERM_COLS.map((c) => (
+            <option key={c} value={c}>{labelFor(c, labels)}</option>
+          ))}
+        </select>
+      </div>
+      {loading && <p className="td-adm-people-loading">Loading…</p>}
+      {!loading && data && (
+        <div className="td-adm-perm-results">
+          <h4 className="td-adm-perm-results-title">
+            {data.label} <span className="td-adm-perm-results-count">({data.people.length})</span>
+          </h4>
+          {data.people.length === 0 && <p className="td-adm-people-empty">No one has this today.</p>}
+          <ul className="td-adm-perm-results-list">
+            {data.people.map((p) => (
+              <li key={p.work_email || p.worker_id} className="td-adm-perm-results-row">
+                <button
+                  type="button"
+                  className="td-adm-perm-results-btn"
+                  onClick={() => onJumpToPerson && onJumpToPerson(p.work_email)}
+                >
+                  <div>
+                    <div className="td-adm-perm-results-name">{p.display_name}</div>
+                    <div className="td-adm-perm-results-sub">{p.title || '—'} · {p.work_email}</div>
+                  </div>
+                  <span className="td-adm-perm-results-val">{fmtValue(p.value)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChangelogTab() {
+  const PAGE = 50;
+  const [entries, setEntries] = useState([]);
+  const [labels, setLabels] = useState({});
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [offset, setOffset] = useState(0);
+
+  async function load(off) {
+    setLoading(true);
+    const r = await fetch(`/api/directory?action=admin-changelog&limit=${PAGE}&offset=${off}`);
+    const d = await r.json();
+    if (d.success) {
+      setEntries((prev) => off === 0 ? (d.entries || []) : [...prev, ...(d.entries || [])]);
+      setTotal(d.total || 0);
+      if (d.columnLabels) setLabels(d.columnLabels);
+    }
+    setLoading(false);
+  }
+  // Initial load. Fetch effect; eslint disable per the same rationale
+  // as the other data-fetching effects in this file.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load(0);
+  }, []);
+
+  function diffLine(e) {
+    const label = labelFor(e.column_name, labels);
+    return `${label}: ${fmtValue(e.old_value)} → ${fmtValue(e.new_value)}`;
+  }
+
+  return (
+    <div className="td-adm-log">
+      <p className="td-adm-log-count">{total} entr{total === 1 ? 'y' : 'ies'} total</p>
+      <ol className="td-adm-log-list">
+        {entries.map((e) => (
+          <li key={e.id} className="td-adm-log-row">
+            <div className="td-adm-log-row-main">
+              <div className="td-adm-log-who">
+                <strong>{e.person_name || e.person_email}</strong>
+                <span className="td-adm-log-email">{e.person_email}</span>
+              </div>
+              <div className="td-adm-log-diff">{diffLine(e)}</div>
+              {e.reason && <div className="td-adm-log-reason">“{e.reason}”</div>}
+            </div>
+            <div className="td-adm-log-meta">
+              <div className="td-adm-log-by">by {e.changed_by}</div>
+              <div className="td-adm-log-when" title={e.changed_at}>{relTime(e.changed_at)}</div>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {entries.length < total && (
+        <button
+          type="button"
+          className="td-adm-log-more"
+          onClick={() => { const next = offset + PAGE; setOffset(next); load(next); }}
+          disabled={loading}
+        >
+          {loading ? 'Loading…' : `Load more (${total - entries.length} left)`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function DirectoryAdmin({ teams, onClose, isAdmin = true, isPeopleAdmin = false }) {
+  const [tab, setTab] = useState(isAdmin ? 'accounts' : 'people');
+  const [jumpEmail, setJumpEmail] = useState(null);
 
   const tabs = [
-    { id: 'accounts', label: 'Accounts & Links' },
-    { id: 'contacts', label: 'Contacts' },
-    { id: 'heroes',   label: 'Hero Images' },
+    ...(isAdmin ? [
+      { id: 'accounts', label: 'Accounts & Links' },
+      { id: 'contacts', label: 'Contacts' },
+      { id: 'heroes',   label: 'Hero Images' },
+    ] : []),
+    ...(isPeopleAdmin ? [
+      { id: 'people',      label: 'People' },
+      { id: 'permissions', label: 'Permissions' },
+      { id: 'changelog',   label: 'Changelog' },
+    ] : []),
   ];
 
   return (
@@ -814,6 +1310,9 @@ export default function DirectoryAdmin({ teams, onClose }) {
           {tab === 'accounts' && <AccountsTab teams={teams} />}
           {tab === 'contacts' && <ContactsTab teams={teams} />}
           {tab === 'heroes'   && <HeroTab />}
+          {tab === 'people'      && <PeopleTab initialSelectEmail={jumpEmail} />}
+          {tab === 'permissions' && <PermissionsTab onJumpToPerson={(email) => { setJumpEmail(email); setTab('people'); }} />}
+          {tab === 'changelog'   && <ChangelogTab />}
         </div>
       </div>
 

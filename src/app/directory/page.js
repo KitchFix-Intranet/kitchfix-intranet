@@ -64,6 +64,7 @@ export default function DirectoryPage() {
   const [heroImage, setHeroImage] = useState('');
   const [firstName, setFirstName] = useState('');
   const [isAdmin,   setIsAdmin]   = useState(false);
+  const [isPeopleAdmin, setIsPeopleAdmin] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
 
   // ── Load pins from localStorage ──
@@ -109,6 +110,7 @@ export default function DirectoryPage() {
           if (data.heroImage) setHeroImage(data.heroImage);
           if (data.firstName) setFirstName(data.firstName);
           if (data.isAdmin)   setIsAdmin(data.isAdmin);
+          if (data.isPeopleAdmin) setIsPeopleAdmin(data.isPeopleAdmin);
           try {
             localStorage.setItem(CACHE_KEY, JSON.stringify({ teams: data.teams, ts: Date.now() }));
           } catch {}
@@ -205,7 +207,7 @@ export default function DirectoryPage() {
             </button>
           ))}
         </div>
-        {isAdmin && (
+        {(isAdmin || isPeopleAdmin) && (
           <button
             className="td-admin-gear"
             onClick={() => setAdminOpen(true)}
@@ -238,6 +240,8 @@ export default function DirectoryPage() {
             <DirectoryAdmin
               teams={teams}
               onClose={() => setAdminOpen(false)}
+              isAdmin={isAdmin}
+              isPeopleAdmin={isPeopleAdmin}
             />
           </div>
         </div>
