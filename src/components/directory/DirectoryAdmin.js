@@ -999,7 +999,7 @@ function PeopleTab({ initialSelectEmail }) {
                 </h3>
                 <p className="td-adm-people-meta">{selected.title || '—'} · {selected.work_email || 'no work email'}</p>
                 {selected.is_super_admin && (
-                  <p className="td-adm-people-note">Super Admin — access protected by code (OPS_LEADERSHIP_EMAILS). Ops leadership toggle is disabled.</p>
+                  <p className="td-adm-people-note">Super Admin — access protected by code (SUPER_ADMINS). Ops leadership toggle is disabled.</p>
                 )}
               </div>
             </header>

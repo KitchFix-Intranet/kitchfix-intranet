@@ -16,13 +16,26 @@ import { getServiceClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
 // ─── Stage 3 admin-panel auth helpers ───────────────────────────────
-// The handoff referenced a `SUPER_ADMINS` constant that does not exist
-// in admin.js today - the closest existing allowlist is
-// OPS_LEADERSHIP_EMAILS (6 people at the top of admin.js). We use that
-// as the code-level super-admin fallback: these 6 are always admins,
-// regardless of their `people.is_ops_leadership` DB flag. Additional
-// admins can be granted via the DB flag alone.
+// Two separate allowlists for two separate concerns:
+//
+//   OPS_LEADERSHIP_SET - panel ACCESS code-level fallback (6 people).
+//     The admin tabs open when the user matches this set OR their DB
+//     `is_ops_leadership` flag is TRUE. Code membership is immunity
+//     against a DB flag that got flipped off by mistake.
+//
+//   SUPER_ADMINS_SET   - toggle PROTECTION code-level allowlist (Kevin
+//     only). When editing a SUPER_ADMIN's row, the `is_ops_leadership`
+//     toggle is disabled in the UI and the API rejects the write.
+//     Narrower than OPS_LEADERSHIP so the other 5 ops-leadership
+//     members can still have their flag flipped through the panel if
+//     their role changes; Kevin alone has structural immunity.
+//
+// Stage 4 moves SUPER_ADMINS to src/lib/admin.js alongside the other
+// allowlists; it lives inline here for now because admin.js is a
+// danger zone this PR deliberately does not touch.
 const OPS_LEADERSHIP_SET = new Set(OPS_LEADERSHIP_EMAILS.map((e) => e.toLowerCase().trim()));
+const SUPER_ADMINS = ["k.fietek@kitchfix.com"];
+const SUPER_ADMINS_SET = new Set(SUPER_ADMINS.map((e) => e.toLowerCase().trim()));
 
 // 19 editable permission columns. Must match the CHECK constraint in
 // docs/migrations/people-3-changelog.sql. The 13 bools and 6 enums are
@@ -329,7 +342,7 @@ export async function GET(request) {
           display_name:  r.display_name,
           title:         r.title,
           status:        r.status,
-          is_super_admin: email ? OPS_LEADERSHIP_SET.has(email) : false,
+          is_super_admin: email ? SUPER_ADMINS_SET.has(email) : false,
           ...Object.fromEntries([...EDITABLE_COLUMNS].map((c) => [c, r[c] ?? null])),
         };
       });
@@ -554,8 +567,12 @@ export async function POST(request) {
       if (!current) return NextResponse.json({ error: `no person with work_email=${emailLc}` }, { status: 404 });
 
       // ─── Super-admin guard: can't un-flag is_ops_leadership for
-      // code-level allowlist members through the UI.
-      if (column === "is_ops_leadership" && OPS_LEADERSHIP_SET.has(emailLc)) {
+      // SUPER_ADMINS members through the UI. Narrower than the panel-
+      // access OPS_LEADERSHIP check: the other 5 ops-leadership members
+      // CAN have their flag flipped (role change scenario), but Kevin
+      // has structural immunity so he can never lock himself out of
+      // the ops_leadership gate the whole panel depends on.
+      if (column === "is_ops_leadership" && SUPER_ADMINS_SET.has(emailLc)) {
         return NextResponse.json({
           error: "cannot modify super-admin ops leadership flag",
         }, { status: 403 });
