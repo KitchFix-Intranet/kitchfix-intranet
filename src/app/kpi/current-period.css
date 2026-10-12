@@ -916,7 +916,10 @@
 .kpi-app .kpi-ov-cp-led-tbl th {
   font-size: var(--kpi-t-label);
   font-weight: 800;
-  letter-spacing: 0.6px;
+  /* Kevin ruling 2026-10-12. Align letter-spacing to the labor WeekTable
+     thead (0.07em). The prior 0.6px shipped slightly tighter at the body
+     font-size and widened the gap between labor and purchasing headers. */
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--n-600);
   text-align: right;
@@ -949,17 +952,23 @@
 .kpi-app .kpi-ov-cp-led-vrow-open td { background: var(--n-100); }
 .kpi-app .kpi-ov-cp-led-lrow td {
   background: #FCFCFD;
-  font-size: var(--kpi-t-meta);
-  font-weight: 600;
+  /* Kevin ruling 2026-10-12. Align transaction-row type to labor child
+     rows (.kpi-tbl-child > td): size --kpi-size-ctl, weight 500. The
+     prior --kpi-t-meta / 600 pairing read smaller and heavier than the
+     labor rows at the same visual stop. */
+  font-size: var(--kpi-size-ctl);
+  font-weight: 500;
   color: var(--n-700);
   padding: 5px 14px;
 }
 .kpi-app .kpi-ov-cp-led-lrow td.kpi-ov-cp-led-l {
   padding-left: 34px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--n-700);
 }
-.kpi-app .kpi-ov-cp-led-mute { color: var(--n-600); font-weight: 600; }
+/* Kevin ruling 2026-10-12. Muted cells drop from 600 to 500 to match
+   the labor table's muted (--n-600 weight 500). */
+.kpi-app .kpi-ov-cp-led-mute { color: var(--n-600); font-weight: 500; }
 .kpi-app .kpi-ov-cp-led-dim { color: var(--text-muted); }
 .kpi-app .kpi-ov-cp-led-bb { color: var(--n-600); }
 .kpi-app .kpi-ov-cp-led-cx {
@@ -1136,8 +1145,14 @@
    picks up amber-700 on the warn variant. */
 .kpi-app .kpi-ov-pf-vname {
   display: block;
-  color: var(--n-900);
-  font-weight: 700;
+  /* Kevin ruling 2026-10-12. Pull vendor-name weight down to match the
+     labor table's first-column child treatment (weight 500 / --n-700
+     on worker rows). The vendor still anchors the row; the ratio to
+     labor's row anchor stays steady. The brief named weight 600 / --n-800
+     - using that pair here (one stop up from labor's workers), tunable on
+     the review. */
+  color: var(--n-800);
+  font-weight: 600;
 }
 .kpi-app .kpi-ov-pf-vsub {
   display: block;
@@ -1192,4 +1207,33 @@
 .kpi-app [data-kpi-ov="purchasing-ledger"] .kpi-ov-cp-led-lrow > td:nth-child(3) {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-variant-numeric: tabular-nums;
+}
+
+/* Kevin ruling 2026-10-12. Purchasing week-band chevron button.
+   Mirrors .kpi-tbl-bandbtn / .kpi-tbl-chev from the labor WeekTable so
+   the two folds disclose with the same cue. The band row's bucket
+   subtotals (food / pack / vehicle / billed / total) are unchanged -
+   the toggle only sits in the first (label) cell. */
+.kpi-app .kpi-ov-pf-wbandbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  padding: var(--kpi-sp-1) 0;
+  border-radius: var(--kpi-ctl-r);
+}
+.kpi-app .kpi-ov-pf-wbandbtn:hover { background: var(--n-100); color: var(--n-800); }
+.kpi-app .kpi-ov-pf-chev {
+  display: inline-block;
+  width: 15px;
+  flex: 0 0 auto;
+  color: var(--n-500);
+  font-size: var(--kpi-size-caption);
 }

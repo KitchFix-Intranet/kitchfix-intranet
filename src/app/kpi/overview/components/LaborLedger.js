@@ -137,7 +137,7 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
 
   return (
     <div
-      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card kpi-ov-fold-panel${open ? " kpi-ov-fold-open" : ""}`}
+      className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card kpi-ov-fold-panel kpi-ov-fold-strip-labor${open ? " kpi-ov-fold-open" : ""}`}
       data-kpi-ov="labor-ledger"
       data-kpi-ov-open={open ? "1" : "0"}
     >
@@ -170,10 +170,17 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
           )}
           <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
         </button>
-        <HelpPop id="qLaborFold" title="The week table" body={WEEK_TABLE_POP_BODY} />
       </div>
       {open && (
         <>
+          {/* Kevin ruling 2026-10-12. Fold-help moves out of the collapsed
+              header row into a meta line shown only when open - same pattern
+              as PnlStatement. Keeps the collapsed trigger clean (no dangling
+              "?" past the chevron) and gives the help a tidy row to sit on
+              above the table. */}
+          <div className="kpi-ov-fold-meta">
+            <HelpPop id="qLaborFold" title="The week table" body={WEEK_TABLE_POP_BODY} />
+          </div>
           <div className="kpi-ov-cb">
             {laborError ? (
               <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="labor-ledger-error">

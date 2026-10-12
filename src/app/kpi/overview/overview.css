@@ -212,6 +212,13 @@
 .kpi-app .kpi-ov-card-cogs { border-top: 3px solid var(--navy-700); }
 .kpi-app .kpi-ov-card-gm   { border-top: 3px solid var(--kpi-purple-600); }
 .kpi-app .kpi-ov-card-aa   { border-top: 3px solid var(--amber-500); }
+/* Kevin ruling 2026-10-12. Distinct top strips per fold - navy (Full
+   P&L via .kpi-ov-card-cogs, above), purple (Rippling labor), amber
+   (Purchasing detail). All three are 3px to match. Reuses the same
+   tokens the hero cards above use so the strip language stays coherent
+   across the page. */
+.kpi-app .kpi-ov-fold-strip-labor { border-top: 3px solid var(--kpi-purple-600); }
+.kpi-app .kpi-ov-fold-strip-purch { border-top: 3px solid var(--amber-500); }
 /* PR-2 (2026-09-02) additions - cost-lines + tracked accent tones.
    R-52 (2026-09-02): .kpi-ov-card-pace-* removed alongside PacePanel. */
 .kpi-app .kpi-ov-card-cost-over    { border-top: 3px solid var(--red-600); }
