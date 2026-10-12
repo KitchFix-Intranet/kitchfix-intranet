@@ -11,31 +11,28 @@ import {
   getHeroImages,
   replaceHeroImages,
 } from "@/lib/dataStore";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb, isSuperAdmin } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
 // ─── Stage 3 admin-panel auth helpers ───────────────────────────────
-// Two separate allowlists for two separate concerns:
+// Two separate concerns gated by two separate checks:
 //
-//   OPS_LEADERSHIP_SET - panel ACCESS code-level fallback (6 people).
-//     The admin tabs open when the user matches this set OR their DB
-//     `is_ops_leadership` flag is TRUE. Code membership is immunity
-//     against a DB flag that got flipped off by mistake.
+//   isOpsLeadershipDb(email) - panel ACCESS. Returns true when the
+//     user is a code-level SUPER_ADMIN OR their people.is_ops_leadership
+//     DB flag is TRUE. Centralized in src/lib/admin.js (Stage 4a/4b).
+//     Code-level membership (SUPER_ADMINS) is immunity against a DB
+//     flag that got flipped off by mistake.
 //
-//   SUPER_ADMINS_SET   - toggle PROTECTION code-level allowlist (Kevin
-//     only). When editing a SUPER_ADMIN's row, the `is_ops_leadership`
-//     toggle is disabled in the UI and the API rejects the write.
-//     Narrower than OPS_LEADERSHIP so the other 5 ops-leadership
-//     members can still have their flag flipped through the panel if
-//     their role changes; Kevin alone has structural immunity.
+//   isSuperAdmin(email) - toggle PROTECTION (Kevin only). When editing
+//     a SUPER_ADMIN's row, the `is_ops_leadership` toggle is disabled
+//     in the UI and the API rejects the write. Narrower than ops
+//     leadership so the other 5 ops-leadership members can still have
+//     their flag flipped through the panel if their role changes;
+//     Kevin alone has structural immunity.
 //
-// Stage 4 moves SUPER_ADMINS to src/lib/admin.js alongside the other
-// allowlists; it lives inline here for now because admin.js is a
-// danger zone this PR deliberately does not touch.
-const OPS_LEADERSHIP_SET = new Set(OPS_LEADERSHIP_EMAILS.map((e) => e.toLowerCase().trim()));
-const SUPER_ADMINS = ["k.fietek@kitchfix.com"];
-const SUPER_ADMINS_SET = new Set(SUPER_ADMINS.map((e) => e.toLowerCase().trim()));
+// Prior Stage 3 inline SUPER_ADMINS + OPS_LEADERSHIP_SET removed in
+// Stage 4b; both now live in src/lib/admin.js.
 
 // 19 editable permission columns. Must match the CHECK constraint in
 // docs/migrations/people-3-changelog.sql. The 13 bools and 6 enums are
@@ -116,22 +113,14 @@ async function requirePeopleAdmin(session) {
   const email = session.user?.email?.toLowerCase().trim() || "";
   if (!email) return { ok: false, status: 401, reason: "Session missing email" };
 
-  // Code-level allowlist first - immune to DB flag mistakes
-  if (OPS_LEADERSHIP_SET.has(email)) {
-    return { ok: true, email, isSuperAdmin: true };
-  }
-  // DB-level flag check
-  const supa = getServiceClient();
-  const { data, error } = await supa
-    .from("people")
-    .select("is_ops_leadership")
-    .ilike("work_email", email)
-    .maybeSingle();
-  if (error) return { ok: false, status: 500, reason: `people lookup: ${error.message}` };
-  if (data?.is_ops_leadership === true) {
-    return { ok: true, email, isSuperAdmin: false };
-  }
-  return { ok: false, status: 403, reason: "People admin authorization required" };
+  // Panel-access check: SUPER_ADMIN short-circuit + DB ops_leadership
+  // via the Stage 4a wrapper. `isSuperAdmin` field reflects the
+  // narrower code-level allowlist (Kevin only) rather than ops
+  // leadership membership - semantics unchanged for every call site
+  // that only reads `.ok`.
+  const ok = await isOpsLeadershipDb(email);
+  if (!ok) return { ok: false, status: 403, reason: "People admin authorization required" };
+  return { ok: true, email, isSuperAdmin: isSuperAdmin(email) };
 }
 // ═══════════════════════════════════════════════════════════════
 // TEAM DIRECTORY API
@@ -268,23 +257,12 @@ export async function GET(request) {
         : userEmail.split("@")[0].replace(/^\w/, (c) => c.toUpperCase());
 
       // isPeopleAdmin: separate gate from the directory `isAdmin` above.
-      // Super-admin (OPS_LEADERSHIP_EMAILS code allowlist) OR
-      // people.is_ops_leadership DB flag. See requirePeopleAdmin() for
-      // the full gate used by API actions.
+      // Super-admin code allowlist OR people.is_ops_leadership DB flag,
+      // via the Stage 4a wrapper that already dual-reads + drift-logs.
       let isPeopleAdmin = false;
-      if (OPS_LEADERSHIP_SET.has(userEmail)) {
-        isPeopleAdmin = true;
-      } else if (userEmail) {
-        try {
-          const supa = getServiceClient();
-          const { data } = await supa
-            .from("people")
-            .select("is_ops_leadership")
-            .ilike("work_email", userEmail)
-            .maybeSingle();
-          if (data?.is_ops_leadership === true) isPeopleAdmin = true;
-        } catch { /* non-fatal: assume no admin access */ }
-      }
+      try {
+        if (userEmail) isPeopleAdmin = await isOpsLeadershipDb(userEmail);
+      } catch { /* non-fatal: assume no admin access */ }
 
       // contactMap: keyed by safeId(teamKey), values are arrays of
       // API-shape contact objects matching the pre-PR-B handler's
@@ -342,7 +320,7 @@ export async function GET(request) {
           display_name:  r.display_name,
           title:         r.title,
           status:        r.status,
-          is_super_admin: email ? SUPER_ADMINS_SET.has(email) : false,
+          is_super_admin: isSuperAdmin(email),
           ...Object.fromEntries([...EDITABLE_COLUMNS].map((c) => [c, r[c] ?? null])),
         };
       });
@@ -572,7 +550,7 @@ export async function POST(request) {
       // CAN have their flag flipped (role change scenario), but Kevin
       // has structural immunity so he can never lock himself out of
       // the ops_leadership gate the whole panel depends on.
-      if (column === "is_ops_leadership" && SUPER_ADMINS_SET.has(emailLc)) {
+      if (column === "is_ops_leadership" && isSuperAdmin(emailLc)) {
         return NextResponse.json({
           error: "cannot modify super-admin ops leadership flag",
         }, { status: 403 });

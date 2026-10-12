@@ -236,6 +236,48 @@ export async function getPermissions(email) {
 }
 
 /**
+ * Fire-and-forget drift log. Each dual-read wrapper above calls this
+ * when the DB value disagrees with the hardcoded set (`event_type:
+ * 'drift'`) or when the DB read failed and we fell back to the
+ * hardcoded value (`event_type: 'fallback'`). Writes go to the
+ * `admin_drift_log` table (docs/migrations/admin-drift-log.sql).
+ *
+ * Contract: never throws, never awaits in the caller's hot path.
+ * The DB insert is a dangling promise with a catch handler. On any
+ * failure we drop back to console.warn so the signal survives even
+ * if the drift-log table is misconfigured.
+ *
+ * `console.warn` fires FIRST in every drift path (synchronous,
+ * visible in Vercel logs immediately); logDrift is the durable record
+ * for the two-week validation window.
+ *
+ * Server-only. Not safe for `"use client"`.
+ */
+export function logDrift({ email, permission, event_type = "drift", db_value = null, hardcoded_value = null, error_msg = null, consumer = "admin.js" }) {
+  try {
+    const supa = getServiceClient();
+    const row = {
+      email:            String(email || "").toLowerCase().trim(),
+      permission:       String(permission || ""),
+      event_type,
+      db_value:         typeof db_value === "boolean" ? db_value : null,
+      hardcoded_value:  typeof hardcoded_value === "boolean" ? hardcoded_value : null,
+      error_msg,
+      consumer,
+    };
+    // Dangling promise. Catch so an unhandled rejection cannot crash
+    // the Node process; log on failure as the fallback signal.
+    supa.from("admin_drift_log").insert(row).then(({ error }) => {
+      if (error) console.warn(`[admin] logDrift insert failed for ${row.email}/${row.permission}: ${error.message}`);
+    }).catch((err) => {
+      console.warn(`[admin] logDrift promise rejected for ${row.email}/${row.permission}: ${err?.message || err}`);
+    });
+  } catch (err) {
+    console.warn(`[admin] logDrift sync exception for ${email}/${permission}: ${err?.message || err}`);
+  }
+}
+
+/**
  * Dual-read: ops leadership. SUPER_ADMIN -> true unconditionally
  * (structural backstop). Then DB; drift-check vs OPS_LEADERSHIP_EMAILS;
  * return DB. On DB error, fall back to hardcoded.
@@ -246,10 +288,14 @@ export async function isOpsLeadershipDb(email) {
   const norm = email.toLowerCase().trim();
   const hardcoded = OPS_LEADERSHIP_LC.has(norm);
   const perms = await getPermissions(email);
-  if (!perms) return hardcoded;
+  if (!perms) {
+    logDrift({ email: norm, permission: "is_ops_leadership", event_type: "fallback", hardcoded_value: hardcoded, error_msg: "getPermissions returned null" });
+    return hardcoded;
+  }
   const db = !!perms.is_ops_leadership;
   if (db !== hardcoded) {
     console.warn(`[admin] DRIFT is_ops_leadership for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+    logDrift({ email: norm, permission: "is_ops_leadership", event_type: "drift", db_value: db, hardcoded_value: hardcoded });
   }
   return db;
 }
@@ -262,10 +308,14 @@ export async function isScAccessDb(email) {
   const norm = email.toLowerCase().trim();
   const hardcoded = SC_ADMINS_LC.has(norm);
   const perms = await getPermissions(email);
-  if (!perms) return hardcoded;
+  if (!perms) {
+    logDrift({ email: norm, permission: "is_sc_access", event_type: "fallback", hardcoded_value: hardcoded, error_msg: "getPermissions returned null" });
+    return hardcoded;
+  }
   const db = !!perms.is_sc_access;
   if (db !== hardcoded) {
     console.warn(`[admin] DRIFT is_sc_access for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+    logDrift({ email: norm, permission: "is_sc_access", event_type: "drift", db_value: db, hardcoded_value: hardcoded });
   }
   return db;
 }
@@ -278,10 +328,14 @@ export async function isScAdminDb(email) {
   const norm = email.toLowerCase().trim();
   const hardcoded = SC_ADMIN_EMAILS.has(norm);
   const perms = await getPermissions(email);
-  if (!perms) return hardcoded;
+  if (!perms) {
+    logDrift({ email: norm, permission: "is_sc_admin", event_type: "fallback", hardcoded_value: hardcoded, error_msg: "getPermissions returned null" });
+    return hardcoded;
+  }
   const db = !!perms.is_sc_admin;
   if (db !== hardcoded) {
     console.warn(`[admin] DRIFT is_sc_admin for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+    logDrift({ email: norm, permission: "is_sc_admin", event_type: "drift", db_value: db, hardcoded_value: hardcoded });
   }
   return db;
 }
@@ -294,10 +348,14 @@ export async function isScLockOverrideDb(email) {
   const norm = email.toLowerCase().trim();
   const hardcoded = SC_LOCK_OVERRIDE.has(norm);
   const perms = await getPermissions(email);
-  if (!perms) return hardcoded;
+  if (!perms) {
+    logDrift({ email: norm, permission: "is_sc_lock_override", event_type: "fallback", hardcoded_value: hardcoded, error_msg: "getPermissions returned null" });
+    return hardcoded;
+  }
   const db = !!perms.is_sc_lock_override;
   if (db !== hardcoded) {
     console.warn(`[admin] DRIFT is_sc_lock_override for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+    logDrift({ email: norm, permission: "is_sc_lock_override", event_type: "drift", db_value: db, hardcoded_value: hardcoded });
   }
   return db;
 }

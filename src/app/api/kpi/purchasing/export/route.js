@@ -23,7 +23,7 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { auth } from "@/lib/auth";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
 import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 
 // Round-to-2 helper. Stores the rounded value, not just the display -
@@ -52,7 +52,7 @@ export async function GET(request) {
     if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-    if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+    if (!(await isOpsLeadershipDb(email))) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   } else {
