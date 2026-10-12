@@ -388,7 +388,9 @@ export default function DirectoryView({ showToast, bootstrapData }) {
   // Message menu actions
   const messageActions = useMemo(() => {
     if (!data) return null;
+    const effectiveEmail = (p) => p.work_email || p.personal_email || "";
     const managersWithEmail = data.people.filter((p) => p.is_salaried && p.work_email);
+    const allWithEmail = data.people.filter((p) => effectiveEmail(p));
     const managersByRegion = (regionName) => {
       const teamsInRegion = new Set(
         data.teams.filter((t) => t.region === regionName).map((t) => t.team_key)
@@ -396,22 +398,43 @@ export default function DirectoryView({ showToast, bootstrapData }) {
       return managersWithEmail.filter((p) => teamsInRegion.has(p.team_key));
     };
     return {
-      all: managersWithEmail,
+      managers: managersWithEmail,
+      everyone: allWithEmail,
       east: managersByRegion("East"),
       west: managersByRegion("West"),
+      effectiveEmail,
     };
   }, [data]);
 
-  const copyManagerEmails = async () => {
-    if (!messageActions?.all) return;
-    const text = messageActions.all.map((p) => p.work_email).join("; ");
+  // Per-site message actions (visible when a site is selected)
+  const siteActions = useMemo(() => {
+    if (!selectedSite || !messageActions) return null;
+    const { managers, team_list, team } = selectedSite;
+    const eff = messageActions.effectiveEmail;
+    const siteMgrs = managers.filter((p) => eff(p));
+    const siteAssocs = team_list.filter((p) => eff(p));
+    const siteAll = [...siteMgrs, ...siteAssocs];
+    const assocPhones = team_list
+      .map((p) => normalizePhone(p.phone))
+      .filter((ph) => ph.display && ph.display !== "");
+    return {
+      label: siteLabel(team),
+      managers: siteMgrs,
+      associates: siteAssocs,
+      all: siteAll,
+      phones: assocPhones,
+    };
+  }, [selectedSite, messageActions]);
+
+  const copySitePhones = async () => {
+    if (!siteActions?.phones?.length) return;
+    const text = siteActions.phones.map((ph) => ph.display).join(", ");
     try {
       await navigator.clipboard.writeText(text);
-      showToast && showToast(`Copied ${messageActions.all.length} manager emails`, "success");
+      showToast && showToast(`Copied ${siteActions.phones.length} phone numbers`, "success");
     } catch {
       showToast && showToast("Clipboard blocked - selecting the list for manual copy", "info");
-      // Fallback: open a prompt so the user can select+copy manually
-      try { window.prompt("Copy manager emails:", text); } catch { /* noop */ }
+      try { window.prompt("Copy phone numbers:", text); } catch { /* noop */ }
     }
     setMsgOpen(false);
   };
@@ -463,16 +486,16 @@ export default function DirectoryView({ showToast, bootstrapData }) {
               {msgOpen && messageActions && (
                 <div className="pp-dir-msg-menu" role="menu">
                   <h5>Email in Gmail</h5>
-                  {messageActions.all.length > 0 && (
+                  {messageActions.managers.length > 0 && (
                     <a
                       role="menuitem"
-                      href={gmailCompose(messageActions.all.map((p) => p.work_email), { bcc: true })}
+                      href={gmailCompose(messageActions.managers.map((p) => p.work_email))}
                       target="_blank"
                       rel="noopener"
                       onClick={() => setMsgOpen(false)}
                     >
                       <span>All managers</span>
-                      <span className="pp-dir-msg-count">{messageActions.all.length}</span>
+                      <span className="pp-dir-msg-count">{messageActions.managers.length}</span>
                     </a>
                   )}
                   {messageActions.east.length > 0 && (
@@ -499,13 +522,71 @@ export default function DirectoryView({ showToast, bootstrapData }) {
                       <span className="pp-dir-msg-count">{messageActions.west.length}</span>
                     </a>
                   )}
-                  <hr />
-                  <button type="button" role="menuitem" onClick={copyManagerEmails}>
-                    <span>Copy all manager emails</span>
-                    <span className="pp-dir-msg-count">{messageActions.all.length}</span>
-                  </button>
+                  {messageActions.everyone.length > 0 && (
+                    <a
+                      role="menuitem"
+                      href={gmailCompose(messageActions.everyone.map((p) => messageActions.effectiveEmail(p)))}
+                      target="_blank"
+                      rel="noopener"
+                      onClick={() => setMsgOpen(false)}
+                    >
+                      <span>All managers + associates</span>
+                      <span className="pp-dir-msg-count">{messageActions.everyone.length}</span>
+                    </a>
+                  )}
+                  {siteActions && (
+                    <>
+                      <hr />
+                      <h5>{siteActions.label}</h5>
+                      {siteActions.managers.length > 0 && (
+                        <a
+                          role="menuitem"
+                          href={gmailCompose(siteActions.managers.map((p) => messageActions.effectiveEmail(p)))}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={() => setMsgOpen(false)}
+                        >
+                          <span>{siteActions.label} managers</span>
+                          <span className="pp-dir-msg-count">{siteActions.managers.length}</span>
+                        </a>
+                      )}
+                      {siteActions.associates.length > 0 && (
+                        <a
+                          role="menuitem"
+                          href={gmailCompose(siteActions.associates.map((p) => messageActions.effectiveEmail(p)))}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={() => setMsgOpen(false)}
+                        >
+                          <span>{siteActions.label} associates</span>
+                          <span className="pp-dir-msg-count">{siteActions.associates.length}</span>
+                        </a>
+                      )}
+                      {siteActions.all.length > 0 && (
+                        <a
+                          role="menuitem"
+                          href={gmailCompose(siteActions.all.map((p) => messageActions.effectiveEmail(p)))}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={() => setMsgOpen(false)}
+                        >
+                          <span>All at {siteActions.label}</span>
+                          <span className="pp-dir-msg-count">{siteActions.all.length}</span>
+                        </a>
+                      )}
+                      {siteActions.phones.length > 0 && (
+                        <>
+                          <hr />
+                          <button type="button" role="menuitem" onClick={copySitePhones}>
+                            <span>Copy {siteActions.label} associate numbers</span>
+                            <span className="pp-dir-msg-count">{siteActions.phones.length}</span>
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
                   <p className="pp-dir-msg-hint">
-                    Opens a new Gmail tab. The full list goes in BCC; site lists go in To so reply-all works.
+                    Opens a new Gmail tab. Copy buttons put the list on your clipboard.
                   </p>
                 </div>
               )}
