@@ -298,7 +298,7 @@ function foldHeaderSummary(payload) {
   return `${n} card ${n === 1 ? "charge" : "charges"} awaiting coding · ${amt}`;
 }
 
-export default function PurchasingFold({ payload, error, account, start, end, today, open, onToggle }) {
+export default function PurchasingFold({ payload, error, account, start, end, today, open, onToggle, billbackPeriod }) {
   const actuals = Array.isArray(payload?.actuals) ? payload.actuals : null;
   const headerSummary = foldHeaderSummary(payload);
 
@@ -431,8 +431,68 @@ export default function PurchasingFold({ payload, error, account, start, end, to
               No purchases for this range.
             </div>
           ) : (
-            <PurchasingTable derived={derived} />
+            <>
+              <PurchasingTable derived={derived} />
+              <PurchasingGoalRow billbackPeriod={billbackPeriod} />
+            </>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// PR-billback-2. Goal row for the single-period surface. Renders under the
+// purchasing period total. All figures come from the resolver's
+// billback_period (same source as the Current-Year ledger); this only
+// formats + tones. Tone: over = amber (notable, pass-through, not a loss),
+// under = green, otherwise neutral - the same meaning the card/ledger use.
+function PurchasingGoalRow({ billbackPeriod }) {
+  const bb = billbackPeriod;
+  if (!bb) return null;
+
+  if (bb.state === "pre_season") {
+    return (
+      <div className="kpi-ov-cp-led-goal kpi-ov-cp-led-goal-note" data-kpi-ov="purchasing-billback-goal" data-kpi-ov-state="pre-season">
+        Pre-season &middot; reimbursable spend here rolls into P{bb.first_goal_period}&rsquo;s billed-back goal.
+      </div>
+    );
+  }
+  if (bb.goal == null) {
+    return (
+      <div className="kpi-ov-cp-led-goal kpi-ov-cp-led-goal-note" data-kpi-ov="purchasing-billback-goal" data-kpi-ov-state="no-goal">
+        No billed-back goal for this period.
+      </div>
+    );
+  }
+
+  const toneCls = bb.tone === "over" ? "kpi-ov-wait" : bb.tone === "under" ? "kpi-ov-good" : "";
+  const settled = bb.state === "closed";
+  const running = bb.state === "in_progress";
+  const arrow = bb.delta > 0 ? "▲" : bb.delta < 0 ? "▼" : "";
+  const pct = bb.pct == null ? null : Math.round(bb.pct);
+
+  return (
+    <div className="kpi-ov-cp-led-goal" data-kpi-ov="purchasing-billback-goal" data-kpi-ov-state="has-goal">
+      <div className="kpi-ov-cp-led-goal-row">
+        <span className="kpi-ov-cp-led-goal-eb">P{bb.period_no} billed-back goal</span>
+        <span className="kpi-ov-cp-led-goal-fig"><b>{fmt0(bb.goal)}</b> goal</span>
+        <span className="kpi-ov-cp-led-goal-fig">
+          <b>{fmt0(bb.actual)}</b> billed back{running ? " so far" : ""}
+        </span>
+        {settled ? (
+          <>
+            <span className={`kpi-ov-cp-led-goal-delta ${toneCls}`}>{arrow ? arrow + " " : ""}{fmt0(Math.abs(bb.delta))}</span>
+            <span className="kpi-ov-cp-led-goal-vs">vs goal</span>
+            <span className={`kpi-ov-cp-led-goal-pct ${toneCls}`}>{pct == null ? "—" : pct + "%"}</span>
+          </>
+        ) : (
+          <span className="kpi-ov-cp-led-goal-pct kpi-ov-cp-led-goal-soft">{running ? "period in progress" : "not started"}</span>
+        )}
+      </div>
+      {bb.is_first_goal_period && bb.pre_season_amount > 0.005 && (
+        <div className="kpi-ov-cp-led-goal-sub">
+          Billed back includes {fmt0(bb.pre_season_amount)} pre-season reimbursables (P1&ndash;P{bb.first_goal_period - 1}); it exceeds this period&rsquo;s transactions above by that amount, matching the Current-Year ledger.
         </div>
       )}
     </div>

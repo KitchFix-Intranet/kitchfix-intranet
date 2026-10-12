@@ -120,7 +120,7 @@ import { periodOf, periodStartISO, periodEndISO, weekStartsInRange, endOfLastCom
 import { PURCHASING_ENVELOPE_EXCLUSIONS } from "@/lib/accountModels.js";
 import { canonicalSubLine } from "@/lib/purchasing/glRollup.js";
 import { resolveFinanceCloseAdjustment, absorbFinanceCloseIntoSubLines } from "@/lib/kpi/shared/financeCloseAdjustment.js";
-import { buildBillback } from "@/lib/kpi/overview/billback.js";
+import { buildBillback, buildBillbackPeriod } from "@/lib/kpi/overview/billback.js";
 
 const FISCAL_YEAR = 2026;
 
@@ -2191,6 +2191,26 @@ export async function resolveOverview({
     fiscalYear: FISCAL_YEAR,
   });
 
+  // PR-billback-2. Single-period surface: the goal row inside the Purchasing
+  // fold. Multi-period ships null here (the card + ledger own that range);
+  // non-MF ships null (no goal concept). Exactly one full compute per view -
+  // buildBillback above returns null on single-period (its gate), and this
+  // is skipped on multi-period.
+  const billback_period =
+    isManagementFee && rng.kind === "period" && rng.period_no != null
+      ? await buildBillbackPeriod(
+          {
+            supa,
+            accountKey,
+            isManagementFee,
+            todayISO: today,
+            periodStatus,
+            fiscalYear: FISCAL_YEAR,
+          },
+          rng.period_no,
+        )
+      : null;
+
   // 17b. Week rail (Kevin CC prompt 2026-09-08 item 4). Four cards
   // below the three, showing each week's confirmed / forecast meals
   // + prorated service fee + cost target + cost landed + caveats.
@@ -3932,6 +3952,11 @@ export async function resolveOverview({
     // null, nothing on null. Finance core in @/lib/kpi/overview/
     // billback.js.
     billback,
+    // PR-billback-2. Single-period surface for the Purchasing fold's goal
+    // row. Null on multi-period and on non-MF accounts; populated with the
+    // selected period's scorecard otherwise. Same source as billback above
+    // (one full compute path); the fold renders the row, non-MF self-hides.
+    billback_period,
     statement_rows: statementRows,
     // E19 (2026-09-01): total-row period-budget figures the client
     // renders on Total revenue and Total COGS. Prior payload shipped

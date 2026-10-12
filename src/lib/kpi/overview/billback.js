@@ -347,5 +347,59 @@ export async function buildBillback({
     },
     breakdown,
     strays_amount: strays,
+    // PR-billback-2. Exposed so the single-period goal row can caption
+    // "Billed back includes {amount} pre-season reimbursables" on the
+    // first_goal_period view. The card + ledger ignore the field; it
+    // is additive to the shipped payload.
+    pre_season_amount: preSeasonActual,
+  };
+}
+
+/**
+ * Single-period surface (PR-billback-2). The Purchasing fold's goal row.
+ * Reuses buildBillback as the one source of truth for the allocation and
+ * the pre-season fold, then returns just the selected period's scorecard.
+ * `isMultiPeriod: true` here is internal - it forces the full FY compute so
+ * the row matches the Current-Year ledger exactly; the caller only invokes
+ * this on a single-period range.
+ *
+ * Returns null for non-MF or when the period is not goaled and not pre-season.
+ * Pre-season periods (period_no < first_goal_period) return a marker so the
+ * fold can show "rolls into P{first_goal_period}" instead of a comparison.
+ */
+export async function buildBillbackPeriod(args, periodNo) {
+  const full = await buildBillback({ ...args, isMultiPeriod: true });
+  if (!full) return null;
+
+  const row = (full.periods || []).find((r) => r.period_no === periodNo);
+  if (!row) {
+    if (full.first_goal_period && periodNo < full.first_goal_period) {
+      return {
+        period_no: periodNo,
+        goal: null, actual: null, tone: "na", delta: null, pct: null,
+        state: "pre_season",
+        annual_goal: full.annual_goal,
+        fiscal_year: full.fiscal_year,
+        first_goal_period: full.first_goal_period,
+        is_first_goal_period: false,
+        pre_season_amount: full.pre_season_amount,
+      };
+    }
+    return null;
+  }
+
+  return {
+    period_no: row.period_no,
+    goal: row.goal,
+    actual: row.actual,
+    tone: row.tone,
+    delta: row.delta,
+    pct: row.pct,
+    state: row.state,
+    annual_goal: full.annual_goal,
+    fiscal_year: full.fiscal_year,
+    first_goal_period: full.first_goal_period,
+    is_first_goal_period: row.period_no === full.first_goal_period,
+    pre_season_amount: full.pre_season_amount,
   };
 }

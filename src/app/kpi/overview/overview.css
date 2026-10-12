@@ -2499,3 +2499,48 @@
   color: var(--n-900);
 }
 .kpi-app .kpi-ov-bb-foot td { font-weight: 800; }
+
+/* PR-billback-2. Billed-back goal row under the purchasing period total on
+   single-period ranges. A summary strip, not a table row. Figures come from
+   the resolver; tone (amber over / green under) reuses the color-only
+   .kpi-ov-wait / .kpi-ov-good classes. */
+.kpi-app .kpi-ov-cp-led-goal {
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-3);
+  border-top: 1px solid var(--n-200);
+}
+.kpi-app .kpi-ov-cp-led-goal-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--kpi-sp-2) var(--kpi-sp-4);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-cp-led-goal-eb {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-700);
+}
+.kpi-app .kpi-ov-cp-led-goal-fig b { color: var(--n-900); font-weight: 800; font-variant-numeric: tabular-nums; }
+.kpi-app .kpi-ov-cp-led-goal-delta { font-weight: 800; font-variant-numeric: tabular-nums; }
+.kpi-app .kpi-ov-cp-led-goal-vs { color: var(--n-600); }
+.kpi-app .kpi-ov-cp-led-goal-pct { margin-left: auto; font-weight: 800; font-size: var(--kpi-t-body); font-variant-numeric: tabular-nums; }
+.kpi-app .kpi-ov-cp-led-goal-soft { color: var(--n-600); font-weight: 700; }
+.kpi-app .kpi-ov-cp-led-goal-note {
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-3);
+  border-top: 1px solid var(--n-200);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-style: italic;
+}
+.kpi-app .kpi-ov-cp-led-goal-sub {
+  margin-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  line-height: 1.5;
+}
