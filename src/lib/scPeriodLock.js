@@ -34,7 +34,7 @@
 //                              the response body with 403 status
 
 import { getServiceClient } from "@/lib/supabase";
-import { isScLockOverride } from "@/lib/admin";
+import { isScLockOverrideDb } from "@/lib/admin";
 
 /**
  * @param {string}   accountKey
@@ -48,8 +48,8 @@ export async function assertDaysUnlockedForWrite(accountKey, dates, email) {
   }
   if (!Array.isArray(dates) || dates.length === 0) return null;
 
-  // Override bypass. isScLockOverride normalizes email casing + trims.
-  if (isScLockOverride(email)) return null;
+  // Override bypass. isScLockOverrideDb normalizes email casing + trims.
+  if (await isScLockOverrideDb(email)) return null;
 
   const supa = getServiceClient();
   const uniqueDates = [...new Set(dates)];
