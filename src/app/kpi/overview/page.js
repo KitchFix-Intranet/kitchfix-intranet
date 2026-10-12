@@ -862,7 +862,7 @@ export default function KpiOverviewPage() {
                     component short-circuits either way; the explicit
                     revenue_model check keeps the swap readable at the
                     call site. */}
-                {data.revenue_model === "management_fee"
+                {data.revenue_model === "management_fee" && (data.billback?.annual_goal != null || data.billback_period?.annual_goal != null)
                   ? (data.billback
                       ? <BillbackCard billback={data.billback} revenueModel={data.revenue_model} />
                       : <BillbackPeriodCard billbackPeriod={data.billback_period} />)

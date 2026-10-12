@@ -473,7 +473,12 @@ export default function PurchasingFold({ payload, error, account, start, end, to
 // under = green, otherwise neutral - the same meaning the card/ledger use.
 function PurchasingGoalRow({ billbackPeriod }) {
   const bb = billbackPeriod;
-  if (!bb) return null;
+  // Kevin ruling 2026-10-12 (TXR-TX-H chart slot fix). `!bb` catches non-MF
+  // single-period views (resolver ships null). `bb.annual_goal == null`
+  // catches MF accounts with no kpi_billback_goals row (TXR - TX - H) where
+  // buildBillbackPeriod returned a full row object with null annual_goal.
+  // Same pattern BillbackLedger uses.
+  if (!bb || bb.annual_goal == null) return null;
 
   if (bb.state === "pre_season") {
     return (
