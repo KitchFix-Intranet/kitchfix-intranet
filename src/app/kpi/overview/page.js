@@ -758,6 +758,7 @@ export default function KpiOverviewPage() {
                     today={today}
                     open={purchasingFoldOpen}
                     onToggle={() => setPurchasingFoldOpen(o => !o)}
+                    billbackPeriod={data.billback_period}
                   />
                 )}
               </>
@@ -825,6 +826,7 @@ export default function KpiOverviewPage() {
                 today={today}
                 open={purchasingFoldOpen}
                 onToggle={() => setPurchasingFoldOpen(o => !o)}
+                billbackPeriod={data.billback_period}
               />
             )}
           </>
@@ -894,6 +896,7 @@ export default function KpiOverviewPage() {
                 today={today}
                 open={purchasingFoldOpen}
                 onToggle={() => setPurchasingFoldOpen(o => !o)}
+                billbackPeriod={data.billback_period}
               />
             )}
           </>
