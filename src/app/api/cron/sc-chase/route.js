@@ -69,6 +69,7 @@ import { NOTIFICATION_TYPES } from "@/lib/billing/recipients";
 import { fireN3 } from "@/lib/billing/chaseNotifications";
 import { resolveChasePersonName } from "@/lib/billing/chasePersonName";
 import { getSalariedManagerEmails, getSalariedManagerEmailsBatch } from "@/lib/billing/getSalariedManagerEmails";
+import { isWeekFullyEntered } from "./isWeekFullyEntered";
 
 export const dynamic    = "force-dynamic";
 export const maxDuration = 60;
@@ -477,6 +478,22 @@ export async function GET(request) {
     const missing  = comp.missingDates || [];
     const total    = comp.serviceDays;              // service days only
     const complete = comp.serviceDaysEntered;       // service days with actuals
+
+    // A chase nags the operator to ENTER missing days. A fully-entered
+    // week (0 missing) has nothing for them to do - finalizing is the
+    // biller's step, not the site lead's. Skip. This is what spares
+    // biweekly first-weeks, which are complete but not yet finalizable
+    // (their pair closes later), from a false "0 of N days not entered"
+    // reminder. Confirmed 2026-10-12: CIN - AZ week of Oct 5 chased
+    // Jennifer Trible despite 0 missing. Placed BEFORE the dry-run
+    // branch and the ledger insert so both reporting and send paths
+    // see the same skip, and it covers both stages (N3.reminder +
+    // N3.urgent) via the shared loop. See isWeekFullyEntered below -
+    // the pure predicate it calls is exported for unit coverage.
+    if (isWeekFullyEntered(comp)) {
+      log.push(`${accountKey}: ${stage} skip - week ${weekStart} fully entered (0 missing), nothing to chase`);
+      continue;
+    }
 
     // RDO auto-derive with override. accountMap.rdo_email wins when
     // non-null; else region -> REGIONAL_DIRECTORS (null for CORP or
