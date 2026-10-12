@@ -328,6 +328,14 @@ export default function KpiOverviewPage() {
   useEffect(() => {
     if (!fetchAccount && !urlPreview) return;
     if (!start || !end) return;
+    // Kevin ruling 2026-10-12. Portfolio views never render LaborLedger;
+    // skip the aggregate labor fetch here instead of letting it fire and
+    // throw the payload away. Inlined account list rather than
+    // PORTFOLIO_KEYS because PORTFOLIO_KEYS is defined below this hook
+    // in component-body order; the effect runs post-render so it would
+    // still resolve, but keeping the gate self-contained avoids any
+    // declaration-order confusion.
+    if (["ALL", "EAST", "WEST"].includes(fetchAccount)) return;
     const ctrl = new AbortController();
     setLaborLedger(null);
     setLaborLedgerError(null);
@@ -368,6 +376,11 @@ export default function KpiOverviewPage() {
   useEffect(() => {
     if (!fetchAccount && !urlPreview) return;
     if (!start || !end) return;
+    // Kevin ruling 2026-10-12. Portfolio views never render
+    // PurchasingFold; skip the aggregate purchasing fetch here instead
+    // of letting it fire. Same inlined account list as the labor hook
+    // above; same rationale on PORTFOLIO_KEYS placement.
+    if (["ALL", "EAST", "WEST"].includes(fetchAccount)) return;
     const ctrl = new AbortController();
     setPurchasingLedger(null);
     setPurchasingLedgerError(null);
@@ -800,40 +813,30 @@ export default function KpiOverviewPage() {
             CurrentPeriodTable + CurrentPeriodReview rendered above.
             Nothing else renders below on CP. Other ranges unchanged. */}
         {data.period_state === "planned" || cpGateActive ? null : PORTFOLIO_KEYS.includes(account) ? (
-          /* Portfolio scope (account ∈ ALL / EAST / WEST) keeps the
-              pre-PR-2 single-column layout. PR-2 explicitly scoped
-              its two-column reorg to single-account only - portfolio
-              byte-diff test guards against drift. */
+          /* Portfolio scope (account ∈ ALL / EAST / WEST). Kevin ruling
+              2026-10-12. The ALL / EAST / WEST rollups now use the same
+              two-column split layout the single-account branch below
+              uses - RevenueLines + AlsoTracked on the left, CostLines +
+              Chart on the right, PnlStatement fold below. Portfolio
+              never carries BillbackCard (billback is per-account) and
+              never carries LaborLedger / PurchasingFold (both are
+              site-specific transaction detail that does not aggregate
+              across accounts with different hourly / salary / billing
+              models). The split uses data-kpi-ov="portfolio-split" so
+              probes can distinguish it from the single-account split
+              below. */
           <>
-            <Chart chart={data.chart} revenueModel={data.revenue_model} />
+            <div className="kpi-ov-split" data-kpi-ov="portfolio-split">
+              <div className="kpi-ov-split-left">
+                <RevenueLines payload={data} />
+                <AlsoTracked payload={data} />
+              </div>
+              <div className="kpi-ov-split-right">
+                <CostLines payload={data} previewAccount={data.preview_account} />
+                <Chart chart={data.chart} revenueModel={data.revenue_model} />
+              </div>
+            </div>
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
-            <AlsoTracked payload={data} />
-            <LaborLedger
-              labor={laborLedger}
-              laborError={laborLedgerError}
-              account={account}
-              start={start}
-              end={end}
-              today={today}
-              open={laborLedgerOpen}
-              onToggle={() => setLaborLedgerOpen(o => !o)}
-            />
-            {/* R-150 · Purchasing fold on Closed / CY portfolio branch.
-                Only renders on single-period ranges; multi-period
-                (Current Year) is R-151. */}
-            {rangeSelection?.kind === "period" && (
-              <PurchasingFold
-                payload={purchasingLedger}
-                error={purchasingLedgerError}
-                account={account}
-                start={start}
-                end={end}
-                today={today}
-                open={purchasingFoldOpen}
-                onToggle={() => setPurchasingFoldOpen(o => !o)}
-                billbackPeriod={data.billback_period}
-              />
-            )}
           </>
         ) : (
           /* Kevin ruling final-presentation (2026-09-03): the chart
