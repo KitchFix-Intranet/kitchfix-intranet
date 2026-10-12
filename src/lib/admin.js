@@ -136,3 +136,168 @@ export const SC_LOCK_OVERRIDE = Object.freeze(new Set([
  */
 export const isScLockOverride = (email) =>
   !!email && SC_LOCK_OVERRIDE.has(email.toLowerCase().trim());
+
+
+// ═══════════════════════════════════════════════════════════════════
+// Stage 4 (admin-panel-stage-4a) · DB-backed permission layer
+//
+// Strictly additive: every sync export above stays as the hardcoded
+// fallback for the dual-read window. Stage 5 removes the hardcoded
+// paths and the comparison code.
+//
+// Dual-read contract: each async wrapper queries the `people` table,
+// compares the DB result against the hardcoded set, logs
+// `[admin] DRIFT` on mismatch (console.warn - drift is informational
+// during the window, not an error), and returns the DB result when
+// available. On DB error, returns the hardcoded fallback so a
+// transient Supabase blip never produces a gate miss.
+//
+// NOTE on the match key: `people.work_email` is the correct column
+// (Stage 1 seeded on LOWER(work_email); there is no `people.email`
+// column). Rippling writes already lower-case + trim the value on
+// ingest, so `.ilike(work_email, email)` and `.eq(work_email, email)`
+// are both safe in current state; `.ilike` is kept for defensive
+// case-insensitivity to match the Stage 3 route pattern.
+// ═══════════════════════════════════════════════════════════════════
+
+import { getServiceClient } from "@/lib/supabase";
+
+/**
+ * Code-level super-admin allowlist. Checked FIRST in every panel-
+ * access and toggle-protection path across the app.
+ *
+ * Kevin's DB flags can be toggled through the admin UI without
+ * locking him out; this constant is the structural backstop so a
+ * mis-click can never remove ops leadership from the one person who
+ * needs to recover from it. Deliberately narrower than
+ * OPS_LEADERSHIP_EMAILS above (6 people) - panel access via code is
+ * for exactly Kevin; the other 5 ops-leadership members ride on
+ * their DB `is_ops_leadership` flag.
+ *
+ * Moved to admin.js in Stage 4a. The inline copy at the top of
+ * src/app/api/directory/route.js (Stage 3) stays in place for now;
+ * Stage 4b consumer rewire removes it there and imports from here.
+ */
+export const SUPER_ADMINS = ["k.fietek@kitchfix.com"];
+const SUPER_ADMINS_SET = new Set(SUPER_ADMINS.map((e) => e.toLowerCase().trim()));
+
+/**
+ * Sync code-level super-admin check. Safe to call from client-side
+ * modules (no DB dependency).
+ */
+export const isSuperAdmin = (email) =>
+  !!email && SUPER_ADMINS_SET.has(email.toLowerCase().trim());
+
+
+// ─── Lower-cased sets for the hardcoded-vs-DB diff ────────────────────
+// Pre-computed so each dual-read wrapper doesn't re-lower the array
+// per call. The source constants above stay in their original casing
+// for human readability of the admin.js file.
+const OPS_LEADERSHIP_LC = new Set(OPS_LEADERSHIP_EMAILS.map((e) => e.toLowerCase().trim()));
+const SC_ADMINS_LC      = new Set(SC_ADMINS.map((e)              => e.toLowerCase().trim()));
+
+
+/**
+ * Fetch a person's permission flags from the `people` table. Returns
+ * an object with every permission column, or null when the email is
+ * not found or the DB errored. Callers that need a specific flag go
+ * through the per-permission wrappers below (which handle the
+ * drift log + hardcoded fallback); this is for bulk reads.
+ *
+ * Server-only. The service client reads `people` without RLS; do not
+ * import this from a `"use client"` component.
+ */
+export async function getPermissions(email) {
+  if (!email) return null;
+  const norm = email.toLowerCase().trim();
+  try {
+    const supa = getServiceClient();
+    const { data, error } = await supa
+      .from("people")
+      .select(
+        "work_email, is_ops_leadership, is_sc_access, is_sc_admin, " +
+        "is_sc_lock_override, is_labor_admin, is_invoice_admin, " +
+        "is_inv_manager, paf_always_cc, is_site_leader, " +
+        "is_playbook_owner, is_sous_preview, is_hr_admin, region, " +
+        "kpi_role, kpi_scope, can_see_salary, is_kpi_preview, " +
+        "opd_access_tier, incident_notify, sc_default_account"
+      )
+      .ilike("work_email", norm)
+      .maybeSingle();
+    if (error) {
+      console.error(`[admin] getPermissions DB error for ${norm}:`, error.message);
+      return null;
+    }
+    return data; // null if the person doesn't exist in people
+  } catch (err) {
+    console.error(`[admin] getPermissions exception for ${norm}:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Dual-read: ops leadership. SUPER_ADMIN -> true unconditionally
+ * (structural backstop). Then DB; drift-check vs OPS_LEADERSHIP_EMAILS;
+ * return DB. On DB error, fall back to hardcoded.
+ */
+export async function isOpsLeadershipDb(email) {
+  if (!email) return false;
+  if (isSuperAdmin(email)) return true;
+  const norm = email.toLowerCase().trim();
+  const hardcoded = OPS_LEADERSHIP_LC.has(norm);
+  const perms = await getPermissions(email);
+  if (!perms) return hardcoded;
+  const db = !!perms.is_ops_leadership;
+  if (db !== hardcoded) {
+    console.warn(`[admin] DRIFT is_ops_leadership for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+  }
+  return db;
+}
+
+/**
+ * Dual-read: SC page access.
+ */
+export async function isScAccessDb(email) {
+  if (!email) return false;
+  const norm = email.toLowerCase().trim();
+  const hardcoded = SC_ADMINS_LC.has(norm);
+  const perms = await getPermissions(email);
+  if (!perms) return hardcoded;
+  const db = !!perms.is_sc_access;
+  if (db !== hardcoded) {
+    console.warn(`[admin] DRIFT is_sc_access for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+  }
+  return db;
+}
+
+/**
+ * Dual-read: SC admin (money-moving config).
+ */
+export async function isScAdminDb(email) {
+  if (!email) return false;
+  const norm = email.toLowerCase().trim();
+  const hardcoded = SC_ADMIN_EMAILS.has(norm);
+  const perms = await getPermissions(email);
+  if (!perms) return hardcoded;
+  const db = !!perms.is_sc_admin;
+  if (db !== hardcoded) {
+    console.warn(`[admin] DRIFT is_sc_admin for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+  }
+  return db;
+}
+
+/**
+ * Dual-read: SC lock-override.
+ */
+export async function isScLockOverrideDb(email) {
+  if (!email) return false;
+  const norm = email.toLowerCase().trim();
+  const hardcoded = SC_LOCK_OVERRIDE.has(norm);
+  const perms = await getPermissions(email);
+  if (!perms) return hardcoded;
+  const db = !!perms.is_sc_lock_override;
+  if (db !== hardcoded) {
+    console.warn(`[admin] DRIFT is_sc_lock_override for ${norm}: DB=${db} hardcoded=${hardcoded}`);
+  }
+  return db;
+}
