@@ -123,10 +123,16 @@ export async function GET(request) {
     console.warn(`[sc-drift] state read FAILED - falling back to current-list post without diff: ${e.message}`);
   }
 
+  // Failed-account set drives the CLEARED guard in computeWeeklyDiff:
+  // a prior drift must only be posted / deleted when we successfully
+  // verified its account this run. Otherwise a transient API blip
+  // would false-clear real drifts (and re-alert them next week).
+  const failedAccounts = new Set(accountResults.filter((r) => r.error).map((r) => r.account));
+
   let payload;
   let diff = null;
   if (priorRows !== null) {
-    diff = computeWeeklyDiff({ currentEntries, priorRows });
+    diff = computeWeeklyDiff({ currentEntries, priorRows, failedAccounts });
     payload = formatWeeklyRecapPayload({
       newItems:       diff.newItems,
       clearedItems:   diff.clearedItems,

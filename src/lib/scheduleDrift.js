@@ -423,11 +423,19 @@ export function signatureOf(d) {
 //                  display, drift }.
 //   priorRows:     [{ signature, account_key, kind, display, first_seen,
 //                    last_seen }] from sc_schedule_drift_state.
+//   failedAccounts: Set<account_key> of accounts whose fetch or hs read
+//                   threw this run. A failed account contributes zero
+//                   current entries, so without this input every one of
+//                   its prior signatures would be wrongly CLEARED +
+//                   deleted (then re-alerted as NEW next run). Prior
+//                   rows for a failed account are left untouched: not
+//                   cleared, not deleted, not counted in carryOpen.
 //
 // Output:
 //   {
 //     newItems:    [...entries whose signatures are new],
-//     clearedItems:[...prior rows whose signatures are gone],
+//     clearedItems:[...prior rows whose signatures are gone and whose
+//                    account WAS verified this run],
 //     carryOpen:   count of signatures present on both sides,
 //     reconcile:   {
 //       inserts:  [...new-row payloads for sc_schedule_drift_state],
@@ -435,9 +443,14 @@ export function signatureOf(d) {
 //       deletes:  [...signatures to DELETE],
 //     },
 //   }
-export function computeWeeklyDiff({ currentEntries, priorRows }) {
+export function computeWeeklyDiff({ currentEntries, priorRows, failedAccounts = new Set() }) {
   const priorBySig = new Map((priorRows || []).map((r) => [r.signature, r]));
   const currentBySig = new Map((currentEntries || []).map((e) => [e.signature, e]));
+  // Accept any iterable (Set, Array, Set-shaped mock). Normalize to Set
+  // once so the per-prior-row check is O(1).
+  const failed = failedAccounts instanceof Set
+    ? failedAccounts
+    : new Set(failedAccounts || []);
 
   const newItems    = [];
   const clearedItems = [];
@@ -461,10 +474,14 @@ export function computeWeeklyDiff({ currentEntries, priorRows }) {
     }
   }
   for (const [sig, row] of priorBySig.entries()) {
-    if (!currentBySig.has(sig)) {
-      clearedItems.push(row);
-      deletes.push(sig);
-    }
+    if (currentBySig.has(sig)) continue;
+    // Guard: do NOT claim a drift cleared for an account whose fetch
+    // failed this run - we did not actually verify it. Leave the state
+    // row intact; next successful run will clear it correctly if the
+    // schedule really resolved.
+    if (failed.has(row.account_key)) continue;
+    clearedItems.push(row);
+    deletes.push(sig);
   }
 
   return {

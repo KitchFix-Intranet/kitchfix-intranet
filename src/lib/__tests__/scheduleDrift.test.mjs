@@ -192,6 +192,54 @@ test("sc-59 known-gap suppression intact: a listed DATE_DRIFT pk goes to knownGa
   assert.equal(filterToAlerting(r.drifts).length, 0);
 });
 
+// ─── Patch: failed-account guard (don't false-clear a drift we did not verify)
+test("sc-59 patch: prior drifts for a failed account are NOT cleared or deleted", () => {
+  // Prior holds two drifts, one per account. Current run: AAA was
+  // fetched OK and still shows sigA; BBB's fetch threw, so BBB
+  // contributes zero currentEntries and is in failedAccounts.
+  const prior = [
+    { signature: "sigA", account_key: "AAA", kind: "DATE_DRIFT",    display: "AAA line", first_seen: "t0", last_seen: "t0" },
+    { signature: "sigB", account_key: "BBB", kind: "PHANTOM_IN_DB", display: "BBB line", first_seen: "t0", last_seen: "t0" },
+  ];
+  const current = [
+    { signature: "sigA", account_key: "AAA", kind: "DATE_DRIFT", display: "AAA line" },
+  ];
+  const diff = computeWeeklyDiff({
+    currentEntries: current,
+    priorRows:      prior,
+    failedAccounts: new Set(["BBB"]),
+  });
+
+  assert.deepEqual(diff.clearedItems, [], "no CLEARED - sigB belongs to a failed account");
+  assert.deepEqual(diff.reconcile.deletes, [], "sigB must NOT be deleted from state");
+  assert.deepEqual(diff.reconcile.bumps, ["sigA"], "sigA is a carry (bump), still verified");
+  assert.deepEqual(diff.newItems, [], "no NEW this run");
+  assert.deepEqual(diff.reconcile.inserts, [], "no inserts");
+  assert.equal(diff.carryOpen, 1, "only sigA counts as carry; sigB is not re-counted as open");
+
+  // sigB appears nowhere in newItems or clearedItems.
+  const everywhere = [...diff.newItems, ...diff.clearedItems].map((x) => x.signature);
+  assert.ok(!everywhere.includes("sigB"), "sigB must not leak into either section");
+});
+
+test("sc-59 patch: with empty failedAccounts, a prior absent from current is still CLEARED + deleted", () => {
+  // Regression anchor: the new guard must not silence a legitimate
+  // cleared drift when every account was successfully verified.
+  const prior = [
+    { signature: "sigA", account_key: "AAA", kind: "DATE_DRIFT", display: "AAA line", first_seen: "t0", last_seen: "t0" },
+  ];
+  const current = []; // AAA was verified; the drift is gone.
+  const diff = computeWeeklyDiff({
+    currentEntries: current,
+    priorRows:      prior,
+    failedAccounts: new Set(),  // no failures
+  });
+  assert.deepEqual(diff.clearedItems.map((x) => x.signature), ["sigA"], "sigA correctly cleared when AAA is verified");
+  assert.deepEqual(diff.reconcile.deletes, ["sigA"], "sigA deleted from state");
+  assert.equal(diff.carryOpen, 0);
+  assert.deepEqual(diff.newItems, []);
+});
+
 // ─── Test 6: resilience - state read failure doesn't crash the flow ─
 test("sc-59 resilience: when prior state is unavailable, caller falls back to posting current list", () => {
   // The route's fallback simulated here: priorRows = [] means the diff
