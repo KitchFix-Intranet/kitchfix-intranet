@@ -9,7 +9,7 @@
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
 import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
 import { fuzzyMatchVendor } from "@/lib/vendorMatching";
 import { CLAUDE_SONNET_MODEL } from "@/lib/anthropicModel";
 import {
@@ -1213,7 +1213,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
     const { uuid, vendor, invoiceNumber, totalAmount } = body;
     if (!uuid) return { success: false, error: "Missing uuid" };
 
-    if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+    if (!(await isOpsLeadershipDb(email))) {
       console.warn(`[Invoice] delete-dupe denied: ${email} not in ops leadership`);
       return { success: false, error: "Forbidden" };
     }
@@ -2108,7 +2108,7 @@ export async function handleVendorMasterUpdate(body, token, email) {
 export async function handleVendorDeactivate(body, token, email) {
   const { vendorId, accountKey } = body;
   if (!vendorId || !accountKey) return { success: false, error: "vendorId and accountKey required" };
-  if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+  if (!(await isOpsLeadershipDb(email))) {
     return { success: false, error: "Vendor deactivation requires admin approval. Contact Kevin to deactivate a vendor." };
   }
   return setVendorActiveViaOrchestrator(vendorId, accountKey, false, email);
@@ -2157,7 +2157,7 @@ async function setVendorActiveViaOrchestrator(vendorId, accountKey, active, emai
 export async function handleVendorMerge(body, token, email) {
   const { keeperId, dupeIds } = body;
   if (!keeperId || !dupeIds?.length) return { success: false, error: "keeperId and dupeIds required" };
-  if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+  if (!(await isOpsLeadershipDb(email))) {
     return { success: false, error: "Vendor merge requires admin approval. Contact Kevin to merge vendors." };
   }
 

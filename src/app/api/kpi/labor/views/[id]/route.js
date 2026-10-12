@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
 // KPI PREVIEW FENCE - single source of truth in roleGate.js. Sits in
 // FRONT of the OPS_LEADERSHIP_EMAILS check on both GET and PUT so a
 // fenced caller cannot read or update a saved-view record while the
@@ -84,7 +84,7 @@ export async function PATCH(request, { params }) {
   const email = session.user?.email?.toLowerCase().trim();
   // KPI PREVIEW FENCE - refuse before the legacy admin gate.
   if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  if (!OPS_LEADERSHIP_EMAILS.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!(await isOpsLeadershipDb(email))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { id } = await params;
   const idNum = parseInt(id, 10);
@@ -145,7 +145,7 @@ export async function DELETE(request, { params }) {
   const email = session.user?.email?.toLowerCase().trim();
   // KPI PREVIEW FENCE - refuse before the legacy admin gate.
   if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  if (!OPS_LEADERSHIP_EMAILS.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!(await isOpsLeadershipDb(email))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { id } = await params;
   const idNum = parseInt(id, 10);

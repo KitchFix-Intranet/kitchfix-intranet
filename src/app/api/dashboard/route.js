@@ -3,7 +3,7 @@ import { readSheetSA, SHEET_IDS } from "@/lib/sheets";
 import { getNewsInteractions, upsertNewsInteraction, getSubmissions } from "@/lib/dataStore";
 import { createNewsPost, updateNewsPost, deleteNewsPost, readAllNewsPosts, enforceSinglePin } from "@/lib/dataStore/newsPosts";
 import { uploadNewsImage } from "@/lib/drive";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
@@ -126,7 +126,7 @@ export async function GET(request) {
   // ═══════════════════════════════════════
   if (action === "news-admin-list") {
     const email = session.user?.email?.toLowerCase().trim();
-    if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+    if (!(await isOpsLeadershipDb(email))) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
     try {
@@ -409,7 +409,7 @@ export async function POST(request) {
 
     // ── Admin write actions ──
     if (action === "news-create" || action === "news-update" || action === "news-delete") {
-      if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+      if (!(await isOpsLeadershipDb(email))) {
         return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
       }
 

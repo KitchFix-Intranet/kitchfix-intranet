@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { readSheetSA, appendRowSA, SHEET_IDS } from "@/lib/sheets";
 import { opsNotify } from "@/lib/opsUtils";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
 import {
   handleInvoiceGet,
   handleInvoicePost,
@@ -812,7 +812,7 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
           .filter((r) => String(r[3] || "").toLowerCase().trim() === email)
           .map((r) => String(r[0] || "").trim())
           .filter(Boolean);
-        if (OPS_LEADERSHIP_EMAILS.includes(email)) {
+        if (await isOpsLeadershipDb(email)) {
           userCategory = "CORP";
         } else if (userTeamKeys.some((k) => k.toUpperCase() === "CORP")) {
           userCategory = "CORP";
@@ -832,7 +832,7 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
         success: true,
         email,
         firstName: session.user?.name?.split(" ")[0] || "Chef",
-        isAdmin: OPS_LEADERSHIP_EMAILS.includes(email),
+        isAdmin: await isOpsLeadershipDb(email),
         userCategory,
         accounts, periods, currentPeriod, heroImage, inventoryLog,
       });
@@ -1001,7 +1001,7 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
         };
       });
 
-      const isAdmin = OPS_LEADERSHIP_EMAILS.includes(email);
+      const isAdmin = await isOpsLeadershipDb(email);
 
       // 0b (KPI PR 1 rider): 3100.2 Salary Kitchen Wages is site-leader-
       // visibility per playbook §8.2. Portfolio tab is admin-gated in
