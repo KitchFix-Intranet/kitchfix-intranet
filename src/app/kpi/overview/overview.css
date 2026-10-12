@@ -2544,3 +2544,15 @@
   color: var(--n-600);
   line-height: 1.5;
 }
+
+/* Single-period card (Kevin ruling 2026-10-12). Pre-season note under the
+   foot, and a muted non-verdict foot value for running / not-started
+   periods (rare on this branch - the running period is CP-gated - but
+   handled). */
+.kpi-app .kpi-ov-bb-sub {
+  margin-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  line-height: 1.5;
+}
+.kpi-app .kpi-ov-foot-v.kpi-ov-bb-soft { color: var(--n-600); font-weight: 600; }
