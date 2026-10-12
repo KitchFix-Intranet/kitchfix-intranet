@@ -1774,14 +1774,27 @@
   display: flex;
   align-items: center;
   width: 100%;
+  gap: var(--kpi-sp-2);
+  padding: 0 var(--kpi-sp-4);
+}
+/* Kevin ruling 2026-10-12 (follow-up). Title + help are a static left
+   cluster; the "?" sits immediately right of the fold title. The trigger
+   (summary + chevron) fills the rest of the row and stays the click
+   target - its vertical padding gives the row its height and its hover
+   feedback. Scoped `>` so the trigger-padding override does not reach
+   the P&L / Chart folds that place .kpi-ov-fold-trigger directly on the
+   card (no .kpi-ov-fold-head wrapper there). */
+.kpi-app .kpi-ov-fold-head > .kpi-ov-eb {
+  flex: 0 0 auto;
+}
+.kpi-app .kpi-ov-fold-head > [data-hs-help] {
+  flex: 0 0 auto;
+  margin-right: 0;
 }
 .kpi-app .kpi-ov-fold-head > .kpi-ov-fold-trigger {
   flex: 1 1 auto;
   min-width: 0;
-}
-.kpi-app .kpi-ov-fold-head > [data-hs-help] {
-  flex: 0 0 auto;
-  margin-right: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3) 0;
 }
 /* When the trigger has the segment control inline (P&L Full/Summary),
  * pin the seg to the right and let the chevron sit past it. */
