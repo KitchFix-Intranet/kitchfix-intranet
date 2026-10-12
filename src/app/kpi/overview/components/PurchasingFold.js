@@ -410,7 +410,17 @@ export default function PurchasingFold({ payload, error, account, start, end, to
       data-kpi-ov="purchasing-ledger"
       data-kpi-ov-open={open ? "1" : "0"}
     >
+      {/* Kevin ruling 2026-10-12 (follow-up). Title + HelpPop live as a
+          static left cluster inside .kpi-ov-fold-head; the trigger button
+          (now summary + chevron only) fills the rest of the row and stays
+          the fold click target. Title moved OUT of the trigger because the
+          "?" is a sibling button that cannot nest inside the trigger
+          (button-in-button is invalid HTML). The .kpi-ov-fold-meta row the
+          prior PR introduced for this fold is retired - PnlStatement still
+          uses the class, so the CSS rule stays. */}
       <div className="kpi-ov-fold-head">
+        <span className="kpi-ov-eb">Purchasing detail</span>
+        <HelpPop id="qPurchasingFold" title="The purchasing table" body={HELP_BODY} />
         <button
           type="button"
           className="kpi-ov-fold-trigger"
@@ -418,7 +428,6 @@ export default function PurchasingFold({ payload, error, account, start, end, to
           onClick={onToggle}
           aria-expanded={open ? "true" : "false"}
         >
-          <span className="kpi-ov-eb">Purchasing detail</span>
           {headerSummary && (
             <span className="kpi-ov-fold-summary" data-kpi-ov="purchasing-fold-summary">{headerSummary}</span>
           )}
@@ -427,12 +436,6 @@ export default function PurchasingFold({ payload, error, account, start, end, to
       </div>
       {open && (
         <>
-          {/* Kevin ruling 2026-10-12. Fold-help moves out of the collapsed
-              header row into a meta line shown only when open - same pattern
-              as PnlStatement + LaborLedger. */}
-          <div className="kpi-ov-fold-meta">
-            <HelpPop id="qPurchasingFold" title="The purchasing table" body={HELP_BODY} />
-          </div>
           <div className="kpi-ov-cb">
             {error ? (
               <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-error">

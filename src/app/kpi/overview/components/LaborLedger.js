@@ -156,7 +156,17 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
           so a duplicated id would put two data-hs-help="qWeek
           Table" nodes in the DOM and break existing probe
           selectors. */}
+      {/* Kevin ruling 2026-10-12 (follow-up). Title + HelpPop live as a
+          static left cluster inside .kpi-ov-fold-head; the trigger button
+          (now summary + chevron only) fills the rest of the row and stays
+          the fold click target. Title moved OUT of the trigger because the
+          "?" is a sibling button that cannot nest inside the trigger
+          (button-in-button is invalid HTML). The .kpi-ov-fold-meta row the
+          prior PR introduced for this fold is retired - PnlStatement still
+          uses the class, so the CSS rule stays. */}
       <div className="kpi-ov-fold-head">
+        <span className="kpi-ov-eb">Rippling labor</span>
+        <HelpPop id="qLaborFold" title="The week table" body={WEEK_TABLE_POP_BODY} />
         <button
           type="button"
           className="kpi-ov-fold-trigger"
@@ -164,7 +174,6 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
           onClick={onToggle}
           aria-expanded={open ? "true" : "false"}
         >
-          <span className="kpi-ov-eb">Rippling labor</span>
           {headerSummary && (
             <span className="kpi-ov-fold-summary" data-kpi-ov="labor-fold-summary">{headerSummary}</span>
           )}
@@ -173,14 +182,6 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
       </div>
       {open && (
         <>
-          {/* Kevin ruling 2026-10-12. Fold-help moves out of the collapsed
-              header row into a meta line shown only when open - same pattern
-              as PnlStatement. Keeps the collapsed trigger clean (no dangling
-              "?" past the chevron) and gives the help a tidy row to sit on
-              above the table. */}
-          <div className="kpi-ov-fold-meta">
-            <HelpPop id="qLaborFold" title="The week table" body={WEEK_TABLE_POP_BODY} />
-          </div>
           <div className="kpi-ov-cb">
             {laborError ? (
               <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="labor-ledger-error">
