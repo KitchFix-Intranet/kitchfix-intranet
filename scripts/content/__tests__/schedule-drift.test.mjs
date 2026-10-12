@@ -1,10 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // scripts/content/__tests__/schedule-drift.test.mjs
 //
-// Unit tests for the schedule-drift watchdog's PURE differ + Slack payload
-// formatter. No I/O, no DB, no HTTP. Fixtures cover: clean run, time change,
-// PPD / DATE_DRIFT, new DH game_pk (MISSING_IN_DB), PHANTOM_IN_DB, KNOWN_ISSUES
-// suppression grouping, and PDCO AWAY-by-design suppression.
+// Unit tests for the schedule-drift watchdog's PURE differ. No I/O, no DB,
+// no HTTP. Fixtures cover: clean run, time change (still COMPUTED but
+// not alerting post-sc-59), PPD / DATE_DRIFT, new DH game_pk (MISSING_IN_DB),
+// PHANTOM_IN_DB, KNOWN_ISSUES suppression grouping, and PDCO AWAY-by-design
+// suppression.
+//
+// The weekly recap builder (sc-59 formatWeeklyRecapPayload + diff) is
+// tested in src/lib/__tests__/scheduleDrift.test.mjs.
 //
 // Run via:
 //   npm run test:unit
@@ -16,10 +20,8 @@ import {
   TRACKED_TEAMS,
   KNOWN_ISSUES,
   diffSchedule,
-  formatSlackPayload,
   normalizeOpp,
   localDate,
-  HEARTBEAT_DOW,
 } from "../../../src/lib/scheduleDrift.js";
 
 // ─── Constants + helpers ─────────────────────────────────────────────
@@ -196,56 +198,7 @@ test("diffSchedule: PDCO (STL - FL) HOME MISSING_IN_DB -> still alarms", () => {
   assert.equal(r.drifts[0].kind, "MISSING_IN_DB");
 });
 
-// ─── formatSlackPayload: noise discipline ────────────────────────────
-
-test("formatSlackPayload: clean run + not heartbeat -> shouldPost=false", () => {
-  const results = TRACKED_TEAMS.map(t => ({ account: t.account, drifts: [], knownGaps: [], counts: { ok: 100 } }));
-  const p = formatSlackPayload({ accountResults: results, isHeartbeat: false });
-  assert.equal(p.shouldPost, false);
-});
-
-test("formatSlackPayload: clean run + heartbeat -> single 'schedules clean' line", () => {
-  const results = TRACKED_TEAMS.map(t => ({ account: t.account, drifts: [], knownGaps: [], counts: { ok: 100 } }));
-  const p = formatSlackPayload({ accountResults: results, isHeartbeat: true });
-  assert.equal(p.shouldPost, true);
-  assert.match(p.text, /schedules clean/);
-  assert.match(p.text, /8\/8/);
-});
-
-test("formatSlackPayload: real drifts -> shouldPost=true, drifts inline, known-gaps grouped", () => {
-  const drift = { kind: "TIME_DELTA", account: "TXR - TX - H", date: "2026-08-02", game_pk: 900001, details: "hs=... api=... delta=30min", severity: "alert" };
-  const known = { game_pk: 824514, reason: "DATE_DRIFT waits Option A" };
-  const results = [
-    { account: "TXR - TX - H", drifts: [drift], knownGaps: [], counts: {} },
-    { account: "CIN - OH",     drifts: [],      knownGaps: [known, known], counts: {} },
-  ];
-  const p = formatSlackPayload({ accountResults: results, isHeartbeat: false });
-  assert.equal(p.shouldPost, true);
-  assert.match(p.text, /TIME_DELTA/);
-  assert.match(p.text, /known gaps: 2 matches across 1 account/);
-});
-
-test("formatSlackPayload: >30 drifts truncates with 'N more' line", () => {
-  const many = Array.from({ length: 45 }, (_, i) => ({
-    kind: "MISSING_IN_DB", account: "TBJ - NY", date: "2026-05-01", game_pk: 900000 + i,
-    details: `test drift #${i}`, severity: "alert",
-  }));
-  const p = formatSlackPayload({ accountResults: [{ account: "TBJ - NY", drifts: many, knownGaps: [], counts: {} }], isHeartbeat: false });
-  assert.equal(p.shouldPost, true);
-  assert.match(p.text, /\(15 more drift lines truncated\)/);
-});
-
-test("formatSlackPayload: failure -> shouldPost=true, red header", () => {
-  const results = [
-    { account: "CIN - OH", drifts: [], knownGaps: [], counts: {}, error: "API 503" },
-    ...TRACKED_TEAMS.slice(1).map(t => ({ account: t.account, drifts: [], knownGaps: [], counts: {} })),
-  ];
-  const p = formatSlackPayload({ accountResults: results, isHeartbeat: false });
-  assert.equal(p.shouldPost, true);
-  assert.match(p.text, /rotating_light/);
-  assert.match(p.text, /1 failure/);
-});
-
-test("HEARTBEAT_DOW: Monday (JS Date.getDay() === 1)", () => {
-  assert.equal(HEARTBEAT_DOW, 1);
-});
+// Note: sc-59 (2026-10-12) removed the daily formatSlackPayload /
+// HEARTBEAT_DOW surface. The watchdog now runs weekly and posts a
+// change-only recap; that path is exercised by
+// src/lib/__tests__/scheduleDrift.test.mjs.

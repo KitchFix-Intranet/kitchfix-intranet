@@ -134,6 +134,24 @@ export const KNOWN_ISSUES = Object.freeze([
   //     is suppressed as "PDCO_AWAY_BY_DESIGN".
 ]);
 
+// ── Alerting scope (2026-10-12, Kevin ruling) ──────────────────────────
+//
+// Only two drift kinds reach the weekly recap:
+//   - DATE_DRIFT    (game moved to a new date)
+//   - PHANTOM_IN_DB (game dropped from the schedule entirely)
+// Everything else is still COMPUTED (server logs + diagnostics stay
+// useful) but is excluded from the change-diff + the Slack post. The
+// "known gaps" footer is dropped; per-pk suppression for the two kept
+// kinds stays intact.
+export const ALERTING_KINDS = Object.freeze(new Set(["DATE_DRIFT", "PHANTOM_IN_DB"]));
+
+// Narrow a per-account diff result to only the alerting kinds. Used by
+// the weekly-diff + recap paths; the untouched diffSchedule output is
+// available for logs.
+export function filterToAlerting(drifts) {
+  return (drifts || []).filter((d) => ALERTING_KINDS.has(d.kind));
+}
+
 // ── Pure differ ───────────────────────────────────────────────────────
 //
 // Inputs (all pre-fetched by the caller so the differ is I/O-free and
@@ -145,7 +163,8 @@ export const KNOWN_ISSUES = Object.freeze([
 //
 // Output shape:
 //   {
-//     drifts: [ { kind, account, date, game_pk, details, severity } ],
+//     drifts: [ { kind, account, date, game_pk, details, severity,
+//                 scDate?, apiDate?, opponent?, homeAway? } ],
 //     knownGaps: [ { game_pk, reason } ],
 //     counts: { drifts, knownGaps, ok, ppd, dh }
 //   }
@@ -154,9 +173,12 @@ export const KNOWN_ISSUES = Object.freeze([
 //   MISSING_IN_DB, PHANTOM_IN_DB, DATE_DRIFT, ATTRIBUTE_DRIFT,
 //   TIME_DELTA, STATUS_CHANGE, NEW_GAME_PK
 //
-// Severity: "alert" (real drift, post to Slack) | "known" (matched
-// KNOWN_ISSUES, grouped into one line) | "ignored" (PDCO AWAY by
-// design; not counted).
+// 2026-10-12: DATE_DRIFT and PHANTOM_IN_DB additionally carry the
+// structured fields (scDate / apiDate / opponent / homeAway) the recap
+// renderer consumes. Other kinds keep their original shape.
+//
+// Severity: "alert" (real drift) | "known" (matched KNOWN_ISSUES,
+// grouped into counts) | "ignored" (PDCO AWAY by design; not counted).
 const TIME_DELTA_TOLERANCE_MIN = 5;  // Part 1 § "COSMETIC_TIME"
 
 export function diffSchedule({ apiGames, hsRows, account }) {
@@ -219,6 +241,11 @@ export function diffSchedule({ apiGames, hsRows, account }) {
           kind: "DATE_DRIFT", account, date: g.date, game_pk: g.game_pk,
           details: `hs.service_date=${hs.service_date} api.date=${g.date} api=${g.ha}/${g.opp}`,
           severity: "alert",
+          // sc-59: structured fields fed to renderMoveLine.
+          scDate: hs.service_date,
+          apiDate: g.date,
+          opponent: g.opp,
+          homeAway: g.ha,
         });
         counts.drifts++;
       }
@@ -269,10 +296,18 @@ export function diffSchedule({ apiGames, hsRows, account }) {
         knownGaps.push({ game_pk: r.game_pk, reason: knownReason.get(r.game_pk) });
         counts.knownGaps++;
       } else {
+        // sc-59: PHANTOMs carry structured fields for renderDropLine.
+        // apiDate collapses to scDate (the drop happened on that date -
+        // the API has nothing to report).
+        const ha = r.day_type === "AWAY" ? "AWAY" : "HOME";
         drifts.push({
           kind: "PHANTOM_IN_DB", account, date: r.service_date, game_pk: r.game_pk,
           details: `hs=${r.day_type}/${r.opponent} - not in API`,
           severity: "alert",
+          scDate: r.service_date,
+          apiDate: r.service_date,
+          opponent: r.opponent,
+          homeAway: ha,
         });
         counts.drifts++;
       }
@@ -319,63 +354,174 @@ export async function fetchTeamSchedule(team, { season = 2026, startDate, endDat
   return games;
 }
 
-// ── Slack payload formatter ───────────────────────────────────────────
+// ── Plain-English line renderers (2026-10-12) ─────────────────────────
 //
-// Kevin's noise discipline (2026-07-14):
-//   - Post ONLY on drift (real, unknown alerts) OR failure OR the
-//     Monday heartbeat.
-//   - Per-account compact lines (`TBJ - FL · 2026-08-14 · time 6:30->7:05 ET`).
-//   - Summary counts.
-//   - Grouped known-gaps ONE-liner.
-//   - Truncate past ~30 drift lines with a "... (N more)" line.
-
-const MAX_LINES = 30;
-export const HEARTBEAT_DOW = 1; // 1 = Monday (JS Date.getDay())
-
-function driftLine(d) {
-  return `${d.account} · ${d.date} · pk=${d.game_pk} · ${d.kind}: ${d.details}`;
+// humanDate: "Tue, Aug 11" (year omitted when same as runYear). Parses
+// at noon UTC to avoid timezone off-by-one on the ISO-only date value.
+// Weekday/month/day resolved via Intl in the UTC frame so the format
+// matches regardless of server locale.
+export function humanDate(isoDate, runYear) {
+  if (typeof isoDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month:   "short",
+    day:     "numeric",
+    year:    "numeric",
+  }).formatToParts(d);
+  const get = (t) => parts.find((p) => p.type === t)?.value || "";
+  const wd  = get("weekday");
+  const mo  = get("month");
+  const day = get("day");
+  const yr  = get("year");
+  if (runYear != null && String(yr) === String(runYear)) {
+    return `${wd}, ${mo} ${day}`;
+  }
+  return `${wd}, ${mo} ${day}, ${yr}`;
 }
 
-export function formatSlackPayload({
-  accountResults = [],      // [{ account, counts, drifts, knownGaps, error? }]
-  isHeartbeat = false,
-  runId = null,
-} = {}) {
-  const totalDrifts = accountResults.reduce((a, r) => a + (r.drifts?.length || 0), 0);
-  const totalKnown  = accountResults.reduce((a, r) => a + (r.knownGaps?.length || 0), 0);
-  const failures    = accountResults.filter(r => r.error);
-  const okCount     = accountResults.length - failures.length;
+function haLabel(ha) { return ha === "HOME" ? "Home" : "Away"; }
+function vsOrAt(ha)  { return ha === "HOME" ? "vs"   : "at"; }
 
-  // Silence-is-broken guard - clean run + heartbeat day emits one line.
-  if (totalDrifts === 0 && failures.length === 0) {
-    if (isHeartbeat) {
-      const line = `_schedules clean, ${okCount}/${accountResults.length} accounts checked_`;
-      return { shouldPost: true, text: line, blocks: [{ type: "section", text: { type: "mrkdwn", text: `:white_check_mark: ${line}` } }] };
+// Move template per Kevin ruling 2026-10-12.
+export function renderMoveLine(d, runYear) {
+  return `*${d.account}* - ${haLabel(d.homeAway)} ${vsOrAt(d.homeAway)} ${d.opponent}: your calendar shows *${humanDate(d.scDate, runYear)}*, the league now has it on *${humanDate(d.apiDate, runYear)}*. Update the Service Calendar.`;
+}
+
+// Drop template per Kevin ruling 2026-10-12.
+export function renderDropLine(d, runYear) {
+  return `*${d.account}* - ${haLabel(d.homeAway)} ${vsOrAt(d.homeAway)} ${d.opponent} on *${humanDate(d.scDate, runYear)}*: no longer on the league schedule (cancelled or removed). Remove or update it.`;
+}
+
+export function renderDrift(d, runYear) {
+  if (d.kind === "DATE_DRIFT")    return renderMoveLine(d, runYear);
+  if (d.kind === "PHANTOM_IN_DB") return renderDropLine(d, runYear);
+  return null;  // Non-alerting kinds never reach the recap.
+}
+
+// ── Signatures (stable fingerprints for weekly change-diff) ──────────
+//
+// If a game moves AGAIN to yet another date, apiDate changes and the
+// signature changes with it - that is correct: the previously-fired
+// drift CLEARED (prior apiDate no longer matches), a new one appears.
+export function signatureOf(d) {
+  if (d.kind === "DATE_DRIFT") {
+    return `${d.account}|${d.game_pk}|DATE_DRIFT|${d.scDate}|${d.apiDate}`;
+  }
+  if (d.kind === "PHANTOM_IN_DB") {
+    return `${d.account}|${d.game_pk}|PHANTOM_IN_DB|${d.scDate}`;
+  }
+  return null;
+}
+
+// ── Week-over-week diff ──────────────────────────────────────────────
+//
+// Inputs:
+//   currentDrifts: alerting-only, per-account diffs flattened and
+//                  rendered. Each entry: { signature, account_key, kind,
+//                  display, drift }.
+//   priorRows:     [{ signature, account_key, kind, display, first_seen,
+//                    last_seen }] from sc_schedule_drift_state.
+//
+// Output:
+//   {
+//     newItems:    [...entries whose signatures are new],
+//     clearedItems:[...prior rows whose signatures are gone],
+//     carryOpen:   count of signatures present on both sides,
+//     reconcile:   {
+//       inserts:  [...new-row payloads for sc_schedule_drift_state],
+//       bumps:    [...signatures to UPDATE last_seen=now()],
+//       deletes:  [...signatures to DELETE],
+//     },
+//   }
+export function computeWeeklyDiff({ currentEntries, priorRows }) {
+  const priorBySig = new Map((priorRows || []).map((r) => [r.signature, r]));
+  const currentBySig = new Map((currentEntries || []).map((e) => [e.signature, e]));
+
+  const newItems    = [];
+  const clearedItems = [];
+  const carrySigs   = [];
+  const inserts     = [];
+  const bumps       = [];
+  const deletes     = [];
+
+  for (const [sig, entry] of currentBySig.entries()) {
+    if (priorBySig.has(sig)) {
+      carrySigs.push(sig);
+      bumps.push(sig);
+    } else {
+      newItems.push(entry);
+      inserts.push({
+        signature:   sig,
+        account_key: entry.account_key,
+        kind:        entry.kind,
+        display:     entry.display,
+      });
     }
+  }
+  for (const [sig, row] of priorBySig.entries()) {
+    if (!currentBySig.has(sig)) {
+      clearedItems.push(row);
+      deletes.push(sig);
+    }
+  }
+
+  return {
+    newItems,
+    clearedItems,
+    carryOpen: carrySigs.length,
+    reconcile: { inserts, bumps, deletes },
+  };
+}
+
+// ── Weekly recap Slack payload (2026-10-12) ──────────────────────────
+//
+// Posts the recap only when there is a change (NEW, CLEARED, or a
+// per-account failure). An all-clear quiet week emits nothing.
+export function formatWeeklyRecapPayload({
+  newItems       = [],
+  clearedItems   = [],
+  carryOpenCount = 0,
+  failures       = [],
+  weekOfIso      = null,
+  runId          = null,
+  runYear        = null,
+} = {}) {
+  if (newItems.length === 0 && clearedItems.length === 0 && failures.length === 0) {
     return { shouldPost: false, text: "", blocks: [] };
   }
-
+  const year = runYear || (weekOfIso ? Number(weekOfIso.slice(0, 4)) : new Date().getUTCFullYear());
   const lines = [];
-  const header = failures.length > 0
-    ? `:rotating_light: *SC drift watch* - ${totalDrifts} drift${totalDrifts === 1 ? "" : "s"}, ${failures.length} failure${failures.length === 1 ? "" : "s"}`
-    : `:warning: *SC drift watch* - ${totalDrifts} drift${totalDrifts === 1 ? "" : "s"} across ${accountResults.filter(r => r.drifts?.length > 0).length} account${accountResults.filter(r => r.drifts?.length > 0).length === 1 ? "" : "s"}`;
-  lines.push(header);
+  const weekOfLabel = weekOfIso ? humanDate(weekOfIso, year) : "";
+  lines.push(`:calendar: *Weekly schedule changes*${weekOfLabel ? ` - week of ${weekOfLabel}` : ""}`);
 
-  for (const f of failures) {
-    lines.push(`✗ ${f.account}: ${f.error}`);
+  if (failures.length > 0) {
+    for (const f of failures) {
+      lines.push(`:x: ${f.account}: ${f.error}`);
+    }
   }
 
-  const allDrifts = accountResults.flatMap(r => r.drifts || []);
-  const shown = allDrifts.slice(0, MAX_LINES).map(driftLine);
-  for (const s of shown) lines.push(s);
-  if (allDrifts.length > MAX_LINES) {
-    lines.push(`_... (${allDrifts.length - MAX_LINES} more drift line${allDrifts.length - MAX_LINES === 1 ? "" : "s"} truncated)_`);
+  if (newItems.length > 0) {
+    lines.push("");
+    lines.push(":new: *New this week*");
+    for (const e of newItems) lines.push(e.display);
   }
-  if (totalKnown > 0) {
-    const knownAcctCount = new Set(accountResults.filter(r => (r.knownGaps || []).length > 0).map(r => r.account)).size;
-    lines.push(`_known gaps: ${totalKnown} match${totalKnown === 1 ? "" : "es"} across ${knownAcctCount} account${knownAcctCount === 1 ? "" : "s"} (Option A backlog)_`);
+  if (clearedItems.length > 0) {
+    lines.push("");
+    lines.push(":white_check_mark: *Cleared since last week*");
+    for (const r of clearedItems) lines.push(r.display);
   }
-  if (runId) lines.push(`_run ${runId}_`);
+
+  const trailer = [];
+  if (carryOpenCount > 0) {
+    trailer.push(`_${carryOpenCount} change${carryOpenCount === 1 ? "" : "s"} still open from earlier weeks_`);
+  }
+  if (runId) trailer.push(`_run ${runId}_`);
+  if (trailer.length > 0) {
+    lines.push("");
+    for (const t of trailer) lines.push(t);
+  }
 
   const text = lines.join("\n");
   return {
