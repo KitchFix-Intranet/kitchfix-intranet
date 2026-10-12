@@ -52,7 +52,14 @@ const BILLBACK_FOLD_HELP = (
 const DASH = "—";
 
 export default function BillbackLedger({ billback, open, onToggle }) {
-  if (!billback) return null;
+  // Kevin ruling 2026-10-12 (TXR-TX-H chart slot fix). The `!billback` guard
+  // handles non-MF + single-period views where the resolver ships null. The
+  // `annual_goal == null` guard handles MF accounts whose buildBillback
+  // returned a full object (periods, reimbursables, etc. populate) but no
+  // kpi_billback_goals row exists - TXR - TX - H today. On those accounts
+  // the fold mounts unconditionally in page.js, so hiding here is the only
+  // way to keep the ledger off accounts that have no goal to compare against.
+  if (!billback || billback.annual_goal == null) return null;
   const { annual_goal, fiscal_year, through_period, periods, ytd } = billback;
 
   // Fold summary (collapsed state): one-line "{actual_to_date} ·
