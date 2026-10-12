@@ -94,6 +94,11 @@ import LaborLedger from "./components/LaborLedger";
 // branch can mount them unconditionally.
 import BillbackCard from "./components/BillbackCard";
 import BillbackLedger from "./components/BillbackLedger";
+// Kevin ruling 2026-10-12. Single-period face of the billed-back card.
+// Renders in the split-right slot on management-fee + single-period views;
+// fed by the billback_period payload (same source as PurchasingFold's
+// goal row, so the two agree by construction).
+import BillbackPeriodCard from "./components/BillbackPeriodCard";
 // R-150 (2026-09-22). Purchasing detail as a fold, period into weeks
 // into transactions. Mounts beside the labor fold on single-period
 // ranges only; multi-period (Current Year) is R-151 and does not
@@ -858,7 +863,9 @@ export default function KpiOverviewPage() {
                     revenue_model check keeps the swap readable at the
                     call site. */}
                 {data.revenue_model === "management_fee"
-                  ? <BillbackCard billback={data.billback} revenueModel={data.revenue_model} />
+                  ? (data.billback
+                      ? <BillbackCard billback={data.billback} revenueModel={data.revenue_model} />
+                      : <BillbackPeriodCard billbackPeriod={data.billback_period} />)
                   : <Chart chart={data.chart} revenueModel={data.revenue_model} />}
               </div>
             </div>
