@@ -79,7 +79,11 @@ async function stubAll(page: Page, opts: { account?: string; periodRanges?: type
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ heroImage: '' }),
+      // Stage 4c: sc-hero now also returns viewerIsScAccess (DB-backed
+      // via isScAccessDb). page.js gates Coming Soon on this flag;
+      // the stubbed test user must land as granted or the matrix
+      // never reaches .sc-ribbon.
+      body: JSON.stringify({ heroImage: '', viewerIsScAccess: true }),
     });
   });
 
@@ -166,6 +170,14 @@ async function stubAll(page: Page, opts: { account?: string; periodRanges?: type
           },
         ],
         overrides: [],
+        // Stage 4c: sc-load now carries three viewer flags computed
+        // server-side via isScAdminDb / isScLockOverrideDb. The matrix
+        // only reads them indirectly (ServiceCalendar.isAdmin and
+        // PeriodWorkspace.isOverrideUser), but keep the stub shape in
+        // sync with the server so a regression there surfaces here.
+        viewerCanEditPastPeriods: true,
+        viewerIsScAdmin:          true,
+        viewerIsLockOverride:     true,
         accounts: [
           { key: MLB_ACCOUNT, category: 'MLB' },
           { key: PDC_ACCOUNT, category: 'PDC' },
