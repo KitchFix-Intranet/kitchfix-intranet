@@ -17,6 +17,9 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 // V-role-gates - OPS_LEADERSHIP_EMAILS retired here; server decides.
 import { addDaysISO } from "@/lib/kpi/dateResolve";
+// Kevin ruling 2026-10-13 (V-LOADER). Unified page-level loader; replaces
+// the local BoardSkeleton function + the .kpi-board-loading dim class.
+import KpiLoader from "../components/KpiLoader";
 import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine, standWindow } from "./lib/formatting";
 import { computeStaleness } from "@/lib/labor/staleness";
 import { deriveClientAccount, shouldRestoreLastAccount, shouldAutoEnableSalary, shouldRenderLandingBridgeLoading } from "@/lib/kpi/previewAccess";
@@ -934,8 +937,9 @@ export default function KpiLaborPage() {
       {/* V25-15 - board stays MOUNTED whenever we have data, regardless
           of loadState. During a warm refetch (loadState === "loading"
           with previous data) it renders at 0.45 opacity via
-          `.kpi-board-loading`. It only unmounts on genuine cold start
-          (no data ever), where the skeleton below takes over.
+          `.kpi-loader-dim` (Kevin ruling 2026-10-13, V-LOADER).
+          It only unmounts on genuine cold start (no data ever), where
+          the <KpiLoader /> cold branch below takes over.
 
           Labor empty-state fix (Kevin 2026-09-07). Gate rebound from
           actuals row count to board.applies. The prior condition
@@ -947,10 +951,16 @@ export default function KpiLaborPage() {
           has a labor budget and can be compared; that is the honest
           condition for rendering the panel. */}
       {!inHomestandView && !isSalaried && data?.board?.applies === true && (
+        /* Kevin ruling 2026-10-13 (V-LOADER). Warm-refetch wrapper. The
+           board dims via .kpi-loader-dim; <KpiLoader overlay /> floats
+           above inside the .kpi-loader-wrap positioning context. The
+           hasEverRenderedRef gate distinguishes warm (overlay fires)
+           from cold (handled by the <KpiLoader /> branch above). */
+        <div className="kpi-loader-wrap">
         <div
           ref={boardRef}
           tabIndex={-1}
-          className={`kpi-board ${loadState === "loading" ? "kpi-board-loading" : ""}`}
+          className={`kpi-board ${loadState === "loading" && hasEverRenderedRef.current ? "kpi-loader-dim" : ""}`}
           style={{ outline: "none" }}
           aria-busy={loadState === "loading" ? "true" : undefined}
         >
@@ -965,7 +975,7 @@ export default function KpiLaborPage() {
                    until the overview + purchasing aux fetch lands -
                    no second loader between skeleton and table. */
                 (!cpOverview || !cpPurch) && !cpAuxError ? (
-                  <BoardSkeleton />
+                  <KpiLoader />
                 ) : (
                   <>
                     <CurrentPeriodTable
@@ -1015,6 +1025,8 @@ export default function KpiLaborPage() {
               )}
             </>
           )}
+        </div>
+          {loadState === "loading" && hasEverRenderedRef.current && <KpiLoader overlay />}
         </div>
       )}
 
@@ -1082,10 +1094,11 @@ export default function KpiLaborPage() {
            homestand context. */
         <DayStrip data={data} todayISO={today} />
       ) : loadState === "loading" && !hasEverRenderedRef.current ? (
-        /* V25-16 - COLD skeleton mirrors the real layout so the shape
-           of what is coming is promised: spend card + four signal
-           cards + numbers strip + six table rows. */
-        <BoardSkeleton />
+        /* Kevin ruling 2026-10-13 (V-LOADER). Unified cold loader
+           replaces the shape-mimicking skeleton. The dedicated
+           BoardSkeleton function (previously defined at the bottom of
+           this file) is deleted alongside this swap. */
+        <KpiLoader />
       ) : loadState === "loading" ? (
         /* V25-15 warm nav: board above is opacity 0.45; render nothing
            here (the previous board and table hold the layout height). */
@@ -1160,7 +1173,7 @@ export default function KpiLaborPage() {
           hours + totals table sits below the CP surface; NP still
           suppresses it (nothing has been worked yet). */}
       {!inHomestandView && !isSalaried && !npGateActive && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
-        <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
+        <div className={loadState === "loading" ? "kpi-loader-dim" : ""}>
         {/* PR-B (owner ruling 2026-08-24) - on portfolio views (ALL /
             EAST / WEST), hide the worker filter and the Names | Numbers
             toggle. Both are per-site controls; on an aggregate they
@@ -1386,37 +1399,10 @@ export default function KpiLaborPage() {
   );
 }
 
-// V25-16 - COLD skeleton mirrors the actual board layout so the shape
-// of the incoming content is promised: a spend-card block, four
-// signal-card blocks, a numbers-strip block, six table rows, each at
-// its real height. Only renders when the board has NEVER rendered in
-// this session (first paint). Warm nav keeps the previous board.
-function BoardSkeleton() {
-  // V40 FIX 4 - V35 shape: two top cards (StoryBlock + comparison
-  // companion), four signal cards, details strip, numbers header
-  // above the table, six table rows. Acceptance: skeleton height
-  // within 40px of the mounted board at 1180/1280/1440.
-  return (
-    <div className="kpi-board kpi-board-skel" role="status" aria-live="polite" aria-busy="true">
-      <span className="sr-only">Loading dashboard</span>
-      <div className="kpi-skel kpi-skel-spend" />
-      <div className="kpi-skel kpi-skel-companion" />
-      <div className="kpi-skel-sigs">
-        <div className="kpi-skel kpi-skel-sig" />
-        <div className="kpi-skel kpi-skel-sig" />
-        <div className="kpi-skel kpi-skel-sig" />
-        <div className="kpi-skel kpi-skel-sig" />
-      </div>
-      <div className="kpi-skel kpi-skel-det" />
-      <div className="kpi-skel kpi-skel-nums" />
-      <div className="kpi-skel-tbl">
-        {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="kpi-skel kpi-skel-row" />
-        ))}
-      </div>
-    </div>
-  );
-}
+// V25-16 BoardSkeleton retired (Kevin ruling 2026-10-13, V-LOADER).
+// Shape-mimicking skeleton replaced by the unified <KpiLoader /> at the
+// two call sites above. Supporting CSS (kpi-board-skel / kpi-skel-*)
+// deleted in the same PR after a repo-wide reference check.
 
 // SYSTEM status strip (V7-19). Health block: is the pipeline working.
 // One 22px row + optional Salary state row. Value classes:

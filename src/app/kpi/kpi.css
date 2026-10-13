@@ -1874,60 +1874,15 @@
   gap: var(--kpi-sp-3);
   margin-bottom: var(--kpi-sp-3);
 }
-/* V25-15 - warm nav dims the existing board to 0.45 while the next
-   fetch is in flight. The `.kpi-board-loading` class is applied by
-   page.js on the board wrapper AND on the table wrapper so both
-   dim together. Layout is preserved (V25-13). */
-.kpi-board-loading {
-  opacity: 0.45;
-  pointer-events: none;
-  transition: opacity 0.18s ease-out;
-}
-
-/* V25-16 - COLD skeleton mirrors the real board layout. Each block
-   sits at the real height so first paint promises the shape of the
-   coming content. V25-17 - respects prefers-reduced-motion: the
-   shimmer keyframe animation is suppressed in favour of a static tint. */
-.kpi-board-skel { gap: var(--kpi-sp-3); }
-.kpi-skel {
-  background: linear-gradient(90deg, var(--n-100) 0%, var(--n-200) 50%, var(--n-100) 100%);
-  background-size: 200% 100%;
-  border-radius: var(--rad-10);
-  border: 1px solid var(--n-200);
-  animation: kpiSkelShimmer 1.4s ease-in-out infinite;
-}
-.kpi-skel-spend { height: calc(220px * var(--kf-scale)); }
-/* V40 FIX 4 - companion top card (ComparisonStrip mirror) so the
-   skeleton reflects the V35 two-top-cards shape. Numbers header sits
-   above the six row skeletons to mirror WeekTable's THead. */
-.kpi-skel-companion { height: calc(60px * var(--kf-scale)); }
-.kpi-skel-nums { height: calc(40px * var(--kf-scale)); }
-.kpi-skel-sigs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--kpi-sp-4);
-}
-.kpi-skel-sig { height: calc(180px * var(--kf-scale)); }
-.kpi-skel-det { height: calc(52px * var(--kf-scale)); }
-.kpi-skel-tbl { display: flex; flex-direction: column; gap: var(--kpi-sp-1); }
-.kpi-skel-row { height: var(--kpi-row-h); border-radius: var(--rad-6); }
-
-@keyframes kpiSkelShimmer {
-  0%   { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .kpi-skel {
-    animation: none;
-    background: var(--n-100);
-  }
-}
-@media (max-width: 1279px) {
-  .kpi-skel-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 767px) {
-  .kpi-skel-sigs { grid-template-columns: 1fr; }
-}
+/* V25-15 / V25-16 board-skeleton CSS retired - Kevin ruling 2026-10-13
+   (V-LOADER). Replaced by .kpi-loader-* at the end of this file. The
+   dead block carried .kpi-board-loading (warm dim), .kpi-board-skel
+   (cold shape wrapper), a second .kpi-skel definition (overriding the
+   live one at line 485), .kpi-skel-spend / -companion / -nums / -sigs /
+   -sig / -det / -tbl / -row, the kpiSkelShimmer keyframe (NOT the live
+   kpi-skel-shimmer at line 491), and the sigs responsive breakpoints.
+   The live .kpi-skel / .kpi-skel-wrap at lines 484-496 are preserved -
+   StateBoxes and HomestandBoard still use them. */
 
 /* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad}.
    V21-5: the pill relocates to the spend card header (was the retired
@@ -5035,4 +4990,89 @@
   font-variant-numeric: var(--num-tabular);
   color: var(--n-900);
   white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------
+   V-LOADER  Unified loading indicator
+   --------------------------------------------------------------- */
+
+/* Standalone mode - replaces board area on cold load */
+.kpi-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kpi-sp-3);
+  min-height: calc(320px * var(--kf-scale));
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--rad-10);
+  padding: var(--kpi-sp-6);
+}
+
+/* Spinning ring */
+.kpi-loader-ring {
+  width: calc(32px * var(--kf-scale));
+  height: calc(32px * var(--kf-scale));
+  border: 3px solid var(--n-200);
+  border-top-color: var(--navy-700);
+  border-radius: var(--rad-circle);
+  animation: kpi-loader-spin 0.9s linear infinite;
+}
+
+@keyframes kpi-loader-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Message text */
+.kpi-loader-msg {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--kpi-t-body);
+  font-weight: 500;
+}
+
+/* Overlay wrapper - parent applies this to create positioning context */
+.kpi-loader-wrap {
+  position: relative;
+}
+
+/* Dim layer - parent applies this to board content during warm refetch */
+.kpi-loader-dim {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity var(--duration-base) var(--ease-standard);
+}
+
+/* Overlay mode - floats over dimmed content */
+.kpi-loader-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Floating card in overlay mode */
+.kpi-loader-float {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--kpi-sp-3);
+  padding: var(--kpi-sp-5) var(--kpi-sp-6);
+  background: var(--surface-card);
+  border-radius: var(--rad-10);
+  box-shadow: var(--sh-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi-loader-ring {
+    animation: none;
+    border-color: var(--navy-700);
+  }
+  .kpi-loader-dim {
+    transition: none;
+  }
 }
