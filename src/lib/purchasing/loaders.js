@@ -700,12 +700,15 @@ export async function loadPending(supa, { members, start, end }) {
 
 export async function fetchMembers(supa, account) {
   if (account === "ALL") {
-    const q = await supa.from("accounts").select("team_key").neq("team_key", "CORP").order("team_key");
+    // Kevin ruling 2026-10-06: retired accounts (active=false, today
+    // CHI - IL + CIN - FL) are not portfolio members. .neq (not .eq
+    // true) so a new account inserted without the flag does not vanish.
+    const q = await supa.from("accounts").select("team_key").neq("team_key", "CORP").neq("active", false).order("team_key");
     return q.error ? { error: q.error } : { members: (q.data || []).map(r => r.team_key) };
   }
   if (account === "EAST" || account === "WEST") {
     const regionValue = account === "EAST" ? "East" : "West";
-    const q = await supa.from("accounts").select("team_key").neq("team_key", "CORP").eq("region", regionValue).order("team_key");
+    const q = await supa.from("accounts").select("team_key").neq("team_key", "CORP").neq("active", false).eq("region", regionValue).order("team_key");
     return q.error ? { error: q.error } : { members: (q.data || []).map(r => r.team_key) };
   }
   return { members: [account] };
@@ -800,6 +803,7 @@ export async function loadAccountsDirectory(supa) {
   const q = await supa.from("accounts")
     .select("team_key, region, name, city, state")
     .neq("team_key", "CORP")
+    .neq("active", false)
     .order("team_key");
   if (q.error) return { error: q.error };
   const salaried = new Set(["CIN - KY", "TBJ - NY"]);
@@ -1525,7 +1529,7 @@ export async function loadCompliance(supa, { members, start, end, today }) {
     // self-contained and its assertions don't depend on parallel-load
     // ordering. loadAccountsDirectory also fetches these fields for the
     // rail; the duplication is worth the isolation.
-    const arResp = await supa.from("accounts").select("team_key, region").neq("team_key", "CORP");
+    const arResp = await supa.from("accounts").select("team_key, region").neq("team_key", "CORP").neq("active", false);
     if (arResp.error) return { error: arResp.error };
     const regionByKey = new Map();
     for (const row of arResp.data || []) regionByKey.set(row.team_key, row.region);
