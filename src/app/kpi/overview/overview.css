@@ -703,76 +703,12 @@
   vertical-align: -1px;
 }
 
-/* ── Drill buttons (element 7) ───────────────────────────────────── */
-.kpi-app .kpi-ov-drills {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--kpi-sp-3);
-  margin-top: var(--kpi-sp-3);
-}
-@media (max-width: 768px) {
-  .kpi-app .kpi-ov-drills { grid-template-columns: 1fr; }
-}
-.kpi-app .kpi-ov-dr {
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-card-r);
-  padding: var(--kpi-sp-3) var(--kpi-sp-4);
-  cursor: pointer;
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-.kpi-app .kpi-ov-dr:hover {
-  border-color: var(--navy-700);
-  background: var(--navy-50);
-}
-.kpi-app .kpi-ov-dr-lab { border-left: 3px solid var(--navy-700); }
-.kpi-app .kpi-ov-dr-pur { border-left: 3px solid var(--green-600); }
-.kpi-app .kpi-ov-dr-top {
-  display: flex;
-  align-items: center;
-  gap: var(--kpi-sp-2);
-}
-.kpi-app .kpi-ov-dr-t1 {
-  font-size: var(--kpi-t-body);
-  font-weight: 800;
-}
-.kpi-app .kpi-ov-dr-go {
-  margin-left: auto;
-  color: var(--navy-700);
-  font-weight: 800;
-  font-size: var(--kpi-t-medium);
-}
-.kpi-app .kpi-ov-dr-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--kpi-sp-2);
-  margin-top: var(--kpi-sp-2);
-  padding-top: var(--kpi-sp-2);
-  /* Decorative divider, not an info-carrying dashed mark - solid at
-     --n-300 stays inside the graphical-axis rule (S3): dashed marks
-     that carry info must clear 3.0:1; a solid divider between two
-     content stripes carries no info and clears the rule by not being
-     the class the rule governs. */
-  border-top: 1px solid var(--n-300);
-}
-.kpi-app .kpi-ov-dr-k {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-dr-v {
-  font-size: var(--kpi-t-body);
-  font-weight: 700;
-  margin-top: 2px;
-}
-.kpi-app .kpi-ov-dr-v small {
-  font-weight: 500;
-  color: var(--n-600);
-}
+/* Drill buttons (element 7) retired - Kevin ruling 2026-10-13 (cleanup).
+   The .kpi-ov-drills grid + .kpi-ov-dr card variants + .kpi-ov-dr-*
+   sub-selectors shipped under element 7 of the original Overview spec
+   and were later superseded by the two-column split (RevenueLines /
+   CostLines) + the P&L fold. Zero JSX refs across src/ at retirement.
+   See git history for the full ruleset if the pattern comes back. */
 
 /* ── Fold + statement (element 8) ────────────────────────────────── */
 .kpi-app .kpi-ov-fold {
@@ -1610,38 +1546,12 @@
 @media (max-width: 1024px) {
   .kpi-app .kpi-ov-wil { grid-template-columns: 1fr; }
 }
-.kpi-app .kpi-ov-split {
-  display: flex;
-  align-items: center;
-  gap: var(--kpi-sp-4);
-}
-.kpi-app .kpi-ov-split-lead {
-  flex: none;
-}
-.kpi-app .kpi-ov-split-stats {
-  margin-left: auto;
-  display: flex;
-  gap: var(--kpi-sp-5, 22px);
-  text-align: right;
-}
-.kpi-app .kpi-ov-split-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.kpi-app .kpi-ov-split-k {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-split-v {
-  font-size: var(--kpi-t-body);
-  font-weight: 800;
-  color: var(--n-900);
-}
-.kpi-app .kpi-ov-split-suffix { font-weight: 600; color: var(--n-600); }
+/* Original flex .kpi-ov-split rule + its inner children (-lead / -stats /
+   -stat / -k / -v / -suffix) retired - Kevin ruling 2026-10-13 (cleanup).
+   The grid redefinition at ~line 1945 (search for ".kpi-ov-split" below)
+   fully re-declares display, grid-template-columns, gap, align-items,
+   margin-top, so the flex version was dead by cascade. The six inner-
+   child classes had zero JSX refs across src/. */
 
 /* Kevin CC prompt 2026-09-10 item 3: .kpi-ov-tgt-label ("budget
    $X / wk" strip) retired with the dashed target line it named.
@@ -1847,31 +1757,10 @@
   box-shadow: inset 3px 0 0 var(--amber-500);
 }
 
-/* ── Rev-source toggle (corporate posture) - lives in Shell's
-     revSourceToggle slot ────────────────────────────────────────── */
-.kpi-app .kpi-ov-revtog {
-  display: flex;
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-ctl-r);
-  overflow: hidden;
-}
-.kpi-app .kpi-ov-revtog button {
-  font-size: var(--kpi-t-meta);
-  font-weight: 700;
-  padding: var(--kpi-sp-2) var(--kpi-sp-3);
-  color: var(--n-700);
-  background: var(--n-0);
-  border: none;
-  cursor: pointer;
-}
-.kpi-app .kpi-ov-revtog button.on {
-  background: var(--navy-700);
-  color: var(--n-0);
-}
-.kpi-app .kpi-ov-revtog button.ona {
-  background: var(--amber-600);
-  color: var(--n-0);
-}
+/* Rev-source toggle (.kpi-ov-revtog family) retired - R-40 (2026-09-01)
+   dropped the toggle feature end-to-end; Kevin ruling 2026-10-13
+   (cleanup) deleted the CSS. The Shell's revSourceToggle slot is also
+   gone. Zero JSX refs across src/ at retirement. */
 
 /* ── By-account grid (corporate portfolio) ───────────────────────── */
 .kpi-app .kpi-ov-grid {

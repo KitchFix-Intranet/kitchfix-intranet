@@ -520,7 +520,8 @@
   border-top: 5px solid var(--n-900);
   transform: translateX(-4px);
 }
-.kpi-app .kpi-ov-cp-good { color: var(--green-600, #008330); }
+/* .kpi-ov-cp-good retired - Kevin ruling 2026-10-13 (cleanup).
+   Zero JSX refs across src/; sibling .kpi-ov-cp-over below is still live. */
 .kpi-app .kpi-ov-cp-over { color: var(--red-600, #B9000C); }
 .kpi-app .kpi-ov-cp-mute { color: var(--n-600); }
 .kpi-app .kpi-ov-cp-mute-strong { color: var(--n-700, #475569); }
@@ -654,7 +655,8 @@
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-dlt-trim { color: var(--red-600, #B9000C); }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-dlt-cush { color: var(--green-600, #008330); }
-.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-dlt-over { color: var(--red-600, #B9000C); }
+/* .kpi-ov-cp-dlt-over retired - Kevin ruling 2026-10-13 (cleanup).
+   Zero JSX refs across src/. */
 
 /* ── ROLLING · summary card (Kevin § B "The summary card") ─────── */
 /* Sits below the table, above Needs review today. One column per

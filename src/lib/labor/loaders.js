@@ -185,6 +185,109 @@ export async function resolveMemberBudget(supa, accountKey, fiscalYear = 2026) {
   return { data: out };
 }
 
+/**
+ * Bulk version of resolveMemberBudget. One query against kpi_budgets with
+ * .in(account_key, members), one against sc_labor_budgets with the same
+ * filter - 2 queries instead of 2 * N. Portfolio loads with 11 members
+ * dropped from 22 queries to 2 per route call (ALL fires in both the
+ * overview resolver and the labor route, so the per-page saving is x2).
+ *
+ * Returns a Map<accountKey, { data: [...] } | { error, scope }> matching
+ * the singular function's shape per member. Members with no rows in
+ * either table still get an entry with data: [] - absence is a valid
+ * answer and the downstream for-loop expects every member present.
+ */
+export async function resolveMemberBudgets(supa, members, fiscalYear = 2026) {
+  const out = new Map();
+  if (!Array.isArray(members) || members.length === 0) return out;
+
+  const fyBounds = fiscalYear === 2026
+    ? { start: "2025-12-29", end: "2026-12-27" }
+    : null;
+
+  const [pnlQ, scQ] = await Promise.all([
+    supa
+      .from("kpi_budgets")
+      .select("account_key, period_no, amount")
+      .in("account_key", members)
+      .eq("line_code", "3100.1")
+      .eq("fiscal_year", fiscalYear),
+    fyBounds
+      ? supa
+          .from("sc_labor_budgets")
+          .select("account_key, period, hourly_budget, reason")
+          .in("account_key", members)
+          .is("superseded_at", null)
+          .gte("effective_from", fyBounds.start)
+          .lte("effective_from", fyBounds.end)
+      : supa
+          .from("sc_labor_budgets")
+          .select("account_key, period, hourly_budget, reason")
+          .in("account_key", members)
+          .is("superseded_at", null)
+          .eq("period", "__NO_MATCH__"),
+  ]);
+
+  if (pnlQ.error) {
+    for (const m of members) out.set(m, { error: pnlQ.error, scope: "kpi_budgets_3100_1" });
+    return out;
+  }
+  if (scQ.error) {
+    for (const m of members) out.set(m, { error: scQ.error, scope: "sc_labor_budgets" });
+    return out;
+  }
+
+  // Partition both result sets by account_key.
+  const pnlByAcct = new Map();
+  for (const r of (pnlQ.data || [])) {
+    const a = String(r.account_key);
+    if (!pnlByAcct.has(a)) pnlByAcct.set(a, new Map());
+    pnlByAcct.get(a).set(Number(r.period_no), Number(r.amount));
+  }
+  const scByAcct = new Map();
+  for (const r of (scQ.data || [])) {
+    const a = String(r.account_key);
+    if (!scByAcct.has(a)) scByAcct.set(a, new Map());
+    scByAcct.get(a).set(parseInt(String(r.period), 10), {
+      amount: Number(r.hourly_budget),
+      reason: r.reason || null,
+    });
+  }
+
+  for (const member of members) {
+    const isRevenueFlex = V37_REVENUE_FLEX_ACCOUNTS.has(member);
+    const pnlByPeriod = pnlByAcct.get(member) || new Map();
+    const scByPeriod = scByAcct.get(member) || new Map();
+    const periods = [];
+    for (let p = 1; p <= 13; p += 1) {
+      const sc = scByPeriod.get(p);
+      const pnl = pnlByPeriod.get(p);
+      if (sc != null && Number.isFinite(sc.amount)) {
+        const pnlDiffers = pnl != null && Math.abs(pnl - sc.amount) > 0.01;
+        periods.push({
+          period_no: p,
+          amount: Math.round(sc.amount * 100) / 100,
+          source: "supersede",
+          basis: isRevenueFlex ? "envelope" : "pnl",
+          superseded: pnlDiffers,
+          ...(sc.reason ? { reason: sc.reason } : {}),
+          ...(pnlDiffers ? { pnl_amount: Math.round(pnl * 100) / 100 } : {}),
+        });
+      } else if (pnl != null && Number.isFinite(pnl)) {
+        periods.push({
+          period_no: p,
+          amount: Math.round(pnl * 100) / 100,
+          source: "pnl",
+          basis: "pnl",
+          superseded: false,
+        });
+      }
+    }
+    out.set(member, { data: periods });
+  }
+  return out;
+}
+
 // V32-12..V32-15 - prior-period comparison payload for the context
 // strip. Renders only when the range is a SINGLE fiscal period
 // (rangeSelection.kind === "period") with a prior period in FY2026.

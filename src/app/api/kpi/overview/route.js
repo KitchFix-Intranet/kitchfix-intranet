@@ -83,6 +83,13 @@ function parseRange(searchParams, today) {
   return { snap: snapRange(startParam, endParam, today) };
 }
 
+// Kevin ruling 2026-10-13 (KPI perf). Vercel's default serverless function
+// timeout is low enough that aggregate ALL / EAST / WEST views return
+// opaque 500s before the resolver can finish. Raise the ceiling to 30s so
+// slow aggregates error out with a meaningful signal rather than a cold
+// cutoff. Client-side already enforces a 15s abort for user-facing speed.
+export const maxDuration = 30;
+
 export async function GET(request) {
   // TEST_MODE double-gate mirrors labor + purchasing routes.
   const testModeBypass = process.env.TEST_MODE === "true" && process.env.VERCEL !== "1";

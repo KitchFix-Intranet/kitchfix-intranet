@@ -298,7 +298,10 @@ function foldHeaderSummary(payload) {
   return `${n} card ${n === 1 ? "charge" : "charges"} awaiting coding · ${amt}`;
 }
 
-export default function PurchasingFold({ payload, error, account, start, end, today, open, onToggle, billbackPeriod }) {
+// Kevin ruling 2026-10-13 (cleanup). The `account` prop was accepted but
+// never read inside this component. Callers in page.js stopped passing
+// it in the same PR. Dropped from the signature.
+export default function PurchasingFold({ payload, error, start, end, today, open, onToggle, billbackPeriod }) {
   const actuals = Array.isArray(payload?.actuals) ? payload.actuals : null;
   const headerSummary = foldHeaderSummary(payload);
   // Kevin ruling 2026-10-12. Purchasing weeks collapse by default; a chevron

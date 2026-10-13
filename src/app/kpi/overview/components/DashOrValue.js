@@ -37,7 +37,9 @@ export default function DashOrValue({
   reported = true, // false = missing
   flags = [],
   state,           // explicit override
-  showBudgetHint = false,
+  // Kevin ruling 2026-10-13 (cleanup). showBudgetHint was destructured
+  // with a default but never read anywhere in the component body or in
+  // any caller's render. Removed.
   budget,
 }) {
   const s = state || resolveDashState({ value, reported, flags, budget });

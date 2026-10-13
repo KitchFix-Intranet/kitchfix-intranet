@@ -85,7 +85,10 @@ export function pctOf(a, b) {
 //
 // Under-$1 gap renders as "on budget" (§5.8) - a distinct semantic
 // state, not "0.0 under".
-export function gapDollars(delta, goodWord, badWord) {
+// Kevin ruling 2026-10-13 (cleanup). Un-exported; CostLines redefines its
+// own local gapDollars, so this module's version has no cross-file
+// consumers. Kept in-file for use by the axis-specific wrappers below.
+function gapDollars(delta, goodWord, badWord) {
   if (delta == null || Number.isNaN(delta)) return null;
   const d = Number(delta);
   if (Math.abs(d) < 1) return "on budget";
@@ -100,7 +103,9 @@ export function gapDollars(delta, goodWord, badWord) {
 // R-114 (Kevin 2026-09-17). Two decimals to match `formatPct` -
 // gap and pct render alongside on the same card; a mixed precision
 // makes one figure read as approximate.
-export function gapPoints(deltaPct, goodWord, badWord) {
+// Kevin ruling 2026-10-13 (cleanup). Un-exported; only used by the
+// axis-specific wrappers below in this file.
+function gapPoints(deltaPct, goodWord, badWord) {
   if (deltaPct == null || Number.isNaN(deltaPct)) return null;
   const d = Number(deltaPct);
   if (Math.abs(d) < 0.005) return "on target";

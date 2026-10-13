@@ -22,7 +22,10 @@ export function addDaysISO(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
-export function resolvePreset(preset, opts = {}) {
+// Kevin ruling 2026-10-13 (cleanup). Un-exported; RangeMenu redefines its
+// own local resolvePreset so this module's version has no cross-file
+// consumers. Kept in-file for use by resolveViewDates below.
+function resolvePreset(preset, opts = {}) {
   const today = opts.today || new Date().toISOString().slice(0, 10);
   const periods = opts.accountPeriods || [];
   switch (preset) {
@@ -44,7 +47,8 @@ export function resolvePreset(preset, opts = {}) {
 // Given a view row and the account's periods, produce the concrete
 // resolved range. Returns null on unresolvable preset (e.g. no periods
 // data or invalid preset name).
-export function resolveViewDates(view, opts = {}) {
+// Kevin ruling 2026-10-13 (cleanup). Un-exported; no cross-file consumers.
+function resolveViewDates(view, opts = {}) {
   if (!view) return null;
   if (view.date_mode === "absolute") {
     return { start: view.date_from, end: view.date_to };
