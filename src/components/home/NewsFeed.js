@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+// Stage 4d: OPS_LEADERSHIP_EMAILS import retired. The news admin gate
+// now reads `viewerIsNewsAdmin` from the news-bootstrap API response,
+// which the server computes via isOpsLeadershipDb against the people table.
 import NewsAdmin from "@/components/home/NewsAdmin";
 
 const FILTERS = [
@@ -162,10 +164,14 @@ export default function NewsFeed({ session, refreshKey }) {
   const [readingPost, setReadingPost] = useState(null);
   const [reactionCounts, setReactionCounts] = useState({});
   const [reactorNames, setReactorNames]     = useState({});
+  // Stage 4d: news admin flag derived from news-bootstrap response
+  // (server-side isOpsLeadershipDb), not the sync hardcoded list. Falsy
+  // until the fetch returns so the Manage button does not flash for
+  // non-admins during initial load.
+  const [isNewsAdmin, setIsNewsAdmin] = useState(false);
   const localEditsRef = useRef({});
 
   const userEmail = session?.user?.email || "";
-  const isNewsAdmin = OPS_LEADERSHIP_EMAILS.includes(userEmail);
 
   // ── Fetch news (initial + silent refresh) ──
   const loadNews = useCallback(async (silent = false) => {
@@ -176,6 +182,7 @@ export default function NewsFeed({ session, refreshKey }) {
       setPosts(data.posts || []);
       setReactionCounts(data.reactionCounts || {});
       setReactorNames(data.reactorNames || {});
+      setIsNewsAdmin(!!data.viewerIsNewsAdmin);
 
       const serverIx = {};
       (data.interactions || []).forEach((ix) => { serverIx[ix.postId] = ix; });

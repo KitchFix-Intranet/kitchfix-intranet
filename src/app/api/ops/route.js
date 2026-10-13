@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { readSheetSA, appendRowSA, SHEET_IDS } from "@/lib/sheets";
 import { opsNotify } from "@/lib/opsUtils";
-import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
+import { isOpsLeadershipDb } from "@/lib/admin";
 import {
   handleInvoiceGet,
   handleInvoicePost,
