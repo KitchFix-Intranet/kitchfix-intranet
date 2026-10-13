@@ -1130,52 +1130,12 @@
   line-height: 1.55;
 }
 
-/* ── Loading + ghost overlay (Phase E) ───────────────────────────── */
-.kpi-app .kpi-ov-skel {
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-card-r);
-  padding: var(--kpi-sp-4);
-  min-height: calc(120px * var(--kf-scale));
-}
-.kpi-app .kpi-ov-skel-bar {
-  background: var(--n-200);
-  border-radius: 6px;
-  height: calc(14px * var(--kf-scale));
-  margin-bottom: var(--kpi-sp-2);
-}
-.kpi-app .kpi-ov-skel-hero {
-  height: calc(30px * var(--kf-scale));
-  width: 60%;
-  margin-bottom: var(--kpi-sp-3);
-}
-.kpi-app .kpi-ov-ghost {
-  opacity: 0.55;
-  pointer-events: none;
-}
-.kpi-app .kpi-ov-refresh-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--kpi-sp-2);
-  padding: 3px var(--kpi-sp-2);
-  border-radius: 999px;
-  background: var(--amber-50);
-  color: var(--amber-600);
-  font-size: var(--kpi-t-meta);
-  font-weight: 700;
-  margin-left: var(--kpi-sp-2);
-}
-.kpi-app .kpi-ov-refresh-chip .kpi-ov-refresh-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--amber-600);
-  animation: kpi-ov-pulse 1.2s ease-in-out infinite;
-}
-@keyframes kpi-ov-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
-}
+/* Loading + ghost overlay (Phase E) retired - Kevin ruling 2026-10-13
+   (V-LOADER). .kpi-ov-skel / -bar / -hero (overview card skeletons),
+   .kpi-ov-ghost (warm 0.55 dim), .kpi-ov-refresh-chip + -refresh-dot
+   (amber "Refreshing..." pill), and @keyframes kpi-ov-pulse all retired.
+   Replaced by .kpi-loader-dim + <KpiLoader overlay /> at the end of
+   kpi.css. */
 
 /* ═════════════════════════════════════════════════════════════════
  * PR 2 polish additions (2026-09-01)
@@ -2110,91 +2070,12 @@
   z-index: 4;
 }
 
-/* ── Item 20b: skeleton matching two-column layout ──────────────── */
-.kpi-app .kpi-ov-skel-board {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.kpi-app .kpi-ov-skel-status {
-  display: flex;
-  height: 44px;
-  border-radius: var(--kpi-card-r);
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  overflow: hidden;
-}
-.kpi-app .kpi-ov-skel-status-state {
-  width: 130px;
-  background: var(--n-200);
-}
-.kpi-app .kpi-ov-skel-status-say {
-  flex: 1;
-  align-self: center;
-  margin: 0 16px;
-  height: 12px;
-  background: var(--n-100);
-  border-radius: 4px;
-}
-.kpi-app .kpi-ov-skel-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-.kpi-app .kpi-ov-skel-card {
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-card-r);
-  padding: 14px 16px;
-  min-height: 108px;
-}
-.kpi-app .kpi-ov-skel-rev { border-top: 3px solid var(--n-200); }
-.kpi-app .kpi-ov-skel-cogs { border-top: 3px solid var(--n-200); }
-.kpi-app .kpi-ov-skel-gm { border-top: 3px solid var(--n-200); }
-.kpi-app .kpi-ov-skel-chart { min-height: 190px; }
-.kpi-app .kpi-ov-skel-costlines { min-height: 220px; }
-.kpi-app .kpi-ov-skel-pace { min-height: 130px; }
-.kpi-app .kpi-ov-skel-revlines { min-height: 150px; }
-.kpi-app .kpi-ov-skel-tracked { min-height: 130px; }
-.kpi-app .kpi-ov-skel-split {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: 14px;
-  align-items: start;
-}
-@media (max-width: 1199px) {
-  .kpi-app .kpi-ov-skel-split { grid-template-columns: 1fr; }
-  .kpi-app .kpi-ov-skel-cards { grid-template-columns: 1fr; }
-}
-.kpi-app .kpi-ov-skel-col-left,
-.kpi-app .kpi-ov-skel-col-right {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.kpi-app .kpi-ov-skel-chart-bars {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  height: 90px;
-  margin-top: 14px;
-}
-.kpi-app .kpi-ov-skel-chart-bars div {
-  flex: 1;
-  background: var(--n-200);
-  border-radius: 3px 3px 0 0;
-}
-.kpi-app .kpi-ov-skel-chart-bars div:nth-child(1) { height: 70%; }
-.kpi-app .kpi-ov-skel-chart-bars div:nth-child(2) { height: 90%; }
-.kpi-app .kpi-ov-skel-chart-bars div:nth-child(3) { height: 80%; }
-.kpi-app .kpi-ov-skel-chart-bars div:nth-child(4) { height: 40%; }
-.kpi-app .kpi-ov-skel-fold {
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-card-r);
-  padding: 14px 16px;
-  min-height: 48px;
-}
+/* Item 20b two-column skeleton retired - Kevin ruling 2026-10-13
+   (V-LOADER). The .kpi-ov-skel-board / -status / -status-state /
+   -status-say / -cards / -card / -rev / -cogs / -gm / -chart /
+   -costlines / -pace / -revlines / -tracked / -split / -col-left /
+   -col-right / -chart-bars / -fold family plus its two responsive
+   breakpoints retired. Zero JS refs after the overview page swap. */
 
 /* ── Chart bars inset (per PR 2 polish, applies to period grain too) ── */
 .kpi-app .kpi-ov-bars-inset {

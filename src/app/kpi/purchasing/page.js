@@ -102,9 +102,12 @@ import { ManagementFeeCard } from "./components/ManagementFeeCard";
 // board. Pass-through boards skip the table (§2 - no COGS distinction
 // to check; the ReimbursableRow already carries the 13xx ledger).
 import { PurchasingTable } from "./components/PurchasingTable";
-// PR 5 - loading skeleton + failure card.
-import { SkeletonBoard } from "./components/SkeletonBoard";
+// PR 5 - failure card. Loading skeleton retired per Kevin ruling
+// 2026-10-13 (V-LOADER); the unified loader below replaces it. The
+// 150ms delayed-set below stays so cache-hit fetches do not flash the
+// loader for a frame.
 import { FailureCard } from "./components/FailureCard";
+import KpiLoader from "../components/KpiLoader";
 
 // Format ISO date -> "MM/DD" for chart week captions.
 // R13 P0-2 - per-unit elapsed fraction for a running WEEK.  Days
@@ -856,7 +859,7 @@ export default function KpiPurchasingPage() {
   // week_rail is).
   //
   // `closedPending` holds useCpTable true while cpLabor is loading
-  // on a fiscally-closed range, so the SkeletonBoard branch below
+  // on a fiscally-closed range, so the KpiLoader branch below
   // holds the paint - otherwise the old PeriodCard + WIG surface
   // would flash for the ~600ms of the aux fetch and swap to
   // CurrentPeriodTable. When cpLabor lands: laborUsable=true takes
@@ -1041,18 +1044,12 @@ export default function KpiPurchasingPage() {
 
   const boardContent = (() => {
     if (loadState === "loading" || loadState === "idle") {
-      // PR 5 - skeleton the actual layout after a 150ms delay to
-      // avoid a flash on very fast fetches. Pre-150ms: an accessible
-      // status row (screen-reader hears "Loading purchasing board")
-      // with no visual, which is quieter than the old "Loading ..."
-      // placeholder.
-      return showSkeleton ? (
-        <SkeletonBoard />
-      ) : (
-        <div className="kpi-p-board" role="status" aria-live="polite" aria-busy="true">
-          <span className="sr-only">Loading purchasing board</span>
-        </div>
-      );
+      // Kevin ruling 2026-10-13 (V-LOADER). Unified loader after the
+      // 150ms delay. Pre-150ms we render nothing - the KpiLoader has
+      // its own role="status" so the earlier pre-skeleton invisible
+      // status row is redundant and retired. The delay prevents a
+      // loader flash on cache-hit fetches.
+      return showSkeleton ? <KpiLoader /> : null;
     }
     if (loadState === "error") {
       // PR 5 - Check 6 gate. FailureCard uses REAL freshness (from
@@ -1327,7 +1324,7 @@ export default function KpiPurchasingPage() {
       // the overview + labor aux fetch lands - no second loader text
       // state between skeleton and table.
       if ((!cpOverview || !cpLabor) && !cpAuxError) {
-        return <SkeletonBoard />;
+        return <KpiLoader />;
       }
       // Kevin fix 2026-09-17 item 6: restore the spend list on CP.
       // Same shape as LP - Date · Vendor · GL · Bucket · Source ·

@@ -71,7 +71,7 @@ import CostLines from "./components/CostLines";
 import RevenueLines from "./components/RevenueLines";
 import PnlStatement from "./components/PnlStatement";
 import AlsoTracked from "./components/AlsoTracked";
-import SkeletonBoard from "./components/SkeletonBoard";
+import KpiLoader from "../components/KpiLoader";
 // R-109 · new Current period one-table view. Kevin ruling 2026-09-15:
 // on CP only, the three cards + week rail + cost-lines + P&L are all
 // replaced by a single table with review cards below. Other ranges
@@ -617,18 +617,13 @@ export default function KpiOverviewPage() {
   // period grid, so the span check alone would flash the wrong
   // skeleton then reflow. `urlEnd >= today` gates them out. When
   // data has landed, useCpTable is definitive and takes precedence.
-  const urlIsPeriodRange = (() => {
-    if (!urlStart || !urlEnd) return false;
-    const s = new Date(urlStart + "T00:00:00Z").getTime();
-    const e = new Date(urlEnd + "T00:00:00Z").getTime();
-    const days = (e - s) / 86400000;
-    return days > 0 && days < 60 && urlEnd >= today;
-  })();
-  const skelStateCold = skelIsPortfolio ? "portfolio" : (urlIsPeriodRange ? "cp" : "closed");
-  const skelStateKnownCp = skelIsPortfolio ? "portfolio" : "cp";
+  // Kevin ruling 2026-10-13 (V-LOADER). The three cold-skeleton shapes
+  // (portfolio, closed, cp) collapsed into one unified KpiLoader with no
+  // per-shape variant. The dead `skelStateCold` / `skelStateKnownCp` /
+  // `urlIsPeriodRange` computations retired alongside them.
 
   if (status === "loading" && !data) {
-    mainContent = <SkeletonBoard state={skelStateCold} />;
+    mainContent = <KpiLoader />;
   } else if (loadState === "auth") {
     mainContent = authError === "expired"
       ? <StateSessionExpired />
@@ -638,30 +633,24 @@ export default function KpiOverviewPage() {
   } else if (data?.locked) {
     mainContent = <LockedPanel />;
   } else if (loadState === "loading" && !data) {
-    mainContent = <SkeletonBoard state={skelStateCold} />;
+    mainContent = <KpiLoader />;
   } else if (!data || (!data.cards && !data.landing_account)) {
-    mainContent = <SkeletonBoard state={skelStateCold} />;
+    mainContent = <KpiLoader />;
   } else if (useCpTable && (!cpLabor || !cpPurch) && !cpEffectiveError) {
     // Kevin fix 2026-09-17 item 1: on CP or NP the CurrentPeriodTable
-    // depends on a second (labor+purchasing) fetch. Keep the board
-    // skeleton up until that lands - no second loader text state.
-    // Kevin R-128 Part 3 item 8 (2026-09-19): definitive CP/NP state
-    // here (data has period_state), so state="cp" is authoritative.
-    mainContent = <SkeletonBoard state={skelStateKnownCp} />;
+    // depends on a second (labor+purchasing) fetch. Keep the loader up
+    // until that lands - no second loader text state.
+    mainContent = <KpiLoader />;
   } else if (data && data.cards) {
     const rangeMeta = { ...data.range, period_state: data.period_state };
-    // Ghost the prior board at reduced opacity during warm refetch.
-    const wrapClass = loadState === "refetching" ? "kpi-ov-ghost" : "";
+    // Kevin ruling 2026-10-13 (V-LOADER). Warm refetch dims the board
+    // via .kpi-loader-dim and floats a <KpiLoader overlay /> above it.
+    // The dim + overlay siblings sit inside a .kpi-loader-wrap div that
+    // creates the positioning context.
+    const dimClass = loadState === "refetching" ? "kpi-loader-dim" : "";
     mainContent = (
-      <div className={wrapClass} data-kpi-ov="board">
-        {loadState === "refetching" && (
-          <div style={{ marginBottom: 12 }}>
-            <span className="kpi-ov-refresh-chip" data-kpi-ov="refresh-chip">
-              <span className="kpi-ov-refresh-dot" aria-hidden="true" />
-              Refreshing...
-            </span>
-          </div>
-        )}
+      <div className="kpi-loader-wrap">
+      <div className={dimClass} data-kpi-ov="board">
         {/* R-40 (2026-09-01): the Overview is one layout everywhere.
             Role governs access only - portfolio rail visibility, the
             salary control. It does not fork the board. Same account +
@@ -944,9 +933,11 @@ export default function KpiOverviewPage() {
           />
         )}
       </div>
+        {loadState === "refetching" && <KpiLoader overlay />}
+      </div>
     );
   } else {
-    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
+    mainContent = <KpiLoader />;
   }
 
   return (
