@@ -41,7 +41,7 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { auth } from "@/lib/auth";
-import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
+import { isOpsLeadershipDb } from "@/lib/admin";
 // KPI PREVIEW FENCE - single source of truth in roleGate.js. Sits in
 // FRONT of the OPS_LEADERSHIP_EMAILS check so a fenced caller cannot
 // pull labor data through the export route while the labor board is

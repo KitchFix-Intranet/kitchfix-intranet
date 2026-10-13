@@ -9,7 +9,7 @@
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
 import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
-import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
+import { isOpsLeadershipDb } from "@/lib/admin";
 import { fuzzyMatchVendor } from "@/lib/vendorMatching";
 import { CLAUDE_SONNET_MODEL } from "@/lib/anthropicModel";
 import {

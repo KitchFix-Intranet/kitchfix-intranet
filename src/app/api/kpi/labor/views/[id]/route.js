@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
+import { isOpsLeadershipDb } from "@/lib/admin";
 // KPI PREVIEW FENCE - single source of truth in roleGate.js. Sits in
 // FRONT of the OPS_LEADERSHIP_EMAILS check on both GET and PUT so a
 // fenced caller cannot read or update a saved-view record while the

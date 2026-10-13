@@ -11,7 +11,7 @@ import {
   getHeroImages,
   replaceHeroImages,
 } from "@/lib/dataStore";
-import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb, isSuperAdmin } from "@/lib/admin";
+import { isOpsLeadershipDb, isSuperAdmin } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 

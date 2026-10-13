@@ -3,7 +3,7 @@ import { readSheetSA, SHEET_IDS } from "@/lib/sheets";
 import { getNewsInteractions, upsertNewsInteraction, getSubmissions } from "@/lib/dataStore";
 import { createNewsPost, updateNewsPost, deleteNewsPost, readAllNewsPosts, enforceSinglePin } from "@/lib/dataStore/newsPosts";
 import { uploadNewsImage } from "@/lib/drive";
-import { OPS_LEADERSHIP_EMAILS, isOpsLeadershipDb } from "@/lib/admin";
+import { isOpsLeadershipDb } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
@@ -114,7 +114,10 @@ export async function GET(request) {
         console.warn("[Dashboard] reaction aggregation failed:", err?.message);
       }
 
-      return NextResponse.json({ posts, interactions, reactionCounts, reactorNames });
+      // Stage 4d: thread admin flag to client so NewsFeed can gate the
+      // Manage button without importing the hardcoded list.
+      const viewerIsNewsAdmin = await isOpsLeadershipDb(email);
+      return NextResponse.json({ posts, interactions, reactionCounts, reactorNames, viewerIsNewsAdmin });
     } catch (error) {
       console.error("[Dashboard] News bootstrap error:", error.message);
       return NextResponse.json({ posts: [], interactions: [], reactionCounts: {}, reactorNames: {} });
