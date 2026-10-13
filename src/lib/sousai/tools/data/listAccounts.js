@@ -4,11 +4,11 @@
 //
 // "Which accounts do we run? Which are PDC?"
 //
-// Reads `accounts`, 12 rows. Every row is currently active=true and
-// season='2026' - the table is a current-season snapshot, not a historical
-// registry. Retired accounts are physically deleted (BGC's term ended
-// 2026-05-21 and it is absent from the table entirely, even though it appears
-// in 7 corpus documents including REF-140/141/142).
+// Reads `accounts`. The table is a current-season snapshot, not a historical
+// registry. Some retired accounts are physically deleted (BGC's term ended
+// 2026-05-21 and is absent entirely); others carry active=false (CHI - IL,
+// CIN - FL since 2026-10). The query filters on .neq("active", false) so
+// both styles of retirement are excluded from the tool output.
 //
 // This is why the tool's MISS shape matters. A caller asking about BGC gets a
 // current-season-list message, not a flat denial - the account existed and
@@ -51,7 +51,9 @@ const SELECT_COLUMNS = [
  */
 export async function listAccounts({ level, teamKey } = {}) {
   const sb = getSupabase();
-  let q = sb.from("accounts").select(SELECT_COLUMNS).order("team_key", { ascending: true });
+  // Kevin ruling 2026-10-06: .neq("active", false) excludes retired
+  // accounts (today CHI - IL + CIN - FL). NULL treats as active.
+  let q = sb.from("accounts").select(SELECT_COLUMNS).neq("active", false).order("team_key", { ascending: true });
   if (teamKey) q = q.eq("team_key", teamKey);
   if (level) q = q.eq("level", level);
 
@@ -65,7 +67,7 @@ export async function listAccounts({ level, teamKey } = {}) {
   // as A4's KNOWN_ROLES fallback.
   let validLevels;
   if (level && data.length === 0) {
-    const { data: allLevels } = await sb.from("accounts").select("level");
+    const { data: allLevels } = await sb.from("accounts").select("level").neq("active", false);
     validLevels = [...new Set((allLevels || []).map((r) => r.level))].sort();
   }
 

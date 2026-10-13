@@ -175,7 +175,7 @@ async function loadExcludedWorkerIds(supa) {
 }
 
 async function loadAccountStateMap(supa) {
-  const q = await supa.from("accounts").select("team_key, state");
+  const q = await supa.from("accounts").select("team_key, state").neq("active", false);
   if (q.error) throw new Error(`load accounts: ${q.error.message}`);
   const m = new Map();
   for (const a of q.data || []) {
@@ -484,7 +484,7 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
   // Load accounts once for both state resolution (obligation states
   // scope) and region resolution (cycle scope), and pull the full
   // account catalog into a Set for scope-name validation.
-  const accountsQ = await db.from("accounts").select("team_key, state, region");
+  const accountsQ = await db.from("accounts").select("team_key, state, region").neq("active", false);
   if (accountsQ.error) throw new Error(`load accounts: ${accountsQ.error.message}`);
   const accountRegionMap = new Map();
   const knownAccountKeys = new Set();
