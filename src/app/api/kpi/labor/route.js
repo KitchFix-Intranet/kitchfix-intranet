@@ -20,7 +20,7 @@
 //   start     YYYY-MM-DD (defaults to fiscal-year start)
 //   end       YYYY-MM-DD (defaults to today)
 
-import { NextResponse } from "next/server";
+import { cachedJson, uncachedJson } from "@/lib/kpi/cacheHeaders";
 import { auth } from "@/lib/auth";
 // V-role-gates - OPS_LEADERSHIP_EMAILS retired here. Access is now
 // resolved by roleGate.js (four roles: corporate, rdo, site_leader,
@@ -184,7 +184,7 @@ export async function GET(request) {
   let email = null;
   if (!testModeBypass) {
     const session = await auth();
-    if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    if (!session) return uncachedJson({ error: "unauthenticated" }, 401);
     email = session.user?.email?.toLowerCase().trim();
   }
 
@@ -236,14 +236,14 @@ export async function GET(request) {
   // docs/KPI_ROLE_GATES_SPEC.md for the design contract and
   // src/lib/kpi/roleGate.js for the resolver.
   const gate = await loadRoleGate(supa);
-  if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
+  if (gate.error) return uncachedJson(safeError("role_gate", gate.error), 500);
   let caller;
   if (testModeBypass) {
     caller = { role: "corporate", scope: null, can_see_salary: true };
   } else {
     try { caller = await gate.resolveKpiRole(email); }
-    catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
-    if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    catch (e) { return uncachedJson(safeError("role_gate_resolve", e), 500); }
+    if (!caller) return uncachedJson({ error: "forbidden" }, 403);
   }
 
   const landing_account = gate.landingAccount(caller);
@@ -274,7 +274,7 @@ export async function GET(request) {
   // locked, single, aggregate, salaried-only) carries them so the
   // folio and command bar can render without a second network call.
   const dirQ = await fetchAccountsDirectory(supa);
-  if (dirQ.error) return NextResponse.json(safeError("accounts_directory", dirQ.error), { status: 500 });
+  if (dirQ.error) return uncachedJson(safeError("accounts_directory", dirQ.error), 500);
   const accounts_directory = dirQ.data;
   const regional_directors_display = {
     East: rdoDisplayName(REGIONAL_DIRECTORS.East),
@@ -284,7 +284,7 @@ export async function GET(request) {
   // Empty account -> landing response. 200, not 400; the client
   // redirects to landing_account. Zero board data.
   if (!account) {
-    return NextResponse.json({
+    return uncachedJson({
       landing_account,
       preview_account,
       accounts_directory,
@@ -292,7 +292,7 @@ export async function GET(request) {
     });
   }
   if (D17_OUT_OF_SCOPE.has(account)) {
-    return NextResponse.json({ error: "account_out_of_scope", account }, { status: 400 });
+    return uncachedJson({ error: "account_out_of_scope", account }, 400);
   }
 
   // V-role-gates - locked-state response for any account the caller
@@ -302,7 +302,7 @@ export async function GET(request) {
   // site_manager. The directory + landing_account still ship so the
   // client keeps the shell + rail + section switcher visible.
   if (!gate.canViewAccount(caller, account)) {
-    return NextResponse.json({
+    return uncachedJson({
       locked: true,
       account,
       reason: "not_authorised",
@@ -418,7 +418,7 @@ export async function GET(request) {
     .order("week_start")
     .limit(1)
     .maybeSingle();
-  if (floorQ.error) return NextResponse.json(safeError("daily_floor", floorQ.error), { status: 500 });
+  if (floorQ.error) return uncachedJson(safeError("daily_floor", floorQ.error), 500);
   const dailyFloorISO = floorQ.data?.week_start || "2026-04-20";
 
   // homestand PR-1 - MLB clubhouse selection. If `?homestand=<game_start ISO>`
@@ -445,7 +445,7 @@ export async function GET(request) {
   let homestandBank = null;
   let homestandGameDatesByStand = null;   // Map<game_start ISO, Set<GAME ISO dates>>
   try { allHomestands = await listHomestands(supa, account, 2026, { includeSalary: mergeSalary }); }
-  catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
+  catch (e) { return uncachedJson(safeError("homestand_list", e), 500); }
   if (allHomestands && allHomestands.length > 0) {
     // 2026-08-28 pagination sweep. labor_actuals_daily is 4,792 rows
     // globally (measured); a mature single account has ~880 daily rows
@@ -477,7 +477,7 @@ export async function GET(request) {
           [(q) => q.eq("account_key", account)]),
       ]);
     } catch (e) {
-      return NextResponse.json(safeError("homestand_daily_or_schedule", { message: e.message }), { status: 500 });
+      return uncachedJson(safeError("homestand_daily_or_schedule", { message: e.message }), 500);
     }
 
       // Per-stand HOURLY actual (myriadth accumulator, cent-rounded per
@@ -498,7 +498,7 @@ export async function GET(request) {
       const salaryX10000ByStand = new Map();
       if (mergeSalary) {
         const salActuals = await loadSalaryActuals(supa, [account], "2025-12-29", "2026-12-27");
-        if (salActuals.error) return NextResponse.json(safeError("homestand_salary_actuals", { message: salActuals.error }), { status: 500 });
+        if (salActuals.error) return uncachedJson(safeError("homestand_salary_actuals", { message: salActuals.error }), 500);
         for (const h of allHomestands) {
           if (h.pre_floor) continue;
           const pr = salaryProRate({
@@ -545,7 +545,7 @@ export async function GET(request) {
       try {
         allHomestands = await foldPreFloorEstimates(supa, account, allHomestands, dailyFloorISO, today);
       } catch (e) {
-        return NextResponse.json(safeError("pre_floor_estimator", e), { status: 500 });
+        return uncachedJson(safeError("pre_floor_estimator", e), 500);
       }
 
       // HS PR-B (owner ruling 2026-08-24): fold per-stand split onto
@@ -558,7 +558,7 @@ export async function GET(request) {
       try {
         allHomestands = await foldPerStandSplits(supa, account, allHomestands, schedRows, today);
       } catch (e) {
-        return NextResponse.json(safeError("per_stand_splits", e), { status: 500 });
+        return uncachedJson(safeError("per_stand_splits", e), 500);
       }
 
       // GAME date sets per stand, keyed by game_start. Client uses
@@ -593,7 +593,7 @@ export async function GET(request) {
           //   * a refusal panel in the stand region (settledRefusal
           //     branch in HomestandBoard already exists per PR-2
           //     ruling: "a refusal must not destroy navigation")
-          return NextResponse.json({
+          return uncachedJson({
             source: null,
             refused: true,
             message: `That homestand does not exist for ${account}. Pick a stand from the rail above.`,
@@ -616,7 +616,7 @@ export async function GET(request) {
           // attribution unavailable). source: "estimated" is a new
           // value alongside "daily" and "weekly". Route-shape probe
           // in _probe_range_resolver treats it as a distinct branch.
-          return NextResponse.json({
+          return (previewParam ? uncachedJson : cachedJson)({
             source: "estimated",
             refused: false,
             homestand: found,
@@ -761,7 +761,7 @@ export async function GET(request) {
     // stays. `homestand` is left off deliberately (no valid stand
     // selection reached this branch under the corrected clamp) so
     // the client's selection state falls back to unset.
-    return NextResponse.json({
+    return uncachedJson({
       source: null,
       refused: true,
       reason: rangeSource.reason,
@@ -799,6 +799,11 @@ export async function GET(request) {
       is_future_range,
       // homestand PR-1/2 - wrapper splices these into the daily body.
       homestandSplice, homestandsList, homestandBank,
+      // Kevin ruling 2026-10-13 (KPI cache). Thread previewParam through
+      // so the daily-range body can honor the "preview = never cache"
+      // rule the top-level GET already uses on the weekly / single /
+      // D26 bodies.
+      previewParam,
     });
   }
 
@@ -812,10 +817,10 @@ export async function GET(request) {
     // 1. Resolve members from live accounts.region via the shared helper
     //    so the export route sees byte-identical membership.
     const memberQ = await resolvePortfolioMembers(supa, account);
-    if (memberQ.error) return NextResponse.json(safeError("v6_members", memberQ.error), { status: 500 });
+    if (memberQ.error) return uncachedJson(safeError("v6_members", memberQ.error), 500);
     const members = memberQ.data.map(r => r.team_key);
     if (members.length === 0) {
-      return NextResponse.json({ error: "no_members_in_region", account }, { status: 400 });
+      return uncachedJson({ error: "no_members_in_region", account }, 400);
     }
 
     // Step 3 restructure 2026-08-29: five independent reads fired in
@@ -870,20 +875,20 @@ export async function GET(request) {
       // names the block, and the message carries the thrown text for
       // triage; the specific-loader .error paths below still surface
       // with their own precise scopes for the non-throw failure mode.
-      return NextResponse.json(safeError("labor_aggregate_loaders", { message: e.message }), { status: 500 });
+      return uncachedJson(safeError("labor_aggregate_loaders", { message: e.message }), 500);
     }
-    if (aQ.error) return NextResponse.json(safeError("labor_actuals_aggregate", aQ.error), { status: 500 });
+    if (aQ.error) return uncachedJson(safeError("labor_actuals_aggregate", aQ.error), 500);
     const actualsRows = aQ.data;
 
     // 2026-08-28 swallowing-catch fix: a DB error must surface as
     // safeError so downstream period-scope math cannot silently fall
     // back to fiscal defaults with wrong-looking-right numbers.
-    if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_aggregate", periodDays.error), { status: 500 });
+    if (periodDays.error) return uncachedJson(safeError("sc_day_metadata_period_bounds_aggregate", periodDays.error), 500);
     // resolveMemberBudgets error surfacing: Map<account, {data|error}>.
     // First non-null error is the one we surface (same early-return shape
     // the prior per-member Promise.all used).
     for (const [, r] of memberBudgetResults) {
-      if (r?.error) return NextResponse.json(safeError(r.scope, r.error), { status: 500 });
+      if (r?.error) return uncachedJson(safeError(r.scope, r.error), 500);
     }
 
     const periodBounds = new Map();
@@ -987,9 +992,9 @@ export async function GET(request) {
       ({ workerMeta, resolvedNames, usersReachable } = workerRes);
       priorCmpAgg = priorRes;
     } catch (e) {
-      return NextResponse.json(safeError("workerMeta_or_prior", { message: e.message }), { status: 500 });
+      return uncachedJson(safeError("workerMeta_or_prior", { message: e.message }), 500);
     }
-    if (priorCmpAgg?.error) return NextResponse.json(safeError(priorCmpAgg.scope, priorCmpAgg.error), { status: 500 });
+    if (priorCmpAgg?.error) return uncachedJson(safeError(priorCmpAgg.scope, priorCmpAgg.error), 500);
 
     // 2026-08-28 person-key fix: build the worker_id -> email map once
     // and thread it through buildBoard + salary paths so distinct-people
@@ -1070,8 +1075,8 @@ export async function GET(request) {
         load3100_2Budgets(supa, members),
         loadSalaryActuals(supa, members, start, end),
       ]);
-      if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
-      if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+      if (budQ.error) return uncachedJson(safeError("kpi_budgets_3100_2", budQ.error), 500);
+      if (actQ.error) return uncachedJson(safeError("labor_salary_actuals", actQ.error), 500);
       // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
       // withSalaryMerge so the merged workerToEmail covers both the
       // hourly and salary sides. Previously salary worker names were
@@ -1105,7 +1110,7 @@ export async function GET(request) {
     body.source = "weekly";
     body.is_future_range = is_future_range;
     body.todayISO = today;
-    return NextResponse.json(body);
+    return (previewParam ? uncachedJson : cachedJson)(body);
   }
 
   if (D26_SALARIED_ONLY.has(account)) {
@@ -1146,8 +1151,8 @@ export async function GET(request) {
         load3100_2Budgets(supa, [account]),
         loadSalaryActuals(supa, [account], start, end),
       ]);
-      if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
-      if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+      if (budQ.error) return uncachedJson(safeError("kpi_budgets_3100_2", budQ.error), 500);
+      if (actQ.error) return uncachedJson(safeError("labor_salary_actuals", actQ.error), 500);
       bodyD26.account_state = "hourly_ok";
       // Step 1 sweep 2026-08-29: `bodyD26.account_state_message = undefined`
       // removed. The field is no longer set at construction so there
@@ -1218,7 +1223,7 @@ export async function GET(request) {
     bodyD26.source = "weekly";
     bodyD26.is_future_range = is_future_range;
     bodyD26.todayISO = today;
-    return NextResponse.json(bodyD26);
+    return (previewParam ? uncachedJson : cachedJson)(bodyD26);
   }
 
   // Step 3 restructure 2026-08-29: five independent single-account
@@ -1284,15 +1289,15 @@ export async function GET(request) {
         .lte("effective_from", FY_END_ISO),
     ]);
   } catch (e) {
-    return NextResponse.json(safeError("labor_actuals", { message: e.message }), { status: 500 });
+    return uncachedJson(safeError("labor_actuals", { message: e.message }), 500);
   }
   const actuals = { data: actualsRows };
   const unattr = { data: unattrRows };
   // 2026-08-28 swallowing-catch fix (single-account path). See the
   // aggregate-path fix for shape rationale.
-  if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_single", periodDays.error), { status: 500 });
-  if (pnlQ.error) return NextResponse.json(safeError("kpi_budgets_3100_1", pnlQ.error), { status: 500 });
-  if (scQ.error)  return NextResponse.json(safeError("sc_labor_budgets", scQ.error),   { status: 500 });
+  if (periodDays.error) return uncachedJson(safeError("sc_day_metadata_period_bounds_single", periodDays.error), 500);
+  if (pnlQ.error) return uncachedJson(safeError("kpi_budgets_3100_1", pnlQ.error), 500);
+  if (scQ.error)  return uncachedJson(safeError("sc_labor_budgets", scQ.error),   500);
 
   // account_periods: full FY period boundaries from sc_day_metadata for
   // this account. Powers client-side "this period" / "last period"
@@ -1426,9 +1431,9 @@ export async function GET(request) {
     ({ workerMeta, resolvedNames, usersReachable } = workerRes);
     priorCmpSingle = priorRes;
   } catch (e) {
-    return NextResponse.json(safeError("workerMeta_or_prior_single", { message: e.message }), { status: 500 });
+    return uncachedJson(safeError("workerMeta_or_prior_single", { message: e.message }), 500);
   }
-  if (priorCmpSingle?.error) return NextResponse.json(safeError(priorCmpSingle.scope, priorCmpSingle.error), { status: 500 });
+  if (priorCmpSingle?.error) return uncachedJson(safeError(priorCmpSingle.scope, priorCmpSingle.error), 500);
   // 2026-08-28 person-key fix (single-account path).
   const workerToEmail = buildWorkerToEmail(workerMeta);
 
@@ -1807,8 +1812,8 @@ export async function GET(request) {
       load3100_2Budgets(supa, [account]),
       loadSalaryActuals(supa, [account], start, end),
     ]);
-    if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
-    if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+    if (budQ.error) return uncachedJson(safeError("kpi_budgets_3100_2", budQ.error), 500);
+    if (actQ.error) return uncachedJson(safeError("labor_salary_actuals", actQ.error), 500);
     // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
     // withSalaryMerge so the workerToEmail map covers them. This is
     // the CIN - AZ path (three salaried workers, none in labor_actuals
@@ -1939,7 +1944,7 @@ export async function GET(request) {
   // this instead of `new Date()` for every today-derived decision.
   // Same field on every KPI route.
   bodySingle.todayISO = today;
-  return NextResponse.json(bodySingle);
+  return (previewParam ? uncachedJson : cachedJson)(bodySingle);
 }
 
 // Daily-source branch. Fires when the range resolver routes to daily
@@ -1950,7 +1955,7 @@ export async function GET(request) {
 // session. This wrapper adds the NextResponse envelope; nothing else.
 export async function handleDailyRangeRequest(ctx) {
   const out = await buildDailyRangeBody(ctx);
-  if (out.error) return NextResponse.json(out.error.payload, { status: out.error.status });
+  if (out.error) return uncachedJson(out.error.payload, out.error.status);
   // homestand PR-1 - splice into the daily body. `homestands` is the
   // full list for MLB accounts (empty otherwise); the selected-stand
   // fields land only when the caller requested a homestand.
@@ -1961,5 +1966,8 @@ export async function handleDailyRangeRequest(ctx) {
   if (typeof ctx.is_future_range === "boolean") body.is_future_range = ctx.is_future_range;
   // Kevin 2026-09-15 (#426): daily-source branch also emits today.
   if (ctx.today) body.todayISO = ctx.today;
-  return NextResponse.json(body);
+  // Kevin ruling 2026-10-13 (KPI cache). Preview-mode disables caching;
+  // non-preview daily-range bodies are cacheable within the window
+  // defined in cacheHeaders.js.
+  return (ctx.previewParam ? uncachedJson : cachedJson)(body);
 }

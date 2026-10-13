@@ -95,7 +95,7 @@
 // smoke runs; never fires on Vercel (VERCEL=1 unsets regardless).
 // No name / dollar / vendor / merchant echo in error paths.
 
-import { NextResponse } from "next/server";
+import { cachedJson, uncachedJson } from "@/lib/kpi/cacheHeaders";
 import { auth } from "@/lib/auth";
 // KPI PREVIEW FENCE - single source of truth in roleGate.js. The
 // preview allowlist gates access before the role gate reads
@@ -342,7 +342,7 @@ export async function GET(request) {
   let email = null;
   if (!testModeBypass) {
     session = await auth();
-    if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    if (!session) return uncachedJson({ error: "unauthenticated" }, 401);
     email = session.user?.email?.toLowerCase().trim();
     // KPI PREVIEW FENCE - sits in front of the role gate so a fenced
     // email is refused before we read kpi_roles or people.
@@ -350,7 +350,7 @@ export async function GET(request) {
     // Authorisation is now the null-caller refusal + canViewAccount
     // check below.
     if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      return uncachedJson({ error: "forbidden" }, 403);
     }
   }
 
@@ -391,7 +391,7 @@ export async function GET(request) {
   // still uses canViewAccount to narrow a corporate caller into a
   // previewed account.
   const gate = await loadRoleGate(supa);
-  if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
+  if (gate.error) return uncachedJson(safeError("role_gate", gate.error), 500);
   let caller = null;
   if (testModeBypass) {
     caller = { role: "corporate", scope: null, can_see_salary: true };
@@ -400,8 +400,8 @@ export async function GET(request) {
     // preview-fence block above already derived; auth() no longer runs
     // twice per request.
     try { caller = email ? await gate.resolveKpiRole(email) : null; }
-    catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
-    if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    catch (e) { return uncachedJson(safeError("role_gate_resolve", e), 500); }
+    if (!caller) return uncachedJson({ error: "forbidden" }, 403);
   }
   const landing_account = caller ? gate.landingAccount(caller) : null;
 
@@ -423,16 +423,16 @@ export async function GET(request) {
   const preview_account = preview.preview_account;
 
   if (!account) {
-    return NextResponse.json({
+    return uncachedJson({
       error: "account_required",
       detail: "?account=<team_key> is required",
       landing_account,
       preview_account,
       todayISO: today,
-    }, { status: 400 });
+    }, 400);
   }
   if (D17_OUT_OF_SCOPE.has(account)) {
-    return NextResponse.json({ error: "account_out_of_scope", account }, { status: 400 });
+    return uncachedJson({ error: "account_out_of_scope", account }, 400);
   }
 
   // V-role-gates 2026-09-23 (R-160). Locked-state response for
@@ -440,7 +440,7 @@ export async function GET(request) {
   // route. No `board`, no `actuals`, no `budget`, no rows, no vendor
   // names, no counts. Spec §3: the LOCK IS SERVER-SIDE.
   if (!gate.canViewAccount(caller, account)) {
-    return NextResponse.json({
+    return uncachedJson({
       locked: true,
       account,
       reason: "not_authorised",
@@ -452,10 +452,10 @@ export async function GET(request) {
 
   // Resolve members.
   const membersResp = await fetchMembers(supa, account);
-  if (membersResp.error) return NextResponse.json(safeError("members", membersResp.error), { status: 500 });
+  if (membersResp.error) return uncachedJson(safeError("members", membersResp.error), 500);
   const members = membersResp.members;
   if (members.length === 0) {
-    return NextResponse.json({ error: "no_members_in_selection", account }, { status: 400 });
+    return uncachedJson({ error: "no_members_in_selection", account }, 400);
   }
 
   const isAggregate = V6_PSEUDO_KEYS.has(account);
@@ -596,23 +596,23 @@ export async function GET(request) {
     const near_note = near.length > 0 ? ` near_guard=${near.map(t => `${t.name}:${t.ms}`).join(",")}` : "";
     console.log(`[F-11-timing] account=${account} range=${effStart}..${effEnd} total=${total}ms slowest=${slowest.name}:${slowest.ms}ms${near_note} | ${parts}`);
   }
-  if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
-  if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
+  if (weeklyResp.error) return uncachedJson(safeError("v_purchasing_by_site_week", weeklyResp.error), 500);
+  if (pendingResp.error) return uncachedJson(safeError("pending", pendingResp.error), 500);
   // F-11: reportPendingResp is a genuine SQL error only. Timeouts on
   // the view are absorbed by loadReportOnlyPending's Promise.race and
   // returned as data.unavailable=true. Real errors still 500.
-  if (reportPendingResp.error) return NextResponse.json(safeError("rippling_report_only_pending_v1", reportPendingResp.error), { status: 500 });
-  if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
-  if (dirResp.error) return NextResponse.json(safeError("accounts_directory", dirResp.error), { status: 500 });
-  if (priorHistoryResp.error) return NextResponse.json(safeError("prior_period_history", priorHistoryResp.error), { status: 500 });
-  if (complianceResp.error) return NextResponse.json(safeError("compliance", complianceResp.error), { status: 500 });
-  if (budgetsResp.error) return NextResponse.json(safeError("kpi_budgets", budgetsResp.error), { status: 500 });
-  if (vehicleR.error) return NextResponse.json(safeError("ledgers.vehicle", vehicleR.error), { status: 500 });
-  if (equipR.error) return NextResponse.json(safeError("ledgers.equipment", equipR.error), { status: 500 });
-  if (repairR.error) return NextResponse.json(safeError("ledgers.repair", repairR.error), { status: 500 });
-  if (reimbR.error) return NextResponse.json(safeError("ledgers.reimbursable", reimbR.error), { status: 500 });
-  if (cardChR.error) return NextResponse.json(safeError("card_charges", cardChR.error), { status: 500 });
-  if (vendorRollupR.error) return NextResponse.json(safeError("vendor_rollup", vendorRollupR.error), { status: 500 });
+  if (reportPendingResp.error) return uncachedJson(safeError("rippling_report_only_pending_v1", reportPendingResp.error), 500);
+  if (actualsResp.error) return uncachedJson(safeError("purchasing_actuals", actualsResp.error), 500);
+  if (dirResp.error) return uncachedJson(safeError("accounts_directory", dirResp.error), 500);
+  if (priorHistoryResp.error) return uncachedJson(safeError("prior_period_history", priorHistoryResp.error), 500);
+  if (complianceResp.error) return uncachedJson(safeError("compliance", complianceResp.error), 500);
+  if (budgetsResp.error) return uncachedJson(safeError("kpi_budgets", budgetsResp.error), 500);
+  if (vehicleR.error) return uncachedJson(safeError("ledgers.vehicle", vehicleR.error), 500);
+  if (equipR.error) return uncachedJson(safeError("ledgers.equipment", equipR.error), 500);
+  if (repairR.error) return uncachedJson(safeError("ledgers.repair", repairR.error), 500);
+  if (reimbR.error) return uncachedJson(safeError("ledgers.reimbursable", reimbR.error), 500);
+  if (cardChR.error) return uncachedJson(safeError("card_charges", cardChR.error), 500);
+  if (vendorRollupR.error) return uncachedJson(safeError("vendor_rollup", vendorRollupR.error), 500);
   const budgetsByLine = budgetsResp.data;
   const weekly = weeklyResp.data;
   // Precedence merge: API pending + report-only pending (no double
@@ -897,7 +897,7 @@ export async function GET(request) {
     } else {
       const fyWeeklyResp = await paginateWeekly(supa, { members, start: FY_START_ISO, end: today });
       if (fyWeeklyResp.error) {
-        return NextResponse.json(safeError("periods_weekly", fyWeeklyResp.error), { status: 500 });
+        return uncachedJson(safeError("periods_weekly", fyWeeklyResp.error), 500);
       }
       fyWeekly = fyWeeklyResp.data;
     }
@@ -1162,7 +1162,7 @@ export async function GET(request) {
       const nq = await supa.from("billcom_ref_accounts")
         .select("account_number, name")
         .in("account_number", glCodesToName);
-      if (nq.error) return NextResponse.json(safeError("billcom_ref_accounts", nq.error), { status: 500 });
+      if (nq.error) return uncachedJson(safeError("billcom_ref_accounts", nq.error), 500);
       for (const r of nq.data || []) namesByCode.set(String(r.account_number), r.name || null);
     }
     const reimb_categories = reimb_categories_raw.map(r => ({
@@ -1356,7 +1356,7 @@ export async function GET(request) {
     if (billcomVendorIds.length > 0) {
       for (const idChunk of chunk(billcomVendorIds, IN_CHUNK)) {
         const vr = await supa.from("billcom_ref_vendors").select("id, name").in("id", idChunk);
-        if (vr.error) return NextResponse.json(safeError("billcom_ref_vendors", vr.error), { status: 500 });
+        if (vr.error) return uncachedJson(safeError("billcom_ref_vendors", vr.error), 500);
         for (const v of vr.data || []) vendorNameMap.set(v.id, v.name || null);
       }
     }
@@ -1394,5 +1394,8 @@ export async function GET(request) {
   // this instead of `new Date()` for every today-derived decision.
   // Same field on every KPI route.
   payload.todayISO = today;
-  return NextResponse.json(payload);
+  // Kevin ruling 2026-10-13 (KPI cache). Preview-mode responses are
+  // draft / speculative - never cache. Non-preview successful payloads
+  // follow the policy defined in cacheHeaders.js.
+  return (previewParam ? uncachedJson : cachedJson)(payload);
 }

@@ -31,7 +31,7 @@
 //   Overview payload per resolveOverview()'s output. See
 //   src/lib/kpi/overview/resolver.js for the full shape.
 
-import { NextResponse } from "next/server";
+import { cachedJson, uncachedJson } from "@/lib/kpi/cacheHeaders";
 import { auth } from "@/lib/auth";
 import { getServiceClient } from "@/lib/supabase";
 import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST, loadRoleGate } from "@/lib/kpi/roleGate.js";
@@ -96,7 +96,7 @@ export async function GET(request) {
   let email = null;
   if (!testModeBypass) {
     const session = await auth();
-    if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    if (!session) return uncachedJson({ error: "unauthenticated" }, 401);
     email = session.user?.email?.toLowerCase().trim();
     // KPI preview fence (mirrors labor + purchasing routes). Sits in
     // front of the role gate: a fenced email is refused before we
@@ -104,7 +104,7 @@ export async function GET(request) {
     // gate retired here (R-160); authorisation is the role gate +
     // canViewAccount below.
     if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      return uncachedJson({ error: "forbidden" }, 403);
     }
   }
 
@@ -120,7 +120,7 @@ export async function GET(request) {
 
   // Role gate + preview narrowing.
   const gate = await loadRoleGate(supa);
-  if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
+  if (gate.error) return uncachedJson(safeError("role_gate", gate.error), 500);
   let caller;
   if (testModeBypass) {
     // Default to corporate for TEST_MODE (matches labor + purchasing).
@@ -159,8 +159,8 @@ export async function GET(request) {
     }
   } else {
     try { caller = await gate.resolveKpiRole(email); }
-    catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
-    if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    catch (e) { return uncachedJson(safeError("role_gate_resolve", e), 500); }
+    if (!caller) return uncachedJson({ error: "forbidden" }, 403);
   }
   const landing_account = gate.landingAccount(caller);
 
@@ -180,19 +180,19 @@ export async function GET(request) {
 
   // No account -> landing response (matches labor's shape).
   if (!account) {
-    return NextResponse.json({
+    return uncachedJson({
       landing_account,
       preview_account,
       todayISO: today,
     });
   }
   if (account === "CORP") {
-    return NextResponse.json({ error: "account_out_of_scope", account }, { status: 400 });
+    return uncachedJson({ error: "account_out_of_scope", account }, 400);
   }
 
   // Locked-state response for accounts the caller cannot view.
   if (!gate.canViewAccount(caller, account)) {
-    return NextResponse.json({
+    return uncachedJson({
       locked: true,
       account,
       reason: "not_authorised",
@@ -221,7 +221,7 @@ export async function GET(request) {
   // Range resolution.
   let parsed;
   try { parsed = parseRange(searchParams, today); }
-  catch (e) { return NextResponse.json(safeError("range", e), { status: 400 }); }
+  catch (e) { return uncachedJson(safeError("range", e), 400); }
   const { snap } = parsed;
   // Build the resolveOverview-compatible range from the snap output.
   // Multi-period (kind === "periods") is expressed to the resolver
@@ -257,10 +257,10 @@ export async function GET(request) {
       debugTiming,
     });
   } catch (e) {
-    return NextResponse.json(safeError("resolve_overview", e), { status: 500 });
+    return uncachedJson(safeError("resolve_overview", e), 500);
   }
   if (payload?.error) {
-    return NextResponse.json(safeError(payload.scope || "resolve_overview", payload.error), { status: 500 });
+    return uncachedJson(safeError(payload.scope || "resolve_overview", payload.error), 500);
   }
   payload.preview_account = preview_account;
   payload.landing_account = landing_account;
@@ -279,5 +279,9 @@ export async function GET(request) {
   // (resolvedPreset inference, elapsed fractions, R-93 fytd end, R-109
   // Current-period one-table view). Same field on every KPI route.
   payload.todayISO = today;
-  return NextResponse.json(payload);
+  // Kevin ruling 2026-10-13 (KPI cache). Preview-mode responses are
+  // draft / speculative - never cache. Non-preview successful payloads
+  // are role-stable within the browser session; cache for the window
+  // defined in cacheHeaders.js.
+  return (previewParam ? uncachedJson : cachedJson)(payload);
 }
