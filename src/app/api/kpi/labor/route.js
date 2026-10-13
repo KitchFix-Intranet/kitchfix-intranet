@@ -235,8 +235,17 @@ export async function GET(request) {
   // kpi_roles; site_leader + site_manager come from people. See
   // docs/KPI_ROLE_GATES_SPEC.md for the design contract and
   // src/lib/kpi/roleGate.js for the resolver.
-  const gate = await loadRoleGate(supa);
+  // Kevin ruling 2026-10-13 (KPI perf). loadRoleGate + fetchAccountsDirectory
+  // are independent supa queries; running them in parallel saves one serial
+  // round-trip on every labor request. The directory result is still consumed
+  // AFTER every early-return gate (landing / locked / out-of-scope) below -
+  // parallelization only overlaps the two network calls.
+  const [gate, dirQ] = await Promise.all([
+    loadRoleGate(supa),
+    fetchAccountsDirectory(supa),
+  ]);
   if (gate.error) return uncachedJson(safeError("role_gate", gate.error), 500);
+  if (dirQ.error) return uncachedJson(safeError("accounts_directory", dirQ.error), 500);
   let caller;
   if (testModeBypass) {
     caller = { role: "corporate", scope: null, can_see_salary: true };
@@ -269,12 +278,10 @@ export async function GET(request) {
   account = preview.account;
   const preview_account = preview.preview_account;
 
-  // Fetch the accounts directory + regional-director display names
-  // BEFORE any account-branch logic; every response path (landing,
-  // locked, single, aggregate, salaried-only) carries them so the
-  // folio and command bar can render without a second network call.
-  const dirQ = await fetchAccountsDirectory(supa);
-  if (dirQ.error) return uncachedJson(safeError("accounts_directory", dirQ.error), 500);
+  // Accounts directory already fetched above in parallel with role gate.
+  // Every response path (landing, locked, single, aggregate, salaried-only)
+  // carries it so the folio and command bar can render without a second
+  // network call.
   const accounts_directory = dirQ.data;
   const regional_directors_display = {
     East: rdoDisplayName(REGIONAL_DIRECTORS.East),
@@ -979,20 +986,26 @@ export async function GET(request) {
     // src/lib/kpi/resolveWorkerMeta.js and buildPriorPeriodComparison
     // (route.js line ~275).
     const workerIds = [...new Set(actualsRows.map(r => r.worker_id))];
-    let workerMeta, resolvedNames, usersReachable, priorCmpAgg;
+    let workerMeta, resolvedNames, usersReachable, priorCmpAgg, workerWeekRatesAgg;
     try {
-      const [workerRes, priorRes] = await Promise.all([
+      // Kevin ruling 2026-10-13 (KPI perf). Folded into parallel batch.
+      // loadWorkerWeekRates only reads supa + actualsRows (available
+      // before the batch) and does not consume workerMeta or prior
+      // output - safe to run concurrently.
+      const [workerRes, priorRes, ratesRes] = await Promise.all([
         resolveWorkerMeta(supa, workerIds),
         buildPriorPeriodComparison({
           supa, rangeStart: start, rangeEnd: end, today,
           isAggregate: true, members: rolledUpMembers,
           currentActuals: rolledUpActuals, pageSize: pageSizeParam,
         }),
+        loadWorkerWeekRates(supa, { actualsRows }),
       ]);
       ({ workerMeta, resolvedNames, usersReachable } = workerRes);
       priorCmpAgg = priorRes;
+      workerWeekRatesAgg = ratesRes;
     } catch (e) {
-      return uncachedJson(safeError("workerMeta_or_prior", { message: e.message }), 500);
+      return uncachedJson(safeError("workerMeta_or_prior_or_rates", { message: e.message }), 500);
     }
     if (priorCmpAgg?.error) return uncachedJson(safeError(priorCmpAgg.scope, priorCmpAgg.error), 500);
 
@@ -1000,17 +1013,6 @@ export async function GET(request) {
     // and thread it through buildBoard + salary paths so distinct-people
     // counts dedupe by person (email) not employment spell (worker_id).
     const workerToEmail = buildWorkerToEmail(workerMeta);
-
-    // Kevin ruling 2026-10-06. Per-worker-per-week HOURLY RATE
-    // resolved by reading `estimated_hourly_rate` off the stamp
-    // Rippling writes on each live pay segment (via presence +
-    // paySegmentDedupe), joined to actualsRows' own week_start so
-    // the keys match what WeekTable sees. Shipped as a plain object
-    // under `worker_week_rates`; client looks up by
-    // `${worker_id}|${week_start}`. See lib/labor/workerWeekRates.js
-    // for the mid-week-raise tie-break and why reads do not fall
-    // back to compensations_latest or divide dollars by hours.
-    const workerWeekRatesAgg = await loadWorkerWeekRates(supa, { actualsRows });
     let body = {
       ok: true,
       filters: { account, start, end },
@@ -1418,20 +1420,25 @@ export async function GET(request) {
   // Median saving: ~55ms (priorPeriodSingle overlaps
   // resolveWorkerMeta rather than running after it).
   const workerIds = [...new Set(actuals.data.map(r => r.worker_id))];
-  let workerMeta, resolvedNames, usersReachable, priorCmpSingle;
+  let workerMeta, resolvedNames, usersReachable, priorCmpSingle, workerWeekRatesSingle;
   try {
-    const [workerRes, priorRes] = await Promise.all([
+    // Kevin ruling 2026-10-13 (KPI perf). Folded into parallel batch.
+    // loadWorkerWeekRates only reads supa + actuals.data (both available
+    // before the batch) and does not consume workerMeta or prior output.
+    const [workerRes, priorRes, ratesRes] = await Promise.all([
       resolveWorkerMeta(supa, workerIds),
       buildPriorPeriodComparison({
         supa, rangeStart: start, rangeEnd: end, today,
         isAggregate: false, account,
         currentActuals: actuals.data,
       }),
+      loadWorkerWeekRates(supa, { actualsRows: actuals.data }),
     ]);
     ({ workerMeta, resolvedNames, usersReachable } = workerRes);
     priorCmpSingle = priorRes;
+    workerWeekRatesSingle = ratesRes;
   } catch (e) {
-    return uncachedJson(safeError("workerMeta_or_prior_single", { message: e.message }), 500);
+    return uncachedJson(safeError("workerMeta_or_prior_or_rates_single", { message: e.message }), 500);
   }
   if (priorCmpSingle?.error) return uncachedJson(safeError(priorCmpSingle.scope, priorCmpSingle.error), 500);
   // 2026-08-28 person-key fix (single-account path).
@@ -1578,6 +1585,12 @@ export async function GET(request) {
   // this handler on the hourly path - only the derived total and
   // the derived hourly allowance ship, both scalars with no salary
   // decomposition visible.
+  // Kevin ruling 2026-10-13 (KPI perf). load3100_2Budgets stays serial
+  // here. The nearest parallel batch is the loadWeeklyRevenueBasis /
+  // loadOverviewBudgets / loadPnlActuals / loadPeriodStatus group ~100
+  // lines above; folding in would also need to eliminate the duplicate
+  // load3100_2Budgets call inside the +salary mergeSalary Promise.all
+  // below. Out of scope for the current pass.
   const salaryBudgetByPeriodHourly = new Map();
   {
     const salaryBudResp = await load3100_2Budgets(supa, [account]);
@@ -1774,8 +1787,8 @@ export async function GET(request) {
   // Kevin ruling 2026-10-06. Shipped-on-wire worker-week rates for
   // the single-account path. See the aggregate body above for the
   // mechanism; both branches use the same helper so there is one
-  // source of truth for the rate.
-  const workerWeekRatesSingle = await loadWorkerWeekRates(supa, { actualsRows: actuals.data });
+  // source of truth for the rate. 2026-10-13 (KPI perf): the standalone
+  // await here moved up into the resolveWorkerMeta/priorCmp Promise.all.
   let bodySingle = {
     ok: true,
     filters: { account, start, end },

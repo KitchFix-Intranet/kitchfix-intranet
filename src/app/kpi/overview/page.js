@@ -29,7 +29,7 @@
 //     account (see the loading-skeleton + wipe-on-account-change
 //     defenses below)
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -168,6 +168,11 @@ export default function KpiOverviewPage() {
   // ... />). Removed with its two setter calls.
   const [errCode, setErrCode] = useState(null);
   const [authError, setAuthError] = useState(null);
+  // Kevin ruling 2026-10-13 (KPI perf). Landing redirect sets this to
+  // skip the next Effect 2 run - the data we have is already scoped to
+  // the landing account, so re-fetching after the URL rewrites would be
+  // a redundant round-trip.
+  const skipRedirectFetchRef = useRef(false);
 
   const account = deriveClientAccount({
     urlAccount,
@@ -190,8 +195,12 @@ export default function KpiOverviewPage() {
   // ── Fetch overview data ─────────────────────────────────────
   useEffect(() => {
     if (status === "loading") return;
+    if (skipRedirectFetchRef.current) {
+      skipRedirectFetchRef.current = false;
+      return;
+    }
     const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(new Error("timeout_15s")), 15000);
+    const to = setTimeout(() => ctrl.abort(new Error("timeout_55s")), 55000);
     // Warm refetch vs cold load:
     //   - No prior data                    -> loading (skeleton)
     //   - Prior data (account preserved)   -> refetching (ghost + chip)
@@ -228,7 +237,7 @@ export default function KpiOverviewPage() {
         setLoadState("ok");
       })
       .catch((e) => {
-        if (e?.name === "AbortError" && String(ctrl.signal.reason?.message || "") !== "timeout_15s") {
+        if (e?.name === "AbortError" && String(ctrl.signal.reason?.message || "") !== "timeout_55s") {
           return;
         }
         if (String(e?.message) === "session_expired" || String(e?.message) === "forbidden") {
@@ -252,6 +261,7 @@ export default function KpiOverviewPage() {
     if (!landing) return;
     const p = new URLSearchParams(searchParams.toString());
     p.set("account", landing);
+    skipRedirectFetchRef.current = true;
     router.replace(`/kpi/overview?${p.toString()}`);
   }, [urlAccount, data?.landing_account, data?.preview_account, router, searchParams]);
 
