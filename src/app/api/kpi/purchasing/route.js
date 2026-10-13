@@ -322,15 +322,28 @@ function budgetForPeriod({ byLine, glLineCode, members, periodNo }) {
 
 // ─── Route handler ───────────────────────────────────────────────────
 
+// Kevin ruling 2026-10-13 (KPI perf). Raise the Vercel function timeout to
+// 30s so purchasing aggregates (especially drill payloads) have room to
+// finish. Default was below the resolver's wall time on portfolio and on
+// single-period drill fetches.
+export const maxDuration = 30;
+
 export async function GET(request) {
   // TEST_MODE double-gate mirrors src/middleware.js so local Playwright
   // + smoke runs can reach the read-only API. Never fires on Vercel
   // (VERCEL=1 unsets the bypass regardless of env vars).
   const testModeBypass = process.env.TEST_MODE === "true" && process.env.VERCEL !== "1";
+  // Kevin ruling 2026-10-13 (KPI perf). auth() ran twice in this handler
+  // (once for the preview fence, once for the role gate below). Hoisted
+  // and reused - one call per request. On TEST_MODE the auth call is
+  // skipped entirely; the role gate uses a synthetic corporate caller
+  // further down.
+  let session = null;
+  let email = null;
   if (!testModeBypass) {
-    const session = await auth();
+    session = await auth();
     if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-    const email = session.user?.email?.toLowerCase().trim();
+    email = session.user?.email?.toLowerCase().trim();
     // KPI PREVIEW FENCE - sits in front of the role gate so a fenced
     // email is refused before we read kpi_roles or people.
     // V-role-gates - OPS_LEADERSHIP_EMAILS gate retired here (R-160).
@@ -383,13 +396,9 @@ export async function GET(request) {
   if (testModeBypass) {
     caller = { role: "corporate", scope: null, can_see_salary: true };
   } else {
-    // Auth already ran above; re-derive email for the gate.
-    const session = await auth();
-    const email = session?.user?.email?.toLowerCase().trim();
-    // Resolver failure is a 500, not a silent null. `catch {}` here
-    // would leave caller=null and rely on downstream checks; the
-    // Overview/labor routes surface the error and this route now
-    // mirrors that (spec §3: THE ROUTE MUST NOT RETURN THE DATA).
+    // Kevin ruling 2026-10-13 (KPI perf). Reuse the session + email the
+    // preview-fence block above already derived; auth() no longer runs
+    // twice per request.
     try { caller = email ? await gate.resolveKpiRole(email) : null; }
     catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
     if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });

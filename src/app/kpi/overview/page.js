@@ -39,21 +39,17 @@ import "./overview.css";
 
 import {
   FY_START_ISO,
-  periodOf,
   periodStartISO,
   periodEndISO,
   currentPeriodNo,
   weekOfPeriod,
   inferRangeSelection,
-  rangeForPeriod,
   r93FytdEndISO,
   r93ExcludedPeriodNo,
 } from "@/app/kpi/labor/lib/periods";
-import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "@/app/kpi/labor/components/FolioRail";
 import { ACCOUNTS, FY_START, STATIC_DIRECTORY, STATIC_RDO_DISPLAY } from "@/app/kpi/labor/lib/accounts";
-import { isKnownAccount } from "@/lib/accountModels";
 import { deriveClientAccount } from "@/lib/kpi/previewAccess";
 import {
   StateBox,
@@ -75,7 +71,6 @@ import CostLines from "./components/CostLines";
 import RevenueLines from "./components/RevenueLines";
 import PnlStatement from "./components/PnlStatement";
 import AlsoTracked from "./components/AlsoTracked";
-import PlanningBoard from "./components/PlanningBoard";
 import SkeletonBoard from "./components/SkeletonBoard";
 // R-109 · new Current period one-table view. Kevin ruling 2026-09-15:
 // on CP only, the three cards + week rail + cost-lines + P&L are all
@@ -168,7 +163,9 @@ export default function KpiOverviewPage() {
 
   const [data, setData] = useState(null);
   const [loadState, setLoadState] = useState("idle"); // idle | loading | refetching | ok | error | auth
-  const [errorMsg, setErrorMsg] = useState(null);
+  // Kevin ruling 2026-10-13 (cleanup). errorMsg was write-only - the
+  // rendered error state consumes errCode (via <StateError code={errCode}
+  // ... />). Removed with its two setter calls.
   const [errCode, setErrCode] = useState(null);
   const [authError, setAuthError] = useState(null);
 
@@ -199,7 +196,6 @@ export default function KpiOverviewPage() {
     //   - No prior data                    -> loading (skeleton)
     //   - Prior data (account preserved)   -> refetching (ghost + chip)
     setLoadState(data ? "refetching" : "loading");
-    setErrorMsg(null);
     setErrCode(null);
     setAuthError(null);
     const params = new URLSearchParams();
@@ -239,11 +235,7 @@ export default function KpiOverviewPage() {
           setLoadState("auth");
           return;
         }
-        const msg = e?.name === "AbortError" || String(ctrl.signal.reason?.message || "") === "timeout_15s"
-          ? "Request took longer than 15 seconds. Retry, or check for a blocking extension."
-          : String(e?.message || e).slice(0, 200);
         setLoadState("error");
-        setErrorMsg(msg);
         setErrCode(errorCode("overview", e));
       })
       .finally(() => clearTimeout(to));
@@ -269,7 +261,12 @@ export default function KpiOverviewPage() {
   // per-week 3200/3400 lives on Purchasing weekly[]. Fired only when
   // the CP gate is true so no extra fetches on any other range
   // (Guard 1: other ranges untouched).
-  const [cpLabor, setCpLabor] = useState(null);
+  // Kevin ruling 2026-10-13 (KPI perf). cpLabor used to be its own state
+  // slot filled by Effect 4's labor fetch - but Effect 5's labor-ledger
+  // fetch fires with identical params on every single-account view
+  // (including CP), producing a redundant /api/kpi/labor round-trip. The
+  // state is now a derivation off laborLedger when useCpTable is active;
+  // Effect 4 was reduced to a purchasing-only fetch below.
   const [cpPurch, setCpPurch] = useState(null);
   const [cpAuxError, setCpAuxError] = useState(null);
   const cpGateActive = data?.range?.kind === "period" && data?.period_state === "open";
@@ -286,38 +283,45 @@ export default function KpiOverviewPage() {
   const useCpTable = cpGateActive || npGateActive;
   useEffect(() => {
     if (!useCpTable) {
-      setCpLabor(null);
       setCpPurch(null);
       setCpAuxError(null);
       return;
     }
     // Kevin 2026-09-15 follow-up 1. Same defect class as Purchasing
     // #1121: `?preview=<account>` URL has no ?account=, so fetchAccount
-    // is "" and the old guard stranded the fetch indefinitely. Labor
-    // and Purchasing routes both resolve preview -> account server-
-    // side via resolvePreviewAccess when fetchAccount is empty. Fire
-    // the fetch when EITHER a fetchAccount or a preview is present;
-    // still bail if neither is set (no range to fetch).
+    // is "" and the old guard stranded the fetch indefinitely. Fire the
+    // fetch when EITHER a fetchAccount or a preview is present; still
+    // bail if neither is set (no range to fetch).
     if (!fetchAccount && !urlPreview) return;
     if (!start || !end) return;
+    // Kevin ruling 2026-10-13 (KPI perf). This effect used to fetch BOTH
+    // labor and purchasing in Promise.all. The labor leg was byte-
+    // identical to Effect 5's labor-ledger fetch below (same account +
+    // start + end + preview + include_salary params), producing one
+    // wasted labor round-trip per CP cold load. The labor leg is removed
+    // here; cpLabor derives from laborLedger (Effect 5's state) via the
+    // `const cpLabor = useCpTable ? laborLedger : null` binding below.
+    // Any labor-side error during the CP wait surfaces through the
+    // laborLedgerError union at the CP table's `error` prop.
     const ctrl = new AbortController();
     setCpAuxError(null);
     const p = new URLSearchParams({ account: fetchAccount, start, end });
     if (urlPreview) p.set("preview", urlPreview);
-    if (urlIncludeSalary) p.set("include_salary", "1");
-    Promise.all([
-      fetch(`/api/kpi/labor?${p}`, { signal: ctrl.signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(`labor HTTP ${r.status}`))),
-      fetch(`/api/kpi/purchasing?${p}`, { signal: ctrl.signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(`purchasing HTTP ${r.status}`))),
-    ]).then(([lb, pu]) => {
-      if (ctrl.signal.aborted) return;
-      setCpLabor(lb);
-      setCpPurch(pu);
-    }).catch(e => {
-      if (e?.name === "AbortError") return;
-      setCpAuxError(String(e?.message || e));
-    });
+    // include_salary intentionally not forwarded - purchasing has no
+    // salary dimension and the route rejects the flag silently; matches
+    // Effect 5's cache-key hygiene for the purchasing-fold fetch.
+    fetch(`/api/kpi/purchasing?${p}`, { signal: ctrl.signal })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`purchasing HTTP ${r.status}`)))
+      .then((pu) => {
+        if (ctrl.signal.aborted) return;
+        setCpPurch(pu);
+      })
+      .catch((e) => {
+        if (e?.name === "AbortError") return;
+        setCpAuxError(String(e?.message || e));
+      });
     return () => ctrl.abort();
-  }, [useCpTable, fetchAccount, start, end, urlPreview, urlIncludeSalary]);
+  }, [useCpTable, fetchAccount, start, end, urlPreview]);
 
   // Consolidation PR 1 (2026-09-22). Labor ledger fetch. Runs on
   // every range (not gated on cpGateActive) so the fold works on
@@ -479,6 +483,15 @@ export default function KpiOverviewPage() {
   const [purchasingLedger, setPurchasingLedger] = useState(null);
   const [purchasingLedgerError, setPurchasingLedgerError] = useState(null);
 
+  // Kevin ruling 2026-10-13 (KPI perf). CP labor dedup bridges here.
+  // cpLabor is a derivation of laborLedger (Effect 5's state) under the
+  // CP / NP gate - avoids a redundant /api/kpi/labor fetch Effect 4 used
+  // to make. cpEffectiveError unions Effect 4's purchasing error with
+  // Effect 5's labor error so the CP table's `error` prop surfaces both
+  // sides and the "waiting" skeleton exits on either failure.
+  const cpLabor = useCpTable ? laborLedger : null;
+  const cpEffectiveError = cpAuxError || (useCpTable ? laborLedgerError : null);
+
   // ── Fiscal context (today / period / week) ──────────────────
   const fiscal = useMemo(() => {
     const t = today;
@@ -561,9 +574,10 @@ export default function KpiOverviewPage() {
     };
   }, [start, end, today, rangeSelection, urlLabel, onCommitRange, data?.range_snap, data?.range_composition]);
 
-  // R-40 polish (2026-09-01): revenue-source toggle retired
-  // end-to-end. Nothing to render.
-  const revSourceToggle = null;
+  // R-40 polish (2026-09-01): revenue-source toggle retired end-to-end.
+  // Kevin ruling 2026-10-13 (cleanup): dropped the `const
+  // revSourceToggle = null` + its Shell prop pass; Shell accepts an
+  // undefined slot without rendering anything.
 
   // R-40: folio rail visibility mirrors Labor's mechanism exactly -
   // show the rail when landing_account is a portfolio pseudo-key
@@ -627,7 +641,7 @@ export default function KpiOverviewPage() {
     mainContent = <SkeletonBoard state={skelStateCold} />;
   } else if (!data || (!data.cards && !data.landing_account)) {
     mainContent = <SkeletonBoard state={skelStateCold} />;
-  } else if (useCpTable && (!cpLabor || !cpPurch) && !cpAuxError) {
+  } else if (useCpTable && (!cpLabor || !cpPurch) && !cpEffectiveError) {
     // Kevin fix 2026-09-17 item 1: on CP or NP the CurrentPeriodTable
     // depends on a second (labor+purchasing) fetch. Keep the board
     // skeleton up until that lands - no second loader text state.
@@ -678,7 +692,7 @@ export default function KpiOverviewPage() {
               payload={data}
               labor={cpLabor}
               purch={cpPurch}
-              error={cpAuxError}
+              error={cpEffectiveError}
             />
             <LaborLedger
               labor={laborLedger}
@@ -745,7 +759,7 @@ export default function KpiOverviewPage() {
                   payload={data}
                   labor={cpLabor}
                   purch={cpPurch}
-                  error={cpAuxError}
+                  error={cpEffectiveError}
                 />
                 <CurrentPeriodReview
                   labor={cpLabor}
@@ -770,7 +784,6 @@ export default function KpiOverviewPage() {
                   <PurchasingFold
                     payload={purchasingLedger}
                     error={purchasingLedgerError}
-                    account={account}
                     start={start}
                     end={end}
                     today={today}
@@ -900,7 +913,6 @@ export default function KpiOverviewPage() {
               <PurchasingFold
                 payload={purchasingLedger}
                 error={purchasingLedgerError}
-                account={account}
                 start={start}
                 end={end}
                 today={today}
@@ -964,7 +976,6 @@ export default function KpiOverviewPage() {
         dataLoading={loadState === "loading" || loadState === "refetching"}
         activeSection="pnl_overview"
         rangeProps={rangeProps}
-        revSourceToggle={revSourceToggle}
         /* Salary control - access-gated by salary_toggle_visible on
            the payload (mirrors Labor's canSeeSalary). R-40: no
            layout branch; the control appears whenever access permits,

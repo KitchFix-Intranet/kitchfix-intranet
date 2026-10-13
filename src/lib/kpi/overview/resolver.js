@@ -30,7 +30,7 @@ import { performance } from "node:perf_hooks";
 
 // Labor + purchasing engines (library-call, no HTTP hop).
 import { buildBoard, computeBudgetToDateDays as computeLaborBudgetToDateDays } from "@/app/kpi/labor/lib/board.js";
-import { paginateActuals as paginateLaborActuals, resolveMemberBudget } from "@/lib/labor/loaders.js";
+import { paginateActuals as paginateLaborActuals, resolveMemberBudgets } from "@/lib/labor/loaders.js";
 import {
   loadWeeklyRevenueBasis as loadWeeklyRevenueBasisForOverview,
   attachWeeklyBasisToBoard,
@@ -607,7 +607,10 @@ export async function resolveOverview({
     // resolver caps upstream, but stays defensive for legacy callers.
     loadScDailyRevenue(supa, { members, start: rng.start, end: effectiveEndISO, today }),
     paginateLaborActuals(supa, { members, start: rng.start, end: effectiveEndISO }),
-    Promise.all(members.map(m => resolveMemberBudget(supa, m))),
+    // Kevin ruling 2026-10-13 (KPI perf). Bulk-fetched by account_key IN()
+    // instead of one call per member. ALL / EAST / WEST views drop from
+    // 2 * N queries to 2 total here (-20 on an 11-member rollup).
+    resolveMemberBudgets(supa, members, FISCAL_YEAR),
     paginatePurchasingWeekly(supa, { members, start: rng.start, end: effectiveEndISO }),
     paginatePurchasingActuals(supa, { members, start: rng.start, end: effectiveEndISO }),
     loadPurchasingPending(supa, { members, start: rng.start, end: effectiveEndISO }),
@@ -722,9 +725,15 @@ export async function resolveOverview({
   const scByAcct = scResp.data;
   const scCarveOutByAcct = scCarveOutResp?.data || new Map();
   const laborActuals = laborActualsResp.data;
+  // Kevin ruling 2026-10-13. resolveMemberBudgets returns a
+  // Map<account, { data | error, scope }>. Preserve the earlier error-
+  // surfacing shape by scanning and bailing on the first error; the
+  // downstream code expects memberBudgets as Map<account, periods[]>.
   const memberBudgets = new Map();
-  for (let i = 0; i < members.length; i += 1) {
-    memberBudgets.set(members[i], memberBudgetResults[i].data);
+  for (const m of members) {
+    const r = memberBudgetResults.get(m);
+    if (r?.error) return { error: r.error, scope: r.scope || "member_budgets" };
+    memberBudgets.set(m, r?.data || []);
   }
   const purchWeekly = purchWeeklyResp.data;
   const purchActuals = purchActualsResp.data;
@@ -851,51 +860,51 @@ export async function resolveOverview({
   // as throughISO so labor's budget-to-date days proration stops at
   // the same edge as revenue + purchasing. On closed ranges this is
   // a no-op (effectiveEndISO == rng.end).
-  const laborBoard = await timeIt("buildBoard(labor)", async () => buildBoard({
-    account: accountKey,
-    start: rng.start,
-    end: effectiveEndISO,
-    today,
-    throughISO: effectiveEndISO,
-    actuals: mergedLaborActuals,
-    budget_periods: laborBudgetPeriods,
-    account_state: "hourly_ok",
-    workerToEmail,
-  }));
-
-  // 6. Call purchasing buildPurchasingBoard as a library call.
-  //
-  // R-63 (Kevin 2026-09-03): pass effectiveEndISO as the range end AND
-  // as throughISO so the purchasing board's own budget-to-date days
-  // proration lands on the same edge that the SC + labor loaders use.
-  // On closed ranges effectiveEndISO == rng.end (no change).
-  const purchBoard = await timeIt("buildBoard(purchasing)", async () => buildPurchasingBoard({
-    members,
-    start: rng.start,
-    // Kevin CC prompt 2026-09-14 (prereq C · defect 1). Pass the
-    // FULL range end for the bucket-budget compute, not
-    // effectiveEndISO. buildPurchasingBoard's `bucketBudgetForRange`
-    // sums `period_amount/4` over weekStartsInRange(start, end);
-    // on running ranges the prior `end: effectiveEndISO` truncated
-    // that to 1 week of a 4-week period, so 3200/3400/3500 pb read
-    // as 1/4 of the period plan ($6,252 not $25,009 on TBJ CP).
-    // Cosmetic until #1119 landed; now the truncated pb propagates
-    // through the week-basis batr, both cards, and every variance.
-    // `throughISO: effectiveEndISO` (below) still controls the
-    // budget-to-date proration correctly - two different
-    // computations with two different edges. Series data
-    // (weeklyRows) is pre-fetched with effectiveEndISO already, so
-    // widening the weeks list here doesn't pick up any extra
-    // actual data on running ranges; series iteration returns null
-    // for future weeks.
-    end: rng.end,
-    today,
-    throughISO: effectiveEndISO,
-    actualsRows: purchActuals,
-    weeklyRows: purchWeekly,
-    pendingRow: purchPending,
-    budgetMap: purchBudgets,
-  }));
+  // Kevin ruling 2026-10-13 (KPI perf). buildBoard(labor) and
+  // buildBoard(purchasing) run in parallel - neither reads the other's
+  // output. The labor board depends on workerToEmail (from
+  // resolveWorkerMeta above); the purchasing board depends only on
+  // layer-1 outputs already in scope. Pure CPU work; parallelism saves
+  // whichever finishes second (~1-2s on portfolio views).
+  const [laborBoard, purchBoard] = await Promise.all([
+    timeIt("buildBoard(labor)", async () => buildBoard({
+      account: accountKey,
+      start: rng.start,
+      end: effectiveEndISO,
+      today,
+      throughISO: effectiveEndISO,
+      actuals: mergedLaborActuals,
+      budget_periods: laborBudgetPeriods,
+      account_state: "hourly_ok",
+      workerToEmail,
+    })),
+    // 6. Call purchasing buildPurchasingBoard as a library call.
+    //
+    // R-63 (Kevin 2026-09-03): pass effectiveEndISO as the range end AND
+    // as throughISO so the purchasing board's own budget-to-date days
+    // proration lands on the same edge that the SC + labor loaders use.
+    // On closed ranges effectiveEndISO == rng.end (no change).
+    //
+    // Kevin CC prompt 2026-09-14 (prereq C · defect 1). Pass the FULL
+    // range end for the bucket-budget compute, not effectiveEndISO.
+    // buildPurchasingBoard's `bucketBudgetForRange` sums
+    // `period_amount/4` over weekStartsInRange(start, end); on running
+    // ranges the prior `end: effectiveEndISO` truncated that to 1 week
+    // of a 4-week period. `throughISO: effectiveEndISO` below still
+    // controls the budget-to-date proration correctly - two different
+    // computations with two different edges.
+    timeIt("buildBoard(purchasing)", async () => buildPurchasingBoard({
+      members,
+      start: rng.start,
+      end: rng.end,
+      today,
+      throughISO: effectiveEndISO,
+      actualsRows: purchActuals,
+      weeklyRows: purchWeekly,
+      pendingRow: purchPending,
+      budgetMap: purchBudgets,
+    })),
+  ]);
 
   // 7. Compute per-period revenue by line + range totals.
   // Kevin ruling 2026-09-07: shared periodBasis.js owns the picker

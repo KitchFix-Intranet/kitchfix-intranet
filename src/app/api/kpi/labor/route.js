@@ -86,6 +86,7 @@ import {
   V37_REVENUE_FLEX_ACCOUNTS,
   paginateActuals,
   resolveMemberBudget,
+  resolveMemberBudgets,
   buildPriorPeriodComparison,
 } from "@/lib/labor/loaders.js";
 
@@ -165,6 +166,11 @@ async function fetchAccountsDirectory(supa) {
 // were extracted to src/lib/labor/loaders.js on 2026-08-31 (Overview
 // Phase 2 PR-1). Imported at the top of this file - see that import
 // block for the contract. Pure move, zero behaviour change.
+
+// Kevin ruling 2026-10-13 (KPI perf). Raise the Vercel function timeout to
+// 30s so aggregate labor queries have room to finish. Default was below
+// the resolver's heavy-aggregate wall time.
+export const maxDuration = 30;
 
 export async function GET(request) {
   // PR-3b - TEST_MODE double-gate mirrors src/middleware.js and the
@@ -849,7 +855,11 @@ export async function GET(request) {
           .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
           .is("resolved_at", null)
           .order("total_amount", { ascending: false }),
-        Promise.all(members.map(m => resolveMemberBudget(supa, m))),
+        // Kevin ruling 2026-10-13 (KPI perf). Bulk IN() replaces the
+        // per-member Promise.all - 2 queries instead of 2 * N. Returns
+        // Map<account, {data | error}>; the error scan + Map assembly
+        // below adapt to that shape.
+        resolveMemberBudgets(supa, members, 2026),
       ]);
     } catch (e) {
       // P3 (Step 4 2026-08-29): the try/catch wraps 5 loaders
@@ -869,13 +879,11 @@ export async function GET(request) {
     // safeError so downstream period-scope math cannot silently fall
     // back to fiscal defaults with wrong-looking-right numbers.
     if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_aggregate", periodDays.error), { status: 500 });
-    // resolveMemberBudget error surfacing: each element in
-    // memberBudgetResults carries { data } or { error, scope }. First
-    // non-null error is the one we surface (same shape as the prior
-    // serial loop's early return).
-    for (let i = 0; i < memberBudgetResults.length; i += 1) {
-      const r = memberBudgetResults[i];
-      if (r.error) return NextResponse.json(safeError(r.scope, r.error), { status: 500 });
+    // resolveMemberBudgets error surfacing: Map<account, {data|error}>.
+    // First non-null error is the one we surface (same early-return shape
+    // the prior per-member Promise.all used).
+    for (const [, r] of memberBudgetResults) {
+      if (r?.error) return NextResponse.json(safeError(r.scope, r.error), { status: 500 });
     }
 
     const periodBounds = new Map();
@@ -901,9 +909,14 @@ export async function GET(request) {
     // aggregate on both sides. Any superseded member period marks the
     // aggregate period superseded; member_detail carries the per-member
     // breakdown for the drill.
+    // Kevin ruling 2026-10-13. Downstream expects Map<account, periods[]>;
+    // the bulk loader returns Map<account, {data|error}>. Unwrap here.
+    // Any member missing from the bulk result (shouldn't happen - the
+    // loader seeds every requested member) gets an empty array so the
+    // following aggregator doesn't skip them.
     const memberBudgets = new Map();
-    for (let i = 0; i < members.length; i += 1) {
-      memberBudgets.set(members[i], memberBudgetResults[i].data);
+    for (const m of members) {
+      memberBudgets.set(m, memberBudgetResults.get(m)?.data || []);
     }
     const perPeriodAgg = new Map();  // p -> { amount, superseded, member_detail: [] }
     for (const [m, list] of memberBudgets) {
