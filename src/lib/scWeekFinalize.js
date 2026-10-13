@@ -28,7 +28,7 @@
 //                              the response body with 403 status
 
 import { getServiceClient } from "@/lib/supabase";
-import { isScLockOverride } from "@/lib/admin";
+import { isScLockOverrideDb } from "@/lib/admin";
 import { buildInvoicePayload } from "@/lib/billing/buildInvoicePayload";
 import { postInvoiceDraft, NotAllowlistedError, QboPostError } from "@/lib/billing/qboAdapter";
 import { fireN1, fireN2, fireNoOpAlert } from "@/lib/billing/qboNotifications";
@@ -363,7 +363,7 @@ export async function assertWeekOpenForWrite(accountKey, dates, email) {
   if (!Array.isArray(dates) || dates.length === 0) return null;
 
   // Override bypass. Same identity check as assertDaysUnlockedForWrite.
-  if (isScLockOverride(email)) return null;
+  if (await isScLockOverrideDb(email)) return null;
 
   // Collapse to unique week starts. A 30-day bulk write touches at
   // most 5-6 weeks; the loop below is bounded by that.

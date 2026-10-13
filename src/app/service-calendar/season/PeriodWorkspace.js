@@ -57,7 +57,10 @@ function shiftIso(iso, days) {
 // only for SC_LOCK_OVERRIDE members (K-10).
 import WeekFinalizeControl from "../v2/billing/WeekFinalizeControl";
 import { isPerMealBillingAccount } from "../v2/billing/perMealAccounts";
-import { isScLockOverride } from "@/lib/admin";
+// Stage 4c: `isScLockOverride` import retired. Lock-override status
+// now arrives as the `viewerIsLockOverride` prop (set upstream by
+// ServiceCalendar from the sc-load response, which computes the flag
+// via isScLockOverrideDb server-side).
 
 // PR-E (2026-08-14): local Monday-derivation. Byte-identical to
 // src/lib/scWeekFinalize.js `mondayOfWeek` - inlined here because
@@ -147,6 +150,11 @@ export default function PeriodWorkspace({
   // Drives the SC_LOCK_OVERRIDE affordances (Revert + Retry). Also
   // gates the FETCH of finalize states (skip when unknown).
   viewerEmail = null,
+  // Stage 4c: server-derived lock-override flag. ServiceCalendar reads
+  // this from sc-load's viewerIsLockOverride and passes it down;
+  // supersedes the client-side isScLockOverride(viewerEmail) call.
+  // Falsy during loading matches the pre-load render.
+  viewerIsLockOverride = false,
   // 2026-09-04 (motion cleanup): finalize success routes through the
   // shared page-level toast. WeekFinalizeControl consumes this.
   showToast = null,
@@ -206,7 +214,7 @@ export default function PeriodWorkspace({
   // property (perMealAccounts.js explicit Set).
   const accountKey = account?.key || "";
   const showFinalize = scV2 && isPerMealBillingAccount(accountKey);
-  const isOverrideUser = isScLockOverride(viewerEmail);
+  const isOverrideUser = viewerIsLockOverride;
   // Map<week_start ISO, live-row-object | null>. Populated after the
   // fetch below; null-row = OPEN week.
   const [finalizeRowsByWeek, setFinalizeRowsByWeek] = useState(() => new Map());

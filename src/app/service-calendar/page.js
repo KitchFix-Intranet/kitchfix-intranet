@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { useSession } from "next-auth/react";
-import { SC_ADMINS } from "@/lib/admin";
+// Stage 4c: SC_ADMINS import retired. The Coming Soon page-access gate
+// now reads `viewerIsScAccess` from the sc-hero response, which the
+// server computes via isScAccessDb against the people table.
 import ServiceCalendar from "./ServiceCalendar";
 // PR-K (2026-08-18): one SC-scoped toast supersedes SubmissionToast +
 // SaveConfirmation + ResetToast + the cream "No service recorded"
@@ -171,12 +173,24 @@ function ServiceCalendarPageBody() {
     };
   }, [toast]);
 
+  // Stage 4c: sc-hero also returns viewerIsScAccess. The Coming Soon
+  // gate below reads from scAccess rather than the sync SC_ADMINS set
+  // it used before. null = request in flight (brief loading screen);
+  // true/false = resolved. Access-denied users see Coming Soon;
+  // granted users see ServiceCalendar.
+  const [scAccess, setScAccess] = useState(null);
   useEffect(() => {
     if (status !== "authenticated") return;
+    let cancelled = false;
     fetch("/api/service-calendar?action=sc-hero")
       .then((r) => r.json())
-      .then((d) => { if (d.heroImage) setHeroImage(d.heroImage); })
-      .catch(() => {});
+      .then((d) => {
+        if (cancelled) return;
+        if (d.heroImage) setHeroImage(d.heroImage);
+        setScAccess(!!d.viewerIsScAccess);
+      })
+      .catch(() => { if (!cancelled) setScAccess(false); });
+    return () => { cancelled = true; };
   }, [status]);
 
   if (status === "loading") {
@@ -218,9 +232,28 @@ function ServiceCalendarPageBody() {
     );
   }
 
-  const email = session?.user?.email?.toLowerCase().trim() || "";
   const firstName = session?.user?.name?.split(" ")[0] || "Chef";
-  const isDev = SC_ADMINS.includes(email);
+
+  // Stage 4c: `isDev` now reflects the DB-backed sc-access flag. The
+  // debug affordances (test URL, ?debug=failed) are gated behind URL
+  // params and only trigger inside ServiceCalendar itself, so passing
+  // `isDev={true}` for any user who passes the access gate is fine -
+  // the gate IS the access boundary.
+  const isDev = scAccess === true;
+
+  // scAccess === null: brief loading state before the sc-hero response
+  // lands. Match the status==="loading" spinner shape so the shift is
+  // seamless when it flips to the resolved view.
+  if (scAccess === null) {
+    return (
+      <div className="oh-app">
+        <div className="oh-bound" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
+          <div className="oh-spinner" />
+          <p style={{ color: "#94a3b8", fontSize: 14, fontWeight: 600 }}>Loading Service Calendar...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isDev) {
     return (

@@ -26,7 +26,10 @@ import { derivePhaseTimeline } from "./season/phaseDerivation";
 // Zero effect on non-MLB accounts (falls through to the own-
 // timeline path).
 import { resolveSpringDateSet } from "./season/mlbSpringSibling";
-import { isScAdmin } from "@/lib/admin";
+// Stage 4c: `isScAdmin` import retired. Client-side admin gate derives
+// from the sc-load response's `viewerIsScAdmin` field (set by the
+// server via isScAdminDb) instead of calling the sync helper from a
+// client component.
 import AdminPanel from "./admin/AdminPanel";
 import { computeInitialView } from "./computeInitialView";
 import { useScV2, useScEntryV2Effective } from "./v2/flags";
@@ -653,9 +656,15 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const [asOf, setAsOf] = useState(null);
 
   // Admin gate (client-side - just controls whether the toggle + body
-  // RENDER, not authorization). Server-side isScAdmin checks on every
+  // RENDER, not authorization). Server-side isScAdminDb checks on every
   // admin POST action in route.js remain the security boundary.
-  const isAdmin = isScAdmin(session?.user?.email);
+  //
+  // Stage 4c: derived from the sc-load response (`viewerIsScAdmin`,
+  // computed server-side via isScAdminDb) rather than a client-side
+  // sync hardcoded-list check. Falsy during the pre-load window
+  // (data === null) which matches the prior behavior for the empty
+  // email case.
+  const isAdmin = !!data?.viewerIsScAdmin;
 
   // Derived view booleans - pure functions of (scope, lens, isAdminView).
   // Use these for render conditions; effects must depend on the
@@ -3960,6 +3969,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               scV2={scV2}
               focusTargetDate={focusTargetDate}
               viewerEmail={session?.user?.email}
+              viewerIsLockOverride={!!data?.viewerIsLockOverride}
               showToast={showToast}
             />
           );
@@ -4229,6 +4239,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               scV2={scV2}
               focusTargetDate={focusTargetDate}
               viewerEmail={session?.user?.email}
+              viewerIsLockOverride={!!data?.viewerIsLockOverride}
               showToast={showToast}
             />
           );

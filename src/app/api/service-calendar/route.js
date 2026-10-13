@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
-import { isScAdmin, isScLockOverride } from "@/lib/admin";
+import { isScAccessDb, isScAdminDb, isScLockOverrideDb } from "@/lib/admin";
 import { assertDaysUnlockedForWrite } from "@/lib/scPeriodLock";
 // sc-30 (2026-08-06, PR-A): week-finalize lock. Sister to
 // assertDaysUnlockedForWrite. Wired into the same four write paths;
@@ -384,6 +384,10 @@ export async function GET(request) {
 
   try {
     // ── sc-hero: random hero image (global pool) ──
+    // Stage 4c augment: returns viewerIsScAccess so page.js can replace
+    // its sync SC_ADMINS.includes() Coming Soon gate with a DB-backed
+    // check. The page already fetches sc-hero on mount; piggybacking
+    // the access flag avoids a separate API call.
     if (action === "sc-hero") {
       const supa = getServiceClient();
       const { data, error } = await supa
@@ -397,7 +401,8 @@ export async function GET(request) {
       const heroImage = urls.length
         ? urls[Math.floor(Math.random() * urls.length)]
         : "";
-      return NextResponse.json({ success: true, heroImage });
+      const viewerIsScAccess = await isScAccessDb(email);
+      return NextResponse.json({ success: true, heroImage, viewerIsScAccess });
     }
 
     // ── sc-accounts: list every imported account ──
@@ -465,6 +470,14 @@ export async function GET(request) {
           { status: 400 }
         );
       }
+
+      // Stage 4c: resolve admin flags once per sc-load call and reuse
+      // in the response payload below. Each wrapper is a single DB
+      // read via admin.js getPermissions, so computing both here (vs.
+      // inline at the response construction) saves two round-trips on
+      // the hot path without changing semantics.
+      const scLoadScAdmin      = await isScAdminDb(email);
+      const scLoadLockOverride = await isScLockOverrideDb(email);
 
       let year, month;
       if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
@@ -612,11 +625,18 @@ export async function GET(request) {
         serviceGroups,
         days,
         // sc-25 (2026-08-01): does the current viewer override the
-        // period lock? Server truth via isScAdmin(email) - client must
+        // period lock? Server truth via isScAdminDb(email) - client must
         // not re-derive from role strings or a hardcoded list. Payload-
         // level (not per-day) because the viewer's identity is constant
         // across the response.
-        viewerCanEditPastPeriods: isScAdmin(email),
+        //
+        // Stage 4c: three flags carried on the payload - the client
+        // components (ServiceCalendar, PeriodWorkspace) can no longer
+        // call the sync admin helpers directly; they consume these.
+        // Both DB wrappers are called once per request and reused.
+        viewerCanEditPastPeriods: scLoadScAdmin,
+        viewerIsScAdmin:          scLoadScAdmin,
+        viewerIsLockOverride:     scLoadLockOverride,
         // Overrides (sc_day_overrides) not migrated; the calendar
         // tolerates an empty array.
         overrides: [],
@@ -864,7 +884,7 @@ export async function GET(request) {
     // ── sc-admin-all-config: per-account groups + services + as-of-today
     //    price + lastUpdatedAt, for the admin overview landing. ──
     if (action === "sc-admin-all-config") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json(
           { error: "Admin access required" },
           { status: 403 }
@@ -878,7 +898,7 @@ export async function GET(request) {
     //    one account, for the admin per-account editor. Cleaner than
     //    sc-load (which also pulls the calendar's full month data). ──
     if (action === "sc-admin-account-config") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json(
           { error: "Admin access required" },
           { status: 403 }
@@ -900,7 +920,7 @@ export async function GET(request) {
     //    current as-of-today fee + next upcoming change. The contract-
     //    revenue surface. ──
     if (action === "sc-admin-fee-list") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json(
           { error: "Admin access required" },
           { status: 403 }
@@ -913,7 +933,7 @@ export async function GET(request) {
     // ── sc-admin-fee-history: full sc_fee_schedule history for one
     //    account. Used by the per-account fee editor's history panel. ──
     if (action === "sc-admin-fee-history") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json(
           { error: "Admin access required" },
           { status: 403 }
@@ -933,7 +953,7 @@ export async function GET(request) {
     // ── sc-admin-labor-budgets-list: all live rows for one MLB account ──
     // Returns per-period budgets + labor_ratio. MLB-only via the M-0 set.
     if (action === "sc-admin-labor-budgets-list") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const accountKey = searchParams.get("account");
@@ -952,7 +972,7 @@ export async function GET(request) {
 
     // ── sc-admin-labor-budget-history: full history for one (account, period) ──
     if (action === "sc-admin-labor-budget-history") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const accountKey = searchParams.get("account");
@@ -986,7 +1006,7 @@ export async function GET(request) {
     // ── sc-admin-labor-ratio-history: full sc_config_changelog history
     //    for one account's labor_ratio edits ──
     if (action === "sc-admin-labor-ratio-history") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const accountKey = searchParams.get("account");
@@ -1955,7 +1975,7 @@ export async function POST(request) {
     // a new live row later.
     if (action === "sc-revert-finalize") {
       const { accountKey, weekStart, reason } = body;
-      if (!isScLockOverride(email)) {
+      if (!(await isScLockOverrideDb(email))) {
         return NextResponse.json(
           { success: false, error: "Revert is restricted to the SC_LOCK_OVERRIDE group" },
           { status: 403 }
@@ -2161,7 +2181,7 @@ export async function POST(request) {
     // than stalling the edit. Owner ruling: names-without-number is
     // worth shipping; a wrong number or a hung spinner is not.
     if (action === "sc-admin-backdate-preview") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const { type, accountKey, effectiveDate, serviceId, newPrice } = body;
@@ -2216,7 +2236,7 @@ export async function POST(request) {
       // Gate is the corporate-write set (SC_ADMIN_EMAILS via isScAdmin).
       // Stage 1 opened the admin page to 8 corporate users; the gate
       // here mirrors that.
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json(
           { error: "Admin access required" },
           { status: 403 }
@@ -2404,7 +2424,7 @@ export async function POST(request) {
     // out of the today-or-future floor; still validates YYYY-MM-DD AND
     // >= 2024-01-01 lower floor for typo protection.
     if (action === "sc-admin-fee-set") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json(
           { error: "Admin access required" },
           { status: 403 }
@@ -2530,7 +2550,7 @@ export async function POST(request) {
     //    row; response includes the supersede count for symmetry with
     //    fee edits' history read. MLB-only. ──
     if (action === "sc-admin-labor-budget-set") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const { accountKey, period, hourlyBudget, salaryBudget, revenueForecast, effectiveFrom, reason, requestedBy } = body;
@@ -2584,7 +2604,7 @@ export async function POST(request) {
     //    Value stored on accounts.labor_ratio; audit in sc_config_changelog.
     //    MLB-only. Value bounded (0, 1) at the schema level. ──
     if (action === "sc-admin-labor-ratio-set") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const { accountKey, laborRatio, reason, requestedBy } = body;
@@ -2624,7 +2644,7 @@ export async function POST(request) {
       action === "sc-admin-archive-service" ||
       action === "sc-admin-archive-group"
     ) {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const isGroup = action === "sc-admin-archive-group";
@@ -2695,7 +2715,7 @@ export async function POST(request) {
       action === "sc-admin-reactivate-service" ||
       action === "sc-admin-reactivate-group"
     ) {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const isGroup = action === "sc-admin-reactivate-group";
@@ -2731,7 +2751,7 @@ export async function POST(request) {
     }
 
     if (action === "sc-admin-add-service") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const {
@@ -2789,7 +2809,7 @@ export async function POST(request) {
     }
 
     if (action === "sc-admin-add-group") {
-      if (!isScAdmin(email)) {
+      if (!(await isScAdminDb(email))) {
         return NextResponse.json({ error: "Admin access required" }, { status: 403 });
       }
       const { accountKey, groupName, reason, requestedBy } = body;
