@@ -71,7 +71,9 @@
  *
  * `d` is a signed number. NaN / null propagate as null.
  */
-export function stateForDelta(d) {
+// Kevin ruling 2026-10-13 (cleanup). Un-exported; only computeTicker
+// below consumes stateForDelta / copyForState / computeLevers.
+function stateForDelta(d) {
   if (d == null || Number.isNaN(d)) return null;
   const v = Number(d);
   if (v >= 1)   return "ahead";
@@ -83,7 +85,7 @@ export function stateForDelta(d) {
 /**
  * Copy for the state pill.
  */
-export function copyForState(state) {
+function copyForState(state) {
   switch (state) {
     case "ahead":           return "Ahead of target";
     case "on_track_above":  return "On track";
@@ -112,7 +114,7 @@ export function copyForState(state) {
  * Lines with actual_pct or target_pct null are dropped from the
  * candidate set (no data - can't rank).
  */
-export function computeLevers(lines) {
+function computeLevers(lines) {
   if (!Array.isArray(lines) || lines.length === 0) {
     return { biggest: null, offsetting: null };
   }
