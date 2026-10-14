@@ -77,11 +77,10 @@ const LAST_RANGE_KEY = "kpi:labor:lastRange";
 // change - the function body is byte-identical there.
 
 export default function KpiLaborPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const email = session?.user?.email?.toLowerCase().trim() || "";
   // V-role-gates - the server is the sole authority for KPI access
   // (see docs/KPI_ROLE_GATES_SPEC.md + src/lib/kpi/roleGate.js).
   // Client-side gating is removed here; the fetch below returns
@@ -90,7 +89,6 @@ export default function KpiLaborPage() {
   // no role, or { locked: true, landing_account } if the caller
   // has a role but not for the requested account. The client no
   // longer holds an OPS_LEADERSHIP list.
-  const isAllowed = !!email;
 
   // V-role-gates - account resolution now leans on the server for
   // the default. If the URL has no account and localStorage has no
@@ -245,18 +243,21 @@ export default function KpiLaborPage() {
   //       relying on a `cancelled` flag that stale closures still resolve.
   //       Prior pattern let two fetches race and both no-op their state
   //       transitions when their cleanup fired before their .then.
-  //   (b) 15s hard timeout: if the network is quiet-but-stuck (extension,
+  //   (b) 55s hard timeout: if the network is quiet-but-stuck (extension,
   //       flaky VPN, ISP hiccup), the fetch transitions to an error state
   //       with a Retry CTA rather than spinning skeleton forever.
-  //   (c) session status "loading" does NOT block a fetch we're already
-  //       able to run. If we've been authenticated once (isAllowed was
-  //       true) and status flaps back to "loading" (authjs refresh
-  //       failure), we keep the last-good `data` on screen and don't
-  //       reset back to skeleton.
+  //       Raised from 15s on 2026-10-14 to match Overview (#1278) - the
+  //       labor route legitimately runs 15-17s on single accounts, so
+  //       the old ceiling aborted real responses.
+  //   (c) client-side auth is advisory only - the API route is the sole
+  //       authority (matches Overview + Purchasing). The fetch fires once
+  //       session status settles; 401/403 map to loadState='auth'. On an
+  //       authjs flap back to "loading" the early return keeps the
+  //       last-good `data` on screen without resetting to skeleton.
   useEffect(() => {
-    if (status !== "authenticated" || !isAllowed) return;
+    if (status === "loading") return;
     const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(new Error("timeout_15s")), 15000);
+    const to = setTimeout(() => ctrl.abort(new Error("timeout_55s")), 55000);
     setLoadState("loading");
     setErrorMsg(null);
     setErrCode(null);
@@ -300,15 +301,15 @@ export default function KpiLaborPage() {
       .catch((e) => {
         // AbortError from cleanup: silent (a newer effect is inbound).
         // AbortError from our timeout: visible error with retry.
-        if (e?.name === "AbortError" && String(ctrl.signal.reason?.message || "") !== "timeout_15s") {
+        if (e?.name === "AbortError" && String(ctrl.signal.reason?.message || "") !== "timeout_55s") {
           return;
         }
         if (String(e?.message) === "session_expired" || String(e?.message) === "forbidden") {
           setLoadState("auth");
           return;
         }
-        const msg = e?.name === "AbortError" || String(ctrl.signal.reason?.message || "") === "timeout_15s"
-          ? "Request took longer than 15 seconds. The API is reachable but the browser tab did not receive a response - retry, or check for a blocking extension."
+        const msg = e?.name === "AbortError" || String(ctrl.signal.reason?.message || "") === "timeout_55s"
+          ? "Request took longer than 55 seconds. The API is reachable but the browser tab did not receive a response - retry, or check for a blocking extension."
           : String(e?.message || e).slice(0, 200);
         setLoadState("error");
         setErrorMsg(msg);
@@ -316,7 +317,7 @@ export default function KpiLaborPage() {
       })
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
-  }, [status, isAllowed, fetchAccount, start, end, searchParams]);
+  }, [status, fetchAccount, start, end, searchParams]);
 
   // R-109 PR 2 · fetch Overview + Purchasing for the CP one-table
   // view. Same pattern the Overview page uses: kicks in only when
@@ -667,15 +668,11 @@ export default function KpiLaborPage() {
     return `/api/kpi/labor/export?${p.toString()}`;
   }
 
-  // ── Auth screens (P9 · nine states 1-3) ─────────────
+  // ── Auth screens (P9 · state 1 here; states 2-3 render off
+  // loadState='auth' + authError below, fed by the route's 401/403.
+  // Client session is advisory only - matches Overview + Purchasing) ──
   if (status === "loading") {
     return (<div className="kpi-app"><div className="kpi-wrap"><StateLoading /></div></div>);
-  }
-  if (status === "unauthenticated") {
-    return (<div className="kpi-app"><div className="kpi-wrap"><StateSessionExpired /></div></div>);
-  }
-  if (!isAllowed) {
-    return (<div className="kpi-app"><div className="kpi-wrap"><StateNotAuthorized /></div></div>);
   }
 
   // Labor empty-state fix follow-up (Kevin 2026-09-07): dead
