@@ -221,6 +221,14 @@ export function Shell({
   previewAccount = null,
   onExitPreview,
 }) {
+  // Hydration fix (2026-10-14): new Date().toLocaleString() rendered
+  // different text on server vs client, tripping a React hydration
+  // mismatch on every page using this Shell (Overview included).
+  // Mount-gated: server + first client render emit nothing, the
+  // timestamp fills in after mount. The print header still carries it
+  // because printing happens well after mount.
+  const [generatedAt, setGeneratedAt] = useState("");
+  useEffect(() => { setGeneratedAt(new Date().toLocaleString()); }, []);
   const freshH = hoursSinceISO(freshness?.last_walk_at);
   return (
     <>
@@ -239,7 +247,7 @@ export function Shell({
           </strong>
         </div>
         {printScopeText && <div>{printScopeText}</div>}
-        <div>Generated {new Date().toLocaleString()}</div>
+        {generatedAt && <div>Generated {generatedAt}</div>}
       </div>
 
       {/* 2026-08-28 preview banner. Amber, pinned above the command
