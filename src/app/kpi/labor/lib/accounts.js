@@ -52,18 +52,25 @@ export const STATIC_RDO_DISPLAY = { East: "S. Lynch", West: "R. Moore" };
 // dropdown - the Overview carries the daily story, so the menu offers
 // one real destination. Both stay `enabled: true` and keep their
 // `path`: the routes remain reachable via the Overview cost-line
-// drill-downs (CostLines.js:85 links 3100 -> /kpi/labor and 3200/3400/
-// 3500 -> /kpi/purchasing) and by direct URL. `enabled: true` is what
-// tells Shell.js:80 to resolve the active-label lookup and print
-// "Labor" / "Purchasing" in the Section control on those routes;
-// marking them enabled:false would render the boards under a SOON
-// tag. The `hidden` flag is menu-only.
+// RETIRED 2026-10-15 (Kevin ruling): the `labor` and `purchasing`
+// entries are gone. Those standalone views are retired - their
+// page.js files are now redirect stubs to /kpi/overview, and the
+// Overview's own folds (LaborLedger, PurchasingFold) carry the
+// drill-downs. The API routes are untouched; the folds still call
+// them.
+//
+// Correction to the prior note here: it claimed CostLines linked 3100
+// -> /kpi/labor and 3200/3400/3500 -> /kpi/purchasing. That was
+// removed by the 2026-10-09 ruling - CostLines rows are plain text
+// (see CostLines.js header). The comment had gone stale.
+//
+// Shell.js:84 resolves `SECTIONS.find(s => s.key === activeKey) ||
+// SECTIONS[0]`, so any stale activeKey now falls back to P&L Overview.
+// The `hidden` flag is menu-only; `enabled: false` renders a SOON tag.
 export const SECTIONS = [
-  { key: "pnl_overview", label: "P&L Overview", enabled: true,  path: "/kpi/overview"                  },
-  { key: "labor",        label: "Labor",        enabled: true,  path: "/kpi/labor",      hidden: true },
-  { key: "purchasing",   label: "Purchasing",   enabled: true,  path: "/kpi/purchasing", hidden: true },
-  { key: "sga",          label: "SG&A",         enabled: false                                        },
-  { key: "travel",       label: "Travel",       enabled: false                                        },
+  { key: "pnl_overview", label: "P&L Overview", enabled: true,  path: "/kpi/overview" },
+  { key: "sga",          label: "SG&A",         enabled: false                        },
+  { key: "travel",       label: "Travel",       enabled: false                        },
 ];
 
 // Preset date keys (client-resolvable). Same values the loader's
