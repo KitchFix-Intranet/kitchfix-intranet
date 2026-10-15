@@ -689,15 +689,29 @@ export async function GET(request) {
     for (const r of weekly) if (isDescendantOfLine(r.gl_line_code, gl)) s += Number(r.amount || 0);
     return Math.round(s * 100) / 100;
   }
-  // R-147 cutover 2026-09-22. Post-cutover invoice-side rows arrive
-  // from paginateActuals tagged `source='invoice_submissions'` for
-  // capture-eligible accounts on invoice_date >= 2026-09-07. Both
-  // sources contribute to the bill-side subtotal.
+  // Bills-side spend = every non-excluded coded row that is NOT card
+  // spend. Cards are definitionally rippling_spend only (loaders.js:
+  // "Card spend is UNCHANGED. rippling_spend rows keep flowing"), so
+  // bills is the exact complement: billcom, invoice_submissions,
+  // billcom_credit (vendor credits, negative - they net in), upload,
+  // and any future bill-side source, with no edit to this filter.
+  //
+  // Complement, not an allowlist (2026-10-15 ruling, see
+  // PERIODCARD_PART_A_PROBE_FINDINGS): the prior allowlist
+  // (billcom + invoice_submissions) silently dropped billcom_credit and
+  // upload, so bills + cards != hero and the Part A assertion fired on
+  // P1-P9. An allowlist re-breaks whenever a source type is added
+  // (invoice_submissions itself was an R-147 addition). The complement
+  // makes bills + cards == sum of all non-excluded actuals by
+  // construction, so hero == bills + cards is a structural identity.
+  // Vendor credits now net into the bucket over/under verdict (Kevin
+  // ruling 2026-10-15), matching R-147 credit handling on the
+  // invoice_submissions lane.
   function billsOnlySpentForGl(gl) {
     let s = 0;
     for (const r of actuals) {
       if (!isDescendantOfLine(r.gl_line_code, gl)) continue;
-      if (r.source !== "billcom" && r.source !== "invoice_submissions") continue;
+      if (r.source === "rippling_spend") continue;
       s += Number(r.amount || 0);
     }
     return Math.round(s * 100) / 100;
