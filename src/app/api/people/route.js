@@ -37,6 +37,8 @@ import {
   updateSubmissionStatus,
 } from "@/lib/dataStore";
 import { sendEmailSA } from "@/lib/gmail";
+import { auth } from "@/lib/auth";
+import { isOpsLeadershipDb } from "@/lib/admin";
 
 // ═══════════════════════════════════════
 // PEOPLE PORTAL API
@@ -54,7 +56,7 @@ const SHEETS = {
   HERO: "hero_images",
   ACCOUNTS: "accounts",
   CONTACTS: "contacts",
-  ADMINS: "admins",
+  // Stage 2: ADMINS removed - admin check now DB-backed via isOpsLeadershipDb
   NOTIFICATIONS: "notifications",
   SUBMISSIONS: "submissions",
   DRAFTS: "drafts",
@@ -386,24 +388,28 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action") || "bootstrap";
-    const userEmail = searchParams.get("email") || "";
+
+    // Stage 2: derive identity from server session, not client query param.
+    // Middleware already gates unauthenticated users, so session should
+    // always exist here. The email param is no longer trusted.
+    const session = await auth();
+    const userEmail = session?.user?.email || "";
 
 if (action === "bootstrap") {
-         const [accounts, contacts, admins, submissions, heroImages, drafts] = await Promise.all([
+         const [accounts, contacts, submissions, heroImages, drafts] = await Promise.all([
                   readSheetSA(SHEET_IDS.HUB, SHEETS.ACCOUNTS),
         readSheetSA(SHEET_IDS.HUB, SHEETS.CONTACTS),
-        readSheetSA(SHEET_IDS.HUB, SHEETS.ADMINS),
+        // Stage 2: admins tab removed - admin check now uses DB-backed
+        // isOpsLeadershipDb (people.is_ops_leadership + super-admin).
         getSubmissions({ module: "people" }),
         readSheetSA(SHEET_IDS.HUB, SHEETS.HERO),
         readSheetSA(SHEET_IDS.COLLECTION, SHEETS.DRAFTS),
       ]);
 
-      // Admin = email in admins tab with hr column (C) set to TRUE
-      const isAdmin = admins.rows.some(
-        (r) =>
-          String(r[0]).toLowerCase().trim() === userEmail.toLowerCase() &&
-          String(r[2]).toUpperCase() === "TRUE"
-      );
+      // Stage 2: DB-backed admin check replaces Sheets HUB/admins lookup.
+      // isOpsLeadershipDb checks super-admin first, then queries
+      // people.is_ops_leadership with drift logging against hardcoded list.
+      const isAdmin = await isOpsLeadershipDb(userEmail);
 
       const counts = { paf: 0, newHire: 0, actionRequired: 0, completedTotal: 0 };
       submissions.forEach((sub) => {
