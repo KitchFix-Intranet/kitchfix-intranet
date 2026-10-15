@@ -5511,3 +5511,473 @@ body:has(.pp-app) {
   .pp-dir-drawer-name { font-size: 18px; }
   .pp-dir-avatar--lg { width: 52px; height: 52px; font-size: 18px; }
 }
+
+
+/* ─────────────────────────────────────────────────────────────
+   People & Access admin panel - in-card master-detail layout.
+   Rendered inside the Directory card when admin mode is on;
+   no overlay, no slide-over, nothing layered over the top nav.
+   ───────────────────────────────────────────────────────── */
+.pp-dir-card--admin {
+  padding: 0;
+  overflow: hidden;
+}
+.pp-access {
+  display: flex; flex-direction: column;
+  min-height: 540px;
+  background: var(--pp-white);
+}
+
+.pp-access-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "back title tabs";
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--pp-grey-border);
+  background: var(--pp-white);
+}
+.pp-access-back {
+  grid-area: back;
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 0; background: transparent;
+  color: var(--pp-grey);
+  font: inherit; font-weight: 600; font-size: 13px;
+  padding: 6px 2px;
+  cursor: pointer;
+}
+.pp-access-back:hover { color: var(--pp-navy); }
+.pp-access-title-block { grid-area: title; min-width: 0; }
+.pp-access-title {
+  margin: 0;
+  font-family: var(--pp-font-head);
+  font-size: 20px; font-weight: 700;
+  color: var(--pp-navy);
+  line-height: 1.1;
+}
+.pp-access-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 12px; color: var(--pp-grey);
+}
+.pp-access-tabs {
+  grid-area: tabs;
+  display: inline-flex; gap: 4px;
+  padding: 3px; border-radius: 10px;
+  background: #f1f5f9;
+}
+.pp-access-tab {
+  border: 0; background: transparent; cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: var(--pp-font-body);
+  font-weight: 600; font-size: 13px;
+  color: var(--pp-grey);
+}
+.pp-access-tab--on {
+  background: var(--pp-white); color: var(--pp-navy);
+  box-shadow: var(--pp-shadow-card);
+}
+
+.pp-access-body-pad { padding: 22px 18px; }
+.pp-access-muted { color: var(--pp-grey); font-size: 13px; }
+.pp-access-error { color: var(--pp-error); font-size: 13px; }
+.pp-access-link { background: none; border: 0; color: var(--pp-blue); cursor: pointer; font: inherit; padding: 0 2px; }
+
+/* Master-detail split (both views). Fills the card body. */
+.pp-access-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.pp-access-pane {
+  min-width: 0;
+  overflow-y: auto;
+  max-height: 72vh;
+}
+.pp-access-pane--list {
+  border-right: 1px solid var(--pp-grey-border);
+  background: #fafbff;
+  padding: 12px 12px 20px 12px;
+}
+.pp-access-pane--detail {
+  padding: 14px 18px 24px 18px;
+}
+.pp-access-mobile-back {
+  display: none;
+  border: 0; background: transparent;
+  color: var(--pp-grey);
+  font: inherit; font-weight: 600; font-size: 13px;
+  padding: 4px 2px 10px 2px;
+  cursor: pointer;
+  align-items: center; gap: 4px;
+}
+.pp-access-mobile-back:hover { color: var(--pp-navy); }
+
+/* People list filters */
+.pp-access-filter-row { margin-bottom: 10px; }
+.pp-access-search {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--pp-white);
+  color: var(--pp-grey);
+}
+.pp-access-search input {
+  flex: 1 1 auto; min-width: 0;
+  border: 0; outline: 0; background: transparent;
+  font: inherit; color: var(--pp-navy);
+}
+.pp-access-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 12px;
+}
+.pp-access-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--pp-grey-border);
+  background: var(--pp-white);
+  color: var(--pp-grey);
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+.pp-access-chip--on {
+  background: var(--pp-navy);
+  color: var(--pp-white);
+  border-color: var(--pp-navy);
+}
+.pp-access-chip-count {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.14);
+  color: inherit;
+}
+.pp-access-chip--on .pp-access-chip-count { background: rgba(255, 255, 255, 0.18); }
+
+/* Groups + accounts */
+.pp-access-groups {
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.pp-access-region + .pp-access-region { margin-top: 2px; }
+.pp-access-region-head,
+.pp-access-account-head {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  border: 0; background: transparent;
+  padding: 6px 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.pp-access-region-head { font-weight: 700; color: var(--pp-navy); font-size: 13px; letter-spacing: 0.3px; text-transform: uppercase; }
+.pp-access-account-head { font-weight: 600; color: var(--pp-navy); font-size: 12px; padding-left: 12px; }
+.pp-access-region-chev,
+.pp-access-account-chev { color: var(--pp-grey); flex-shrink: 0; }
+.pp-access-region-label { flex: 1 1 auto; }
+.pp-access-account-label { flex: 1 1 auto; }
+.pp-access-region-count,
+.pp-access-account-count {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e0e7ff; color: #3730a3;
+  font-weight: 700;
+}
+
+/* Person rows */
+.pp-access-list { list-style: none; margin: 0; padding: 0 0 0 18px; }
+.pp-access-row-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  padding: 8px;
+  cursor: pointer; text-align: left;
+}
+.pp-access-row-btn:hover { background: #eef2ff; }
+.pp-access-row-btn--on {
+  background: #e0e7ff;
+  border-color: #c7d2fe;
+}
+.pp-access-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pp-white); font-weight: 700; font-size: 12px;
+  flex-shrink: 0;
+}
+.pp-access-avatar--lg { width: 52px; height: 52px; font-size: 18px; }
+.pp-access-row-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pp-access-row-name {
+  font-weight: 700; color: var(--pp-navy); font-size: 13px;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.pp-access-row-sub  { font-size: 11px; color: var(--pp-grey); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-access-row-chev { color: var(--pp-grey); flex-shrink: 0; }
+.pp-access-shield {
+  display: inline-flex; align-items: center;
+  color: var(--pp-purple);
+}
+.pp-access-shield--lg { color: var(--pp-purple); margin-left: 6px; }
+
+.pp-access-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.pp-access-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+  padding: 1px 5px; border-radius: 4px;
+  background: #e0e7ff; color: #3730a3;
+}
+.pp-access-badge--ops { background: #fef3c7; color: #92400e; }
+.pp-access-badge--sc  { background: #dbeafe; color: #1e40af; }
+.pp-access-badge--muted { background: #e2e8f0; color: #475569; }
+
+.pp-access-empty { padding: 18px 8px; text-align: center; color: var(--pp-grey); font-size: 13px; }
+
+/* Permissions master-detail */
+.pp-access-perm-master { list-style: none; margin: 0; padding: 0; }
+.pp-access-perm-master-btn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer; text-align: left;
+  margin-bottom: 4px;
+}
+.pp-access-perm-master-btn:hover { background: #eef2ff; }
+.pp-access-perm-master-btn--on {
+  background: #e0e7ff;
+  border-color: #c7d2fe;
+}
+.pp-access-perm-master-group {
+  font-size: 10px; font-weight: 700; color: var(--pp-grey);
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.pp-access-perm-master-label { font-weight: 600; color: var(--pp-navy); font-size: 13px; }
+.pp-access-perm-count {
+  min-width: 24px; text-align: center;
+  font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px;
+  background: #e0e7ff; color: #3730a3;
+}
+.pp-access-perm-body { display: flex; flex-direction: column; gap: 4px; }
+.pp-access-perm-body-head {
+  font-weight: 700; color: var(--pp-navy);
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.pp-access-perm-bucket + .pp-access-perm-bucket { margin-top: 8px; }
+.pp-access-perm-bucket-head { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; color: var(--pp-grey); text-transform: uppercase; margin-bottom: 4px; }
+.pp-access-perm-member {
+  width: 100%; text-align: left;
+  border: 0; background: transparent;
+  padding: 6px 8px; border-radius: 6px;
+  font: inherit; color: var(--pp-navy);
+  cursor: pointer;
+}
+.pp-access-perm-member:hover { background: #e0e7ff; }
+.pp-access-perm-text-val { color: var(--pp-grey); margin-left: 6px; }
+
+/* Detail (right pane) */
+.pp-access-detail { padding: 0; }
+.pp-access-detail-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 4px 2px 16px 2px;
+  border-bottom: 1px solid var(--pp-grey-border);
+  margin-bottom: 14px;
+}
+.pp-access-detail-name {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--pp-font-head);
+  font-size: 20px; font-weight: 700; color: var(--pp-navy);
+}
+.pp-access-detail-sub  { font-size: 12px; color: var(--pp-grey); }
+
+.pp-access-group { margin-bottom: 14px; }
+.pp-access-group-head {
+  width: 100%;
+  display: flex; align-items: center; gap: 6px;
+  border: 0; background: transparent;
+  padding: 6px 0;
+  cursor: pointer; text-align: left;
+  font-family: var(--pp-font-head);
+  font-size: 13px; font-weight: 700;
+  color: var(--pp-navy);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.pp-access-group-head--static { cursor: default; }
+.pp-access-group-body {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--pp-white);
+}
+
+.pp-access-perm {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+}
+.pp-access-perm:hover { background: #f8fafc; }
+.pp-access-perm--locked { opacity: 0.55; }
+.pp-access-perm--pending { background: #fef9c3; }
+.pp-access-perm-main {
+  display: flex; align-items: center; gap: 12px;
+}
+.pp-access-perm-label-wrap { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pp-access-perm-label-text { font-weight: 600; color: var(--pp-navy); font-size: 14px; }
+.pp-access-perm-col { font-family: ui-monospace, monospace; font-size: 11px; color: var(--pp-grey); }
+
+/* Switch (bool) */
+.pp-access-switch {
+  width: 40px; height: 24px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--pp-grey-border);
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease;
+  flex-shrink: 0;
+}
+.pp-access-switch[disabled] { cursor: not-allowed; opacity: 0.55; }
+.pp-access-switch--on { background: var(--pp-blue); }
+.pp-access-switch-dot {
+  position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--pp-white);
+  transition: transform 0.18s ease;
+}
+.pp-access-switch--on .pp-access-switch-dot { transform: translateX(16px); }
+
+/* Super-admin lock chip (replaces the Ops Leadership toggle for
+   SUPER_ADMIN rows - server rejects the write anyway). */
+.pp-access-lock-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: var(--pp-purple);
+  border: 1px solid #c4b5fd;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+/* Select + Input */
+.pp-access-select, .pp-access-input {
+  min-width: 160px;
+  border: 1px solid var(--pp-grey-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--pp-navy);
+  background: var(--pp-white);
+}
+.pp-access-select:focus, .pp-access-input:focus {
+  outline: 0;
+  border-color: var(--pp-blue);
+}
+
+/* Pending reason row */
+.pp-access-pending {
+  display: flex; flex-direction: column; gap: 6px;
+  border-top: 1px dashed #d4d4d8;
+  padding-top: 8px;
+}
+.pp-access-pending-row {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.pp-access-reason { flex: 1 1 220px; min-width: 160px; }
+.pp-access-pending-err { color: var(--pp-error); font-size: 12px; }
+
+.pp-access-btn {
+  border: 1px solid var(--pp-grey-border);
+  background: var(--pp-white);
+  color: var(--pp-navy);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font: inherit; font-weight: 600;
+  cursor: pointer;
+}
+.pp-access-btn:hover { background: #f1f5f9; }
+.pp-access-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+.pp-access-btn--primary { background: var(--pp-blue); color: var(--pp-white); border-color: var(--pp-blue); }
+.pp-access-btn--primary:hover { background: #1d4ed8; }
+
+.pp-access-soft-warn {
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fcd34d;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* Change log */
+.pp-access-log-row {
+  padding: 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid var(--pp-grey-border);
+}
+.pp-access-log-row + .pp-access-log-row { margin-top: 6px; }
+.pp-access-log-top {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  font-size: 12px; margin-bottom: 2px;
+}
+.pp-access-log-col { font-weight: 700; color: var(--pp-navy); }
+.pp-access-log-mid { font-size: 13px; color: var(--pp-navy); margin-bottom: 2px; }
+.pp-access-log-bot { font-size: 12px; color: var(--pp-grey); }
+
+/* Floor-first: stacked panes on narrow screens, with a mobile back
+   control at the top of the detail pane. */
+@media (max-width: 720px) {
+  .pp-access-split {
+    grid-template-columns: 1fr;
+  }
+  .pp-access-pane {
+    max-height: none;
+  }
+  .pp-access-split--list .pp-access-pane--detail { display: none; }
+  .pp-access-split--detail .pp-access-pane--list { display: none; }
+  .pp-access-mobile-back { display: inline-flex; }
+}
+
+@media (max-width: 540px) {
+  .pp-access-header {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "back  tabs"
+      "title title";
+    row-gap: 8px;
+  }
+  .pp-access-title { font-size: 18px; }
+  .pp-access-tabs { padding: 2px; }
+  .pp-access-tab { padding: 5px 10px; font-size: 12px; }
+  .pp-access-select, .pp-access-input { min-width: 0; width: 100%; }
+  .pp-access-perm-main { flex-direction: column; align-items: stretch; gap: 6px; }
+  .pp-access-perm-ctrl { align-self: flex-end; }
+}
+
+/* People & Access filter dropdown (replaces chips row). */
+.pp-access-filter-select {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+}
+.pp-access-filter-select-label {
+  font-size: 12px; font-weight: 700;
+  color: var(--pp-grey);
+  text-transform: uppercase; letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+.pp-access-filter-select .pp-access-select {
+  flex: 1 1 auto; min-width: 0;
+}

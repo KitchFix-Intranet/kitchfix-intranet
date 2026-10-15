@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+// People & Access admin panel opened by the Directory gear. Native to
+// the People Portal design system; lazy-loaded data lives inside the
+// component. No directory.css import, no shared data with the old
+// /directory page.
+import PeopleAccessAdmin from "@/components/people/PeopleAccessAdmin";
 
 // ─── Icons (Lucide-style stroke SVG) ─────────────────────────────────
 const UsersIcon = () => (
@@ -280,6 +285,11 @@ export default function DirectoryView({ showToast, bootstrapData }) {
 
   const isAdmin = !!bootstrapData?.isAdmin;
 
+  // People & Access admin panel open-state. Gear onClick toggles this.
+  // Component owns its own data fetch so DirectoryView stays unaware
+  // of the admin API surface.
+  const [adminOpen, setAdminOpen] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     fetch("/api/people?action=directory")
@@ -433,6 +443,20 @@ export default function DirectoryView({ showToast, bootstrapData }) {
     );
   }
 
+  // Admin mode replaces the directory card body in place (no overlay,
+  // no slide-over). The panel owns its own header (Directory back
+  // control + title + People/Permissions toggle) so the normal
+  // directory header is swapped out alongside the body.
+  if (adminOpen) {
+    return (
+      <div className="pp-view pp-dir-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
+        <div className="pp-card pp-dir-card pp-dir-card--admin">
+          <PeopleAccessAdmin onClose={() => setAdminOpen(false)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pp-view pp-dir-view" style={{ animation: "pp-slideUp 0.4s ease" }}>
       <div className="pp-card pp-dir-card">
@@ -517,7 +541,7 @@ export default function DirectoryView({ showToast, bootstrapData }) {
               <button
                 type="button"
                 className="pp-dir-admin-btn"
-                onClick={() => showToast && showToast("Admin editing coming soon.", "info")}
+                onClick={() => setAdminOpen(true)}
                 aria-label="Admin editing"
                 title="Admin editing"
               >
@@ -625,6 +649,7 @@ export default function DirectoryView({ showToast, bootstrapData }) {
           isAdmin={isAdmin}
         />
       )}
+
     </div>
   );
 }

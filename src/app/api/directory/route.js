@@ -58,8 +58,11 @@ const EDITABLE_COLUMNS = new Set([
   ...FREE_TEXT_COLUMNS,
 ]);
 
-// Identity + all 19 permission columns, used by the list action
-const PEOPLE_IDENTITY_COLS = "worker_id, work_email, display_name, title, status";
+// Identity + all 19 permission columns, used by the list action.
+// Stage 4-render-revise: account_key added so the client can group the
+// people list by region → account (same source /api/people?action=directory
+// uses, NOT the editable `region` permission column).
+const PEOPLE_IDENTITY_COLS = "worker_id, work_email, display_name, title, status, account_key";
 const PEOPLE_PERMISSION_COLS = [...EDITABLE_COLUMNS].join(", ");
 
 // Human-readable labels for the Permissions tab dropdown. Kept here
@@ -311,9 +314,26 @@ export async function GET(request) {
       const authResult = await requirePeopleAdmin(session);
       if (!authResult.ok) return NextResponse.json({ error: authResult.reason }, { status: authResult.status });
       const supa = getServiceClient();
-      const rows = await fetchActivePeople(supa);
+      // Stage 4-render-revise: pair the people fetch with an accounts
+      // read so each person row carries their site's region. Additive
+      // only - every pre-existing field on `people` is unchanged.
+      const [rows, acctRes] = await Promise.all([
+        fetchActivePeople(supa),
+        supa.from("accounts").select("team_key, region, name"),
+      ]);
+      if (acctRes.error) {
+        return NextResponse.json({ error: `[admin-people-list] accounts: ${acctRes.error.message}` }, { status: 500 });
+      }
+      const regionByTeam = new Map();
+      const nameByTeam   = new Map();
+      for (const a of acctRes.data || []) {
+        if (!a?.team_key) continue;
+        regionByTeam.set(a.team_key, a.region || null);
+        nameByTeam.set(a.team_key,   a.name   || null);
+      }
       const people = rows.map((r) => {
         const email = String(r.work_email || "").toLowerCase().trim();
+        const teamKey = r.account_key || null;
         return {
           worker_id:     r.worker_id,
           work_email:    r.work_email,
@@ -321,6 +341,19 @@ export async function GET(request) {
           title:         r.title,
           status:        r.status,
           is_super_admin: isSuperAdmin(email),
+          // Additive fields for the client's region → account grouping.
+          // `team_key` matches the directory shape (`accounts.team_key`);
+          // the DB column on `people` is `account_key`. The grouping
+          // region is nested under `account.region` so it does NOT
+          // collide with the editable `region` permission column
+          // spread from EDITABLE_COLUMNS below. The two mean different
+          // things and can diverge (per the render spec).
+          team_key:      teamKey,
+          account:       teamKey ? {
+            team_key: teamKey,
+            region:   regionByTeam.get(teamKey) || null,
+            name:     nameByTeam.get(teamKey)   || null,
+          } : null,
           ...Object.fromEntries([...EDITABLE_COLUMNS].map((c) => [c, r[c] ?? null])),
         };
       });
