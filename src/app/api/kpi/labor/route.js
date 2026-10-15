@@ -324,14 +324,36 @@ export async function GET(request) {
   // because the only consumer was the deferred `last_walk_ids_seen`
   // field in derive_freshness, now removed. maybeSingle row read
   // stays; only the trimmed column count changes.
-  const psWalkGlobal = await supa
-    .from("rippling_walks")
-    .select("completed_at")
-    .eq("kind", "pay_segments")
-    .eq("status", "success")
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Trip-count batch 2026-10-15. psWalkGlobal, the two freshness maxes
+  // and the daily-floor read are independent single-row reads with no
+  // ordering dependency and no dependency on account/caller. They ran
+  // as three serial round-trips; one Promise.all makes it one. The
+  // floor read moved up here from its original position ~90 lines
+  // below - its error check and dailyFloorISO derivation stay there.
+  const [psWalkGlobal, weeklyMaxQ, dailyMaxQ, floorQ] = await Promise.all([
+    supa
+      .from("rippling_walks")
+      .select("completed_at")
+      .eq("kind", "pay_segments")
+      .eq("status", "success")
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supa.from("labor_actuals").select("derived_at")
+      .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
+      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
+    supa.from("labor_actuals_daily").select("derived_at")
+      .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
+      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
+    supa
+      .from("labor_actuals")
+      .select("week_start")
+      .eq("week_source", "sc_day_metadata")
+      .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
+      .order("week_start")
+      .limit(1)
+      .maybeSingle(),
+  ]);
   // 2026-08-27 staleness banner: table-wide max(derived_at) on both
   // labor_actuals and labor_actuals_daily. The client's banner checks
   // these against a 30h threshold and renders amber if either is stale,
@@ -346,14 +368,7 @@ export async function GET(request) {
   // the scope, a re-derive of history would report a fresh
   // derived_at for FY2026's freshness banner. See FY_START_ISO /
   // FY_END_ISO at the top of this file.
-  const [weeklyMaxQ, dailyMaxQ] = await Promise.all([
-    supa.from("labor_actuals").select("derived_at")
-      .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
-      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
-    supa.from("labor_actuals_daily").select("derived_at")
-      .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
-      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
-  ]);
+  // (weeklyMaxQ + dailyMaxQ now come from the batch above.)
   // Step 2 ride-along 2026-08-29: `last_walk_ids_seen` removed from
   // the response. Deferred from Step 1; the only reference outside
   // this route was a stale comment in src/lib/labor/staleness.js
@@ -417,14 +432,9 @@ export async function GET(request) {
   // FIN-2027 W1 PR-A year-safety: FY-scoped by week_start. Rows with
   // week_source='sc_day_metadata' from an earlier fiscal year would
   // wrongly shift the daily floor if history is ever backfilled.
-  const floorQ = await supa
-    .from("labor_actuals")
-    .select("week_start")
-    .eq("week_source", "sc_day_metadata")
-    .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
-    .order("week_start")
-    .limit(1)
-    .maybeSingle();
+  // floorQ now comes from the preamble batch above; the error gate and
+  // the dailyFloorISO derivation stay here so the failure mode and the
+  // response shape are unchanged.
   if (floorQ.error) return uncachedJson(safeError("daily_floor", floorQ.error), 500);
   const dailyFloorISO = floorQ.data?.week_start || "2026-04-20";
 
@@ -1461,7 +1471,14 @@ export async function GET(request) {
   const closedLaborBudgetSingle = (budget_periods || [])
     .filter(bp => closedPeriodsSingle.includes(bp.period_no))
     .reduce((s, bp) => s + Number(bp.amount || 0), 0);
-  const revenueBasisSingle = await loadRangeRevenueBasis(supa, {
+  // Trip-count batch 2026-10-15. loadRangeRevenueBasis was a standalone
+  // await immediately before the weeklyBasis/overviewBudgets/pnl/
+  // periodStatus Promise.all below. None of those four consume
+  // revenueBasisSingle (checked: they take supa + account/members +
+  // start/end/today or earlier-derived periods), and revenueBasisSingle
+  // is not read until board assembly further down - so it rides along
+  // in that batch instead of costing its own round-trip.
+  const revenueBasisPromiseSingle = loadRangeRevenueBasis(supa, {
     members: [account],
     periods: closedPeriodsSingle,
     start,
@@ -1473,7 +1490,8 @@ export async function GET(request) {
   // line_target_pct comes from the overviewBudgets Map (same read that
   // feeds the range-level batr, keyed per period this time). Ruling:
   // build the fallback (forecast) as the main path, not the exception.
-  const [weeklyBasisSingle, overviewBudgetsSingle, pnlResp, periodStatusResp] = await Promise.all([
+  const [revenueBasisSingle, weeklyBasisSingle, overviewBudgetsSingle, pnlResp, periodStatusResp] = await Promise.all([
+    revenueBasisPromiseSingle,
     loadWeeklyRevenueBasis(supa, {
       members: [account], start, end, today,
     }),
@@ -1591,9 +1609,15 @@ export async function GET(request) {
   // lines above; folding in would also need to eliminate the duplicate
   // load3100_2Budgets call inside the +salary mergeSalary Promise.all
   // below. Out of scope for the current pass.
+  // Trip-count dedupe 2026-10-15. This response is reused by the
+  // mergeSalary batch below instead of re-fetching the same
+  // (supa, [account]) budgets - the duplicate the prior pass flagged
+  // and deferred. Declared in the outer scope so the +salary branch
+  // can read it.
   const salaryBudgetByPeriodHourly = new Map();
+  const salaryBudRespShared = await load3100_2Budgets(supa, [account]);
   {
-    const salaryBudResp = await load3100_2Budgets(supa, [account]);
+    const salaryBudResp = salaryBudRespShared;
     if (!salaryBudResp.error) {
       const byAcct = salaryBudResp.byAccount instanceof Map
         ? salaryBudResp.byAccount.get(account)
@@ -1821,10 +1845,11 @@ export async function GET(request) {
   };
   Object.assign(bodySingle, pinHourlyOnly(bodySingle.board));
   if (mergeSalary) {
-    const [budQ, actQ] = await Promise.all([
-      load3100_2Budgets(supa, [account]),
-      loadSalaryActuals(supa, [account], start, end),
-    ]);
+    // budQ reuses the single load3100_2Budgets response fetched above
+    // (same supa + [account] arguments); only the salary actuals still
+    // need a round-trip here.
+    const budQ = salaryBudRespShared;
+    const actQ = await loadSalaryActuals(supa, [account], start, end);
     if (budQ.error) return uncachedJson(safeError("kpi_budgets_3100_2", budQ.error), 500);
     if (actQ.error) return uncachedJson(safeError("labor_salary_actuals", actQ.error), 500);
     // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
