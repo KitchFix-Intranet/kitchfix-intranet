@@ -116,6 +116,21 @@ export default function PeoplePage() {
 
   useEffect(() => { loadBootstrap(); }, [loadBootstrap]);
 
+  // Initial tab-from-URL deep link. Lets external links land directly
+  // on a tab (e.g. the retired /directory page's "Open the Directory"
+  // button points at /people?tab=directory). Reads once on mount;
+  // the normal navigate() flow still owns subsequent transitions, and
+  // the URL is NOT rewritten here so refresh preserves the hint.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const VALID = new Set(["dashboard", "activity", "newhire", "paf", "incidents", "directory", "admin"]);
+    const sp = new URLSearchParams(window.location.search);
+    const hash = (window.location.hash || "").replace(/^#/, "").trim();
+    const want = (sp.get("tab") || hash || "").toLowerCase();
+    if (want && VALID.has(want)) setView(want);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fix #15: Banner auto-dismiss with proper timer cleanup
   useEffect(() => {
     if (bannerVisible) {
