@@ -268,7 +268,7 @@ function buildRowTags(person, team) {
   return tags;
 }
 
-export default function DirectoryView({ showToast, bootstrapData }) {
+export default function DirectoryView({ showToast, bootstrapData, onNavigate }) {
   const [data, setData] = useState(null);
   const [loadErr, setLoadErr] = useState(false);
   const [search, setSearch] = useState("");
@@ -517,7 +517,7 @@ export default function DirectoryView({ showToast, bootstrapData }) {
               <button
                 type="button"
                 className="pp-dir-admin-btn"
-                onClick={() => showToast && showToast("Admin editing coming soon.", "info")}
+                onClick={() => onNavigate && onNavigate("admin")}
                 aria-label="Admin editing"
                 title="Admin editing"
               >
