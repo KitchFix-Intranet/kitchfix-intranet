@@ -113,6 +113,20 @@ function safeError(scope, err) {
   return { error: "server_error", scope };
 }
 
+// [LABOR-timing] 2026-10-15. Emit one greppable summary line per
+// successful request. Shape mirrors purchasing's [F-11-timing]:
+// total + slowest + db_sum + gap + full name=ms list. Names only, no
+// PII; account key + ISO dates only, no dollar amounts.
+function emitLaborTiming({ loaderTimings, tHandlerStart, laborBranch, account, start, end }) {
+  const total = Date.now() - tHandlerStart;
+  const dbSum = loaderTimings.reduce((s, t) => s + t.ms, 0);
+  const gap = total - dbSum;
+  const sorted = [...loaderTimings].sort((a, b) => b.ms - a.ms);
+  const slowest = sorted[0] || { name: "?", ms: 0 };
+  const parts = sorted.map(t => `${t.name}=${t.ms}${t.ok ? "" : "!"}`).join(" ");
+  console.log(`[LABOR-timing] account=${account} branch=${laborBranch} range=${start}..${end} total=${total}ms db_sum=${dbSum}ms gap=${gap}ms slowest=${slowest.name}:${slowest.ms}ms | ${parts}`);
+}
+
 // V6-18 - build the "S. Lynch" / "R. Moore" display name from the
 // REGIONAL_DIRECTORS email. Format: `<first-initial>. <Lastname>`
 // with the last name capitalized. CSS handles the uppercase eyebrow.
@@ -231,6 +245,23 @@ export async function GET(request) {
 
   const supa = getServiceClient();
 
+  // [LABOR-timing] observability instrumentation (2026-10-15). Side-
+  // channel timing capture so per-section Supabase + loader cost can be
+  // read off Vercel runtime logs. Mirrors the purchasing route's
+  // [F-11-timing] pattern (route.js:525-597). No behaviour change:
+  // timed() is a transparent pass-through on both success and reject.
+  // No PII; names + millisecond counts only.
+  const tHandlerStart = Date.now();
+  const loaderTimings = [];
+  const timed = (name, p) => {
+    const t0 = Date.now();
+    return p.then(
+      r => { loaderTimings.push({ name, ms: Date.now() - t0, ok: !r?.error }); return r; },
+      e => { loaderTimings.push({ name, ms: Date.now() - t0, ok: false, thrown: true }); throw e; }
+    );
+  };
+  let laborBranch = "unknown";
+
   // V-role-gates - resolve the caller once. corporate + rdo come from
   // kpi_roles; site_leader + site_manager come from people. See
   // docs/KPI_ROLE_GATES_SPEC.md for the design contract and
@@ -241,8 +272,8 @@ export async function GET(request) {
   // AFTER every early-return gate (landing / locked / out-of-scope) below -
   // parallelization only overlaps the two network calls.
   const [gate, dirQ] = await Promise.all([
-    loadRoleGate(supa),
-    fetchAccountsDirectory(supa),
+    timed("gate", loadRoleGate(supa)),
+    timed("accounts_dir", fetchAccountsDirectory(supa)),
   ]);
   if (gate.error) return uncachedJson(safeError("role_gate", gate.error), 500);
   if (dirQ.error) return uncachedJson(safeError("accounts_directory", dirQ.error), 500);
@@ -331,28 +362,28 @@ export async function GET(request) {
   // floor read moved up here from its original position ~90 lines
   // below - its error check and dailyFloorISO derivation stay there.
   const [psWalkGlobal, weeklyMaxQ, dailyMaxQ, floorQ] = await Promise.all([
-    supa
+    timed("ps_walk_global", supa
       .from("rippling_walks")
       .select("completed_at")
       .eq("kind", "pay_segments")
       .eq("status", "success")
       .order("completed_at", { ascending: false })
       .limit(1)
-      .maybeSingle(),
-    supa.from("labor_actuals").select("derived_at")
+      .maybeSingle()),
+    timed("weekly_max", supa.from("labor_actuals").select("derived_at")
       .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
-      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
-    supa.from("labor_actuals_daily").select("derived_at")
+      .order("derived_at", { ascending: false }).limit(1).maybeSingle()),
+    timed("daily_max", supa.from("labor_actuals_daily").select("derived_at")
       .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
-      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
-    supa
+      .order("derived_at", { ascending: false }).limit(1).maybeSingle()),
+    timed("daily_floor", supa
       .from("labor_actuals")
       .select("week_start")
       .eq("week_source", "sc_day_metadata")
       .gte("week_start", FY_START_ISO).lte("week_start", FY_END_ISO)
       .order("week_start")
       .limit(1)
-      .maybeSingle(),
+      .maybeSingle()),
   ]);
   // 2026-08-27 staleness banner: table-wide max(derived_at) on both
   // labor_actuals and labor_actuals_daily. The client's banner checks
@@ -461,7 +492,7 @@ export async function GET(request) {
   let allHomestands = null;
   let homestandBank = null;
   let homestandGameDatesByStand = null;   // Map<game_start ISO, Set<GAME ISO dates>>
-  try { allHomestands = await listHomestands(supa, account, 2026, { includeSalary: mergeSalary }); }
+  try { allHomestands = await timed("homestands", listHomestands(supa, account, 2026, { includeSalary: mergeSalary })); }
   catch (e) { return uncachedJson(safeError("homestand_list", e), 500); }
   if (allHomestands && allHomestands.length > 0) {
     // 2026-08-28 pagination sweep. labor_actuals_daily is 4,792 rows
@@ -472,7 +503,7 @@ export async function GET(request) {
     let dailyRows, schedRows;
     try {
       [dailyRows, schedRows] = await Promise.all([
-        fetchAllOffset(supa, "labor_actuals_daily",
+        timed("homestand_daily", fetchAllOffset(supa, "labor_actuals_daily",
           // homestand-redesign 2026-08-26: extend the daily select to
           // include per-worker OT hours so the played-day captions on
           // the day-strip can render the regular/OT split
@@ -481,8 +512,8 @@ export async function GET(request) {
           // fields to the payload; the existing per-day amount
           // aggregation (aggregatePerDay) already ignores extras.
           "work_date, amount, hours_regular, hours_overtime, dollars_overtime",
-          [(q) => q.eq("account_key", account)]),
-        fetchAllOffset(supa, "sc_homestand_schedule",
+          [(q) => q.eq("account_key", account)])),
+        timed("homestand_schedule", fetchAllOffset(supa, "sc_homestand_schedule",
           // homestand-redesign 2026-08-26: fetch game_time + opponent
           // so the day-strip caption can carry `vs BAL · 6:45p` under
           // each game bar. game_time is TIMESTAMPTZ (UTC); client
@@ -491,7 +522,7 @@ export async function GET(request) {
           // render the date without a time rather than guessing UTC,
           // because a wrong first pitch is worse than no first pitch.
           "service_date, day_type, day_night, game_time, opponent",
-          [(q) => q.eq("account_key", account)]),
+          [(q) => q.eq("account_key", account)])),
       ]);
     } catch (e) {
       return uncachedJson(safeError("homestand_daily_or_schedule", { message: e.message }), 500);
@@ -863,25 +894,25 @@ export async function GET(request) {
     let aQ, periodDays, unattrRowsAgg, unmapped, memberBudgetResults;
     try {
       [aQ, periodDays, unattrRowsAgg, unmapped, memberBudgetResults] = await Promise.all([
-        paginateActuals(supa, { members, start, end, pageSize: pageSizeParam }),
-        supa.from("sc_day_metadata")
+        timed("paginate_actuals_agg", paginateActuals(supa, { members, start, end, pageSize: pageSizeParam })),
+        timed("sc_day_metadata_agg", supa.from("sc_day_metadata")
           .select("service_date, period")
           .eq("account_key", canonAcct)
           .gte("service_date", "2025-12-29")
           .lte("service_date", "2026-12-27")
-          .not("period", "is", null),
-        fetchAllOffset(supa, "labor_unattributed",
+          .not("period", "is", null)),
+        timed("unattributed_agg", fetchAllOffset(supa, "labor_unattributed",
           "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
-          [(q) => q.order("amount", { ascending: false })]),
-        supa.from("earning_type_unmapped")
+          [(q) => q.order("amount", { ascending: false })])),
+        timed("earning_type_unmapped_agg", supa.from("earning_type_unmapped")
           .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
           .is("resolved_at", null)
-          .order("total_amount", { ascending: false }),
+          .order("total_amount", { ascending: false })),
         // Kevin ruling 2026-10-13 (KPI perf). Bulk IN() replaces the
         // per-member Promise.all - 2 queries instead of 2 * N. Returns
         // Map<account, {data | error}>; the error scan + Map assembly
         // below adapt to that shape.
-        resolveMemberBudgets(supa, members, 2026),
+        timed("member_budgets_agg", resolveMemberBudgets(supa, members, 2026)),
       ]);
     } catch (e) {
       // P3 (Step 4 2026-08-29): the try/catch wraps 5 loaders
@@ -1003,13 +1034,13 @@ export async function GET(request) {
       // before the batch) and does not consume workerMeta or prior
       // output - safe to run concurrently.
       const [workerRes, priorRes, ratesRes] = await Promise.all([
-        resolveWorkerMeta(supa, workerIds),
-        buildPriorPeriodComparison({
+        timed("worker_meta_agg", resolveWorkerMeta(supa, workerIds)),
+        timed("prior_period_agg", buildPriorPeriodComparison({
           supa, rangeStart: start, rangeEnd: end, today,
           isAggregate: true, members: rolledUpMembers,
           currentActuals: rolledUpActuals, pageSize: pageSizeParam,
-        }),
-        loadWorkerWeekRates(supa, { actualsRows }),
+        })),
+        timed("week_rates_agg", loadWorkerWeekRates(supa, { actualsRows })),
       ]);
       ({ workerMeta, resolvedNames, usersReachable } = workerRes);
       priorCmpAgg = priorRes;
@@ -1084,8 +1115,8 @@ export async function GET(request) {
     // disclosure of the split (see mergeSalary above).
     if (mergeSalary) {
       const [budQ, actQ] = await Promise.all([
-        load3100_2Budgets(supa, members),
-        loadSalaryActuals(supa, members, start, end),
+        timed("salary_budgets_agg", load3100_2Budgets(supa, members)),
+        timed("salary_actuals_agg", loadSalaryActuals(supa, members, start, end)),
       ]);
       if (budQ.error) return uncachedJson(safeError("kpi_budgets_3100_2", budQ.error), 500);
       if (actQ.error) return uncachedJson(safeError("labor_salary_actuals", actQ.error), 500);
@@ -1099,7 +1130,7 @@ export async function GET(request) {
         .filter(id => id && !body.workers[id]);
       let mergedWorkerToEmail = workerToEmail;
       if (salaryOnlyIds.length > 0) {
-        const extra = await resolveWorkerMeta(supa, salaryOnlyIds);
+        const extra = await timed("salary_worker_meta_agg", resolveWorkerMeta(supa, salaryOnlyIds));
         body.workers = { ...body.workers, ...extra.workerMeta };
         mergedWorkerToEmail = buildWorkerToEmail(body.workers);
       }
@@ -1122,6 +1153,8 @@ export async function GET(request) {
     body.source = "weekly";
     body.is_future_range = is_future_range;
     body.todayISO = today;
+    laborBranch = "aggregate";
+    emitLaborTiming({ loaderTimings, tHandlerStart, laborBranch, account, start, end });
     return (previewParam ? uncachedJson : cachedJson)(body);
   }
 
@@ -1160,8 +1193,8 @@ export async function GET(request) {
       // account_state to hourly_ok so buildBoard emits the full shape;
       // hourly rows are still zero, but salary provides the figures.
       const [budQ, actQ] = await Promise.all([
-        load3100_2Budgets(supa, [account]),
-        loadSalaryActuals(supa, [account], start, end),
+        timed("salary_budgets_d26", load3100_2Budgets(supa, [account])),
+        timed("salary_actuals_d26", loadSalaryActuals(supa, [account], start, end)),
       ]);
       if (budQ.error) return uncachedJson(safeError("kpi_budgets_3100_2", budQ.error), 500);
       if (actQ.error) return uncachedJson(safeError("labor_salary_actuals", actQ.error), 500);
@@ -1177,7 +1210,7 @@ export async function GET(request) {
         .filter(id => id && !bodyD26.workers[id]);
       let d26WorkerToEmail = new Map();
       if (salaryOnlyIds.length > 0) {
-        const extra = await resolveWorkerMeta(supa, salaryOnlyIds);
+        const extra = await timed("salary_worker_meta_d26", resolveWorkerMeta(supa, salaryOnlyIds));
         bodyD26.workers = { ...bodyD26.workers, ...extra.workerMeta };
         d26WorkerToEmail = buildWorkerToEmail(bodyD26.workers);
       }
@@ -1203,8 +1236,8 @@ export async function GET(request) {
         }
       }
       const [d26Pnl, d26Status] = await Promise.all([
-        loadPnlActuals(supa, { members: [account], periods: d26RangePeriods, fiscalYear: 2026 }),
-        loadPeriodStatus(supa, 2026),
+        timed("pnl_actuals_d26", loadPnlActuals(supa, { members: [account], periods: d26RangePeriods, fiscalYear: 2026 })),
+        timed("period_status_d26", loadPeriodStatus(supa, 2026)),
       ]);
       const d26PnlMap = d26Pnl?.data || new Map();
       const d26StatusMap = d26Status?.data || new Map();
@@ -1235,6 +1268,8 @@ export async function GET(request) {
     bodyD26.source = "weekly";
     bodyD26.is_future_range = is_future_range;
     bodyD26.todayISO = today;
+    laborBranch = "d26";
+    emitLaborTiming({ loaderTimings, tHandlerStart, laborBranch, account, start, end });
     return (previewParam ? uncachedJson : cachedJson)(bodyD26);
   }
 
@@ -1261,44 +1296,44 @@ export async function GET(request) {
   let actualsRows, unattrRows, periodDays, unmapped, pnlQ, scQ;
   try {
     [actualsRows, unattrRows, periodDays, unmapped, pnlQ, scQ] = await Promise.all([
-      fetchAllOffset(supa, "labor_actuals_latest",
+      timed("labor_actuals_single", fetchAllOffset(supa, "labor_actuals_latest",
         "account_key, worker_id, week_label, week_start, week_end, fiscal_year, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at",
         [
           (q) => q.eq("account_key", account),
           (q) => q.lte("week_start", end),
           (q) => q.gte("week_end", start),
           (q) => q.order("week_start", { ascending: true }).order("worker_id", { ascending: true }),
-        ]),
-      fetchAllOffset(supa, "labor_unattributed",
+        ])),
+      timed("unattributed_single", fetchAllOffset(supa, "labor_unattributed",
         "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
-        [(q) => q.order("amount", { ascending: false })]),
-      supa.from("sc_day_metadata")
+        [(q) => q.order("amount", { ascending: false })])),
+      timed("sc_day_metadata_single", supa.from("sc_day_metadata")
         .select("service_date, period")
         .eq("account_key", account)
         .gte("service_date", "2025-12-29")
         .lte("service_date", "2026-12-27")
-        .not("period", "is", null),
-      supa.from("earning_type_unmapped")
+        .not("period", "is", null)),
+      timed("earning_type_unmapped_single", supa.from("earning_type_unmapped")
         .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
         .is("resolved_at", null)
-        .order("total_amount", { ascending: false }),
+        .order("total_amount", { ascending: false })),
       // FIN-2027 W1 PR-A year-safety: this inline block mirrors
       // resolveMemberBudget() in src/lib/labor/loaders.js; kept
       // inline here to keep the merged Promise.all shape stable.
       // kpi_budgets pinned to FY2026 (stopgap - route caller does
       // not thread fiscalYear yet). sc_labor_budgets year-scoped via
       // effective_from window (no fiscal_year column on that table).
-      supa.from("kpi_budgets")
+      timed("kpi_budgets_single", supa.from("kpi_budgets")
         .select("period_no, amount")
         .eq("account_key", account)
         .eq("line_code", "3100.1")
-        .eq("fiscal_year", 2026),
-      supa.from("sc_labor_budgets")
+        .eq("fiscal_year", 2026)),
+      timed("sc_labor_budgets_single", supa.from("sc_labor_budgets")
         .select("period, hourly_budget, reason")
         .eq("account_key", account)
         .is("superseded_at", null)
         .gte("effective_from", FY_START_ISO)
-        .lte("effective_from", FY_END_ISO),
+        .lte("effective_from", FY_END_ISO)),
     ]);
   } catch (e) {
     return uncachedJson(safeError("labor_actuals", { message: e.message }), 500);
@@ -1436,13 +1471,13 @@ export async function GET(request) {
     // loadWorkerWeekRates only reads supa + actuals.data (both available
     // before the batch) and does not consume workerMeta or prior output.
     const [workerRes, priorRes, ratesRes] = await Promise.all([
-      resolveWorkerMeta(supa, workerIds),
-      buildPriorPeriodComparison({
+      timed("worker_meta_single", resolveWorkerMeta(supa, workerIds)),
+      timed("prior_period_single", buildPriorPeriodComparison({
         supa, rangeStart: start, rangeEnd: end, today,
         isAggregate: false, account,
         currentActuals: actuals.data,
-      }),
-      loadWorkerWeekRates(supa, { actualsRows: actuals.data }),
+      })),
+      timed("week_rates_single", loadWorkerWeekRates(supa, { actualsRows: actuals.data })),
     ]);
     ({ workerMeta, resolvedNames, usersReachable } = workerRes);
     priorCmpSingle = priorRes;
@@ -1478,13 +1513,13 @@ export async function GET(request) {
   // start/end/today or earlier-derived periods), and revenueBasisSingle
   // is not read until board assembly further down - so it rides along
   // in that batch instead of costing its own round-trip.
-  const revenueBasisPromiseSingle = loadRangeRevenueBasis(supa, {
+  const revenueBasisPromiseSingle = timed("revenue_basis_single", loadRangeRevenueBasis(supa, {
     members: [account],
     periods: closedPeriodsSingle,
     start,
     end,
     today,
-  });
+  }));
   // Kevin Labor PR-B (2026-09-07). Per-week revenue basis + per-week
   // adjusted budget. Loader runs once for the range's weeks; per-period
   // line_target_pct comes from the overviewBudgets Map (same read that
@@ -1492,15 +1527,15 @@ export async function GET(request) {
   // build the fallback (forecast) as the main path, not the exception.
   const [revenueBasisSingle, weeklyBasisSingle, overviewBudgetsSingle, pnlResp, periodStatusResp] = await Promise.all([
     revenueBasisPromiseSingle,
-    loadWeeklyRevenueBasis(supa, {
+    timed("weekly_basis_single", loadWeeklyRevenueBasis(supa, {
       members: [account], start, end, today,
-    }),
-    loadOverviewBudgets(supa, { members: [account] }),
+    })),
+    timed("overview_budgets_single", loadOverviewBudgets(supa, { members: [account] })),
     // Kevin ruling 2026-09-18. Load pnl_actuals + kpi_period_status so
     // the finance-close adjustment can be applied to board.spent_to_date
     // on verified periods. Same shape the Overview resolver uses.
-    loadPnlActuals(supa, { members: [account], periods: rangePeriodsSingle, fiscalYear: 2026 }),
-    loadPeriodStatus(supa, 2026),
+    timed("pnl_actuals_single", loadPnlActuals(supa, { members: [account], periods: rangePeriodsSingle, fiscalYear: 2026 })),
+    timed("period_status_single", loadPeriodStatus(supa, 2026)),
   ]);
   const pnlMapSingle = pnlResp?.data || new Map();
   const periodStatusMapSingle = periodStatusResp?.data || new Map();
@@ -1615,7 +1650,7 @@ export async function GET(request) {
   // and deferred. Declared in the outer scope so the +salary branch
   // can read it.
   const salaryBudgetByPeriodHourly = new Map();
-  const salaryBudRespShared = await load3100_2Budgets(supa, [account]);
+  const salaryBudRespShared = await timed("salary_budgets_single", load3100_2Budgets(supa, [account]));
   {
     const salaryBudResp = salaryBudRespShared;
     if (!salaryBudResp.error) {
@@ -1773,7 +1808,7 @@ export async function GET(request) {
     // Load salary actuals for the range (same helper the +salary
     // path uses). One targeted query per hourly request; scoped to
     // verified periods for the offset sum.
-    const salaryActualsResp = await loadSalaryActuals(supa, [account], start, end);
+    const salaryActualsResp = await timed("salary_actuals_fc_single", loadSalaryActuals(supa, [account], start, end));
     if (!salaryActualsResp.error) {
       const salaryByPeriod = new Map();
       for (const r of (salaryActualsResp.rows || [])) {
@@ -1849,7 +1884,7 @@ export async function GET(request) {
     // (same supa + [account] arguments); only the salary actuals still
     // need a round-trip here.
     const budQ = salaryBudRespShared;
-    const actQ = await loadSalaryActuals(supa, [account], start, end);
+    const actQ = await timed("salary_actuals_single", loadSalaryActuals(supa, [account], start, end));
     if (budQ.error) return uncachedJson(safeError("kpi_budgets_3100_2", budQ.error), 500);
     if (actQ.error) return uncachedJson(safeError("labor_salary_actuals", actQ.error), 500);
     // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
@@ -1862,7 +1897,7 @@ export async function GET(request) {
       .filter(id => id && !bodySingle.workers[id]);
     let mergedWorkerToEmail = workerToEmail;
     if (salaryOnlyIds.length > 0) {
-      const extra = await resolveWorkerMeta(supa, salaryOnlyIds);
+      const extra = await timed("salary_worker_meta_single", resolveWorkerMeta(supa, salaryOnlyIds));
       bodySingle.workers = { ...bodySingle.workers, ...extra.workerMeta };
       mergedWorkerToEmail = buildWorkerToEmail(bodySingle.workers);
     }
@@ -1951,7 +1986,7 @@ export async function GET(request) {
     const salaryOnly = [...new Set(actQ.rows.map(r => r.worker_id))]
       .filter(id => id && !bodySingle.workers[id]);
     if (salaryOnly.length > 0) {
-      const extra = await resolveWorkerMeta(supa, salaryOnly);
+      const extra = await timed("salary_worker_meta_recheck_single", resolveWorkerMeta(supa, salaryOnly));
       bodySingle.workers = { ...bodySingle.workers, ...extra.workerMeta };
     }
   }
@@ -1982,6 +2017,8 @@ export async function GET(request) {
   // this instead of `new Date()` for every today-derived decision.
   // Same field on every KPI route.
   bodySingle.todayISO = today;
+  laborBranch = "single";
+  emitLaborTiming({ loaderTimings, tHandlerStart, laborBranch, account, start, end });
   return (previewParam ? uncachedJson : cachedJson)(bodySingle);
 }
 
