@@ -383,6 +383,7 @@ const showToast = useCallback((msgOrObj, type = "success") => {
           <DirectoryView
             showToast={showToast}
             bootstrapData={bootstrapData}
+            onNavigate={navigate}
           />
         )}
 
