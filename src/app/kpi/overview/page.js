@@ -333,15 +333,35 @@ export default function KpiOverviewPage() {
     return () => ctrl.abort();
   }, [useCpTable, fetchAccount, start, end, urlPreview]);
 
-  // Consolidation PR 1 (2026-09-22). Labor ledger fetch. Runs on
-  // every range (not gated on cpGateActive) so the fold works on
-  // closed / CY / CP alike. Same account + range as the Overview
-  // fetch; forwards include_salary and preview only. Failure
-  // isolation: 401 / 403 / network errors land in
-  // laborLedgerError; the Overview above renders normally.
+  // Fold-open state hoisted here 2026-10-15 (lazy-fold perf change).
+  // These two must be declared ABOVE the fetch effects below: they now
+  // appear in those effects' dependency arrays, and dep arrays are
+  // evaluated during render at this point in the component body, so a
+  // declaration further down would hit the temporal dead zone and
+  // throw. Same declaration-order hazard the PORTFOLIO_KEYS note
+  // further down describes.
+  const [laborLedgerOpen, setLaborLedgerOpen] = useState(false);
+  const [purchasingFoldOpen, setPurchasingFoldOpen] = useState(false);
+
+  // Consolidation PR 1 (2026-09-22). Labor ledger fetch.
+  //
+  // LAZY 2026-10-15 (Kevin ruling, measured): this used to fire on
+  // every single-account load. Measured at 16,066 ms on production -
+  // the slowest call on the page by more than 2x, and it gated the
+  // whole load even though the fold starts collapsed. Now it fires
+  // when the fold is opened, OR when the Current-Period table needs
+  // it (cpLabor derives from laborLedger under useCpTable - see the
+  // binding further down; gating on the fold alone would blank the CP
+  // table on CP / NP ranges).
+  //
+  // Same account + range as the Overview fetch; forwards
+  // include_salary and preview only. Failure isolation: 401 / 403 /
+  // network errors land in laborLedgerError; the Overview above
+  // renders normally.
   useEffect(() => {
     if (!fetchAccount && !urlPreview) return;
     if (!start || !end) return;
+    if (!laborLedgerOpen && !useCpTable) return;
     // Kevin ruling 2026-10-12. Portfolio views never render LaborLedger;
     // skip the aggregate labor fetch here instead of letting it fire and
     // throw the payload away. Inlined account list rather than
@@ -375,7 +395,7 @@ export default function KpiOverviewPage() {
         setLaborLedgerError(String(e?.message || e));
       });
     return () => ctrl.abort();
-  }, [fetchAccount, start, end, urlPreview, urlIncludeSalary]);
+  }, [fetchAccount, start, end, urlPreview, urlIncludeSalary, laborLedgerOpen, useCpTable]);
 
   // R-150 (2026-09-22). Purchasing fold fetch. Same cadence as the
   // labor fetch: fires on every range, so a subsequent range change
@@ -395,6 +415,11 @@ export default function KpiOverviewPage() {
     // of letting it fire. Same inlined account list as the labor hook
     // above; same rationale on PORTFOLIO_KEYS placement.
     if (["ALL", "EAST", "WEST"].includes(fetchAccount)) return;
+    // LAZY 2026-10-15 (Kevin ruling, measured at 5,933 ms). Unlike
+    // labor, purchasingLedger feeds ONLY the PurchasingFold - the CP
+    // table reads its own cpPurch state from a separate effect - so
+    // the fold-open flag is the whole gate here.
+    if (!purchasingFoldOpen) return;
     const ctrl = new AbortController();
     setPurchasingLedger(null);
     setPurchasingLedgerError(null);
@@ -420,7 +445,7 @@ export default function KpiOverviewPage() {
         setPurchasingLedgerError(String(e?.message || e));
       });
     return () => ctrl.abort();
-  }, [fetchAccount, start, end, urlPreview, rangeSelection?.kind]);
+  }, [fetchAccount, start, end, urlPreview, rangeSelection?.kind, purchasingFoldOpen]);
 
   // ── URL setters ─────────────────────────────────────────────
   const setParams = useCallback((patch) => {
@@ -476,7 +501,8 @@ export default function KpiOverviewPage() {
   // include_salary and preview, does NOT forward homestand (out of
   // scope per Kevin). 401/403 land silently in the fold's error
   // state; the Overview above never breaks.
-  const [laborLedgerOpen, setLaborLedgerOpen] = useState(false);
+  // laborLedgerOpen moved above the fetch effects (lazy-fold change,
+  // 2026-10-15) - it is a dependency of the labor effect now.
   // Kevin ruling 2026-10-09 (PR-billback-1). Fold state for the
   // Billed-back-to-club bottom fold on the single-account split
   // branch. Mounts unconditionally; the ledger self-hides when
@@ -489,7 +515,8 @@ export default function KpiOverviewPage() {
   // adds ?drill=lines only when the range is a single period. Failure
   // isolation: the fold renders its own error state; the Overview
   // above never breaks.
-  const [purchasingFoldOpen, setPurchasingFoldOpen] = useState(false);
+  // purchasingFoldOpen moved above the fetch effects (lazy-fold
+  // change, 2026-10-15) - it is a dependency of the purchasing effect.
   const [purchasingLedger, setPurchasingLedger] = useState(null);
   const [purchasingLedgerError, setPurchasingLedgerError] = useState(null);
 
