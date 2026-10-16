@@ -767,30 +767,20 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
 
     const landedFor = (line) => {
       if (line === "3100") {
-        // ┌───────────────────────────────────────────────────────────
-        // │ DO NOT REMOVE this `+ weekHatchedDollars(...)` addition
-        // │ without confirming task #489 has shipped and the labor
-        // │ payload's `board.weeks[i].spent` is R-103-complete on the
-        // │ server side. Removing this while the payload still ships
-        // │ costed-only re-introduces the silent under-reporting bug
-        // │ Kevin caught 2026-09-17.
-        // └───────────────────────────────────────────────────────────
+        // Kevin ruling 2026-10-16 (supersedes 2026-09-17's R-103 rule).
+        // Every status now counts as actual dollars; the labor-te-1
+        // derive prices drafts into `dollars_regular -> amount`
+        // directly, so `w.spent` is already full-fat for the running
+        // period. The old "spent = costed + unpriced + unapproved"
+        // formula double-counted drafts the day of the ruling, enough
+        // to flip the current-period budget verdict from under to over
+        // on one in-season account.
         //
-        // Kevin ruling 2026-09-17 (R-103 client fix). Per R-103,
-        //   labor spent = costed + unpriced + unapproved
-        // The payload's `board.weeks[i].spent` is COSTED ONLY - the
-        // WeekTable already adds `weekHatchedDollars(w, avg_rate)`
-        // to reach the R-103 total. Do the same here so the CP
-        // surface (week cells, period figure, percent used, verdict,
-        // Rolling's closedSpent) reads the full R-103 figure. Under-
-        // reported by $6,606 on TBJ CP the day this landed; different
-        // amounts on other days as unapproved hours turn over. `avg_
-        // rate` from `labor.board.avg_rate`.
-        //
-        // Belt-and-braces: the durable fix (task #489, Guard 2) makes
-        // `board.weeks[i].spent` R-103-complete server-side so no
-        // consumer has to remember to add hatched. Until that lands,
-        // this client patch is what keeps the CP surface honest.
+        // `weekHatchedDollars` now returns `capDollars` only (the
+        // genuinely unpriced hours, 8 across the whole corpus
+        // 2026-10-16), so this addition is a no-op on the vast
+        // majority of weeks and still handles the rare case where
+        // the derive could not resolve a rate.
         const lbWks = labor?.board?.weeks || [];
         const avgRate = Number(labor?.board?.avg_rate || 0);
         const byStart = new Map(lbWks.map(w => [
