@@ -12,16 +12,21 @@
 //   Period state       | Per-meal accounts   | Fee accounts        | TXR-TX-V
 //   -------------------|---------------------|---------------------|--------
 //   Closed, verified   | pnl_actuals         | pnl_actuals         | pnl_actuals
-//   Closed, awaiting   | pnl_actuals if      | kpi_budgets 2400.1  | budget + note
-//   finance            | present, else       | (contractual)       |
-//                      | budget to date      |                     |
-//                      | with "estimate"     |                     |
-//   Open               | budget to date      | kpi_budgets 2400.1  | budget + note
-//                      | (planned) UNLESS    | (contractual)       |
+//   Closed, awaiting   | pnl_actuals if      | kpi_budgets         | budget + note
+//   finance            | present, else       | (2400.1 contractual |
+//                      | budget to date      |  + other per_meal   |
+//                      | with "estimate"     |  lines optional)    |
+//   Open               | budget to date      | kpi_budgets         | budget + note
+//                      | (planned) UNLESS    | (as above)          |
 //                      | sc_revenue_live=T   |                     |
 //                      | AND rev_source=sc   |                     |
 //                      | -> sc_daily_revenue |                     |
 //                      | with NOT is_non_rev |                     |
+//
+// Fee accounts read the FULL per_meal line set so a fee account's
+// non-fee revenue (e.g. service charges on 2300, one-off catering on
+// 2200) still surfaces in the Overview. Only 2400.1 carries the
+// `contractual` flag downstream.
 //
 // Fee accounts NEVER read sc_daily_revenue (contamination guard,
 // R888-1 / #888). Fee accounts NEVER read sc_fee_schedule.amount
@@ -66,8 +71,11 @@ const TRACKED_REVENUE_ACCOUNTS = new Set([
  *   'per_meal'     - open period uses planned (budget-to-date) or
  *                    sc_daily_revenue when sc_revenue_live=true and
  *                    rev_source=sc; closed uses pnl_actuals.
- *   'fee'          - always kpi_budgets 2400.1 (contractual); closed
- *                    verified uses pnl_actuals 2400.1.
+ *   'fee'          - kpi_budgets contractual on open + awaiting;
+ *                    pnl_actuals on verified. Reads the full per_meal
+ *                    line set; 2400.1 carries the `contractual` flag
+ *                    (preserving its "always 100% of itself" treatment
+ *                    even when its budget-to-date is zero).
  *   'tracked'      - TXR - TX - V; budget + tracked marker, pnl_actuals
  *                    when verified.
  */
@@ -121,20 +129,34 @@ export function resolveRevenueSource({ accountKey, periodState, revSource = "pla
   const wantsSc = revSource === "sc";
 
   if (kind === "fee") {
-    // Fee accounts: contractual on open + closed_awaiting; pnl_actuals
-    // on verified. NEVER sc_daily_revenue. NEVER sc_fee_schedule.
+    // Fee accounts carry their fee contract on 2400.1, but a fee
+    // account can still earn revenue on the other per_meal lines -
+    // one-off service charges (2300), catering (2200), consulting
+    // (2600). Those lines land in pnl_actuals the same way they land
+    // for per_meal accounts; the fee classifier reads them so the
+    // Revenue Lines card picks them up. 2400.1 keeps its contractual
+    // flag downstream (isContractual = isFeeAccount && line === "2400.1"
+    // in the resolver's statement-row build) so its "always 100%"
+    // treatment is preserved. Fee accounts STILL never read
+    // sc_daily_revenue (R888-1 contamination guard, preserved via
+    // read_sc_daily_revenue:false on both branches).
+    //
+    // Prior line_codes:["2400.1"] silently hid STL - MO's 2300
+    // service-charge revenue and TXR - TX - H's 2200 catering - the
+    // pnl_actuals rows exist, the reader just never looked at them.
+    // Same defect shape as the TXR - TX - V tracked fix from PR #1307.
     if (periodState === "verified") {
       return {
         source: "pnl_actuals_verified",
         model: "finance",
-        line_codes: ["2400.1"],
+        line_codes: PER_MEAL_LINES,
         read_sc_daily_revenue: false,
       };
     }
     return {
       source: "kpi_budgets_2400_1_contractual",
       model: "contractual",
-      line_codes: ["2400.1"],
+      line_codes: PER_MEAL_LINES,
       read_sc_daily_revenue: false,
     };
   }
