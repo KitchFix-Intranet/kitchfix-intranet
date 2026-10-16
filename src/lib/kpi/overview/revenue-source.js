@@ -55,7 +55,7 @@ const FEE_REVENUE_ACCOUNTS = new Set([
 ]);
 
 // TXR - TX - V direct-sales / tracked account (R-3, R-11).
-export const TRACKED_REVENUE_ACCOUNTS = new Set([
+const TRACKED_REVENUE_ACCOUNTS = new Set([
   "TXR - TX - V",
 ]);
 
@@ -142,25 +142,12 @@ export function resolveRevenueSource({ accountKey, periodState, revSource = "pla
   if (kind === "tracked") {
     // TXR - TX - V (direct-sales, tracked). The primary revenue line
     // is 2400.2 Meal Service (Away) - this account bills AWAY, not
-    // Home. But the account can also carry revenue on other per_meal
+    // Home - but the account can also carry revenue on other per_meal
     // lines in some periods (e.g. 2200 Catering in P4), so the reader
-    // must look at the full per_meal line set, same as a per_meal
-    // account. The ONLY difference from per_meal is the open-period
-    // "model" marker (tracked vs planned) and the fact that tracked
-    // never reads SC daily revenue.
-    //
-    // Prior line_codes:["2400.1"] (singular, wrong line) silently
-    // dropped the bulk of FY2026 revenue from the Overview -
-    // pnl_actuals carries the main revenue on 2400.2 but the actual-
-    // side reader was looking at 2400.1 only.
-    //
-    // kpi_budgets has the main budget historically misfiled on 2400.1
-    // for this account; the resolver reflows that into overviewBudgets'
-    // 2400.2 slot once (see remapTrackedRevenueBudgets in resolver.js)
-    // so budget + actual both land on 2400.2 as the line. A future
-    // kpi_budgets correction (moving the TXR - TX - V budget rows to
-    // line_code 2400.2 server-side) retires the remap without further
-    // code change - the remap short-circuits when 2400.1 is empty.
+    // iterates the full per_meal line set, same as a per_meal account.
+    // The ONLY difference from per_meal is the open-period "model"
+    // marker (tracked vs planned) and the fact that tracked never
+    // reads SC daily revenue.
     if (periodState === "verified") {
       return {
         source: "pnl_actuals_verified",

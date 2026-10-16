@@ -93,38 +93,7 @@ import { SC_LINE_CARVE_OUTS } from "@/lib/kpi/shared/periodBasis.js";
 // (still owned there); periodBasis re-exports them for convenience
 // but this file keeps the direct import for the two remaining
 // direct call sites.
-import { classifyForRevenue, resolveRevenueSource, TRACKED_REVENUE_ACCOUNTS } from "./revenue-source.js";
-
-// 2026-10-16. Reflow kpi_budgets line_code 2400.1 into 2400.2 for
-// tracked accounts (TXR - TX - V), where the P&L semantics correctly
-// put revenue on 2400.2 Meal Service (Away) but kpi_budgets stored
-// it on 2400.1 historically. Mutates `overviewBudgets` in place.
-//
-// Short-circuits when 2400.1 has no entries for any tracked account,
-// so a future kpi_budgets correction retires this behavior without
-// any code removal needed.
-function remapTrackedRevenueBudgets(overviewBudgets) {
-  const perL1 = overviewBudgets.get("2400.1");
-  if (!perL1) return;
-  let perL2 = overviewBudgets.get("2400.2");
-  for (const acct of TRACKED_REVENUE_ACCOUNTS) {
-    const l1 = perL1.get(acct);
-    if (!l1 || l1.size === 0) continue;
-    if (!perL2) {
-      perL2 = new Map();
-      overviewBudgets.set("2400.2", perL2);
-    }
-    let l2 = perL2.get(acct);
-    if (!l2) {
-      l2 = new Map();
-      perL2.set(acct, l2);
-    }
-    for (const [periodNo, amount] of l1) {
-      l2.set(periodNo, (l2.get(periodNo) || 0) + Number(amount));
-    }
-    perL1.delete(acct);
-  }
-}
+import { classifyForRevenue, resolveRevenueSource } from "./revenue-source.js";
 import {
   computeBudgetToDateForLine,
   computeFullPeriodBudget,
@@ -752,19 +721,6 @@ export async function resolveOverview({
   const periodStatus = periodStatusResp.data;
   const accountFlags = accountFlagsResp.data;
   const overviewBudgets = overviewBudgetsResp.data;
-  // 2026-10-16. kpi_budgets historically misfiled TXR - TX - V's revenue
-  // budget on line 2400.1 (Home); the authoritative P&L (pnl_actuals)
-  // carries it on 2400.2 (Away). The resolver reflows the misfiled
-  // budget here so every downstream consumer sees it on 2400.2, matching
-  // the actual-side read. resolveRevenueSource now returns the full
-  // per_meal line set for tracked accounts (2200, 2300, 2400.1, 2400.2,
-  // 2600) so other revenue lines (e.g. 2200 Catering) also render; the
-  // remap specifically puts the historical misfiled budget on the
-  // primary line 2400.2. A future kpi_budgets correction (UPDATE the
-  // TXR - TX - V 2400.1 rows to 2400.2 server-side) retires this remap
-  // without any further code change - the remap short-circuits when
-  // 2400.1 is empty for the tracked account.
-  remapTrackedRevenueBudgets(overviewBudgets);
   const pnl = pnlResp.data;
   const scByAcct = scResp.data;
   const scCarveOutByAcct = scCarveOutResp?.data || new Map();
