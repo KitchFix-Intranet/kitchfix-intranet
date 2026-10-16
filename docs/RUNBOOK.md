@@ -62,11 +62,11 @@ KitchFix uses Google Workspace OAuth. There is no user table to add to.
    - Analytics admin: hardcoded to `k.fietek@kitchfix.com` (in code)
    - Service Calendar admin: k.fietek + j.curtin
 
-## How to restore a Google Sheet from backup
+## How to restore a Google Sheet from backup (snapshots on or before 2026-10-16)
 
-Daily backups run via `/api/cron/backup-sheets` at 06:00 UTC (01:00 CT). Backups land in Drive folder ID `1-Gedxfa0-e0FT6b562qx4Z_fIkj1oQtI` ("Ops Hub - Sheet Backups"). Covered: HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY. ANALYTICS is deliberately skipped (generated data, cell-quota sensitive).
+**The daily `/api/cron/backup-sheets` cron was retired 2026-10-16 (Kevin's call, no longer needed). Existing snapshots in Drive folder ID `1-Gedxfa0-e0FT6b562qx4Z_fIkj1oQtI` ("Ops Hub - Sheet Backups") are untouched by that retirement and the restore procedure below still applies to any snapshot taken on or before 2026-10-16.** No automated backups land after that date; new restore needs route through Google Workspace's own version history or a fresh manual export.
 
-Each backup is a full sheet copy named `{NAME}-backup-{YYYY-MM-DD}`. Retention is currently unlimited - backups accumulate; pruning is a future sub-cron.
+Historical coverage (what the retired cron produced): HUB, COLLECTION, GL_CODES, AI_LINE_ITEMS, INVENTORY. ANALYTICS was deliberately skipped. Each backup is a full sheet copy named `{NAME}-backup-{YYYY-MM-DD}`. Retention is unlimited; the pre-retirement snapshot history is preserved.
 
 ### Scenario 1: A tab was wiped or corrupted (most common)
 
@@ -120,19 +120,17 @@ For the service account private key, OAuth client secret, or any API key:
 
 ## How to trigger a cron manually
 
-Crons are at:
+Current crons (post-2026-10-16 retirement sweep):
 
-- `/api/cron/daily` - 13:00 UTC daily
-- `/api/cron/incident-reminders` - 14:00 UTC daily
-- `/api/cron/backup-sheets` - 06:00 UTC daily
-- `/api/cron/schedule-drift` - 11:00 UTC daily (06:00 ET, Stage 1 watchdog)
-- `/api/people?action=generate-report&period=weekly` - Mondays 13:00 UTC
-- `/api/people?action=generate-report&period=monthly` - 1st of month 13:00 UTC
+- `/api/cron/extract-line-items` - every 5 minutes (invoice line-item extraction worker)
+- `/api/cron/schedule-drift` - Mondays 11:00 UTC (SC schedule-drift watchdog)
+- `/api/cron/sc-chase` - 00-01 and 19-23 UTC on Sunday + Monday (14 ticks/week; local-time coverage for N3 billing reminders across ET/CT/MST)
+- `/api/cron/sc-bg-monthly-report` - 13:00 UTC on the 4th of each month (SC billing-group monthly report)
 
 To trigger manually:
 
 ```bash
-curl -X GET "https://kitchfix-intranet.vercel.app/api/cron/daily" \
+curl -X GET "https://kitchfix-intranet.vercel.app/api/cron/schedule-drift" \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
@@ -140,7 +138,7 @@ curl -X GET "https://kitchfix-intranet.vercel.app/api/cron/daily" \
 
 ## Analytics module deleted
 
-The custom analytics system was decommissioned 2026-05-15 in PRs #31/#32/#33. There is no `/analytics` dashboard, no analytics cron, and no `logEvent*` writes anywhere in production code. `src/lib/analytics.js` exists only as a no-op stub (kept while `src/lib/auth.js` and `src/app/api/cron/incident-reminders/route.js` still import `logEventSA`; touching those files is out of scope for now).
+The custom analytics system was decommissioned 2026-05-15 in PRs #31/#32/#33. There is no `/analytics` dashboard, no analytics cron, and no `logEvent*` writes anywhere in production code. `src/lib/analytics.js` exists only as a no-op stub (kept while `src/lib/auth.js` still imports `logEventSA`; auth.js is in the danger zone). The other historical importer, `/api/cron/incident-reminders`, was retired 2026-10-16 along with five other crons - so only auth.js remains.
 
 Future analytics live outside this repo: **Sentry** (errors), **Vercel Analytics** (traffic), **Supabase dashboards** (operational data once Phase 3 ships). A custom analytics surface is not currently planned - see `docs/archive/migration/MIGRATION.md → Phase 3 commentary` (note: the original Phase 1-5 plan; partially superseded by `docs/SUPABASE_MIGRATION.md`).
 
@@ -177,6 +175,7 @@ Quick checks:
 - **2026-07-14 (sc-19 DATE_DRIFT safe subset)** - Part 4 bidirectional audit surfaced 24 DATE_DRIFT rows (`sc_homestand_schedule.service_date` != current API date after postponements) + 5 real AAA MISSING_IN_DB pks. Kevin's ruling split the reconciliation: rows whose target date is FREE + no operator actuals -> UPDATE now; two-games-one-date collisions -> wait for Option A; rows carrying operator actuals -> GUARDED, need ops review. Collision + actuals probe (`scripts/_probe_sc_19_collision_check.mjs`) classified the 26 rows into 1 SAFE_NOW, 13 WAIT_OPTION_A, 12 GUARDED. Migration `docs/migrations/sc-19-date-drift-safe-subset.sql` applies the one SAFE_NOW row (STL - MO pk=823042 2026-06-25 -> 2026-07-23, the Cardinals HOME vs ARI that Part 1's one-way walk missed). The 12 GUARDED rows are all AAA + FSL per-meal accounts where every service day carries actuals (5-6 rows per date); the guard rightly stopped silent date rewrites. The 13 WAIT_OPTION_A + 2 AAA MISSING_IN_DB DH-game-2 rows are documented in the migration body for the Option A follow-up PR (post-cron ship per Kevin's sequencing).
 - **2026-07-14 (Stage 1 schedule-drift watchdog)** - Nightly cron `/api/cron/schedule-drift` at `0 11 * * *` (06:00 ET) diffs the MLB / MiLB Stats API against `sc_homestand_schedule` for the 8 schedule-bearing accounts and posts alerts to `#service-calendar` via `SLACK_SC_WEBHOOK_URL`. **Zero writes to schedule / projection / metadata tables** - Stage 1 is detect-and-notify only per Kevin's ruling; applying changes stays the manual extract -> migration flow. Pure differ (`src/lib/scheduleDrift.js`, 21 unit tests). `KNOWN_ISSUES` suppression seeded from Part 4's unreconciled population (25 pks) - groups those into a single "known gaps" one-liner instead of ~50 alarms night one. Noise discipline: post ONLY on drift, cron failure, or the Monday heartbeat. Dry-run flag `?dry=1` returns the intended payload as JSON without posting. Rate: 8 API calls + 8 DB reads per night. Stages 2/3 (auto-draft migration PRs, ON CONFLICT auto-apply) PARKED to 2027 review. sc-19b GUARDED reconcile turned out empty under the actuals-stay ruling - every previously-GUARDED row ALSO has a target-date collision, so all 12 join the Option A backlog and appear in `KNOWN_ISSUES` instead of a migration.
 - **2026-07-14 (schedule-truth arc CLOSED)** - Trigger: Kevin's TXR "100% wrong" red flag. Outcome: 2 bugs surfaced + fixed (Bug B rendering mechanism named + fixed in #430; sc-18 counter patches + sc-19 date-drift SAFE_NOW applied in Studio same day), 1 parked with a trap (Bug A transient month-swap parked with reproduction checklist in `SC_STATUS.md`), doctrine enshrined (`docs/modules/SERVICE_CALENDAR.md` "Schedule truth hierarchy" + "Drift detection (Stage 1, LIVE)"), watchdog live (#432 → nightly Slack notify + Monday heartbeat). PR trail #430 → #431 → #432 all merged 2026-07-14. Full arc synthesis - timeline, PR trail, migration record, 7-item rulings ledger, 7 open rulings carried forward, `KNOWN_ISSUES` prune pointer for Option A - in `docs/audits/SC_SCHEDULE_TRUTH_AUDIT_2026-07.md` "ARC CLOSEOUT" section.
+- **2026-10-16 (six crons retired, sc-chase narrowed)** - Kevin's call: delete six scheduled jobs no longer needed. Retired `/api/cron/daily` (notification bells + reminders), `/api/cron/incident-reminders` (People-Ops escalation emails), `/api/cron/backup-sheets` (daily Google Sheet snapshots - last manual snapshot fired same day, existing Drive backups preserved), `/api/cron/sousai-daily` (Slack digest), `/api/cron/sousai-weekly` + `/api/cron/sousai-monthly` (email digests). `src/lib/sousai/reports/formatDigests.js` + `src/lib/sousai/reports/emailShared.js` deleted with them (sole importers). `/sousai/reports` UI stays. `vercel.json` goes from 10 to 4 cron entries. Survivors: `extract-line-items`, `schedule-drift`, `sc-chase`, `sc-bg-monthly-report`. `sc-chase` schedule narrowed from `0 * * * *` (168/week) to `0 0-1,19-23 * * 0,1` (14/week) with zero behavior change - `stageForLocalMoment()` fires only Sunday 18:00 local and Monday 15:00 local, which lands anywhere from 22:00 UTC Sunday to 22:00 UTC Monday across ET, CT, and MST (AZ no DST). The expression covers both windows with an hour of margin on each side. Over-cover is safe because the ledger-row insert is guarded by a unique index and 23505 is treated as already-sent. Five env vars retired to Vercel-removal queue in `ENV_VARS.md`: `SLACK_RECAP_WEBHOOK`, `SLACK_SOUSAI_WEBHOOK_URL`, `SOUSAI_REPORT_RECIPIENTS`, `BACKUP_FOLDER_ID`, `PEOPLE_OPS_FROM_EMAIL`. Backup-restore procedure above dated as applying only to snapshots on or before 2026-10-16.
 
 ---
 

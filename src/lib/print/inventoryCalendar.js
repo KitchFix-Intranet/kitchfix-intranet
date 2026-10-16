@@ -20,8 +20,9 @@
 //    year, VERBATIM (same shape as the pre-merge check that surfaced
 //    the 2026 divergence - see PR #426 comment for the pattern).
 // 2. Reconcile any mismatch BEFORE anything ships. Rings on the Ops
-//    Calendar and the notification-bell cron (src/app/api/cron/daily/
-//    route.js) fire from different sources; they must agree.
+//    Calendar and the notification-bell path (whatever source replaces
+//    the retired /api/cron/daily/ route) fire from different sources;
+//    they must agree. The daily cron was retired 2026-10-16.
 // 3. Populate INVENTORY_DUE_2027 = { 1: ..., 2: ..., ... } and add
 //    the year branch below to getInventoryDueIndex().
 // 4. Add an entry to CHANGELOG-style docs; retire this parked note.
@@ -36,10 +37,10 @@
 // including inventory_*, inv_due_dates, sc_inv_due_dates - all
 // return "table not found in schema cache"). Sheets HUB period_data
 // tab is the sole source in the codebase, read by src/lib/opsUtils.js
-// getPeriods() (columns: label, start, end, dueDate) and src/app/api/
-// cron/daily/route.js (notification scheduler that fires
-// "Inventory due in Nd" bells). No migration files define any
-// period_data / inventory_due table.
+// getPeriods() (columns: label, start, end, dueDate). The notification
+// scheduler that formerly fired "Inventory due in Nd" bells lived in
+// /api/cron/daily/route.js and was retired 2026-10-16. No migration
+// files define any period_data / inventory_due table.
 
 // ─── Kevin's 2026 schedule (REFERENCE - parked, not active) ────────
 // Kept verbatim so 2027 re-enable can compare intent + pattern. P1
