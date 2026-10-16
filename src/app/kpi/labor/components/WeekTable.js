@@ -1083,7 +1083,19 @@ export function WeekTable({
                 {showRate && (
                   <td className="num"><span className="kpi-tbl-mixed">mixed</span></td>
                 )}
-                <td className="num">{fmt$((grandTotal?.amount || 0) + (grandTotal?.hatched || 0))}</td>
+                {/* Kevin owner ruling 2026-10-16 (labor-te-1 correction).
+                    Draft hours are now REAL hours priced as REAL dollars
+                    by the derive, folded into dollars_regular / amount.
+                    The old TOTAL = amount + hatched formula added draft_hours
+                    x rate on top of amount, double-counting the drafts
+                    that were already inside amount. TOTAL now equals the
+                    sum of the dollar buckets actually shown (REG $ + OT $
+                    + HOL $ + PREMIUM $), which is exactly amount by the
+                    derive's writer. UNAPPROVED stays on the row as a
+                    subset indicator; it is never added here. Matches the
+                    pattern the LaborLedger fold header already uses
+                    (LaborLedger.js:121, Kevin ruling 2026-09-25). */}
+                <td className="num">{fmt$(grandTotal?.amount || 0)}</td>
               </tr>
             </tbody>
           </table>
@@ -1190,7 +1202,10 @@ function FragmentRows({
         </>}
         {showUnpriced && <td className={`num ${band.totals.unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.unpriced > 0.004 ? fmtHrs(band.totals.unpriced) : "–"}</td>}
         {showRate && <td className="num"><span className="kpi-tbl-mixed">mixed</span></td>}
-        <td className="num">{fmt$((band.totals.amount || 0) + (band.totals.hatched || 0))}</td>
+        {/* Owner ruling 2026-10-16 - see grand-total TOTAL cell at
+            line ~1086 for the full rationale. Drafts are already in
+            amount; adding hatched here double-counted them. */}
+        <td className="num">{fmt$(band.totals.amount || 0)}</td>
       </tr>
       {periodOpen && weeks.map(w => {
         const sev = weekSeverity(w);
@@ -1298,7 +1313,11 @@ function FragmentRows({
                   0 when drafts are already priced. */}
               {showUnpriced && <td className={`num ${(w.draft_hours || 0) > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{(w.draft_hours || 0) > 0.004 ? fmtHrs(w.draft_hours) : "–"}</td>}
               {showRate && <td className="num"><span className="kpi-tbl-mixed">mixed</span></td>}
-              <td className="num">{fmt$((Number(w.amount) || 0) + weekHatchedDollars(w, avgRate).total)}</td>
+              {/* Owner ruling 2026-10-16 - see grand-total TOTAL cell
+                  at line ~1086 for the full rationale. Drafts are
+                  already in w.amount; adding weekHatchedDollars here
+                  double-counted them. */}
+              <td className="num">{fmt$(Number(w.amount) || 0)}</td>
             </tr>
             {weekOpen && mode === "single" && workerChildrenForWeek(w, workers).map(c => (
               <ChildRow
