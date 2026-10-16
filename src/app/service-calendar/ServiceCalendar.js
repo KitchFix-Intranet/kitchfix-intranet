@@ -500,8 +500,21 @@ function HandoffAmbient({ selectedAccount, scope, periodKey, monthKey, syncingKe
 
 function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev = false }) {
   const scV2 = useScV2();
+  // P1-2 perf: hoisted above the state block so selectedAccount can seed
+  // from the URL at mount. useRouter() still lives further down with the
+  // ?view=admin URL-sync block; only useSearchParams moved up.
+  const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState("");
+  // P1-2 perf: seed selectedAccount from the URL synchronously at mount so the
+  // sc-load + sc-year-summary effects fire immediately, in parallel with
+  // sc-accounts, instead of waiting ~1s for sc-accounts to resolve and set it.
+  // The sc-accounts effect stays authoritative (see below): if the URL account
+  // is invalid / not accessible it overrides this with a validated fallback;
+  // when the URL account is valid, its setSelectedAccount(initial) is an
+  // identical-value no-op so no second fetch fires.
+  const [selectedAccount, setSelectedAccount] = useState(
+    () => searchParams.get("account") || ""
+  );
   // year is hardcoded to the active season; month initializes from the
   // CLIENT's local clock, not the server's. The calendar fetch below
   // always sends ?month=YYYY-MM explicitly, so the server-side UTC
@@ -702,8 +715,9 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const isYearViewEffective = isYearView || isHomestandOnNonPilot;
 
   // URL ?view=admin sync (App Router shallow update).
+  // searchParams is hoisted above the state block (see top of this
+  // component) so the selectedAccount seed can read it at mount.
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   /* V3 §9.2 H1 - effective load-state resolves the ?debug=failed
      hook ONCE for every consumer. SC-033 wired the hook only at the
