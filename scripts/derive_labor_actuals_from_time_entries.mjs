@@ -37,10 +37,16 @@
 //     x2.0 - Holiday Double Rate carries NULL ot_multiplier, so any
 //     detector reading ot_multiplier misses the holiday case).
 //
-//   status gating (corpus: PAID 11182 / DRAFT 109 / APPROVED 108):
-//     APPROVED | FINALIZED | PAID  -> approved-equivalent (hours+dollars)
-//     DRAFT                        -> draft_hours only; anomalies fire
-//     Treating PAID as neither would silently drop 98% of entries.
+//   status gating (owner ruling 2026-10-16): approval state is NOT a
+//   filter on cost. Every entry's hours and dollars are booked
+//   regardless of status - APPROVED | FINALIZED | PAID | DRAFT all
+//   contribute to hours_regular / hours_overtime / hours_double_time
+//   and the matching dollars. The existing pay-segments pipeline
+//   priced every hour this way; the board renders unapproved alongside
+//   total so a leader can see the flag without the dollars being wrong.
+//   approved_hours, draft_hours, draft_entry_count, oldest_draft_date,
+//   still_costing_hours and the anomaly_* columns stay as SUBSET
+//   TRACKERS sitting beside the realized total.
 //
 //   date rule: left(start_time, 10) - the local wall-clock date from
 //   the ISO string's own UTC offset. Never a ::date cast on the
@@ -70,6 +76,10 @@ const MAX_DURATION_SEC = 600;
 // oldest_draft_date; they still fire anomalies if present.
 const APPROVAL_TRACKING_START = "2026-08-24";
 
+// Known Rippling status values. Any new status must be surfaced
+// explicitly rather than silently dropped - count it in skippedStatus
+// and fail the run if it ever becomes non-zero.
+const KNOWN_STATUSES = new Set(["APPROVED", "FINALIZED", "PAID", "DRAFT"]);
 const APPROVED_EQUIVALENT = new Set(["APPROVED", "FINALIZED", "PAID"]);
 const REGULAR_SEGMENT_NAMES = new Set(["Regular", "Base Pay"]);
 
@@ -341,6 +351,7 @@ const buckets = new Map();
 let skippedPreFloor = 0, skippedUnattr = 0, skippedUnknownStatus = 0, skippedNoStartDate = 0;
 let entriesInApproved = 0, entriesInDraft = 0;
 let rateFromSegment = 0, rateFromWage = 0, rateNone = 0;
+const unpricedEntries = [];   // {workerIdHash, startDate, status, dur} - blocker if non-empty
 
 function localDate(iso) { return typeof iso === "string" ? iso.slice(0, 10) : null; }
 function getBucket(acct, workerId, w, lineCode) {
@@ -385,9 +396,9 @@ for (const te of timeEntries) {
   if (!attr) { skippedUnattr++; continue; }
 
   const status = String(p.status || "");
+  if (!KNOWN_STATUSES.has(status)) { skippedUnknownStatus++; continue; }
   const isApproved = APPROVED_EQUIVALENT.has(status);
   const isDraft = status === "DRAFT";
-  if (!isApproved && !isDraft) { skippedUnknownStatus++; continue; }
 
   const w = resolveWeek(attr.account_key, startDate);
   // Only touch weeks on or after the floor. resolveWeek returns bounds
@@ -403,34 +414,44 @@ for (const te of timeEntries) {
   const reg = Number(summary.regular_hours || 0);
   const ot = Number(summary.over_time_hours || 0);
   const dot = Number(summary.double_over_time_hours || 0);
+  const other = Math.max(0, dur - reg - ot - dot);
 
+  // Hours - priced for every status (owner ruling 2026-10-16).
+  // Approval state is a subset tracker, not a filter on cost.
+  b.hours_regular += reg;
+  b.hours_overtime += ot;
+  b.hours_double_time += dot;
+  b.hours_premium_other += other;
+
+  // Dollars - priced for every status. Resolve rate once per entry.
+  const { rate, source } = resolveRate(p, workerId);
+  if (source === "segment") rateFromSegment++;
+  else if (source === "compensations") rateFromWage++;
+  else rateNone++;
+  if (rate <= 0 && dur > 0) {
+    // Blocker. Any entry with hours and no resolvable rate must stop
+    // the run - a silent zero is the Stage 1 defect we are explicitly
+    // fixing. Collect for the end-of-run report; exit non-zero below.
+    unpricedEntries.push({
+      workerIdHash: String(workerId).slice(0, 6) + "...",
+      startDate,
+      status,
+      dur: Math.round(dur * 100) / 100,
+      account_key: attr.account_key,
+    });
+  }
+  b.dollars_regular       += reg * rate;
+  b.dollars_overtime      += ot  * rate * 1.5;
+  b.dollars_double_time   += dot * rate * 2.0;
+  b.dollars_premium_other += other * rate;
+  if (rate <= 0) b.hours_without_dollars += dur;
+
+  // Subset trackers (sit beside the realized totals, do not filter them).
   if (isApproved) {
     entriesInApproved++;
-    b.hours_regular += reg;
-    b.hours_overtime += ot;
-    b.hours_double_time += dot;
-    // premium_other = total duration - the three Rippling-split
-    // buckets. Rare; zero in the current corpus. Covers any
-    // display_name outside Regular / 1.5x Overtime / Holiday Double
-    // Rate landing in the summary.duration tally.
-    const other = Math.max(0, dur - reg - ot - dot);
-    b.hours_premium_other += other;
     b.approved_hours += dur;
-
-    // Dollars: resolve rate once per entry, apply hardcoded multipliers.
-    const { rate, source } = resolveRate(p, workerId);
-    if (source === "segment") rateFromSegment++;
-    else if (source === "compensations") rateFromWage++;
-    else rateNone++;
-    b.dollars_regular     += reg * rate;
-    b.dollars_overtime    += ot  * rate * 1.5;
-    b.dollars_double_time += dot * rate * 2.0;
-    // Any premium_other hours get the base rate; near-zero contributor
-    // in practice (the three live display_names cover every observed
-    // segment).
-    b.dollars_premium_other += other * rate;
-    if (rate === 0) b.hours_without_dollars += dur;
-  } else if (isDraft) {
+  }
+  if (isDraft) {
     entriesInDraft++;
     b.draft_entry_count++;
     if (!p.end_time) b.anomaly_no_clockout++;
@@ -447,20 +468,38 @@ for (const te of timeEntries) {
   }
 }
 
+
 const durationSec = ((Date.now() - t0) / 1000);
 console.log(`  entries processed: ${timeEntries.length}`);
-console.log(`    approved-equivalent: ${entriesInApproved}  (dollars written)`);
-console.log(`    draft:               ${entriesInDraft}  (draft_hours only)`);
+console.log(`    APPROVED/FINALIZED/PAID (approved_hours tracker): ${entriesInApproved}`);
+console.log(`    DRAFT (draft_hours tracker):                      ${entriesInDraft}`);
 console.log(`    skipped pre-floor:   ${skippedPreFloor}`);
 console.log(`    skipped unattr:      ${skippedUnattr}`);
 console.log(`    skipped no start:    ${skippedNoStartDate}`);
-console.log(`    skipped status:      ${skippedUnknownStatus}`);
-console.log(`  rate resolution over approved entries:`);
-console.log(`    from segment pay_rate:   ${rateFromSegment}`);
-console.log(`    from compensations wage: ${rateFromWage}`);
-console.log(`    none (dollars = 0):      ${rateNone}`);
+console.log(`    skipped status (unknown): ${skippedUnknownStatus}`);
+console.log(`  rate resolution over ALL priced entries:`);
+console.log(`    from segment pay_rate:    ${rateFromSegment}`);
+console.log(`    from compensations wage:  ${rateFromWage}`);
+console.log(`    unpriced (rate <= 0):     ${rateNone}`);
 console.log(`  bucket count: ${buckets.size}`);
 console.log(`  elapsed so far: ${durationSec.toFixed(2)}s`);
+
+// ── Stop and report on any unpriced entry ─────────────────────────
+// Owner ruling 2026-10-16: any entry with hours and no resolvable
+// rate is a blocker, not a silent zero. The Stage 1 defect was
+// exactly a silent-zero on 34% of regular segments; this gate ensures
+// we never ship that again.
+if (unpricedEntries.length > 0) {
+  console.error(`\nSTOP: ${unpricedEntries.length} entries have hours but no resolvable rate.`);
+  console.error(`  (shift pay_rate NULL AND compensations hourly_wage absent for the worker)`);
+  console.error(`  first 20 (workerHash | account | start_date | status | duration):`);
+  for (const u of unpricedEntries.slice(0, 20)) {
+    console.error(`    ${u.workerIdHash} | ${u.account_key} | ${u.startDate} | ${u.status} | ${u.dur}h`);
+  }
+  console.error(`\nFix the data (missing compensation row for the worker) or extend the`);
+  console.error(`rate resolution before writing. No labor_actuals row is written.`);
+  process.exit(3);
+}
 
 // ── Build RPC payload per account ────────────────────────────────
 const round2 = x => Math.round(x * 100) / 100;
