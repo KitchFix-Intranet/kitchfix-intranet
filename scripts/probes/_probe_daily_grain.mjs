@@ -147,13 +147,23 @@ else fail(`${containerLeaks} daily-row workers back to a container department`);
 
 // ─── D1 - reconciliation ─────────────────────────────────────────────
 console.log("");
-console.log("[D1] for every (account, week) in the daily window, sum(daily) = weekly to the cent");
-// V-weekly-integer-cent hotfix - sum daily via INTEGER CENTS so FP
-// summation-order artifacts cannot manufacture a mismatch. Postgres
-// row order is not deterministic vs the weekly derive's segment
-// iteration; summing as integers eliminates the drift entirely.
-// Hours in hundredths (x100); dollars in myriadths (x10000) since
-// labor_actuals_daily stores amount at NUMERIC(14,4).
+console.log("[D1] for every (account, week) in the daily window, sum(daily) ties to weekly");
+// Hours still require exact match (per-day integer-cent accumulators;
+// a real hours defect must still fail).
+//
+// labor-te-2 (2026-10-16): dollars check RELAXED to a flat $0.05
+// tolerance. Historical pay-segments-era mismatches were up to 5 rows
+// at exactly $0.02 off from one-direction FP rounding (weekly sums
+// full precision then rounds once; daily rounds per-day then sums,
+// so up to 7 roundings against 1). The sign varied, ruling out a
+// systematic offset. Keeping D1 at exact-to-the-cent caused the
+// grain probe to false-fail nightly since 2026-10-02 which is why
+// the Rippling 404 outage went unnoticed for two weeks (the alarm
+// cried wolf). Tolerance is flat $0.05 because 7-day sum of per-day
+// 1/2-cent rounding error maxes at ~$0.035; the extra headroom is
+// insurance against future bucket shapes without being so loose
+// that a real cent-grain defect could pass.
+const DOLLAR_TOLERANCE_CENTS = 5;   // $0.05 absolute cents difference
 function bucketAdd(map, key, row) {
   const cur = map.get(key) || {
     hours_regularX100: 0, hours_overtimeX100: 0, hours_double_timeX100: 0, hours_premium_otherX100: 0,
@@ -209,9 +219,13 @@ for (const w of weeklyInWindow) {
   for (const field of ["hours_regular", "hours_overtime", "hours_double_time", "hours_premium_other", "amount"]) {
     const dailyCents = readCents(dSum, field);
     const weeklyCents = Math.round(Number(w[field]) * 100);
-    if (dailyCents !== weeklyCents) {
+    const diff = Math.abs(dailyCents - weeklyCents);
+    // Hours fields must match exactly; dollars get the per-day
+    // rounding tolerance (see DOLLAR_TOLERANCE_CENTS above).
+    const limit = field === "amount" ? DOLLAR_TOLERANCE_CENTS : 0;
+    if (diff > limit) {
       mismatches++;
-      if (sampleMismatches.length < 5) sampleMismatches.push(`${w.account_key} ${w.week_start} worker=${w.worker_id.slice(0,8)} ${w.line_code} ${field}: daily=${(dailyCents/100).toFixed(2)} weekly=${w[field]}`);
+      if (sampleMismatches.length < 5) sampleMismatches.push(`${w.account_key} ${w.week_start} worker=${w.worker_id.slice(0,8)} ${w.line_code} ${field}: daily=${(dailyCents/100).toFixed(2)} weekly=${w[field]} (diff ${diff} cents, limit ${limit})`);
     }
   }
 }

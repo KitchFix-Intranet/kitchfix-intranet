@@ -13,48 +13,20 @@
 // already on the time entry; sourcing from time_entries directly cuts
 // both dead objects.
 //
-// Model (full evidence in claude/LABOR_API_DOLLARS_MODEL_PROVEN_2026-10-16.md):
-//   hours per entry:
-//     regular     = time_entry_summary.regular_hours
-//     overtime    = time_entry_summary.over_time_hours
-//     double_time = time_entry_summary.double_over_time_hours
-//     Never re-derive the OT split. Rippling allocates against the
-//     weekly 40h boundary; the summary is authoritative.
+// labor-te-2 (2026-10-16, same day) extracted the compute into
+// src/lib/labor/timeEntriesDerive.js so the weekly and daily derives
+// share one implementation of the hours/dollars model. Any change to
+// the computation must land in that module, not inline here. The
+// grain probe D1 reconciliation only ties if the two derives compute
+// identically.
 //
-//   rate per entry (two sources, in order):
-//     1. segments[].pay_rate on display_name in {'Regular','Base Pay'}
-//        where pay_rate IS NOT NULL
-//     2. rippling_raw_compensations latest hourly_wage.value for the
-//        worker, presence-filtered. MANDATORY fallback - pay_rate is
-//        null on ~34% of Regular segments and 38% of OT segments.
-//
-//   dollars per entry (approved-equivalent only):
-//     regular     = regular_hours          * rate
-//     overtime    = over_time_hours        * rate * 1.5
-//     double_time = double_over_time_hours * rate * 2.0
-//     Multipliers are hardcoded by display_name presence in the corpus
-//     ('Regular' x1.0, '1.5x Overtime' x1.5, 'Holiday Double Rate'
-//     x2.0 - Holiday Double Rate carries NULL ot_multiplier, so any
-//     detector reading ot_multiplier misses the holiday case).
-//
-//   status gating (owner ruling 2026-10-16): approval state is NOT a
-//   filter on cost. Every entry's hours and dollars are booked
-//   regardless of status - APPROVED | FINALIZED | PAID | DRAFT all
-//   contribute to hours_regular / hours_overtime / hours_double_time
-//   and the matching dollars. The existing pay-segments pipeline
-//   priced every hour this way; the board renders unapproved alongside
-//   total so a leader can see the flag without the dollars being wrong.
-//   approved_hours, draft_hours, draft_entry_count, oldest_draft_date,
-//   still_costing_hours and the anomaly_* columns stay as SUBSET
-//   TRACKERS sitting beside the realized total.
-//
-//   date rule: left(start_time, 10) - the local wall-clock date from
-//   the ISO string's own UTC offset. Never a ::date cast on the
-//   whole timestamp. Accounts span ET/CT/MT/AZ.
-//
-//   account + line_code: unchanged from the pay-segments derive.
-//   worker_id -> rippling_department_map -> account_key, and the
-//   account's hourly pnl_line (where pnl_line='3100.1') -> line_code.
+// Model (full header in src/lib/labor/timeEntriesDerive.js):
+//   hours per entry  = time_entry_summary.{regular,over_time,double_over_time}_hours
+//   rate per entry   = segment pay_rate on Regular/Base Pay (two-source
+//                      fallback to compensations hourly_wage.value)
+//   dollars per hour bucket = hours * rate * {1.0, 1.5, 2.0}
+//   status           = every known status priced (owner ruling 2026-10-16);
+//                      approved_hours / draft_hours are subset trackers.
 //
 // CLI:
 //   node --env-file=.env.local scripts/derive_labor_actuals_from_time_entries.mjs --source=nightly
@@ -68,6 +40,16 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { TIME_ENTRY_SOURCE_FLOOR } from "../src/lib/kpi/floors.js";
+import {
+  KNOWN_STATUSES,
+  APPROVED_EQUIVALENT,
+  localDate,
+  loadReferenceData,
+  loadTimeEntries,
+  makeAttribute,
+  makeResolveRate,
+  computeEntryHoursAndDollars,
+} from "../src/lib/labor/timeEntriesDerive.js";
 
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
 const MAX_DURATION_SEC = 600;
@@ -75,13 +57,6 @@ const MAX_DURATION_SEC = 600;
 // Pre-cutoff DRAFT entries do not contribute to draft_hours or
 // oldest_draft_date; they still fire anomalies if present.
 const APPROVAL_TRACKING_START = "2026-08-24";
-
-// Known Rippling status values. Any new status must be surfaced
-// explicitly rather than silently dropped - count it in skippedStatus
-// and fail the run if it ever becomes non-zero.
-const KNOWN_STATUSES = new Set(["APPROVED", "FINALIZED", "PAID", "DRAFT"]);
-const APPROVED_EQUIVALENT = new Set(["APPROVED", "FINALIZED", "PAID"]);
-const REGULAR_SEGMENT_NAMES = new Set(["Regular", "Base Pay"]);
 
 function parseArgs(argv) {
   const args = { source: null, dryRun: false };
@@ -122,16 +97,12 @@ if (!args.dryRun) {
     p_source_run: "preflight",
     p_week_from: TIME_ENTRY_SOURCE_FLOOR,
   });
-  // Function exists if the error is business-logic (account_key not in
-  // accounts) rather than "function does not exist" / 404.
   const msg = String(probe.error?.message || "");
   if (probe.error && /does not exist|could not find the function|PGRST202/i.test(msg)) {
     console.error("pre-flight FAIL: swap_labor_actuals_for_account_window is ABSENT.");
     console.error("Apply docs/migrations/labor-te-1-windowed-rpc.sql in Studio first.");
     process.exit(3);
   }
-  // Expected: raised the "account_key not in accounts table" exception
-  // with the __preflight__ sentinel. That is PRESENT + working.
   if (probe.error && /account_key .* not in accounts/i.test(msg)) {
     console.log("  windowed RPC: PRESENT");
   } else if (!probe.error) {
@@ -142,119 +113,24 @@ if (!args.dryRun) {
   }
 }
 
-// ── Paginate helpers ─────────────────────────────────────────────
-async function pageAll(builderFactory, pageSize = 1000) {
-  const out = [];
-  let from = 0;
-  while (true) {
-    const q = await builderFactory().range(from, from + pageSize - 1);
-    if (q.error) throw new Error(q.error.message);
-    const rows = q.data || [];
-    for (const r of rows) out.push(r);
-    if (rows.length < pageSize) break;
-    from += pageSize;
-  }
-  return out;
-}
-
-async function keysetPage(builderFactory, keyCol = "rippling_id", pageSize = 1000) {
-  const out = [];
-  let cursor = null;
-  while (true) {
-    let q = builderFactory();
-    if (cursor) q = q.gt(keyCol, cursor);
-    q = q.order(keyCol, { ascending: true }).limit(pageSize);
-    const r = await q;
-    if (r.error) throw new Error(r.error.message);
-    const rows = r.data || [];
-    for (const row of rows) out.push(row);
-    if (rows.length < pageSize) break;
-    cursor = rows[rows.length - 1][keyCol];
-  }
-  return out;
-}
-
-// ── Load reference data ──────────────────────────────────────────
+// ── Load reference data (shared module) ─────────────────────────
 console.log("\nloading reference data...");
+const ref = await loadReferenceData(supa);
+console.log(`  presence time_entries: ${ref.counts.presenceTe}`);
+console.log(`  presence compensations: ${ref.counts.presenceComp}`);
+console.log(`  dept map: ${ref.counts.deptMap}, accounts with 3100.1: ${ref.counts.accountToHourlyLine}`);
+console.log(`  workers: ${ref.counts.workers}`);
+console.log(`  comps_latest: ${ref.counts.compsLatest}  (presence-dropped: ${ref.counts.compPresenceDrops}, no-wage dropped: ${ref.counts.compNoWageDrops})`);
+console.log(`  hourly wage resolved for: ${ref.counts.workerToWage} workers`);
+console.log(`  sc_day_metadata: ${ref.counts.dayRows}`);
 
-const presenceTe = new Set();
-for (const r of await pageAll(() => supa.from("rippling_current_presence").select("rippling_id").eq("kind", "time_entries"))) {
-  presenceTe.add(r.rippling_id);
-}
-console.log(`  presence time_entries: ${presenceTe.size}`);
+const attribute = makeAttribute(ref);
+const resolveRate = makeResolveRate(ref);
 
-const presenceComp = new Set();
-for (const r of await pageAll(() => supa.from("rippling_current_presence").select("rippling_id").eq("kind", "compensations"))) {
-  presenceComp.add(r.rippling_id);
-}
-console.log(`  presence compensations: ${presenceComp.size}`);
-
-const deptRows = await pageAll(() =>
-  supa.from("rippling_department_map").select("department_id, department_name, account_key, pnl_line, is_container"));
-const deptMap = new Map(deptRows.map(d => [d.department_id, d]));
-const accountToHourlyLine = new Map();
-for (const d of deptRows) {
-  if (d.is_container) continue;
-  if (d.pnl_line !== "3100.1") continue;
-  if (!d.account_key) continue;
-  accountToHourlyLine.set(d.account_key, d.pnl_line);
-}
-console.log(`  dept map: ${deptMap.size}, accounts with 3100.1: ${accountToHourlyLine.size}`);
-
-const workers = await keysetPage(() =>
-  supa.from("rippling_raw_workers_latest").select("rippling_id, payload"));
-const workerToDept = new Map();
-for (const w of workers) {
-  const wid = w.payload?.id;
-  if (wid) workerToDept.set(wid, w.payload?.department_id || null);
-}
-console.log(`  workers: ${workers.length}`);
-
-// Build worker -> hourly wage from compensations_latest, presence-filtered.
-// Gate on hourly_wage.value > 0 directly - payment_type in this corpus
-// is DEFAULT (hourly workers) or VARIED (variable-rate workers); only
-// DEFAULT carries a usable wage, and the field itself is the authoritative
-// signal regardless of the payment_type label. Latest payload.updated_at
-// per worker wins.
-const compsLatest = await keysetPage(() =>
-  supa.from("rippling_raw_compensations_latest").select("rippling_id, payload"));
-const workerToWage = new Map();
-let compPresenceDrops = 0, compNoWageDrops = 0;
-for (const c of compsLatest) {
-  if (!presenceComp.has(c.rippling_id)) { compPresenceDrops++; continue; }
-  const p = c.payload || {};
-  const workerId = p.worker_id;
-  if (!workerId) continue;
-  const wage = Number(p.hourly_wage?.value || 0);
-  if (!(wage > 0)) { compNoWageDrops++; continue; }
-  const uat = p.updated_at || "";
-  const prev = workerToWage.get(workerId);
-  if (!prev || uat > prev.uat) workerToWage.set(workerId, { wage, uat });
-}
-console.log(`  comps_latest: ${compsLatest.length}  (presence-dropped: ${compPresenceDrops}, no-wage dropped: ${compNoWageDrops})`);
-console.log(`  hourly wage resolved for: ${workerToWage.size} workers`);
-
-const dayRows = await pageAll(() =>
-  supa.from("sc_day_metadata").select("account_key, service_date, period, week_label"));
-const dayMap = new Map();
-const weekBoundsMap = new Map();
-for (const r of dayRows) {
-  if (!r.week_label || !r.period) continue;
-  dayMap.set(`${r.account_key}|${r.service_date}`, { period: r.period, week_label: r.week_label });
-  const k = `${r.account_key}|${r.period}|${r.week_label}`;
-  const cur = weekBoundsMap.get(k);
-  if (!cur) weekBoundsMap.set(k, { start: r.service_date, end: r.service_date });
-  else {
-    if (r.service_date < cur.start) cur.start = r.service_date;
-    if (r.service_date > cur.end)   cur.end   = r.service_date;
-  }
-}
-console.log(`  sc_day_metadata: ${dayRows.length}`);
-
-// ── Week resolver ────────────────────────────────────────────────
+// ── Week resolver (weekly-only; daily uses the raw service date) ─
 function isoWeekBounds(dateStr) {
   const d = new Date(dateStr + "T00:00:00Z");
-  const dayNum = (d.getUTCDay() + 6) % 7;   // Monday = 0
+  const dayNum = (d.getUTCDay() + 6) % 7;
   const monday = new Date(d);
   monday.setUTCDate(d.getUTCDate() - dayNum);
   const sunday = new Date(monday);
@@ -269,9 +145,9 @@ function isoWeekBounds(dateStr) {
   };
 }
 function resolveWeek(accountKey, dateStr) {
-  const day = dayMap.get(`${accountKey}|${dateStr}`);
+  const day = ref.dayMap.get(`${accountKey}|${dateStr}`);
   if (day) {
-    const bounds = weekBoundsMap.get(`${accountKey}|${day.period}|${day.week_label}`);
+    const bounds = ref.weekBoundsMap.get(`${accountKey}|${day.period}|${day.week_label}`);
     return {
       week_label: day.week_label,
       week_start: bounds?.start || dateStr,
@@ -290,7 +166,6 @@ function resolveWeek(accountKey, dateStr) {
   };
 }
 
-// FY lookup mirroring deriveActuals.js. FY2026 is 2025-12-29..2026-12-27.
 function fiscalYearForDate(dateStr) {
   if (!dateStr) return null;
   if (dateStr >= "2025-12-29" && dateStr <= "2026-12-27") return 2026;
@@ -299,51 +174,10 @@ function fiscalYearForDate(dateStr) {
   return null;
 }
 
-function attribute(workerId) {
-  if (!workerId || !workerToDept.has(workerId)) return null;
-  const deptId = workerToDept.get(workerId);
-  if (!deptId) return null;
-  const d = deptMap.get(deptId);
-  if (!d || d.is_container) return null;
-  if (d.account_key === "CORP") return null;
-  const hourlyLine = accountToHourlyLine.get(d.account_key);
-  if (!hourlyLine) return null;
-  return { account_key: d.account_key, line_code: hourlyLine };
-}
-
-// ── Load time entries + dedupe ───────────────────────────────────
+// ── Load time entries + dedupe (shared) ─────────────────────────
 console.log("\nloading rippling_raw_time_entries_latest...");
-const teLatest = await keysetPage(() =>
-  supa.from("rippling_raw_time_entries_latest").select("rippling_id, payload"));
-console.log(`  rows: ${teLatest.length}`);
-
-const liveTe = teLatest.filter(r => presenceTe.has(r.rippling_id));
-const bestById = new Map();
-for (const r of liveTe) {
-  const id = r.payload?.id;
-  if (!id) continue;
-  const uat = r.payload?.updated_at || "";
-  const prev = bestById.get(id);
-  if (!prev || uat > prev.uat) bestById.set(id, { r, uat });
-}
-const timeEntries = [...bestById.values()].map(x => x.r);
-console.log(`  live-in-presence: ${liveTe.length}  deduped: ${timeEntries.length}`);
-
-// ── Resolve rate per entry ───────────────────────────────────────
-// Order: shift pay_rate on Regular/Base Pay segments first; then
-// compensations hourly_wage fallback. Measured: shift rate rescues 51
-// worker-weeks over wage-only; wage-only wins 1. Keep both.
-function resolveRate(payload, workerId) {
-  const segs = Array.isArray(payload.segments) ? payload.segments : [];
-  for (const seg of segs) {
-    if (!REGULAR_SEGMENT_NAMES.has(seg.display_name)) continue;
-    const r = Number(seg.pay_rate);
-    if (Number.isFinite(r) && r > 0) return { rate: r, source: "segment" };
-  }
-  const wage = workerToWage.get(workerId);
-  if (wage && wage.wage > 0) return { rate: wage.wage, source: "compensations" };
-  return { rate: 0, source: "none" };
-}
+const { timeEntries, counts: teCounts } = await loadTimeEntries(supa, ref.presenceTe);
+console.log(`  rows: ${teCounts.latest}  live-in-presence: ${teCounts.liveInPresence}  deduped: ${timeEntries.length}`);
 
 // ── Build buckets ────────────────────────────────────────────────
 console.log("\ncomputing per-worker-week buckets...");
@@ -351,9 +185,8 @@ const buckets = new Map();
 let skippedPreFloor = 0, skippedUnattr = 0, skippedUnknownStatus = 0, skippedNoStartDate = 0;
 let entriesInApproved = 0, entriesInDraft = 0;
 let rateFromSegment = 0, rateFromWage = 0, rateNone = 0;
-const unpricedEntries = [];   // {workerIdHash, startDate, status, dur} - blocker if non-empty
+const unpricedEntries = [];
 
-function localDate(iso) { return typeof iso === "string" ? iso.slice(0, 10) : null; }
 function getBucket(acct, workerId, w, lineCode) {
   const k = `${acct}|${workerId}|${w.week_start}|${lineCode}`;
   let b = buckets.get(k);
@@ -371,9 +204,9 @@ function getBucket(acct, workerId, w, lineCode) {
       hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
       dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
       hours_without_dollars: 0,
-      segment_count: 0,          // 0 on this path; segments not consumed
+      segment_count: 0,
       entry_count: 0,
-      coverage_state: "complete", // presence is live by construction
+      coverage_state: "complete",
       draft_entry_count: 0,
       draft_hours: 0,
       anomaly_no_clockout: 0, anomaly_under_1h: 0, anomaly_over_16h: 0,
@@ -401,73 +234,57 @@ for (const te of timeEntries) {
   const isDraft = status === "DRAFT";
 
   const w = resolveWeek(attr.account_key, startDate);
-  // Only touch weeks on or after the floor. resolveWeek returns bounds
-  // from sc_day_metadata which may land on a slightly different
-  // week_start than the start_date; the floor is on the resolved week.
   if (w.week_start < TIME_ENTRY_SOURCE_FLOOR) { skippedPreFloor++; continue; }
 
   const b = getBucket(attr.account_key, workerId, w, attr.line_code);
   b.entry_count++;
 
-  const summary = p.time_entry_summary || {};
-  const dur = Number(summary.duration || 0);
-  const reg = Number(summary.regular_hours || 0);
-  const ot = Number(summary.over_time_hours || 0);
-  const dot = Number(summary.double_over_time_hours || 0);
-  const other = Math.max(0, dur - reg - ot - dot);
-
-  // Hours - priced for every status (owner ruling 2026-10-16).
-  // Approval state is a subset tracker, not a filter on cost.
-  b.hours_regular += reg;
-  b.hours_overtime += ot;
-  b.hours_double_time += dot;
-  b.hours_premium_other += other;
-
-  // Dollars - priced for every status. Resolve rate once per entry.
   const { rate, source } = resolveRate(p, workerId);
   if (source === "segment") rateFromSegment++;
   else if (source === "compensations") rateFromWage++;
   else rateNone++;
-  if (rate <= 0 && dur > 0) {
-    // Blocker. Any entry with hours and no resolvable rate must stop
-    // the run - a silent zero is the Stage 1 defect we are explicitly
-    // fixing. Collect for the end-of-run report; exit non-zero below.
+
+  const compute = computeEntryHoursAndDollars(p, rate);
+  if (rate <= 0 && compute.dur > 0) {
     unpricedEntries.push({
       workerIdHash: String(workerId).slice(0, 6) + "...",
       startDate,
       status,
-      dur: Math.round(dur * 100) / 100,
+      dur: Math.round(compute.dur * 100) / 100,
       account_key: attr.account_key,
     });
   }
-  b.dollars_regular       += reg * rate;
-  b.dollars_overtime      += ot  * rate * 1.5;
-  b.dollars_double_time   += dot * rate * 2.0;
-  b.dollars_premium_other += other * rate;
-  if (rate <= 0) b.hours_without_dollars += dur;
 
-  // Subset trackers (sit beside the realized totals, do not filter them).
+  b.hours_regular       += compute.reg;
+  b.hours_overtime      += compute.ot;
+  b.hours_double_time   += compute.dot;
+  b.hours_premium_other += compute.other;
+  b.dollars_regular     += compute.dollars_regular;
+  b.dollars_overtime    += compute.dollars_overtime;
+  b.dollars_double_time += compute.dollars_double_time;
+  b.dollars_premium_other += compute.dollars_premium_other;
+  if (rate <= 0) b.hours_without_dollars += compute.dur;
+
   if (isApproved) {
     entriesInApproved++;
-    b.approved_hours += dur;
+    b.approved_hours += compute.dur;
   }
   if (isDraft) {
     entriesInDraft++;
     b.draft_entry_count++;
     if (!p.end_time) b.anomaly_no_clockout++;
-    if (dur > 0 && dur < 1.0) b.anomaly_under_1h++;
-    if (dur > 16.0) b.anomaly_over_16h++;
+    if (compute.dur > 0 && compute.dur < 1.0) b.anomaly_under_1h++;
+    if (compute.dur > 16.0) b.anomaly_over_16h++;
     const startIso = p.start_time || null;
     const inTracking = startIso && startIso.slice(0, 10) >= APPROVAL_TRACKING_START;
     if (inTracking) {
-      b.draft_hours += dur;
+      b.draft_hours += compute.dur;
       if (b.oldest_draft_start === null || startIso < b.oldest_draft_start) {
         b.oldest_draft_start = startIso;
       }
     }
   }
 }
-
 
 const durationSec = ((Date.now() - t0) / 1000);
 console.log(`  entries processed: ${timeEntries.length}`);
@@ -484,11 +301,6 @@ console.log(`    unpriced (rate <= 0):     ${rateNone}`);
 console.log(`  bucket count: ${buckets.size}`);
 console.log(`  elapsed so far: ${durationSec.toFixed(2)}s`);
 
-// ── Stop and report on any unpriced entry ─────────────────────────
-// Owner ruling 2026-10-16: any entry with hours and no resolvable
-// rate is a blocker, not a silent zero. The Stage 1 defect was
-// exactly a silent-zero on 34% of regular segments; this gate ensures
-// we never ship that again.
 if (unpricedEntries.length > 0) {
   console.error(`\nSTOP: ${unpricedEntries.length} entries have hours but no resolvable rate.`);
   console.error(`  (shift pay_rate NULL AND compensations hourly_wage absent for the worker)`);
@@ -542,11 +354,6 @@ for (const b of buckets.values()) {
 }
 
 // ── Aggregated-by-account+week summary ──────────────────────────
-// Collapse worker-week rows to one line per account+week so Kevin can
-// read the shape of what Stage 2 would write without scrolling 68
-// worker-weeks. Public-repo rule: hours and counts only in the
-// committed probe output; dollar validation goes in the CC report to
-// Kevin separately.
 console.log("\nper-account+week summary (what Stage 2 would write):");
 console.log("  account         week_start   wks  entries  appr  draft  hr_reg  hr_ot  hr_dt  draft_h");
 const sortedAccts = [...perAccount.keys()].sort();
