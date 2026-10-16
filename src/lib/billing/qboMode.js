@@ -34,9 +34,14 @@
 // ─── Current state (2026-10-16) ───────────────────────────────────
 //
 // The stub returns 'live' for accounts on LIVE_ACCOUNTS and 'test'
-// for everything else (default-deny). TBJ - FL is on the live list
-// as of this PR; TXR - AZ and CIN - AZ remain 'test'. The allowlist
-// MUST be kept in sync with each Studio flip of
+// for everything else (default-deny). Three accounts are live as of
+// this PR: TBJ - FL, CIN - AZ, and TXR - AZ. CIN - AZ and TXR - AZ
+// were already live in sc_qbo_account_map (and pushing real invoices
+// on the server) when this stub was still returning 'test' for them;
+// this PR closes that pre-existing badge drift, it does NOT flip them
+// live. TBR - FL remains intentionally test.
+//
+// The allowlist MUST be kept in sync with each Studio flip of
 // sc_qbo_account_map.qbo_mode: if an account is flipped to live in
 // the DB but not added here, the badge will show TEST MODE over a
 // real server-side push - a cosmetic lie that could trick an
@@ -51,6 +56,8 @@
 // directly. Keep in sync with each Studio flip - see the file header.
 const LIVE_ACCOUNTS = new Set([
   "TBJ - FL",
+  "CIN - AZ",
+  "TXR - AZ",
 ]);
 
 /**
@@ -75,6 +82,8 @@ export const TEST_DESTINATION = "ZZ TEST - KitchFix Intranet";
 // and the DB.
 const LIVE_DESTINATIONS = {
   "TBJ - FL": "Rogers Blue Jays Baseball Partnership", // QBO customer 16971
+  "CIN - AZ": "Cincinnati Reds (Goodyear, AZ)",        // QBO customer 17752
+  "TXR - AZ": "Texas Rangers - Surprise, AZ",          // QBO customer 19000
 };
 
 /**
