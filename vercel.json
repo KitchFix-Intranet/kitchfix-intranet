@@ -1,36 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/daily",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/incident-reminders",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/backup-sheets",
-      "schedule": "0 6 * * *"
-    },
-    {
       "path": "/api/cron/schedule-drift",
       "schedule": "0 11 * * 1"
     },
     {
-      "path": "/api/cron/sousai-daily",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/sousai-weekly",
-      "schedule": "0 12 * * 1"
-    },
-    {
-      "path": "/api/cron/sousai-monthly",
-      "schedule": "0 12 1 * *"
-    },
-    {
       "path": "/api/cron/sc-chase",
-      "schedule": "0 * * * *"
+      "schedule": "0 0-1,19-23 * * 0,1"
     },
     {
       "path": "/api/cron/extract-line-items",
