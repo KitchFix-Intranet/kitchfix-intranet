@@ -129,32 +129,32 @@ jobs:
           echo "derive_labor_actuals_from_time_entries --source=${SOURCE}"
           node scripts/derive_labor_actuals_from_time_entries.mjs --source=${SOURCE}
 
-      # 2026-10-16 (labor-te-1 cutover). The daily derive and the grain
-      # probe are DISABLED on main. Both read pay_segments through
-      # dedupePaySegments; the pay_segments walk is retired and its
-      # presence set is frozen. Running either now would re-write
-      # labor_actuals_daily rows from stale data (or fail), creating a
-      # worse surface than the current frozen state: homestand views
-      # and non-week-aligned ranges read from labor_actuals_daily
-      # (route.js:798), so a wrong number here is operator-visible.
-      #
-      # The follow-up (labor-te-2) repoints derive_labor_actuals_daily
-      # at the time-entries source and reinstates the grain probe with
-      # the matching comparison. Both are expected to land in the same
-      # session as this PR while the model is still in context.
-      - name: Derive labor actuals daily (DISABLED pending labor-te-2)
+      # Daily derive (labor-te-2 2026-10-16). Now sourced from
+      # rippling_raw_time_entries via the shared compute in
+      # src/lib/labor/timeEntriesDerive.js. Clamped to
+      # TIME_ENTRY_SOURCE_FLOOR (2026-10-05) in both the DELETE and the
+      # INSERT so pre-floor rows cannot be touched. --window=trailing8
+      # effectively runs from max(trailing8_start, floor); fytd is
+      # clamped identically.
+      - name: Derive labor actuals daily
         id: derive_daily
-        if: false
+        if: always() && steps.sync.outputs.time_entries_ok == 'true' && steps.sync.outputs.workers_ok == 'true' && (inputs.dry_run || 'false') != 'true'
         run: |
-          echo "DISABLED by labor-te-1; see workflow comment."
-          exit 0
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          echo "note: weekly derive already wrote successfully; failure here isolates to the daily rollup"
+          echo "derive_labor_actuals_daily --source=${SOURCE} --window=trailing8"
+          node scripts/derive_labor_actuals_daily.mjs --source=${SOURCE} --window=trailing8
 
-      - name: Daily grain probes (DISABLED pending labor-te-2)
+      # Daily grain probe (labor-te-2 2026-10-16). Hours still exact;
+      # dollars now have a flat $0.05 tolerance to absorb per-day
+      # rounding against the once-rounded weekly aggregate. See the
+      # D1 header in the probe for the full rationale.
+      - name: Daily grain probes
         id: probe_grain
-        if: false
+        if: always() && steps.sync.outputs.time_entries_ok == 'true' && steps.sync.outputs.workers_ok == 'true' && (inputs.dry_run || 'false') != 'true'
         run: |
-          echo "DISABLED by labor-te-1; see workflow comment."
-          exit 0
+          echo "probe_daily_grain"
+          node scripts/probes/_probe_daily_grain.mjs
 
       # Salary derive rebuilds the trailing 8 fiscal weeks of
       # labor_salary_actuals so a late-entered raise or a backdated

@@ -1,50 +1,45 @@
 // scripts/derive_labor_actuals_daily.mjs
 //
-// Day-grain rebuild of labor_actuals_daily. Runs AFTER the weekly
-// derive so the reconciliation probe (D1) reads a stable weekly.
-// Same input discipline as the weekly:
+// labor-te-2 (2026-10-16). Day-grain rebuild of labor_actuals_daily
+// sourced from rippling_raw_time_entries. Clamped to
+// TIME_ENTRY_SOURCE_FLOOR: no pre-floor row is ever deleted or
+// rewritten, so the frozen pay-segments-era rows
+// (2026-04-20..2026-10-04) stay exactly as they were on 2026-10-06.
 //
-//   1. presence filter FIRST, then dedupe by external_id - via the
-//      shared helper in src/lib/labor/paySegmentDedupe.js so the
-//      weekly and daily derives cannot drift on the 2026-08-19
-//      hotfix contract. A tripled Tuesday reads as a busy Tuesday
-//      if we skip the dedupe here (the weekly's hours_regular > 48
-//      sanity assert has no day-level analogue).
-//   2. attribution identical to the weekly derive - worker.
-//      department_id via rippling_department_map, CORP excluded,
-//      container departments excluded, D26 3100.1 excluded.
-//   3. round only at the end. Full precision through the
-//      accumulator; r2() at the row-build step. Per-day rounded
-//      sums drop a cent vs the weekly (CIN - OH week of 06/29:
-//      $4,328.26 rounded per-day vs $4,328.27 unrounded).
+// Shares the compute with the weekly derive via
+// src/lib/labor/timeEntriesDerive.js. One source of truth for hours,
+// dollars, rate resolution, and attribution - the grain probe D1
+// reconciliation only ties if the two derives match.
 //
-// Usage
+// The DELETE is bounded by work_date range; both --window=trailing8
+// and --window=fytd land their effective start at
+// max(windowStart, TIME_ENTRY_SOURCE_FLOOR). The script refuses to
+// touch any day earlier than the floor even if a payload accidentally
+// carries one.
+//
+// Usage:
 //   node --env-file=.env.local scripts/derive_labor_actuals_daily.mjs --source=nightly
-//   node --env-file=.env.local scripts/derive_labor_actuals_daily.mjs --source=manual --dry-run
 //   node --env-file=.env.local scripts/derive_labor_actuals_daily.mjs --source=manual --window=fytd
-//
-// --window=trailing8 (default) rebuilds the last 8 fiscal weeks.
-// --window=fytd rebuilds every day from FY2026 open through today.
+//   node --env-file=.env.local scripts/derive_labor_actuals_daily.mjs --source=manual --dry-run
 //
 // Exit codes
 //   0  success (or dry-run success)
 //   1  configuration error
 //   2  derivation error mid-run
+//   3  pre-flight failed (unpriced entries, below-floor payload)
 
 import { createClient } from "@supabase/supabase-js";
 import { FY_START_ISO } from "../src/app/kpi/labor/lib/periods.js";
-import { dedupePaySegments } from "../src/lib/labor/paySegmentDedupe.js";
-import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
-import { classifyBucket, loadBaseHourlyWages } from "../src/lib/labor/earningBucket.js";
-
-// Kevin ruling 2026-10-05 (updated post PR-1233 review). Guard
-// ceilings match the weekly derive's - one classifier, one set of
-// thresholds. See src/lib/labor/deriveActuals.js for baselines +
-// rationale. UNEVALUABLE_WORKERS_CEILING is on distinct workers (not
-// segments) because segments grow with shifts and setup changes move
-// workers. Both derives fail the step on ceiling exceedance.
-const RECLASSIFIED_CEILING = 10;
-const UNEVALUABLE_WORKERS_CEILING = 3;
+import { TIME_ENTRY_SOURCE_FLOOR } from "../src/lib/kpi/floors.js";
+import {
+  KNOWN_STATUSES,
+  localDate,
+  loadReferenceData,
+  loadTimeEntries,
+  makeAttribute,
+  makeResolveRate,
+  computeEntryHoursAndDollars,
+} from "../src/lib/labor/timeEntriesDerive.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -70,30 +65,20 @@ if (!VALID_WINDOWS.has(args.window)) {
 // ─── Env + Supabase ──────────────────────────────────────────────────
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SB_URL) { console.error("SUPABASE_URL not set"); process.exit(1); }
-if (!SB_KEY) { console.error("SUPABASE_SERVICE_ROLE_KEY not set"); process.exit(1); }
-const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+console.log(`SUPABASE_URL: ${SB_URL ? "PRESENT" : "ABSENT"}`);
+console.log(`SUPABASE_SERVICE_ROLE_KEY: ${SB_KEY ? "PRESENT" : "ABSENT"}`);
+if (!SB_URL || !SB_KEY) { console.error("missing env"); process.exit(1); }
+const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const runStartISO = new Date().toISOString();
+const t0 = Date.now();
 const runSource = `daily/${args.source}/${runStartISO}`;
 console.log(`derive_labor_actuals_daily source=${args.source} dryRun=${args.dryRun} window=${args.window} started=${runStartISO}`);
+console.log(`floor: TIME_ENTRY_SOURCE_FLOOR = ${TIME_ENTRY_SOURCE_FLOOR}`);
 
-const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
-// V-daily-grain D3 fix - store to 4 decimal places (matches
-// labor_actuals_daily NUMERIC(14,4) after daily-2 precision
-// migration). Per-day rounding to 2dp loses cents on the week
-// aggregate ($4,328.26 vs $4,328.27 on CIN - OH 06/29); rounding
-// to 4dp preserves sub-cent precision through the sum.
-const r4 = (v) => Math.round((Number(v) || 0) * 10000) / 10000;
-
-// ─── Helpers ─────────────────────────────────────────────────────────
-// 2026-08-27 - local fetchAll retired for the same reason as
-// deriveActuals.js. Base-table reads use fetchAllOffset; `_latest`
-// DISTINCT ON view reads use fetchAllKeyset. See
-// src/lib/rippling/paginate.js for the incident rationale.
-const fetchAll = (table, sel) => fetchAllOffset(supa, table, sel);
+// ─── Window + clamp ──────────────────────────────────────────────────
 function toDate(iso) { return new Date(`${iso}T00:00:00.000Z`); }
-function toISO(d)    { return d.toISOString().slice(0, 10); }
+function toISO(d) { return d.toISOString().slice(0, 10); }
 function addDaysISO(iso, days) {
   const d = toDate(iso); d.setUTCDate(d.getUTCDate() + days); return toISO(d);
 }
@@ -105,147 +90,44 @@ function mondayOnOrBefore(iso) {
   return toISO(d);
 }
 
-// ─── Window ──────────────────────────────────────────────────────────
 const todayISO = new Date().toISOString().slice(0, 10);
-let windowStartISO;
-if (args.window === "fytd") windowStartISO = FY_START_ISO;
-else                        windowStartISO = addDaysISO(mondayOnOrBefore(todayISO), -7 * 8);
+const rawWindowStartISO = args.window === "fytd"
+  ? FY_START_ISO
+  : addDaysISO(mondayOnOrBefore(todayISO), -7 * 8);
+// labor-te-2 clamp: never reach past the floor. Both the DELETE and the
+// row set must respect it. The weekly table's pre-floor era is owned
+// by the pay-segments derive and is frozen; the daily table's pre-floor
+// era is likewise owned by the (now-frozen) pay-segments daily derive.
+// Touching either from the time-entries source is the same class of
+// damage labor-te-1 was built to prevent, arriving by a different door.
+const windowStartISO = rawWindowStartISO < TIME_ENTRY_SOURCE_FLOOR
+  ? TIME_ENTRY_SOURCE_FLOOR
+  : rawWindowStartISO;
 const windowEndISO = todayISO;
-console.log(`  delete window: ${windowStartISO} .. ${windowEndISO}`);
+console.log(`  raw window start:       ${rawWindowStartISO}`);
+console.log(`  effective window start: ${windowStartISO}  ${windowStartISO === TIME_ENTRY_SOURCE_FLOOR ? "(CLAMPED to floor)" : ""}`);
+console.log(`  effective window end:   ${windowEndISO}`);
+console.log(`  delete window:          ${windowStartISO} .. ${windowEndISO}`);
 
-// ─── V-daily-grain D1 fix - data-derived floor ──────────────────────
-// Kevin ruling 2026-08-20: the earliest week where
-// labor_actuals.week_source='sc_day_metadata' is the ONLY reachable
-// day-grain floor. Weeks before that were backfilled from a Rippling
-// REPORT export (totals-only, no per-segment breakdown, retention
-// already passed for the underlying segments); they are a permanent
-// grain boundary, not a gap we can fill.
-//
-// The derive REFUSES to write below this floor. Defense at the data
-// layer so a future backfill cannot silently reintroduce
-// low-confidence rows. Floor is data-derived (not a hardcoded date)
-// so the code documents why the boundary exists.
-const floorQ = await supa
-  .from("labor_actuals")
-  .select("week_start")
-  .eq("week_source", "sc_day_metadata")
-  .order("week_start")
-  .limit(1)
-  .maybeSingle();
-if (floorQ.error) { console.error("floor lookup:", floorQ.error.message); process.exit(2); }
-const dailyFloorISO = floorQ.data?.week_start;
-if (!dailyFloorISO) { console.error("no sc_day_metadata weeks in labor_actuals - cannot derive day-grain floor"); process.exit(2); }
-console.log(`  day-grain floor: ${dailyFloorISO}  (min sc_day_metadata week_start; earlier weeks are rippling_report-backfilled, no segments)`);
-// The DELETE still runs on the broader window so pre-floor rows
-// from earlier backfills are swept out. Only the INSERT is floored.
-const writeFloorISO = dailyFloorISO;
+// ─── Load reference data (shared) ────────────────────────────────────
+console.log("\nloading reference data...");
+const ref = await loadReferenceData(supa);
+console.log(`  presence time_entries: ${ref.counts.presenceTe}`);
+console.log(`  presence compensations: ${ref.counts.presenceComp}`);
+console.log(`  dept map: ${ref.counts.deptMap}, accounts with 3100.1: ${ref.counts.accountToHourlyLine}`);
+console.log(`  workers: ${ref.counts.workers}`);
+console.log(`  hourly wage resolved for: ${ref.counts.workerToWage} workers`);
 
-// ─── 1. Load reference maps ─────────────────────────────────────────
-console.log("loading earning_type_map, workers, department_map");
-const [emRows, workers, deptMap] = await Promise.all([
-  fetchAll("earning_type_map",              "merged_earning_type_name, multiplier, bucket"),
-  // 2026-08-27 - keyset on rippling_id for _latest views. See
-  // src/lib/rippling/paginate.js for the incident rationale.
-  fetchAllKeyset(supa, "rippling_raw_workers_latest", "rippling_id, payload"),
-  fetchAll("rippling_department_map",       "department_id, account_key, is_container, pnl_line"),
-]);
-const earningMap = new Map(emRows.map(m => [m.merged_earning_type_name, m]));
-const workerToDept = new Map();
-for (const w of workers) {
-  const wid = w.rippling_id || w.payload?.id;
-  if (wid) workerToDept.set(wid, w.payload?.department_id || null);
-}
-const deptById = new Map();
-for (const d of deptMap) deptById.set(d.department_id, d);
-console.log(`  earning_types=${earningMap.size} workers=${workers.length} depts=${deptById.size}`);
+const attribute = makeAttribute(ref);
+const resolveRate = makeResolveRate(ref);
 
-// Kevin ruling 2026-10-05. Base hourly wage per worker drives the
-// classifier's holiday upgrade. See src/lib/labor/earningBucket.js for
-// the rule.
-const baseHourlyWages = await loadBaseHourlyWages(supa);
-console.log(`  base hourly wages resolved for ${baseHourlyWages.size} workers`);
+// ─── Load time entries + dedupe (shared) ─────────────────────────────
+console.log("\nloading rippling_raw_time_entries_latest...");
+const { timeEntries, counts: teCounts } = await loadTimeEntries(supa, ref.presenceTe);
+console.log(`  rows: ${teCounts.latest}  live-in-presence: ${teCounts.liveInPresence}  deduped: ${timeEntries.length}`);
 
-// 2026-09-17 classifier fix - mirror of the accountToHourlyLine rule
-// shipped in src/lib/labor/deriveActuals.js the same day. The prior
-// attribute() below copied `d.pnl_line` verbatim, so an hourly worker
-// whose CURRENT department mapped to 3100.2 (a salary line) produced
-// 3100.2 rows in labor_actuals_daily even though the segment is an
-// hourly clock-in. That was the D1 divergence on Anna Hughes's
-// TXR-AZ hourly weeks 2026-07-13..2026-08-10: weekly emitted 3100.1
-// (fix landed), daily still emitted 3100.2 (fix landed only on the
-// weekly file). Same defect, same rule, same lookup.
-//
-// The daily derive and the weekly derive are separate implementations
-// - the daily's attribute() closes over its own skippedUnattr counters,
-// and pulling attribute() into a shared helper is a deferred refactor
-// (see this file's ── 2. Attribution comment, and the isInServiceOnDay
-// duplication class more broadly). Until that refactor lands, any
-// classifier change must be applied to both files. This block matches
-// deriveActuals.js verbatim so a future reviewer can diff them.
-const accountToHourlyLine = new Map();
-for (const d of deptMap) {
-  if (d.is_container) continue;
-  if (d.pnl_line !== "3100.1") continue;
-  if (!d.account_key) continue;
-  accountToHourlyLine.set(d.account_key, d.pnl_line);
-}
-
-// ─── 2. Attribution (mirrors weekly deriveActuals.js:attribute) ─────
-// Kept in sync with src/lib/labor/deriveActuals.js. If the weekly
-// rules change (new D-ruling), update this too - PR-1 does not
-// extract this into a shared helper because the weekly attribute
-// closes over local bumpUnattr state; a shared version is a
-// separate refactor. See docs/KPI_DASHBOARD_PLAYBOOK.md.
-function attribute(workerId) {
-  if (!workerId) return { reason: "unknown_worker" };
-  if (!workerToDept.has(workerId)) return { reason: "unknown_worker", workerId };
-  const deptId = workerToDept.get(workerId);
-  if (!deptId) return { reason: "no_worker_department", workerId };
-  const d = deptById.get(deptId);
-  if (!d) return { reason: "unknown_department", workerId, deptId };
-  if (d.is_container) return { reason: "container_leak", workerId, deptId };
-  if (d.account_key === "CORP") return null;                       // D17 out of scope
-  if (D26_SALARIED_ONLY.has(d.account_key)) return null;            // D26: salaried-only accounts never emit hourly rows
-  const hourlyLine = accountToHourlyLine.get(d.account_key);
-  if (!hourlyLine) return { reason: "account_has_no_hourly_line", workerId, deptId };
-  return { account_key: d.account_key, line_code: hourlyLine };
-}
-
-// ─── 3. Load pay_segments + presence + dedupe (shared helper) ───────
-console.log("loading pay_segments (raw) + presence");
-const psWalkGlobal = await supa
-  .from("rippling_walks")
-  .select("completed_at")
-  .eq("kind", "pay_segments")
-  .eq("status", "success")
-  .order("completed_at", { ascending: false })
-  .limit(1)
-  .maybeSingle();
-if (psWalkGlobal.error) { console.error("presence walk lookup:", psWalkGlobal.error.message); process.exit(2); }
-
-const presenceSet = new Set();
-{
-  const PS = 1000;
-  let from = 0;
-  while (true) {
-    const q = await supa.from("rippling_current_presence")
-      .select("rippling_id").eq("kind", "pay_segments").range(from, from + PS - 1);
-    if (q.error) { console.error("presence load:", q.error.message); process.exit(2); }
-    for (const r of q.data || []) presenceSet.add(r.rippling_id);
-    if ((q.data || []).length < PS) break;
-    from += PS;
-  }
-}
-console.log(`  presence holds ${presenceSet.size} pay-segment ids`);
-
-const paySegsRaw = await fetchAll("rippling_raw_pay_segments", "rippling_id, payload");
-const dedupeOut = dedupePaySegments(paySegsRaw, presenceSet);
-const paySegs = dedupeOut.segments;
-console.log(`  raw=${dedupeOut.stats.raw} live-in-presence=${dedupeOut.stats.liveInPresence} orphan=${dedupeOut.stats.orphan}`);
-console.log(`  external_id dedup: ${dedupeOut.stats.liveInPresence} -> ${paySegs.length} (${dedupeOut.stats.dedupDropped} rippling_id re-issues collapsed; ${dedupeOut.stats.noExtId} carry no external_id)`);
-
-// ─── 4. Accumulate per (account, worker, work_date, line) ───────────
-const buckets = new Map();   // key -> { hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, segment_count }
+// ─── Accumulate per (account, worker, work_date, line) ──────────────
+const buckets = new Map();
 function getBucket(account_key, worker_id, work_date, line_code) {
   const k = `${account_key}|${worker_id}|${work_date}|${line_code}`;
   let b = buckets.get(k);
@@ -254,104 +136,94 @@ function getBucket(account_key, worker_id, work_date, line_code) {
       account_key, worker_id, work_date, line_code,
       hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
       dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
-      amount: 0, segment_count: 0,
+      amount: 0, entry_count: 0,
     };
     buckets.set(k, b);
   }
   return b;
 }
 
-let skippedCorp = 0, skippedContainer = 0, skippedUnattr = 0, skippedOutOfWindow = 0, skippedNoDate = 0, skippedBelowFloor = 0;
-let reclassifiedCount = 0, unevaluableCount = 0;
-const unevaluableWorkerIds = new Set();
-const reclassifiedLog = [];
-for (const seg of paySegs) {
-  const p = seg.payload || {};
-  const workerId = p.owner_role?.id;
-  const segDate = p.segment_date;
-  if (!segDate) { skippedNoDate++; continue; }
-  if (segDate < windowStartISO || segDate > windowEndISO) { skippedOutOfWindow++; continue; }
-  // V-daily-grain D1 fix - reject sub-floor writes at the derive.
-  // See dailyFloorISO computation above for the rationale.
-  if (segDate < writeFloorISO) { skippedBelowFloor++; continue; }
+let skippedPreFloor = 0, skippedOutOfWindow = 0, skippedUnattr = 0;
+let skippedUnknownStatus = 0, skippedNoStartDate = 0;
+let rateFromSegment = 0, rateFromWage = 0, rateNone = 0;
+const unpricedEntries = [];
 
+for (const te of timeEntries) {
+  const p = te.payload || {};
+  const workerId = p.worker_id;
+  const workDate = localDate(p.start_time);
+  if (!workerId || !workDate) { skippedNoStartDate++; continue; }
+  // Clamp enforcement: never process below the floor.
+  if (workDate < TIME_ENTRY_SOURCE_FLOOR) { skippedPreFloor++; continue; }
+  // Window filter: skip days outside the derive's own range.
+  if (workDate < windowStartISO || workDate > windowEndISO) { skippedOutOfWindow++; continue; }
   const attr = attribute(workerId);
-  if (attr === null) { skippedCorp++; continue; }
-  if (attr.reason) {
-    if (attr.reason === "container_leak") skippedContainer++;
-    else skippedUnattr++;
-    continue;
-  }
+  if (!attr) { skippedUnattr++; continue; }
+  const status = String(p.status || "");
+  if (!KNOWN_STATUSES.has(status)) { skippedUnknownStatus++; continue; }
 
-  const b = getBucket(attr.account_key, workerId, segDate, attr.line_code);
-  const hrs = Number(p.segment_duration_hours || 0);
-  const amt = Number(p.estimated_amount || 0);
-  b.amount += amt;
-  b.segment_count++;
+  const b = getBucket(attr.account_key, workerId, workDate, attr.line_code);
+  b.entry_count++;
 
-  const etName = p.merged_earning_type_name || null;
-  const mapEntry = etName ? earningMap.get(etName) : null;
-  const baseWage = baseHourlyWages.get(workerId) ?? null;
-  const verdict = classifyBucket({
-    segmentPayload: p,
-    mapEntry,
-    baseHourlyWage: baseWage,
-  });
-  if (verdict.reclassified) {
-    reclassifiedCount++;
-    reclassifiedLog.push({
-      external_id: p.external_id || null,
+  const { rate, source } = resolveRate(p, workerId);
+  if (source === "segment") rateFromSegment++;
+  else if (source === "compensations") rateFromWage++;
+  else rateNone++;
+
+  const compute = computeEntryHoursAndDollars(p, rate);
+  if (rate <= 0 && compute.dur > 0) {
+    unpricedEntries.push({
+      workerIdHash: String(workerId).slice(0, 6) + "...",
+      workDate,
+      status,
+      dur: Math.round(compute.dur * 100) / 100,
       account_key: attr.account_key,
-      segment_date: segDate,
-      ratio: verdict.ratio,
-      et_name: etName,
     });
   }
-  if (verdict.unevaluable) {
-    unevaluableCount++;
-    if (workerId) unevaluableWorkerIds.add(workerId);
-  }
-  switch (verdict.bucket) {
-    case "regular":
-      b.hours_regular += hrs;
-      b.dollars_regular += amt;
-      break;
-    case "overtime":
-      b.hours_overtime += hrs;
-      b.dollars_overtime += amt;
-      break;
-    case "double_time":
-      b.hours_double_time += hrs;
-      b.dollars_double_time += amt;
-      break;
-    default:
-      b.hours_premium_other += hrs;
-      b.dollars_premium_other += amt;
-  }
-}
-console.log(`  buckets: ${buckets.size}`);
-console.log(`  skipped: corp=${skippedCorp} container=${skippedContainer} unattr=${skippedUnattr} out_of_window=${skippedOutOfWindow} no_date=${skippedNoDate} below_floor=${skippedBelowFloor}`);
-console.log(`  holiday reclassify: ${reclassifiedCount} segments regular -> double_time (ceiling ${RECLASSIFIED_CEILING})`);
-for (const r of reclassifiedLog) {
-  console.log(`    reclassified ${r.external_id}  ${r.account_key}  ${r.segment_date}  ratio=${r.ratio.toFixed(4)}  was=${r.et_name}`);
-}
-console.log(`  holiday reclassify: ${unevaluableWorkerIds.size} distinct workers unevaluable (${unevaluableCount} regular-mapped segments) (worker ceiling ${UNEVALUABLE_WORKERS_CEILING})`);
-if (reclassifiedCount > RECLASSIFIED_CEILING) {
-  console.error(`holiday reclassify: ceiling exceeded · reclassified=${reclassifiedCount} ceiling=${RECLASSIFIED_CEILING} · Rippling may have changed behavior; stop + reporter investigate before trusting output`);
-  process.exit(2);
-}
-if (unevaluableWorkerIds.size > UNEVALUABLE_WORKERS_CEILING) {
-  console.error(`holiday reclassify: unevaluable-worker ceiling exceeded · distinct_workers=${unevaluableWorkerIds.size} ceiling=${UNEVALUABLE_WORKERS_CEILING} · segments=${unevaluableCount} · a worker without a usable base wage silently skips the holiday upgrade; new VARIED-only comp entity or payroll setup change likely - stop + investigate`);
-  process.exit(2);
+
+  b.hours_regular       += compute.reg;
+  b.hours_overtime      += compute.ot;
+  b.hours_double_time   += compute.dot;
+  b.hours_premium_other += compute.other;
+  b.dollars_regular     += compute.dollars_regular;
+  b.dollars_overtime    += compute.dollars_overtime;
+  b.dollars_double_time += compute.dollars_double_time;
+  b.dollars_premium_other += compute.dollars_premium_other;
+  b.amount += compute.dollars_regular + compute.dollars_overtime
+            + compute.dollars_double_time + compute.dollars_premium_other;
 }
 
-// ─── 5. Build rows (round ONLY here) ────────────────────────────────
+const durationSec = ((Date.now() - t0) / 1000);
+console.log(`  entries processed: ${timeEntries.length}`);
+console.log(`    buckets built:        ${buckets.size}`);
+console.log(`    skipped pre-floor:    ${skippedPreFloor}`);
+console.log(`    skipped out-of-window:${skippedOutOfWindow}`);
+console.log(`    skipped unattr:       ${skippedUnattr}`);
+console.log(`    skipped no start:     ${skippedNoStartDate}`);
+console.log(`    skipped status:       ${skippedUnknownStatus}`);
+console.log(`  rate resolution:`);
+console.log(`    from segment pay_rate:   ${rateFromSegment}`);
+console.log(`    from compensations wage: ${rateFromWage}`);
+console.log(`    unpriced (rate <= 0):    ${rateNone}`);
+console.log(`  elapsed so far: ${durationSec.toFixed(2)}s`);
+
+if (unpricedEntries.length > 0) {
+  console.error(`\nSTOP: ${unpricedEntries.length} entries have hours but no resolvable rate.`);
+  console.error(`  first 20 (workerHash | account | work_date | status | duration):`);
+  for (const u of unpricedEntries.slice(0, 20)) {
+    console.error(`    ${u.workerIdHash} | ${u.account_key} | ${u.workDate} | ${u.status} | ${u.dur}h`);
+  }
+  process.exit(3);
+}
+
+// ─── Build rows (round only here) ───────────────────────────────────
 const derivedAt = new Date().toISOString();
-const rows = [];
-// Hours stay at 2dp (integer-ish input from Rippling; 2dp is
-// well within stored NUMERIC(10,2) precision). Dollars round to
-// 4dp per D3 fix - see r4 declaration above.
 const h2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+// 4dp precision on dollars matches labor_actuals_daily NUMERIC(14,4)
+// after the daily-2 precision migration. Per-day rounding to 2dp
+// loses cents on the week aggregate (D1 historical finding).
+const r4 = (v) => Math.round((Number(v) || 0) * 10000) / 10000;
+const rows = [];
 for (const b of buckets.values()) {
   rows.push({
     account_key:           b.account_key,
@@ -367,7 +239,7 @@ for (const b of buckets.values()) {
     dollars_double_time:   r4(b.dollars_double_time),
     dollars_premium_other: r4(b.dollars_premium_other),
     amount:                r4(b.amount),
-    segment_count:         b.segment_count,
+    segment_count:         b.entry_count,
     derived_at:            derivedAt,
     source_run:            runSource,
     source:                args.source,
@@ -375,24 +247,60 @@ for (const b of buckets.values()) {
 }
 console.log(`  rows to write: ${rows.length}`);
 
-// ─── 6. Write - DELETE window, then INSERT batches ─────────────────
+// ─── Dry-run summary ─────────────────────────────────────────────────
 if (args.dryRun) {
-  console.log(`DRY RUN: would DELETE work_date in [${windowStartISO}, ${windowEndISO}] then INSERT ${rows.length} rows`);
-} else {
-  console.log(`deleting existing rows in window ${windowStartISO} .. ${windowEndISO}`);
-  const del = await supa.from("labor_actuals_daily").delete()
-    .gte("work_date", windowStartISO).lte("work_date", windowEndISO);
-  if (del.error) { console.error(`delete failed: ${del.error.message}`); process.exit(2); }
-
-  const BATCH = 500;
-  let written = 0;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const chunk = rows.slice(i, i + BATCH);
-    const ins = await supa.from("labor_actuals_daily").insert(chunk);
-    if (ins.error) { console.error(`insert failed at offset ${i}: ${ins.error.message}`); process.exit(2); }
-    written += chunk.length;
+  console.log(`\nDRY RUN: would DELETE labor_actuals_daily where work_date in [${windowStartISO}, ${windowEndISO}]`);
+  console.log(`         then INSERT ${rows.length} rows (clamp at ${TIME_ENTRY_SOURCE_FLOOR})`);
+  // Per-account+date rollup
+  console.log(`\nper-account rollup:`);
+  console.log(`  account         rows  entries  hr_total`);
+  const byAcct = new Map();
+  for (const r of rows) {
+    const cur = byAcct.get(r.account_key) || { rows: 0, entries: 0, hr: 0 };
+    cur.rows++;
+    cur.entries += r.segment_count;
+    cur.hr += r.hours_regular + r.hours_overtime + r.hours_double_time + r.hours_premium_other;
+    byAcct.set(r.account_key, cur);
   }
-  console.log(`  inserted ${written} rows`);
+  for (const a of [...byAcct.keys()].sort()) {
+    const c = byAcct.get(a);
+    console.log(`  ${a.padEnd(15)} ${String(c.rows).padStart(4)}  ${String(c.entries).padStart(7)}  ${c.hr.toFixed(2).padStart(8)}`);
+  }
+  console.log(`\nelapsed: ${((Date.now() - t0) / 1000).toFixed(2)}s`);
+  process.exit(0);
 }
 
-console.log(`derive_labor_actuals_daily done source=${args.source} finished=${new Date().toISOString()}`);
+// ─── Write: bounded DELETE + batched INSERT ─────────────────────────
+console.log(`\ndeleting existing rows in window ${windowStartISO} .. ${windowEndISO}`);
+const del = await supa.from("labor_actuals_daily").delete()
+  .gte("work_date", windowStartISO).lte("work_date", windowEndISO);
+if (del.error) {
+  console.error(`delete failed: ${del.error.message}`);
+  process.exit(2);
+}
+
+const BATCH = 500;
+let written = 0;
+for (let i = 0; i < rows.length; i += BATCH) {
+  const chunk = rows.slice(i, i + BATCH);
+  // belt-and-braces: no row below the floor can slip past.
+  for (const r of chunk) {
+    if (r.work_date < TIME_ENTRY_SOURCE_FLOOR) {
+      console.error(`row below floor detected: ${r.work_date} < ${TIME_ENTRY_SOURCE_FLOOR}`);
+      process.exit(2);
+    }
+  }
+  const ins = await supa.from("labor_actuals_daily").insert(chunk);
+  if (ins.error) {
+    console.error(`insert failed at offset ${i}: ${ins.error.message}`);
+    process.exit(2);
+  }
+  written += chunk.length;
+}
+
+console.log("");
+console.log(`derive_labor_actuals_daily summary:`);
+console.log(`  rows inserted: ${written}`);
+console.log(`  elapsed:       ${((Date.now() - t0) / 1000).toFixed(2)}s`);
+console.log(`  source=${args.source}  window=${args.window}  floor=${TIME_ENTRY_SOURCE_FLOOR}`);
+process.exit(0);
