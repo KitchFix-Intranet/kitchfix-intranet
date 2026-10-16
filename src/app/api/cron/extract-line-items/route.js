@@ -96,17 +96,28 @@ export const dynamic      = "force-dynamic";
 export const maxDuration  = 300;
 
 // ─── Tunables ─────────────────────────────────────────────────────────────
-// CLAIM_LIMIT: max rows a single get_extraction_claims call takes. Small
-// enough that the SQL lock hold is short; the loop can call again if
-// there's budget.
-const CLAIM_LIMIT = 3;
-// LEASE_SECS: how long a claim is exclusive. Must exceed maxDuration so
-// that a killed worker's claim is guaranteed to have expired by the
-// next tick (5 min cron cadence + 5 min lease = never overlap).
-const LEASE_SECS = 300;
+// CLAIM_LIMIT: max rows a single get_extraction_claims call takes.
+// li-4 (2026-10-16): dropped 3 -> 1. One bad document (truncation,
+// malformed PDF, etc.) can now burn at most one invocation instead of
+// taking two healthy neighbours down with it. The loop can still fetch
+// more if there is budget - a run that completes its claim quickly
+// re-enters the while loop and claims the next row.
+const CLAIM_LIMIT = 1;
+// LEASE_SECS: how long a claim is exclusive. Must EXCEED maxDuration -
+// not equal it, or a killed run's rows are re-claimable by the very next
+// tick with no gap. li-4 (2026-10-16): 300 -> 600. The prior 300 was
+// resonant with cron tick (300s), maxDuration (300s), and lease (300s) -
+// three identical numbers that let the 2026-10-14 crash loop re-claim
+// the same three rows every tick with no cooldown. 600 gives a one-tick
+// cooldown for a killed run before the crash counter advances.
+const LEASE_SECS = 600;
 // BUDGET_MS: stop CLAIMING once we've spent this much wall-clock.
 // Extraction in flight is awaited to completion; only new claims stop.
 const BUDGET_MS = 240_000; // 4 min - leaves 60s headroom under maxDuration.
+// CRASH_CEILING: must match v_max_crashes in li-4-extraction-crash-guard.sql.
+// Rows at or over this ceiling are reaped to 'failed' at the top of every
+// run so a crash loop becomes operator-visible instead of silent.
+const CRASH_CEILING = 10;
 
 export async function GET(request) {
   // ─── Auth ────────────────────────────────────────────────────────────
@@ -132,10 +143,46 @@ export async function GET(request) {
     terminal: 0,
     pgFailed: 0,
     driveErrors: 0,
+    reaped: 0,
     perInvoice: [],
   };
 
   const supabase = getServiceClient();
+
+  // ─── Reaper (li-4) ───────────────────────────────────────────────────
+  // Rows at or over the crash ceiling are no longer claimable (the SQL
+  // function excludes them). They would sit at 'queued' forever with no
+  // signal. Mark them 'failed' with a loud cause the moment they appear
+  // so a crash loop becomes operator-visible on the first subsequent
+  // tick instead of needing a human to notice.
+  try {
+    const { data: capped, error: capErr } = await supabase
+      .from("invoice_submissions")
+      .select("client_uuid, ai_scan_crash_count, ai_scan_attempt")
+      .eq("ai_scan_status", "queued")
+      .gte("ai_scan_crash_count", CRASH_CEILING)
+      .range(0, 999);
+    if (capErr) {
+      summary.reapError = capErr.message;
+    } else if (capped && capped.length > 0) {
+      for (const row of capped) {
+        try {
+          await updateInvoiceFields(row.client_uuid, {
+            aiScanStatus: "failed",
+            aiScanError: `extraction crash loop: ${row.ai_scan_crash_count} consecutive worker crashes without an outcome - needs manual entry or page split`,
+            aiScanClaimedAt: null,
+            aiScanClaimedBy: null,
+            aiScanNextAttemptAt: null,
+          }, { module: "ops" });
+          summary.reaped++;
+        } catch (reapRowErr) {
+          console.error(`[extract-line-items] reaper failed for ${row.client_uuid}:`, reapRowErr.message);
+        }
+      }
+    }
+  } catch (reapErr) {
+    summary.reapError = reapErr.message;
+  }
 
   // ─── Claim loop ──────────────────────────────────────────────────────
   while (Date.now() - t0 < BUDGET_MS) {
@@ -294,6 +341,8 @@ export async function GET(request) {
           aiScanClaimedBy: null,
           aiScanNextAttemptAt: null,
           aiScanError: null,
+          // li-4: outcome written, crash counter resets.
+          aiScanCrashCount: 0,
         }, { module: "ops" });
         summary.complete++;
       } else if (finalStatus === "pg_failed") {
@@ -304,6 +353,8 @@ export async function GET(request) {
         await updateInvoiceFields(clientUuid, {
           aiScanClaimedAt: null,
           aiScanClaimedBy: null,
+          // li-4: outcome written (terminal), crash counter resets.
+          aiScanCrashCount: 0,
         }, { module: "ops" });
         summary.pgFailed++;
       } else if (finalStatus === "failed") {
@@ -326,6 +377,8 @@ export async function GET(request) {
               aiScanClaimedAt: null,
               aiScanClaimedBy: null,
               aiScanNextAttemptAt: null,
+              // li-4: outcome written (terminal), crash counter resets.
+              aiScanCrashCount: 0,
             }, { module: "ops" });
             summary.terminal++;
           } else {
@@ -338,6 +391,8 @@ export async function GET(request) {
               aiScanClaimedAt: null,
               aiScanClaimedBy: null,
               aiScanNextAttemptAt: null,
+              // li-4: outcome written (terminal), crash counter resets.
+              aiScanCrashCount: 0,
             }, { module: "ops" });
             summary.terminal++;
           }
@@ -353,6 +408,8 @@ export async function GET(request) {
             aiScanNextAttemptAt: naa,
             aiScanClaimedAt: null,
             aiScanClaimedBy: null,
+            // li-4: outcome written (clean release for retry), crash counter resets.
+            aiScanCrashCount: 0,
           }, { module: "ops" });
           if (cls.class === "retryable-later") summary.retriedLater++;
           else summary.retriedSoon++;
@@ -366,6 +423,10 @@ export async function GET(request) {
         await updateInvoiceFields(clientUuid, {
           aiScanClaimedAt: null,
           aiScanClaimedBy: null,
+          // li-4: this path still released the lease; reset the counter
+          // so an anomalous intermediate state does not accumulate crash
+          // credit for a row that may legitimately re-queue later.
+          aiScanCrashCount: 0,
         }, { module: "ops" });
         summary.terminal++;
       }
@@ -390,6 +451,9 @@ async function releaseAsFailed(supabase, clientUuid, cause, attempt) {
       aiScanClaimedBy: null,
       aiScanNextAttemptAt: null,
       aiScanAttempt: attempt,
+      // li-4: an outcome was written, so this claim did not crash. Reset the
+      // crash counter so a future re-queue starts clean.
+      aiScanCrashCount: 0,
     }, { module: "ops" });
   } catch (e) {
     console.error(`[extract-line-items] releaseAsFailed ${clientUuid} threw:`, e.message);
@@ -403,6 +467,8 @@ async function releaseAsRetry(supabase, clientUuid, nextAt) {
       aiScanNextAttemptAt: nextAt,
       aiScanClaimedAt: null,
       aiScanClaimedBy: null,
+      // li-4: outcome written (deliberate retry), crash counter resets.
+      aiScanCrashCount: 0,
     }, { module: "ops" });
   } catch (e) {
     console.error(`[extract-line-items] releaseAsRetry ${clientUuid} threw:`, e.message);

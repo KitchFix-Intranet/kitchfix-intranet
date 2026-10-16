@@ -12,6 +12,7 @@ import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice
 import { isOpsLeadershipDb } from "@/lib/admin";
 import { fuzzyMatchVendor } from "@/lib/vendorMatching";
 import { CLAUDE_SONNET_MODEL } from "@/lib/anthropicModel";
+import { getServiceClient } from "@/lib/supabase";
 import {
   getVendorsForList,
   getVendorsForBootstrap,
@@ -955,6 +956,30 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       // 'pg_failed'. The old fire-and-forget triggerAIScan below this
       // block is gone; extraction no longer races the Vercel-response-
       // triggered instance suspend.
+      //
+      // li-4 (2026-10-16): vendor-level opt-out. When vendors.extract_line_items
+      // is false (service vendors - linen, uniform, equipment) the submission
+      // lands at 'photo-only' and never enters the queue. The flag defaults
+      // to true, so an unknown or missing vendorId stays on the queue path -
+      // we only opt a vendor out on a positive 'false' signal.
+      let initialScanStatus = "queued";
+      if (vendorId) {
+        try {
+          const supa = getServiceClient();
+          const { data: v, error: vErr } = await supa
+            .from("vendors")
+            .select("extract_line_items")
+            .eq("id", vendorId)
+            .is("deleted_at", null)
+            .maybeSingle();
+          if (!vErr && v && v.extract_line_items === false) {
+            initialScanStatus = "photo-only";
+          }
+        } catch (vendorLookupErr) {
+          console.warn(`[Invoice] vendor extract_line_items lookup failed (non-blocking, defaulting to queued): ${vendorLookupErr.message}`);
+        }
+      }
+
       let writeResult;
       try {
         writeResult = await upsertInvoiceSubmission({
@@ -972,7 +997,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
           type,
           rawDriveUrl,
           correctedFromUuid: correctedFromUuid || null,
-          aiScanStatus: "queued",
+          aiScanStatus: initialScanStatus,
         });
       } catch (writeErr) {
         return { success: false, error: "Failed to log submission: " + writeErr.message };
@@ -1658,13 +1683,34 @@ async function callClaudeOnce(apiKey, imageBlocks) {
 
   const result = await res.json();
   const text = result.content?.[0]?.text || "";
+  const stopReason = result.stop_reason || null;
+
+  // li-4 (2026-10-16): a 'max_tokens' stop means Claude ran out of output
+  // budget mid-response. Retrying the SAME request will truncate at the
+  // same ceiling in the same way, guaranteed. Treat as terminal here so
+  // extractWithRetry does not burn its 3 inner attempts, and so the
+  // worker's classifier picks it up as terminal rather than retryable.
+  // Recovery is manual: enter the invoice by hand, or split the PDF.
+  // Do NOT raise max_tokens in this PR - splitting is the real fix.
+  if (stopReason === "max_tokens") {
+    return {
+      ok: false,
+      retryable: false,
+      cause: "Claude output truncated at token ceiling (stop_reason=max_tokens) - needs manual entry or page split",
+      stopReason,
+    };
+  }
 
   let parsed;
   try {
     const cleanJson = text.replace(/```json\s*|```/g, "").trim();
     parsed = JSON.parse(cleanJson);
   } catch (parseErr) {
-    return { ok: false, retryable: true, cause: `Claude output JSON parse failed: ${parseErr.message}` };
+    // li-4: if we got here with a non-max_tokens stop_reason but still
+    // failed to parse, surface the stop_reason in the cause so an
+    // 'end_turn' truncation that mis-reports stop_reason stays diagnosable.
+    const stopTag = stopReason ? ` [stop_reason=${stopReason}]` : "";
+    return { ok: false, retryable: true, cause: `Claude output JSON parse failed: ${parseErr.message}${stopTag}` };
   }
 
   const items = parsed.lineItems || [];
@@ -1814,6 +1860,14 @@ export function classifyExtractionFailure(cause) {
     lower.includes("submission ") && lower.includes(" not in pg")
   ) {
     return { class: "terminal", reason: "config_or_routing" };
+  }
+
+  // li-4 (2026-10-16): output truncated at the Claude token ceiling. Same
+  // request will truncate the same way every time; the fix is manual
+  // (hand-entry or page split). Terminal so the worker lands the row at
+  // 'failed' with a distinct, operator-visible cause rather than looping.
+  if (lower.includes("stop_reason=max_tokens") || lower.includes("truncated at token ceiling")) {
+    return { class: "terminal", reason: "output_truncated_at_token_ceiling" };
   }
 
   // Billing / credit-balance / quota class. Anthropic returns these as
