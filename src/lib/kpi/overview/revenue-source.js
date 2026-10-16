@@ -55,7 +55,7 @@ const FEE_REVENUE_ACCOUNTS = new Set([
 ]);
 
 // TXR - TX - V direct-sales / tracked account (R-3, R-11).
-const TRACKED_REVENUE_ACCOUNTS = new Set([
+export const TRACKED_REVENUE_ACCOUNTS = new Set([
   "TXR - TX - V",
 ]);
 
@@ -108,6 +108,13 @@ export function classifyForRevenue(accountKey) {
  * loader wrapper in pnl-loader.js does NOT re-check; the resolver's
  * caller enforces via this function's return value.
  */
+// Hoisted so both the "tracked" and "per_meal" branches of
+// resolveRevenueSource can reference it. The 5 revenue lines are the
+// full per_meal set; "tracked" uses the same list because
+// TXR - TX - V can carry revenue on any of them (e.g. 2200 in P4),
+// not just 2400.2.
+const PER_MEAL_LINES = ["2200", "2300", "2400.1", "2400.2", "2600"];
+
 export function resolveRevenueSource({ accountKey, periodState, revSource = "planned", accountFlags = null }) {
   const kind = classifyForRevenue(accountKey);
   const scLive = !!(accountFlags && accountFlags.sc_revenue_live);
@@ -133,32 +140,49 @@ export function resolveRevenueSource({ accountKey, periodState, revSource = "pla
   }
 
   if (kind === "tracked") {
-    // TXR - TX - V (direct-sales, tracked). Budget + tracked marker
-    // for open + closed_awaiting; pnl_actuals when verified (post-
-    // season upload lands per R-3).
+    // TXR - TX - V (direct-sales, tracked). The primary revenue line
+    // is 2400.2 Meal Service (Away) - this account bills AWAY, not
+    // Home. But the account can also carry revenue on other per_meal
+    // lines in some periods (e.g. 2200 Catering in P4), so the reader
+    // must look at the full per_meal line set, same as a per_meal
+    // account. The ONLY difference from per_meal is the open-period
+    // "model" marker (tracked vs planned) and the fact that tracked
+    // never reads SC daily revenue.
+    //
+    // Prior line_codes:["2400.1"] (singular, wrong line) silently
+    // dropped the bulk of FY2026 revenue from the Overview -
+    // pnl_actuals carries the main revenue on 2400.2 but the actual-
+    // side reader was looking at 2400.1 only.
+    //
+    // kpi_budgets has the main budget historically misfiled on 2400.1
+    // for this account; the resolver reflows that into overviewBudgets'
+    // 2400.2 slot once (see remapTrackedRevenueBudgets in resolver.js)
+    // so budget + actual both land on 2400.2 as the line. A future
+    // kpi_budgets correction (moving the TXR - TX - V budget rows to
+    // line_code 2400.2 server-side) retires the remap without further
+    // code change - the remap short-circuits when 2400.1 is empty.
     if (periodState === "verified") {
       return {
         source: "pnl_actuals_verified",
         model: "finance",
-        line_codes: ["2400.1"],
+        line_codes: PER_MEAL_LINES,
         read_sc_daily_revenue: false,
       };
     }
     return {
-      source: "kpi_budgets_2400_1_tracked",
+      source: "kpi_budgets_2400_2_tracked",
       model: "tracked",
-      line_codes: ["2400.1"],
+      line_codes: PER_MEAL_LINES,
       read_sc_daily_revenue: false,
     };
   }
 
-  // per_meal: five revenue lines.
-  const perMealLines = ["2200", "2300", "2400.1", "2400.2", "2600"];
+  // per_meal: PER_MEAL_LINES hoisted above.
   if (periodState === "verified") {
     return {
       source: "pnl_actuals_verified",
       model: "finance",
-      line_codes: perMealLines,
+      line_codes: PER_MEAL_LINES,
       read_sc_daily_revenue: false,
     };
   }
@@ -186,14 +210,14 @@ export function resolveRevenueSource({ accountKey, periodState, revSource = "pla
       return {
         source: "sc_daily_revenue",
         model: "sc_estimate",
-        line_codes: perMealLines,
+        line_codes: PER_MEAL_LINES,
         read_sc_daily_revenue: true,
       };
     }
     return {
       source: "not_reported",
       model: "not_reported",
-      line_codes: perMealLines,
+      line_codes: PER_MEAL_LINES,
       read_sc_daily_revenue: false,
     };
   }
@@ -206,14 +230,14 @@ export function resolveRevenueSource({ accountKey, periodState, revSource = "pla
     return {
       source: "sc_daily_revenue",
       model: "live_count",
-      line_codes: perMealLines,
+      line_codes: PER_MEAL_LINES,
       read_sc_daily_revenue: true,
     };
   }
   return {
     source: "kpi_budgets_2400_1_planned",
     model: "planned",
-    line_codes: perMealLines,
+    line_codes: PER_MEAL_LINES,
     read_sc_daily_revenue: false,
   };
 }
