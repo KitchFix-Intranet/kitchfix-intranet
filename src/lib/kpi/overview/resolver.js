@@ -3594,7 +3594,10 @@ export async function resolveOverview({
       // popover doesn't lump the two together. The union of used
       // sources tells us which noun to pick.
       const usesContract = revenueSourcesUsed.some(s => s === "kpi_budgets_2400_1_contractual");
-      const usesTracked = revenueSourcesUsed.some(s => s === "kpi_budgets_2400_1_tracked");
+      // 2026-10-16 - tracked source renamed from _2400_1_ to _2400_2_
+      // (TXR - TX - V's revenue line is 2400.2, not 2400.1); match
+      // both so a mid-rollout stale cache does not drop the chip.
+      const usesTracked = revenueSourcesUsed.some(s => s === "kpi_budgets_2400_1_tracked" || s === "kpi_budgets_2400_2_tracked");
       const noun = usesContract ? "the fee contract"
         : usesTracked ? "the tracked budget"
         : "budget";
