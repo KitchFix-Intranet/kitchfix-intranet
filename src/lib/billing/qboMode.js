@@ -28,43 +28,62 @@
 // (a) extending an existing SC endpoint to include qbo_mode in its
 // response, (b) prefetching modes on page load, or (c) a small
 // dedicated fetcher with useEffect. All three land as PR-F.1 when
-// Kevin flips a pilot to live and the badge would otherwise show
-// stale copy.
+// the account roster is big enough that a hand-maintained allowlist
+// becomes a hazard.
 //
-// Until then: both pilots stay 'test' per sc-35's seed, the stub
-// returns 'test' for both, and the badge is accurate by convention.
-// If Kevin flips one pilot to live via Studio, the badge will still
-// show "Test mode" until the client accessor is updated. That is a
-// cosmetic drift only - the SERVER-side fence + resolver still
-// route correctly per the DB truth.
+// ─── Current state (2026-10-16) ───────────────────────────────────
+//
+// The stub returns 'live' for accounts on LIVE_ACCOUNTS and 'test'
+// for everything else (default-deny). TBJ - FL is on the live list
+// as of this PR; TXR - AZ and CIN - AZ remain 'test'. The allowlist
+// MUST be kept in sync with each Studio flip of
+// sc_qbo_account_map.qbo_mode: if an account is flipped to live in
+// the DB but not added here, the badge will show TEST MODE over a
+// real server-side push - a cosmetic lie that could trick an
+// operator into finalizing on the wrong screen. The server-side
+// fence + resolver still route correctly per the DB truth even when
+// this stub drifts, but the point of this file is to prevent the
+// drift. PR-F.1 is the eventual replacement.
 
-const TEST_ACCOUNTS = new Set([
-  "TXR - AZ",
-  "CIN - AZ",
+// Accounts whose DB qbo_mode has been flipped to 'live' in
+// sc_qbo_account_map. This client allowlist is cosmetic (it drives
+// the overlay badge + destination row only); the server reads the DB
+// directly. Keep in sync with each Studio flip - see the file header.
+const LIVE_ACCOUNTS = new Set([
+  "TBJ - FL",
 ]);
 
 /**
- * @param {string} accountKey  e.g. "TXR - AZ"
+ * @param {string} accountKey  e.g. "TBJ - FL"
  * @returns {"test" | "live"}  Cosmetic badge signal only.
  */
 export function getQboMode(accountKey) {
   if (typeof accountKey !== "string" || accountKey.length === 0) return "test";
-  if (TEST_ACCOUNTS.has(accountKey)) return "test";
-  // Default-deny discipline: unknown accounts read as 'test' so the
-  // badge never claims 'live' for a row whose real DB mode we have
-  // not yet confirmed.
+  if (LIVE_ACCOUNTS.has(accountKey)) return "live";
+  // Default-deny discipline: anything not on the live allowlist reads
+  // as 'test' so the badge never claims 'live' for a row we have not
+  // explicitly flipped.
   return "test";
 }
 
 // Names exposed for the overlay's destination row + test-mode badge.
 export const TEST_DESTINATION = "ZZ TEST - KitchFix Intranet";
 
+// Live-account display names for the overlay's "Invoice goes to" row,
+// keyed to the QBO customer the server-side fence actually routes to
+// (sc_qbo_account_map.qbo_customer_id). Keep in sync with LIVE_ACCOUNTS
+// and the DB.
+const LIVE_DESTINATIONS = {
+  "TBJ - FL": "Rogers Blue Jays Baseball Partnership", // QBO customer 16971
+};
+
 /**
  * Destination string for the overlay's "Invoice goes to" row.
- * Returns the test-mode literal for every account until an account
- * is authoritatively flipped to live via the server-side path.
+ * Test accounts show the ZZ TEST literal. Live accounts show the caller-
+ * supplied name if present, else the mapped live customer name, else the
+ * account key (never ZZ TEST).
  */
 export function getInvoiceDestination(accountKey, liveCustomerName) {
   if (getQboMode(accountKey) === "test") return TEST_DESTINATION;
-  return liveCustomerName || accountKey;
+  return liveCustomerName || LIVE_DESTINATIONS[accountKey] || accountKey;
 }
