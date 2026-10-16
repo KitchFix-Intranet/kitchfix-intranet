@@ -115,18 +115,38 @@ export async function loadReportOnlyPending(supa, { members, start, end, IN_CHUN
   const rows = [];
 
   async function walk() {
-    // Chunk the members set - PostgREST silent 1000-row cap, same
-    // pattern as loadPending in the route.
+    // purchasing-11 (2026-10-16): switched from reading
+    // rippling_report_only_pending_v1 directly to calling the
+    // date-parameterized function rippling_report_only_pending_v1_fn.
+    // The view's inner DISTINCT ON over rippling_report_txns_latest
+    // forced the whole 14,419-row table to be deduped before the
+    // caller's purchased_at filter could apply - production measured
+    // 2,515 ms to return 1 row. The function takes the range as
+    // arguments, so the dedupe runs over the in-window set only and
+    // the existing rippling_report_txns_purchased_at_idx drives the
+    // scan. Expected drop: 2.5s to ~150-200ms per call. See
+    // docs/migrations/purchasing-11-report-only-pending-fn.sql.
+    //
+    // p_account_keys is passed per chunk so the function returns
+    // only the chunk's accounts; the IN_CHUNK pattern is preserved
+    // for URL-length safety on future growth, and the chunk count
+    // today is 1 (11 attributable accounts).
+    //
+    // Row set, amounts and column order are byte-identical to the
+    // previous view read on all tested ranges (2026-09-07..2026-10-04
+    // and FY2026 to date). Verified by
+    // scripts/probes/_probe_report_fn_parity.mjs.
     for (let i = 0; i < members.length; i += IN_CHUNK) {
       const chunk = members.slice(i, i + IN_CHUNK);
       let from = 0;
       while (true) {
         const q = await supa
-          .from(REPORT_ONLY_PENDING_VIEW)
+          .rpc("rippling_report_only_pending_v1_fn", {
+            p_start: start,
+            p_end: end,
+            p_account_keys: chunk,
+          })
           .select("parent_txn_id, amount, account_key, purchased_at, category, work_location")
-          .in("account_key", chunk)
-          .gte("purchased_at", start)
-          .lte("purchased_at", end)
           .order("parent_txn_id", { ascending: true })
           .range(from, from + PS - 1);
         if (q.error) return { error: q.error };
