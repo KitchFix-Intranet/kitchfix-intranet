@@ -633,8 +633,28 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // handleSave / handleReset upstream).
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // P2-1 perf: the year-summary (full-season rollup, ~2.9s) is the heaviest
+  // fetch and re-runs on every save via reloadKey. Debounce ONLY its post-save
+  // refetch so a burst of entries coalesces into one rollup refresh. Account/
+  // scope switches still load it immediately (those stay direct deps of the
+  // year-summary effect); only the reloadKey-driven (post-save) refresh is
+  // debounced via this parallel key.
+  const [yearSummaryReloadKey, setYearSummaryReloadKey] = useState(0);
   const handleSaveConfirmed = useCallback(() => {}, []);
   const handleSaveConfirmComplete = useCallback(() => {}, []);
+
+  // P2-1 perf: trailing-debounce reloadKey -> yearSummaryReloadKey. Each
+  // save bumps reloadKey; the cleanup cancels any pending timer so a burst
+  // coalesces into ONE rollup refresh ~1.5s after the last save. The initial
+  // mount (reloadKey === 0) is skipped so the year-summary effect's own
+  // direct deps still own the first-load fetch. The timer always fires on
+  // the final change (cleanup only runs on unmount or on a next bump that
+  // re-arms it), so the final refresh is never dropped.
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    const t = setTimeout(() => setYearSummaryReloadKey((k) => k + 1), 1500);
+    return () => clearTimeout(t);
+  }, [reloadKey]);
 
   // F3: save-queue state. syncingKeys is the set of `${account}|${date}`
   // for entries currently pending replay across ALL accounts (the driver
@@ -931,7 +951,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         setAsOf(new Date());
       }).catch(() => { setYearLoadState("failed"); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, lens, isAdminView, selectedAccount, reloadKey, today]);
+    // P2-1 perf: the dep below is yearSummaryReloadKey (not reloadKey) so
+    // a burst of saves coalesces into ONE rollup refresh instead of N.
+    // scope/lens/isAdminView/selectedAccount/today stay direct deps so
+    // account + view switches still refetch the rollup immediately.
+  }, [scope, lens, isAdminView, selectedAccount, yearSummaryReloadKey, today]);
 
   // PR-B2 period-data effect. Derives the 1-2 calendar months the
   // current period spans and fetches only the missing months in
@@ -4453,9 +4477,16 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             /* M-3 (2026-08-XX): close-out plumbing. onReload bumps
                reloadKey so the year-summary refetches after a
                confirm, transitioning the block from actuals-due to
-               closed-out on the next render. */
+               closed-out on the next render.
+               P2-1 perf: also bump yearSummaryReloadKey directly so
+               an EXPLICIT refresh skips the trailing debounce window
+               and lands immediately. Automatic post-save reloadKey
+               bumps elsewhere still coalesce through the debounce. */
             showToast={showToast}
-            onReload={() => setReloadKey((k) => k + 1)}
+            onReload={() => {
+              setReloadKey((k) => k + 1);
+              setYearSummaryReloadKey((k) => k + 1);
+            }}
           />
         )}
 
