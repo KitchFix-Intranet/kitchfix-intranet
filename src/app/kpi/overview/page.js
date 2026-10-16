@@ -376,6 +376,13 @@ export default function KpiOverviewPage() {
     const p = new URLSearchParams({ account: fetchAccount, start, end });
     if (urlPreview) p.set("preview", urlPreview);
     if (urlIncludeSalary) p.set("include_salary", "1");
+    // rates=1 only when the fold is actually open (2026-10-15, measured).
+    // The per-worker hourly-rate column lives in WeekTable's ChildRow
+    // inside this fold and nowhere else; the CP / NP table does not read
+    // worker_week_rates. Asking for it unconditionally cost ~13 s on
+    // every CP load. laborLedgerOpen is already in this effect's
+    // dependency array, so opening the fold refetches with the flag set.
+    if (laborLedgerOpen) p.set("rates", "1");
     fetch(`/api/kpi/labor?${p}`, { signal: ctrl.signal })
       .then(async (r) => {
         if (r.status === 401) throw new Error("session_expired");

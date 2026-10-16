@@ -241,6 +241,15 @@ export async function GET(request) {
   let is_future_range = start > today;
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
   const includeSalaryReq = searchParams.get("include_salary") === "1";
+  // rates=1 (2026-10-15, measured). loadWorkerWeekRates pages the whole
+  // rippling_raw_pay_segments table (26k rows / 40 MB) and measured at
+  // 13,054 ms of a 14,210 ms request. Its only consumer is WeekTable's
+  // per-worker ChildRow inside the Overview's labor fold, so the caller
+  // now asks for it explicitly and the CP / NP table - which never reads
+  // it - no longer pays for it. Absent the flag the response still
+  // carries worker_week_rates, just empty; WeekTable renders a dash for
+  // a missing key (workerWeekRates.js:67), never a wrong rate.
+  const wantWorkerRates = searchParams.get("rates") === "1";
   const homestandParam = searchParams.get("homestand");   // <game_start ISO>, e.g. 2026-08-14
 
   const supa = getServiceClient();
@@ -1040,7 +1049,9 @@ export async function GET(request) {
           isAggregate: true, members: rolledUpMembers,
           currentActuals: rolledUpActuals, pageSize: pageSizeParam,
         })),
-        timed("week_rates_agg", loadWorkerWeekRates(supa, { actualsRows })),
+        wantWorkerRates
+          ? timed("week_rates_agg", loadWorkerWeekRates(supa, { actualsRows }))
+          : Promise.resolve({ rates: new Map(), mixedRaiseWeeks: 0, workerWeeksCount: 0 }),
       ]);
       ({ workerMeta, resolvedNames, usersReachable } = workerRes);
       priorCmpAgg = priorRes;
@@ -1477,7 +1488,9 @@ export async function GET(request) {
         isAggregate: false, account,
         currentActuals: actuals.data,
       })),
-      timed("week_rates_single", loadWorkerWeekRates(supa, { actualsRows: actuals.data })),
+      wantWorkerRates
+        ? timed("week_rates_single", loadWorkerWeekRates(supa, { actualsRows: actuals.data }))
+        : Promise.resolve({ rates: new Map(), mixedRaiseWeeks: 0, workerWeeksCount: 0 }),
     ]);
     ({ workerMeta, resolvedNames, usersReachable } = workerRes);
     priorCmpSingle = priorRes;
