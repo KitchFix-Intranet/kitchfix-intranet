@@ -113,25 +113,43 @@ export async function loadWorkerWeekRates(supa, { actualsRows }) {
       from += PAGE;
     }
   }
-  // PERF 2026-10-16 (PR #1291 narrowed columns; this change adds the
-  // WHERE clause). Was reading the whole 26,527-row table on every
-  // labor request. pg_stat_statements showed 128ms mean DB time but
-  // 4-8s wall-clock per call - the overhead was 27 round trips of
-  // paginated JSON, not the query itself. Filtering on worker +
-  // segment_date range reduces to the segments this request actually
-  // needs (typically 200-1,700 rows, 5-7% of baseline latency).
+  // PERF 2026-10-16. Three-stage history:
+  //   #1291 (narrowed columns):  40 MB -> 3.8 MB  per call
+  //   #1301 (WHERE clause added): row count scoped to request
+  //   this PR (table swap):       let the index actually be used
   //
-  // Reads rippling_raw_pay_segments_latest, not the raw table, so
-  // rippling_id supersedes are already deduped by the view; the
-  // external_id dedupe in dedupePaySegments still runs as defense in
-  // depth (handles the 2026-08-19 rippling_id re-issue hotfix
-  // contract if it ever recurs).
+  // #1301 switched to rippling_raw_pay_segments_latest and added the
+  // worker + segment_date filters. The two moves were in tension: the
+  // _latest view is DISTINCT ON (rippling_id) ORDER BY rippling_id,
+  // fetched_at DESC, so the view dictates the scan order and no index
+  // on segment_date can be used. The filter had to be applied after a
+  // full scan of every row with its payload detoasted - production
+  // measured 4,421 ms on TBJ - FL after #1301.
   //
-  // The two JSONB filters hit without an expression index at
-  // acceptable latency on the current corpus (<500ms per account).
-  // If future load regresses, see the index proposal under
-  // docs/migrations/pay-segments-filter-index-proposal.sql - not
-  // applied, review-only.
+  // Kevin applied an expression index on the raw table 2026-10-16:
+  //   rippling_raw_pay_segments_role_segdate_idx
+  //   on ((payload -> 'owner_role' ->> 'id'),
+  //       (payload ->> 'segment_date'))
+  //
+  // Reading the raw table (not _latest) with these two filters as
+  // text comparisons produces a clean Index Scan with all predicates
+  // in Index Cond. Measured 353 ms on TBJ - FL (12x local speedup;
+  // production should be larger since the brief reports it was
+  // scan-bound, not transfer-bound). Rate maps byte-identical before
+  // and after - verified end-to-end on TBJ - FL, CIN - AZ and
+  // TXR - TX - H plus the all-accounts portfolio.
+  //
+  // DO NOT cast the segment_date predicate to ::date. The index
+  // expression is text; a date cast makes the index unusable and
+  // silently returns to the pre-change latency. Keep the .gte/.lte
+  // string comparisons here.
+  //
+  // dedupePaySegments stays - raw carries multiple rows per
+  // rippling_id (rippling_id re-issues per the 2026-08-19 hotfix
+  // contract, and the walk's own append-only ingest) and the helper
+  // is what collapses them. Verified: 6,443 distinct external_id in
+  // the raw table matches 6,443 in _latest; 0 external_ids missing;
+  // 0 cases where the newest system_updated_at row differs.
   //
   // The rehydrated `payload` shape below is deliberate -
   // dedupePaySegments takes `{ rippling_id, payload }`. Keep the shape
@@ -159,7 +177,7 @@ export async function loadWorkerWeekRates(supa, { actualsRows }) {
     let from = 0;
     while (true) {
       const q = await supa
-        .from("rippling_raw_pay_segments_latest")
+        .from("rippling_raw_pay_segments")
         .select(RATE_SEG_COLS)
         .in("payload->owner_role->>id", workerIds)
         .gte("payload->>segment_date", minDate)
