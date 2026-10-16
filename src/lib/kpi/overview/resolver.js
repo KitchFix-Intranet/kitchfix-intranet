@@ -30,7 +30,7 @@ import { performance } from "node:perf_hooks";
 
 // Labor + purchasing engines (library-call, no HTTP hop).
 import { buildBoard, computeBudgetToDateDays as computeLaborBudgetToDateDays } from "@/app/kpi/labor/lib/board.js";
-import { paginateActuals as paginateLaborActuals, resolveMemberBudgets } from "@/lib/labor/loaders.js";
+import { paginateActuals as paginateLaborActuals, resolveMemberBudgets, loadLaborFreshness } from "@/lib/labor/loaders.js";
 import {
   loadWeeklyRevenueBasis as loadWeeklyRevenueBasisForOverview,
   attachWeeklyBasisToBoard,
@@ -629,6 +629,14 @@ export async function resolveOverview({
     // through (last CLOSED card date) + last_derive_at (drives the
     // Overview's command-bar freshness chip via last_walk_at echo).
     loadPurchasingFreshness(supa),
+    // 2026-10-16 (P0 fix). Labor pipeline freshness - newest derived_at
+    // on labor_actuals + labor_actuals_daily. Composed into last_walk_at
+    // below as MIN of non-null pipe stamps so a healthy pipe cannot mask
+    // a cold one (prior implementation only read purchasing and rendered
+    // green through a 14-day labor outage). Rides in this Promise.all so
+    // it hides behind the slowest existing read; two cheap single-row
+    // queries, no serial addition.
+    loadLaborFreshness(supa),
     // Kevin R-61 (2026-09-03): Sebastian's inventory adjusting JEs.
     // Ships an empty map pre-migration; the resolver treats absent
     // JEs as "no adjustment", not zero (absent-vs-zero rule). Never
@@ -683,7 +691,7 @@ export async function resolveOverview({
     scResp, laborActualsResp, memberBudgetResults,
     purchWeeklyResp, purchActualsResp, purchPendingResp, purchBudgetsResp,
     salaryBudgetsResp, salaryActualsResp,
-    dirResp, purchFreshness, invAdjResp,
+    dirResp, purchFreshness, laborFreshness, invAdjResp,
     railWkBasisResp, railLaborActualsResp, railSalaryActualsResp,
     scCarveOutResp,
   ] = layer1;
@@ -3555,6 +3563,21 @@ export async function resolveOverview({
     const day = iso ? formatDayLabel(iso) : null;
     return day ? `${base} ${day}` : (fallback || `${base} (not yet reporting)`);
   };
+  // 2026-10-16 (P0 freshness fix). Plain-words pipeline age for the
+  // popover. Separate from through_date - through_date is data
+  // coverage ("Labor through Sun 10/11"), this is pipeline freshness
+  // ("rebuilt 10 days ago"). The 14-day outage hid partly because
+  // through_date read as healthy while the pipeline was dead.
+  const pipelineAgeLabel = (iso) => {
+    if (!iso) return null;
+    const then = new Date(iso).getTime();
+    if (!Number.isFinite(then)) return null;
+    const hours = (Date.now() - then) / 3600000;
+    if (hours < 30) return "rebuilt today";
+    if (hours < 54) return "rebuilt yesterday";
+    const days = Math.round(hours / 24);
+    return `rebuilt ${days} days ago`;
+  };
   // Kevin 2026-09-02 blocker Item 4+5: the popover revenue row must
   // name every source the payload used (verified first), and when the
   // range contains a still-running period the consequence sentence
@@ -3611,10 +3634,15 @@ export async function resolveOverview({
     labor: {
       through_date: laborLastClosed,
       label: labelWithThrough("Labor through", laborLastClosed, "Labor not yet reporting"),
+      // 2026-10-16. Pipeline age sibling of label. Null when the
+      // pipeline has never run (fresh install); the popover renders
+      // the pipeline row only when this is set.
+      pipeline_age_label: pipelineAgeLabel(laborDeriveAt),
     },
     purchases: {
       through_date: cardsThrough,
       label: labelWithThrough("Purchases through", cardsThrough, "Purchases not yet reporting"),
+      pipeline_age_label: pipelineAgeLabel(purchDeriveAt),
     },
     sc_revenue: {
       through_date: scMaxDate,
@@ -3714,28 +3742,40 @@ export async function resolveOverview({
   //     composes labor + purchasing + SC. Prior implementation
   //     passed `freshness={ last_walk_at: null }` on the client
   //     side, which the Shell's FreshnessChip renders as red
-  //     "No recent walk". That is wrong for the Overview: the
-  //     signal that drives the red on the labor board is the
-  //     Rippling walk age (a labor-pipeline-specific concept),
-  //     but the Overview's aggregated view has no single "walk"
-  //     - it has three source pipes. On the same account,
-  //     purchasing was reading "Data current" while Overview
-  //     was reading red "No recent walk".
-  //     Kevin's ruling: a false red alarm is worse than no chip.
-  //     Fix: emit last_walk_at as the max(labor last derive,
-  //     purchasing last derive). The client passes this into
-  //     Shell's `freshness` prop and the chip reflects the
-  //     underlying data-pipe age. When both pipes are fresh
-  //     (< 30h old per freshnessTint) the chip renders "Data
-  //     current" - matching what purchasing shows on the same
-  //     account.
-  const laborDeriveAt = null;  // labor board doesn't ship this on library-call output
+  //     "No recent walk". Kevin's ruling: a false red alarm is
+  //     worse than no chip.
+  //
+  //     2026-10-16 P0 correction. The prior implementation claimed
+  //     to compose max(labor, purchasing) but in fact pinned labor
+  //     to null and emitted purchasing only, so a dead labor
+  //     pipeline rendered green for 14 days (2026-10-02..10-16
+  //     Rippling custom-object 404 outage). Composition is now:
+  //
+  //       OLDEST wins across non-null pipes.
+  //
+  //     The chip's job is to warn when ANY composed pipe has gone
+  //     cold - taking the newest lets a healthy pipe mask a dead
+  //     one, which is exactly what shipped before and what the 14-
+  //     day outage exploited. If a pipe is genuinely absent
+  //     (empty table, not stale) its timestamp is null and the
+  //     fallback uses the other pipe only, preserving the Kevin-
+  //     2026-09-01 "a false red alarm is worse than no chip"
+  //     ruling.
+  const laborDeriveAt = laborFreshness?.last_derive_at || null;
   const purchDeriveAt = purchFreshness?.last_derive_at || null;
-  const composedWalkAt = purchDeriveAt || laborDeriveAt;
+  const nonNullDeriveAt = [laborDeriveAt, purchDeriveAt].filter(Boolean);
+  const composedWalkAt = nonNullDeriveAt.length === 0
+    ? null
+    : nonNullDeriveAt.reduce((oldest, cur) => (cur < oldest ? cur : oldest));
   const freshness = {
     today,
     cards_through: cardsThrough || today,
     last_walk_at: composedWalkAt,
+    // Per-pipe stamps so the popover can name which pipe is cold.
+    // The composed last_walk_at above is MIN of these; the client
+    // chip reads only last_walk_at.
+    labor_last_derive_at: laborDeriveAt,
+    purchases_last_derive_at: purchDeriveAt,
   };
 
   // Kevin R-94 (2026-09-09) + Kevin ruling 2026-09-17.

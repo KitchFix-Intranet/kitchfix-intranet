@@ -46,9 +46,22 @@ export default function DataCurrentPop({ sources }) {
       ? { k: "Revenue · Service Calendar", v: valueOnly(sources.sc_revenue.label, "Revenue from Service Calendar through") }
       : null;
 
+  // 2026-10-16 (P0 freshness fix). Pipeline rows sit adjacent to
+  // their data-coverage rows. Pipeline age ("rebuilt N days ago")
+  // is a different fact from through_date ("Labor through Sun
+  // 10/11") - the 2026-10-02..10-16 outage hid for 14 days partly
+  // because through_date read as healthy while the pipeline was
+  // dead. Only rendered when the resolver shipped a label (null
+  // when the pipeline has never run).
   const rows = [
     sources.labor?.label ? { k: "Labor", v: valueOnly(sources.labor.label, "Labor through") } : null,
+    sources.labor?.pipeline_age_label
+      ? { k: "Labor pipeline", v: sources.labor.pipeline_age_label, testId: "data-current-labor-pipeline" }
+      : null,
     sources.purchases?.label ? { k: "Purchases · bills and cards", v: valueOnly(sources.purchases.label, "Purchases through") } : null,
+    sources.purchases?.pipeline_age_label
+      ? { k: "Purchases pipeline", v: sources.purchases.pipeline_age_label, testId: "data-current-purchases-pipeline" }
+      : null,
     revenueRow,
     // Kevin ruling 2026-09-03 (top-simplify) item 3: two trust
     // statements moved off the Revenue card into the popover. Periods
