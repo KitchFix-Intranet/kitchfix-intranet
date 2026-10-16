@@ -85,7 +85,19 @@ export async function loadWorkerWeekRates(supa, { actualsRows }) {
     return { rates: new Map(), mixedRaiseWeeks: 0, workerWeeksCount: 0 };
   }
 
-  // Load presence + raw pay_segments + dedupe. One source of truth
+  // Compute the request's scope BEFORE fetching: which workers, and
+  // which date range. workerWeeks is built from actualsRows above, so
+  // these are already the exact rows this call needs.
+  const workerIds = [...workerWeeks.keys()];
+  let minDate = null, maxDate = null;
+  for (const list of workerWeeks.values()) {
+    for (const w of list) {
+      if (minDate === null || w.week_start < minDate) minDate = w.week_start;
+      if (maxDate === null || w.week_end   > maxDate) maxDate = w.week_end;
+    }
+  }
+
+  // Load presence + pay_segments + dedupe. One source of truth
   // (dedupePaySegments) so this helper cannot drift from the derive.
   const presenceSet = new Set();
   {
@@ -101,18 +113,29 @@ export async function loadWorkerWeekRates(supa, { actualsRows }) {
       from += PAGE;
     }
   }
-  // PERF 2026-10-16. Was `.select("rippling_id, payload")` - 40 MB of
-  // JSONB for 7 fields, ~10s of transfer on every call. We read an
-  // average 25.7 keys per row and use 7; `owner_role` alone is 14 MB
-  // (45% of payload) and we want one field from it.
+  // PERF 2026-10-16 (PR #1291 narrowed columns; this change adds the
+  // WHERE clause). Was reading the whole 26,527-row table on every
+  // labor request. pg_stat_statements showed 128ms mean DB time but
+  // 4-8s wall-clock per call - the overhead was 27 round trips of
+  // paginated JSON, not the query itself. Filtering on worker +
+  // segment_date range reduces to the segments this request actually
+  // needs (typically 200-1,700 rows, 5-7% of baseline latency).
   //
-  // Narrowing removes no rows and drops no field the logic reads, so the
-  // resolved rate map is identical by construction. Verified against the
-  // live corpus: all 26,527 rows carry all seven fields.
+  // Reads rippling_raw_pay_segments_latest, not the raw table, so
+  // rippling_id supersedes are already deduped by the view; the
+  // external_id dedupe in dedupePaySegments still runs as defense in
+  // depth (handles the 2026-08-19 rippling_id re-issue hotfix
+  // contract if it ever recurs).
   //
-  // The rehydrated `payload` shape below is deliberate - dedupePaySegments
-  // takes `{ rippling_id, payload }` and is shared with both derives. Keep
-  // the shape here rather than changing the helper's contract.
+  // The two JSONB filters hit without an expression index at
+  // acceptable latency on the current corpus (<500ms per account).
+  // If future load regresses, see the index proposal under
+  // docs/migrations/pay-segments-filter-index-proposal.sql - not
+  // applied, review-only.
+  //
+  // The rehydrated `payload` shape below is deliberate -
+  // dedupePaySegments takes `{ rippling_id, payload }`. Keep the shape
+  // here rather than changing the helper's contract.
   //
   // `->>` yields text, so estimated_hourly_rate / segment_duration_hours
   // arrive as strings. Both are already read through Number() downstream
@@ -136,8 +159,11 @@ export async function loadWorkerWeekRates(supa, { actualsRows }) {
     let from = 0;
     while (true) {
       const q = await supa
-        .from("rippling_raw_pay_segments")
+        .from("rippling_raw_pay_segments_latest")
         .select(RATE_SEG_COLS)
+        .in("payload->owner_role->>id", workerIds)
+        .gte("payload->>segment_date", minDate)
+        .lte("payload->>segment_date", maxDate)
         .range(from, from + PAGE - 1);
       if (q.error) throw new Error(`loadWorkerWeekRates raw: ${q.error.message}`);
       const rows = q.data || [];

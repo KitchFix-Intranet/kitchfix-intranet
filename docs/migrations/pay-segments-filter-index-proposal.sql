@@ -1,0 +1,69 @@
+-- PROPOSAL ONLY. Do not apply blindly.
+--
+-- Author: Chat-Claude review PR for workerWeekRates WHERE-clause change
+-- (perf/week-rates-filter, 2026-10-16).
+--
+-- Context
+--   workerWeekRates.loadWorkerWeekRates now filters pay_segments by
+--   (payload->owner_role->>id IN (...)) AND
+--   (payload->>segment_date BETWEEN ... AND ...).
+--
+--   Measured without an index on the current corpus
+--   (rippling_raw_pay_segments_latest, 22,099 rows, pay-segments walk
+--   retired 2026-10-07 so the row count is now frozen):
+--     TXR - TX - H  2026-09-07..2026-10-04:  418 ms  (293 rows out)
+--     TBJ - FL      2026-09-07..2026-10-04:  371 ms  (1,636 rows out)
+--     CIN - AZ      2026-09-07..2026-10-04:  183 ms  (646 rows out)
+--
+--   All three are under the brief's 1,000 ms target for `week_rates`
+--   without an index. Shipping the WHERE clause alone is sufficient
+--   today.
+--
+-- When this index becomes worth applying
+--   - the pay-segments walk is restored (table grows past the current
+--     snapshot)
+--   - route cardinality grows past ~15 accounts × 10 workers per range
+--   - latency on a filtered week_rates fetch regresses past ~1,500 ms
+--
+--   The expression index below cuts the filtered fetch to the ~100 ms
+--   range in test runs because it avoids the per-row payload-JSON
+--   extraction on the filter columns.
+--
+-- Index shape
+--   Two columns, both JSONB-path expressions. Owner-role-id first
+--   because it is the higher-selectivity filter (158 distinct values
+--   across 22,099 rows vs ~800 distinct dates), and PostgREST issues
+--   the two filters as separate predicates - a composite index
+--   supports index-only scans when both filters are present.
+--
+--   Partial index on `payload ? 'owner_role'` is not needed: every row
+--   in the corpus carries owner_role (verified 2026-10-16).
+
+-- CREATE INDEX CONCURRENTLY idx_pay_segments_owner_segment_date
+--   ON rippling_raw_pay_segments
+--     ((payload->'owner_role'->>'id'),
+--      (payload->>'segment_date'));
+
+-- CONCURRENTLY avoids a table-level lock during build. The build
+-- itself is cheap on a 54 MB table (seconds).
+
+-- Review notes for Kevin + Chat-Claude
+--
+-- 1. The `_latest` view is DISTINCT ON (rippling_id), so an index on
+--    the raw table is read through the view. The planner can use
+--    this index on both the raw table and the view path.
+--
+-- 2. If the index helps `_latest` queries but not raw queries (or
+--    vice versa), explain which call sites each helps and whether
+--    the raw table has any remaining live reader. Current state:
+--    workerWeekRates reads `_latest`; deriveActuals.js:288 reads
+--    raw but is no longer called by any nightly path (the retired
+--    weekly derive, superseded by derive_labor_actuals_from_time_entries).
+--
+-- 3. The pg_proc query planner will usually prefer an index over a
+--    seq scan at the row counts current filters produce. Verify with
+--    EXPLAIN before and after if applied.
+--
+-- 4. Do not apply unless the filtered fetch regresses. Shipping an
+--    unused index costs maintenance (bloat, autovacuum work) with no
+--    benefit.
