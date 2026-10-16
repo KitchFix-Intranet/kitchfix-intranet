@@ -644,6 +644,52 @@ export async function GET(request) {
       };
       if (homestandMap) responsePayload.homestandMap = homestandMap;
       if (scheduleOverlay) responsePayload.scheduleOverlay = scheduleOverlay;
+
+      // ─── SC perf 2/N: scoped browser cache for closed past months ───
+      //
+      // Historical months are re-queried on every page load + every
+      // account switch (the 6x sc-load burst). Serving an immutable
+      // past-and-closed month from the browser cache turns those into
+      // instant responses. STRICT scoping is what keeps this safe:
+      //
+      //   1. "Fully past" is derived from clientToday (same anchor the
+      //      rest of the handler reasons about), NOT server-local time.
+      //      If clientToday is absent, we DO NOT cache (conservative).
+      //   2. Every period in the month's days must be closed in
+      //      periodLockMap. Any day with no period metadata, or any
+      //      open period, drops the cache header.
+      //
+      // Only `private` is used - the payload carries viewer-shaped
+      // fields (viewerIsScAdmin / viewerIsLockOverride / revenue
+      // fences); a shared/CDN cache would leak those across users.
+      // Operator data entry only touches the CURRENT open period,
+      // which never satisfies this gate - an operator can never see
+      // their own just-saved edit go stale. Admin backdates of a
+      // closed month are the only drift path; max-age bounds staleness
+      // to 5 min and stale-while-revalidate refreshes on next load.
+      let cacheHeader = null;
+      try {
+        if (clientToday) {
+          const [cy, cm] = clientToday.split("-").map(Number);
+          // year/month in scope here are the request's parsed values.
+          const monthFullyPast = (year < cy) || (year === cy && month < cm);
+          if (monthFullyPast) {
+            const anyUnknownPeriod = days.some(
+              (d) => d.meta?.period == null || d.meta?.period === ""
+            );
+            const anyOpenPeriod = !anyUnknownPeriod && [...periodLockMap.values()].some((v) => v !== true);
+            if (!anyUnknownPeriod && !anyOpenPeriod && periodLockMap.size > 0) {
+              cacheHeader = "private, max-age=300, stale-while-revalidate=3600";
+            }
+          }
+        }
+      } catch (_e) {
+        // Any derivation hiccup -> no cache (fail safe).
+        cacheHeader = null;
+      }
+      if (cacheHeader) {
+        return NextResponse.json(responsePayload, { headers: { "Cache-Control": cacheHeader } });
+      }
       return NextResponse.json(responsePayload);
     }
 
