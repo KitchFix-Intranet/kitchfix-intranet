@@ -15,6 +15,9 @@
 //   resolveMemberBudget         - kpi_budgets 3100.1 + sc_labor_budgets
 //     merge per playbook 4.5.
 //   buildPriorPeriodComparison  - V32-12..V32-15 comparison payload.
+//   loadLaborFreshness          - newest derived_at + data-coverage date
+//     from both labor_actuals (weekly) and labor_actuals_daily (daily),
+//     for the Overview's command-bar freshness composition.
 
 import {
   periodStartISO as fyPeriodStart,
@@ -99,6 +102,49 @@ export async function paginateActuals(supa, { members, start, end, pageSize }) {
     from += PS;
   }
   return { data: out };
+}
+
+// 2026-10-16 (P0 freshness fix). The Overview's command-bar freshness
+// chip previously composed `last_walk_at` from the purchasing derive
+// stamp only (resolver.js:3732 had labor pinned to null). The chip
+// cannot warn about a dead labor pipeline it never reads. This loader
+// surfaces newest derived_at + newest coverage date from both the
+// weekly table (labor_actuals) and the daily table
+// (labor_actuals_daily); the resolver composes last_walk_at as the
+// min of non-null pipe stamps so a healthy pipe never masks a cold
+// one, and emits per-pipe timestamps so the popover can name which
+// pipe is cold. Return shape mirrors loadFreshness in the purchasing
+// loaders (last_derive_at + per-source timestamps + a coverage
+// through-date), so the resolver treats both pipes with the same
+// null-safety.
+export async function loadLaborFreshness(supa) {
+  const [weekly, daily] = await Promise.all([
+    supa.from("labor_actuals")
+      .select("derived_at, week_end")
+      .order("derived_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supa.from("labor_actuals_daily")
+      .select("derived_at, work_date")
+      .order("derived_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const weeklyDeriveAt = weekly.data?.derived_at || null;
+  const dailyDeriveAt = daily.data?.derived_at || null;
+  // Newest derive stamp between the two pipes; null when neither has
+  // ever run (empty tables). Max of non-null; the Overview-level
+  // composition elsewhere takes the MIN across labor + purchasing.
+  const lastDeriveAt = (weeklyDeriveAt && dailyDeriveAt)
+    ? (weeklyDeriveAt > dailyDeriveAt ? weeklyDeriveAt : dailyDeriveAt)
+    : (weeklyDeriveAt || dailyDeriveAt || null);
+  return {
+    last_weekly_derive_at: weeklyDeriveAt,
+    weekly_through:        weekly.data?.week_end || null,
+    last_daily_derive_at:  dailyDeriveAt,
+    daily_through:         daily.data?.work_date || null,
+    last_derive_at:        lastDeriveAt,
+  };
 }
 
 // Resolve the (member) account's budget_periods per playbook 4.5.
