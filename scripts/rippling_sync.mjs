@@ -1,6 +1,15 @@
 // scripts/rippling_sync.mjs
 //
-// KPI PR 8a: sync raw Rippling time_entries + pay_segments into Postgres.
+// KPI PR 8a: sync raw Rippling time_entries + workers + users +
+// compensations into Postgres.
+//
+// 2026-10-16 (labor-te-1 cutover). The pay_segments and time_entry_zo
+// walks were REMOVED - both custom-object endpoints began returning
+// 404 on 2026-10-07 and Rippling will not restore them. The labor
+// pipeline sources from rippling_raw_time_entries directly now; the
+// two dead walks were the only `exit 2` cause on the nightly workflow
+// since the outage. Their raw tables and presence rows are kept in
+// place as provenance for the frozen pre-floor era.
 //
 // Design:
 //   - Serialized by a table-based lock (rippling_sync_locks). Prevents
@@ -9,10 +18,10 @@
 //     audit rows for changes that never happened. GitHub Actions'
 //     `concurrency:` block handles Action-vs-Action; the lock handles
 //     the cross-environment case.
-//   - Two Rippling walks per invocation, sequential (time_entries then
-//     pay_segments). One script run = one exit code. A combined total
-//     would hide one walk silently failing while the other succeeded,
-//     so we report both explicitly.
+//   - Four Rippling walks per invocation, sequential (time_entries,
+//     workers, users, compensations). One script run = one exit code.
+//     A combined total would hide one walk silently failing while the
+//     others succeeded, so we report each explicitly.
 //   - Full cursor walk per object every time. Rippling's date/worker
 //     filters are silently ignored (discovery 2026-08-04). Content-
 //     hash compare-then-insert makes re-fetching cheap.
@@ -353,14 +362,22 @@ async function runWalkWithPresence(walkArgs) {
   }
 }
 
-// ─── Run all six walks ──────────────────────────────────────────────
-// Sequential: time_entries, pay_segments (PR 8a), workers and
-// time_entry_zo (PR 8a-2), users (C5), compensations (salary PR 1).
+// ─── Run four walks ─────────────────────────────────────────────────
+// Sequential: time_entries, workers, users (C5), compensations
+// (salary PR 1).
+//
+// 2026-10-16 (labor-te-1 cutover). The pay_segments and time_entry_zo
+// walks were removed - both custom-object endpoints began returning
+// 404 on 2026-10-07 and are the sole cause of the nightly exit 2.
+// Nothing consumes their raw tables after this cutover. The raw tables
+// and their presence rows are left in place as provenance for the
+// frozen pre-floor labor_actuals era.
+//
 // Wrapped in try/finally so the lock releases on both success and
 // caught failure paths. SIGINT/SIGTERM handlers registered above cover
 // the killed-by-signal path.
 
-let teResult, psResult, wkResult, zoResult, usResult, cpResult;
+let teResult, wkResult, usResult, cpResult;
 try {
   // One kind failing must not prevent the others from writing their
   // presence. Each runWalkWithPresence is independent - it returns a
@@ -374,25 +391,11 @@ try {
     kind:        "time_entries",
   });
 
-  psResult = await runWalkWithPresence({
-    endpoint:    "custom-objects/time_entry_computed_pay_segment/records",
-    table:       "rippling_raw_pay_segments",
-    latestView:  "rippling_raw_pay_segments_latest",
-    kind:        "pay_segments",
-  });
-
   wkResult = await runWalkWithPresence({
     endpoint:    "workers",
     table:       "rippling_raw_workers",
     latestView:  "rippling_raw_workers_latest",
     kind:        "workers",
-  });
-
-  zoResult = await runWalkWithPresence({
-    endpoint:    "custom-objects/time_entry_zo/records",
-    table:       "rippling_raw_time_entry_zo",
-    latestView:  "rippling_raw_time_entry_zo_latest",
-    kind:        "time_entry_zo",
   });
 
   // C5: fifth walk. /users carries the name fields that /workers
@@ -457,9 +460,7 @@ function fmtResult(label, r) {
 console.log("");
 console.log("rippling_sync summary:");
 console.log("  " + fmtResult("time_entries",  teResult));
-console.log("  " + fmtResult("pay_segments",  psResult));
 console.log("  " + fmtResult("workers",       wkResult));
-console.log("  " + fmtResult("time_entry_zo", zoResult));
 console.log("  " + fmtResult("users",         usResult));
 console.log("  " + fmtResult("compensations", cpResult));
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
@@ -469,18 +470,21 @@ console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.
 // must not freeze the people roster or salary derive, which read none of
 // those walks. Emitted even on failure so a partial sync still routes
 // correctly. Local runs (no GITHUB_OUTPUT) skip this silently.
+//
+// 2026-10-16 (labor-te-1 cutover). The pay_segments_ok and
+// time_entry_zo_ok flags were removed - both custom-object walks are
+// retired and nothing downstream reads them. Any gate on either flag
+// in the workflow is dead and must be removed in the same commit.
 if (process.env.GITHUB_OUTPUT) {
   const { appendFileSync } = await import("node:fs");
   const lines = [
     `time_entries_ok=${teResult.ok}`,
-    `pay_segments_ok=${psResult.ok}`,
     `workers_ok=${wkResult.ok}`,
-    `time_entry_zo_ok=${zoResult.ok}`,
     `users_ok=${usResult.ok}`,
     `compensations_ok=${cpResult.ok}`,
   ].join("\n") + "\n";
   appendFileSync(process.env.GITHUB_OUTPUT, lines);
 }
 
-if (!teResult.ok || !psResult.ok || !wkResult.ok || !zoResult.ok || !usResult.ok || !cpResult.ok) process.exit(2);
+if (!teResult.ok || !wkResult.ok || !usResult.ok || !cpResult.ok) process.exit(2);
 process.exit(0);

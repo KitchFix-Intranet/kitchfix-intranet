@@ -1,19 +1,29 @@
 name: rippling raw sync + labor derivation
 
 # Nightly ingest of raw Rippling records into Postgres (PR 8a + 8a-2)
-# followed by the labor_actuals derivation (PR 8b).
+# followed by the labor_actuals derivation (PR 8b + labor-te-1 cutover).
 #
 # Four Rippling walks per run, sequential:
-#   /time-entries                                    -> rippling_raw_time_entries
-#   /custom-objects/time_entry_computed_pay_segment  -> rippling_raw_pay_segments
-#   /workers                                         -> rippling_raw_workers
-#   /custom-objects/time_entry_zo                    -> rippling_raw_time_entry_zo
+#   /time-entries         -> rippling_raw_time_entries
+#   /workers              -> rippling_raw_workers
+#   /users                -> rippling_raw_users
+#   /compensations        -> rippling_raw_compensations
+#
+# 2026-10-16 (labor-te-1 cutover). The pay_segments and time_entry_zo
+# custom-object walks were REMOVED - both endpoints began returning 404
+# on 2026-10-07 and are the sole cause of the nightly exit 2. The
+# labor_actuals derive now sources from time_entries directly via
+# scripts/derive_labor_actuals_from_time_entries.mjs; the windowed RPC
+# swap_labor_actuals_for_account_window writes week_start >=
+# TIME_ENTRY_SOURCE_FLOOR only. The pay-segments-era rows
+# (2026-04-20 .. 2026-10-04) stay frozen in place.
 #
 # On sync success, the derivation step runs. It reads presence
-# (rippling_current_presence), earning_type_map, rippling_department_map,
-# and the four raw _latest views; upserts labor_actuals per account via
-# swap_labor_actuals_for_account; and writes labor_unattributed +
-# earning_type_unmapped. Full re-derive per D38 - no incremental logic.
+# (rippling_current_presence), rippling_department_map,
+# rippling_raw_workers_latest, rippling_raw_time_entries_latest,
+# rippling_raw_compensations_latest, and sc_day_metadata; writes to
+# labor_actuals via the windowed RPC. Full post-floor re-derive per
+# D38 - no incremental logic.
 #
 # The derivation is gated on sync success (per B6). A partial or failed
 # sync must NOT trigger the derivation - deriving over half-updated
@@ -111,35 +121,40 @@ jobs:
       # 2026-06-12 silent-gap class is exactly the case where a
       # fail-open guard produced confidently wrong numbers. Dry-run of
       # sync skips derive (nothing to derive against a preview).
-      - name: Derive labor actuals
+      - name: Derive labor actuals (time-entries source, post-floor)
         id: derive_weekly
-        if: success() && (inputs.dry_run || 'false') != 'true'
+        if: always() && steps.sync.outputs.time_entries_ok == 'true' && steps.sync.outputs.workers_ok == 'true' && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
-          echo "derive_labor_actuals --source=${SOURCE}"
-          node scripts/derive_labor_actuals.mjs --source=${SOURCE}
+          echo "derive_labor_actuals_from_time_entries --source=${SOURCE}"
+          node scripts/derive_labor_actuals_from_time_entries.mjs --source=${SOURCE}
 
-      # Daily grain rebuild - same input as the weekly, bucketed by
-      # segment_date. Runs AFTER Derive labor actuals so the D1
-      # reconciliation probe reads a stable weekly. --window=trailing8
-      # matches the weekly + salary derives; --window=fytd stays
-      # manual-only. Same shared dedupe helper as the weekly so a
-      # tripled-Tuesday cannot happen without also tripling the week.
-      - name: Derive labor actuals daily
+      # 2026-10-16 (labor-te-1 cutover). The daily derive and the grain
+      # probe are DISABLED on main. Both read pay_segments through
+      # dedupePaySegments; the pay_segments walk is retired and its
+      # presence set is frozen. Running either now would re-write
+      # labor_actuals_daily rows from stale data (or fail), creating a
+      # worse surface than the current frozen state: homestand views
+      # and non-week-aligned ranges read from labor_actuals_daily
+      # (route.js:798), so a wrong number here is operator-visible.
+      #
+      # The follow-up (labor-te-2) repoints derive_labor_actuals_daily
+      # at the time-entries source and reinstates the grain probe with
+      # the matching comparison. Both are expected to land in the same
+      # session as this PR while the model is still in context.
+      - name: Derive labor actuals daily (DISABLED pending labor-te-2)
         id: derive_daily
-        if: success() && (inputs.dry_run || 'false') != 'true'
+        if: false
         run: |
-          SOURCE="${{ inputs.source || 'nightly' }}"
-          echo "note: weekly derive already wrote successfully; failure here isolates to the daily rollup"
-          echo "derive_labor_actuals_daily --source=${SOURCE} --window=trailing8"
-          node scripts/derive_labor_actuals_daily.mjs --source=${SOURCE} --window=trailing8
+          echo "DISABLED by labor-te-1; see workflow comment."
+          exit 0
 
-      - name: Daily grain probes
+      - name: Daily grain probes (DISABLED pending labor-te-2)
         id: probe_grain
-        if: success() && (inputs.dry_run || 'false') != 'true'
+        if: false
         run: |
-          echo "probe_daily_grain"
-          node scripts/probes/_probe_daily_grain.mjs
+          echo "DISABLED by labor-te-1; see workflow comment."
+          exit 0
 
       # Salary derive rebuilds the trailing 8 fiscal weeks of
       # labor_salary_actuals so a late-entered raise or a backdated
