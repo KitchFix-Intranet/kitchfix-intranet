@@ -1148,6 +1148,14 @@ async function updateInvoiceFieldsPostgres(uuid, fields) {
   if ("aiScanClaimedBy" in fields) {
     payload.ai_scan_claimed_by = fields.aiScanClaimedBy || null;
   }
+  // li-4 (2026-10-16): consecutive-crash counter. Reset to 0 by the worker
+  // whenever it writes an outcome; incremented inside get_extraction_claims
+  // only when a row is re-claimed over a still-live claim.
+  if ("aiScanCrashCount" in fields) {
+    payload.ai_scan_crash_count = fields.aiScanCrashCount === null
+      ? null
+      : (Number(fields.aiScanCrashCount) || 0);
+  }
   if (Object.keys(payload).length === 0) return;
   const { error } = await supabase
     .from("invoice_submissions")
