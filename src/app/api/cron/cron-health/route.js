@@ -71,30 +71,42 @@ export const maxDuration = 60;
 // maxSilenceMs is the "it never fired at all" backstop. staleRunMs is
 // 2x the host cron's maxDuration (route.js export), floored at 15 min.
 // Keep these in sync with each route's maxDuration if those change.
+//
+// extract-line-items vs the rare jobs: extract reinvokes every 5 min, so
+// a single-newest-row model is fooled by (a) fresh in_progress rows that
+// supersede older ones before aging into stale, and (b) reaped>0 rows
+// getting buried under later clean ticks. For that one job the watchdog
+// scans a 2-hour WINDOW of rows (see decideHealthWindow below). The
+// other three jobs stay on single-newest-row (decideHealth), which is
+// correct for them: a weekly or monthly cadence persists its newest row.
+// Do NOT "simplify" the two paths back together - the window scan is
+// pointless for the rare jobs and the newest-row model is dangerous for
+// the frequent one.
 const MONITORED = [
   {
     name:          "extract-line-items",
+    model:         "window",
     maxSilenceMs:  30 * 60 * 1000,              // 30 min
     staleRunMs:    Math.max(15 * 60 * 1000, 2 * 300 * 1000), // 2x maxDuration(300s)
-    checkReaped:   true,
+    windowMs:      2 * 60 * 60 * 1000,          // scan last 2 hours of rows
   },
   {
     name:          "sc-chase",
+    model:         "newest",
     maxSilenceMs:  6 * 24 * 60 * 60 * 1000,     // 6 days (max legitimate gap)
     staleRunMs:    Math.max(15 * 60 * 1000, 2 * 60 * 1000),  // 2x maxDuration(60s), floor 15m
-    checkReaped:   false,
   },
   {
     name:          "schedule-drift",
+    model:         "newest",
     maxSilenceMs:  8 * 24 * 60 * 60 * 1000,     // 8 days (weekly + 1-day margin)
     staleRunMs:    Math.max(15 * 60 * 1000, 2 * 60 * 1000),
-    checkReaped:   false,
   },
   {
     name:          "sc-bg-monthly-report",
+    model:         "newest",
     maxSilenceMs:  33 * 24 * 60 * 60 * 1000,    // 33 days (monthly + 2-day margin)
     staleRunMs:    Math.max(15 * 60 * 1000, 2 * 120 * 1000), // 2x maxDuration(120s)
-    checkReaped:   false,
   },
 ];
 
@@ -117,7 +129,8 @@ function fmtAgo(ms) {
 // ─── Per-job latest-row lookup ───────────────────────────────────────────
 // Sorted by completed_at DESC NULLS FIRST (via the cron-heartbeat index)
 // so an in_progress row (null completed_at) wins over a prior success,
-// which is exactly what the stale-claim check needs.
+// which is exactly what the stale-claim check needs. Used by the rare
+// jobs. extract-line-items uses windowRunsFor instead.
 async function latestRunFor(supa, jobName) {
   const { data, error } = await supa
     .from("cron_runs")
@@ -131,7 +144,31 @@ async function latestRunFor(supa, jobName) {
   return data || null;
 }
 
-// ─── Health decision ─────────────────────────────────────────────────────
+// Scan the last `windowMs` of rows for a job. Ordered newest-first on
+// started_at (the window predicate also keys on started_at, so the
+// range + sort hit the cron_runs_job_started_idx cleanly). Used only
+// for extract-line-items; see decideHealthWindow for the rationale.
+async function windowRunsFor(supa, jobName, now, windowMs) {
+  const sinceIso = new Date(now - windowMs).toISOString();
+  const { data, error } = await supa
+    .from("cron_runs")
+    .select("id, started_at, completed_at, status, summary, error_message")
+    .eq("job_name", jobName)
+    .gte("started_at", sinceIso)
+    .order("started_at", { ascending: false });
+  if (error) throw new Error(`windowRunsFor(${jobName}): ${error.message}`);
+  return data || [];
+}
+
+// ─── Health decision - rare jobs (newest-row model) ──────────────────────
+// Used for sc-chase, schedule-drift, sc-bg-monthly-report. Not used for
+// extract-line-items; see decideHealthWindow below for why.
+//
+// The `if (!row)` branch is defensive after the migration seeds one row
+// per monitored job at apply time (docs/migrations/cron-heartbeat.sql
+// Step 4), so a job's silence clock starts at deploy, not at the epoch.
+// Leaving the branch in because the migration could someday be re-applied
+// against a wiped table.
 function decideHealth(now, job, row) {
   if (!row) {
     return { healthy: false, reason: `${job.name}: no run ever logged` };
@@ -167,21 +204,106 @@ function decideHealth(now, job, row) {
     }
   }
 
-  // 4. Reaper fired (extract-line-items only).
-  if (job.checkReaped) {
-    const reaped = Number(row.summary?.reaped || 0);
-    if (reaped > 0) {
-      return {
-        healthy: false,
-        reason: `${job.name}: ${reaped} row(s) hit the crash ceiling and were reaped last tick`,
-      };
-    }
-  }
-
-  // 5. Healthy.
+  // 4. Healthy.
   return {
     healthy: true,
     reason: `${job.name}: healthy, last run ${fmtAgo(now - latestEventAt)}`,
+  };
+}
+
+// ─── Health decision - frequent job (window scan) ────────────────────────
+// Used ONLY for extract-line-items. The job reinvokes every 5 minutes,
+// so a newest-row model has two blind spots that together let the
+// October crash loop slip past undetected:
+//
+// A) Fresh in_progress rows never age into "stale". Vercel SIGKILLs the
+//    process at maxDuration = 300s; the catch block never runs, so the
+//    row stays in_progress. But a NEW in_progress row is created every
+//    5 min by the next invocation. The newest in_progress row is almost
+//    always younger than staleRunMs (15 min), so the stale check never
+//    fires. Workaround: scan ALL rows in the window; any one of them
+//    being stale is the signal.
+//
+// B) Reaper fires (summary.reaped > 0) get buried. li-4's reaper is the
+//    REAL signal that a jam occurred, but the very next empty-queue tick
+//    writes a fresh summary.reaped=0 success row. A reaper event is the
+//    newest row only ~5 min out of every 15; roughly two-thirds of
+//    reap events would be invisible to a newest-row watchdog running
+//    every 15 min. Workaround: a reap anywhere in the 2h window is
+//    unhealthy, even if the current newest row is clean.
+//
+// The newest-row silence check is still correct ("Vercel stopped
+// invoking entirely") and is kept against the overall newest row.
+function decideHealthWindow(now, job, rows) {
+  // Silence: oldest-to-newest-event timestamp, measured against the
+  // single newest row. If Vercel stopped invoking, no row of any kind
+  // lands in the window.
+  const newestRow = rows[0] || null;
+  if (!newestRow) {
+    // No rows in the window at all. Could mean the seed row has aged
+    // out of the window AND no real run has landed since - the actual
+    // silence SLA (30 min). Treat as unhealthy with the silence reason.
+    return {
+      healthy: false,
+      reason: `${job.name}: no run in the last ${fmtAgo(job.windowMs)} (SLA ${fmtAgo(job.maxSilenceMs)})`,
+    };
+  }
+  const newestStartedAt   = newestRow.started_at   ? new Date(newestRow.started_at).getTime()   : null;
+  const newestCompletedAt = newestRow.completed_at ? new Date(newestRow.completed_at).getTime() : null;
+  const newestEventAt     = newestCompletedAt ?? newestStartedAt ?? 0;
+  if (now - newestEventAt > job.maxSilenceMs) {
+    return {
+      healthy: false,
+      reason: `${job.name}: no run in ${fmtAgo(now - newestEventAt)} (SLA ${fmtAgo(job.maxSilenceMs)})`,
+    };
+  }
+
+  // Reaper fired anywhere in the window. The real jam signal; report
+  // the total reaped across the window.
+  const reapedRows = rows.filter(r => Number(r?.summary?.reaped || 0) > 0);
+  if (reapedRows.length > 0) {
+    const totalReaped = reapedRows.reduce((s, r) => s + Number(r.summary.reaped || 0), 0);
+    return {
+      healthy: false,
+      reason: `${job.name}: ${totalReaped} row(s) across ${reapedRows.length} tick(s) hit the crash ceiling and were reaped in the last ${fmtAgo(job.windowMs)}`,
+    };
+  }
+
+  // Any failed row in the window.
+  const failedRow = rows.find(r => r?.status === "failed");
+  if (failedRow) {
+    const failedAt = failedRow.completed_at
+      ? new Date(failedRow.completed_at).getTime()
+      : new Date(failedRow.started_at || 0).getTime();
+    const msg = failedRow.error_message ? `: ${String(failedRow.error_message).slice(0, 200)}` : "";
+    return {
+      healthy: false,
+      reason: `${job.name}: a run FAILED ${fmtAgo(now - failedAt)}${msg}`,
+    };
+  }
+
+  // Any genuinely stale in_progress - one that was not superseded in
+  // time. On the common SIGKILL path a NEW in_progress row supersedes
+  // the old one every 5 min, so this fires only when an in_progress
+  // row older than staleRunMs sits past where it should have been
+  // superseded (a real hang that stopped the cron entirely, or a
+  // claim that outlived its lease window).
+  const staleInProgress = rows.find(r => {
+    if (r?.status !== "in_progress") return false;
+    const startedMs = r.started_at ? new Date(r.started_at).getTime() : null;
+    return startedMs !== null && (now - startedMs) > job.staleRunMs;
+  });
+  if (staleInProgress) {
+    const startedMs = new Date(staleInProgress.started_at).getTime();
+    return {
+      healthy: false,
+      reason: `${job.name}: run stuck in_progress ${fmtAgo(now - startedMs)} (crashed or timed out mid-run)`,
+    };
+  }
+
+  return {
+    healthy: true,
+    reason: `${job.name}: healthy, last run ${fmtAgo(now - newestEventAt)} (${rows.length} ticks in window)`,
   };
 }
 
@@ -225,20 +347,33 @@ export async function GET(request) {
     const nowMs = Date.now();
     const prior = await readPriorWatchdogState(supa);
 
-    // Decide each job.
+    // Decide each job. extract-line-items uses the window scan; the
+    // three rare jobs stay on single-newest-row. See the MONITORED
+    // header comment for the full rationale.
     const perJob = [];
     for (const job of MONITORED) {
-      let row = null;
+      let row = null;        // populated for the newest-row model
+      let windowRows = null; // populated for the window model
       let readError = null;
       try {
-        row = await latestRunFor(supa, job.name);
+        if (job.model === "window") {
+          windowRows = await windowRunsFor(supa, job.name, nowMs, job.windowMs);
+          row = windowRows[0] || null;
+        } else {
+          row = await latestRunFor(supa, job.name);
+        }
       } catch (e) {
         readError = e.message;
       }
-      const verdict = readError
-        ? { healthy: false, reason: `${job.name}: cron_runs read failed: ${readError}` }
-        : decideHealth(nowMs, job, row);
-      perJob.push({ job: job.name, row, verdict });
+      let verdict;
+      if (readError) {
+        verdict = { healthy: false, reason: `${job.name}: cron_runs read failed: ${readError}` };
+      } else if (job.model === "window") {
+        verdict = decideHealthWindow(nowMs, job, windowRows || []);
+      } else {
+        verdict = decideHealth(nowMs, job, row);
+      }
+      perJob.push({ job: job.name, row, verdict, windowCount: windowRows?.length ?? null });
     }
 
     // Compute the current alerted-map and which jobs should alert this tick.

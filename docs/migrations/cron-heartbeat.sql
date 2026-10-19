@@ -70,6 +70,23 @@ GRANT SELECT, INSERT, UPDATE ON public.cron_runs           TO service_role;
 GRANT USAGE                 ON SEQUENCE public.cron_runs_id_seq TO service_role;
 
 
+-- ─── Step 4: baseline seed rows ──────────────────────────────────────────
+-- One 'success' row per monitored job at apply time so the watchdog's
+-- silence SLA measures from deploy, not from the epoch. Without these,
+-- every rare job (monthly report, weekly drift, biweekly chase) would
+-- alert "no run ever logged" every 6h from deploy until its first natural
+-- run - up to a month of false alerts for sc-bg-monthly-report. The first
+-- real run of each job supersedes its seed (newer completed_at wins the
+-- watchdog's latest-row sort). cron-health seeds itself on its own first
+-- tick, so it is not listed here.
+INSERT INTO public.cron_runs (job_name, status, started_at, completed_at, summary)
+VALUES
+  ('extract-line-items',   'success', now(), now(), '{"seed":true}'::jsonb),
+  ('sc-chase',             'success', now(), now(), '{"seed":true}'::jsonb),
+  ('schedule-drift',       'success', now(), now(), '{"seed":true}'::jsonb),
+  ('sc-bg-monthly-report', 'success', now(), now(), '{"seed":true}'::jsonb);
+
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- VERIFY BLOCK (read-only SELECTs only)
 -- ────────────────────────────────────────────────────────────────────────────
@@ -103,5 +120,15 @@ WHERE table_schema = 'public'
   AND table_name   = 'cron_runs'
 ORDER BY grantee, privilege_type;
 
--- V5. Empty on first apply (sanity, pre-code-deploy).
+-- V5. Row count after seed. Expect 4 (one per monitored job).
 SELECT count(*) AS row_count FROM public.cron_runs;
+
+-- V6. Seed rows: one 'success' row per monitored job with summary->>'seed'
+-- equal to 'true'. Expect exactly 4 rows: extract-line-items, sc-chase,
+-- schedule-drift, sc-bg-monthly-report. The watchdog relies on these so
+-- rare jobs do not false-alert "no run ever logged" between deploy and
+-- their first natural run.
+SELECT job_name, status, summary->>'seed' AS is_seed, completed_at
+FROM public.cron_runs
+WHERE summary->>'seed' = 'true'
+ORDER BY job_name;
