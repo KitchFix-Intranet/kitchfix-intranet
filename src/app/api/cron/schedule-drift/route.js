@@ -11,6 +11,7 @@ import {
   formatWeeklyRecapPayload,
   postSlack,
 } from "@/lib/scheduleDrift";
+import { startCronRun, finishCronRun } from "@/lib/cronRuns";
 
 // ══════════════════════════════════════════════════════════════════════
 // SCHEDULE-DRIFT WATCHDOG - WEEKLY CHANGE-ONLY RECAP (sc-59, 2026-10-12)
@@ -62,6 +63,11 @@ export async function GET(request) {
   console.log(`[sc-drift] weekly run ${runId} start (dry=${isDryRun}, weekOf=${weekOfIso})`);
 
   const supa = getServiceClient();
+  // Heartbeat open AFTER the auth gate. Null id is tolerated if the
+  // cron_runs table is missing; the watchdog detection just degrades.
+  const cronRunId = await startCronRun(supa, "schedule-drift");
+
+  try {
   const accountResults = [];
 
   for (const team of TRACKED_TEAMS) {
@@ -211,6 +217,25 @@ export async function GET(request) {
 
   console.log(`[sc-drift] weekly run ${runId} done · current=${currentCount} · ${JSON.stringify(summary)} · failures=${failures.length} · elapsed=${elapsedMs}ms · slack=${slackResult.posted}${slackResult.reason ? ` (${slackResult.reason})` : ""}${stateReadError ? ` · stateRead=FAILED(${stateReadError})` : ""}${reconcile.error ? ` · reconcile=FAILED(${reconcile.error})` : ""}`);
 
+  // Heartbeat success close. Carries the per-run deltas the watchdog can
+  // peek at via summary. isDryRun threads through so a dry-run tick is
+  // distinguishable from a real one.
+  await finishCronRun(supa, cronRunId, {
+    status: "success",
+    summary: {
+      runId,
+      weekOf:   weekOfIso,
+      elapsedMs,
+      dry:      isDryRun,
+      newItems: summary.newItems,
+      cleared:  summary.cleared,
+      carryOpen: summary.carryOpen,
+      failures: failures.length,
+      teams:    TRACKED_TEAMS.length,
+      fallbackFromStateError: priorRows === null,
+    },
+  });
+
   return NextResponse.json({
     success: true,
     runId,
@@ -238,4 +263,15 @@ export async function GET(request) {
       error:     r.error || null,
     })),
   });
+  } catch (e) {
+    // Preserve existing shape of a thrown-error exit (prior to this PR
+    // the handler had no explicit catch and a throw would surface as a
+    // 500). Finalize the heartbeat row as failed, then re-throw so the
+    // response status is unchanged.
+    await finishCronRun(supa, cronRunId, {
+      status: "failed",
+      errorMessage: e?.message || String(e),
+    });
+    throw e;
+  }
 }
