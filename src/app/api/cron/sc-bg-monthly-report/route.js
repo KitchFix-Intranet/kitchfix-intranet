@@ -51,6 +51,7 @@ import {
   splitToAndCc,
   previousCalendarMonthISO,
 } from "@/lib/bg/bgRecipients";
+import { startCronRun, finishCronRun } from "@/lib/cronRuns";
 
 export const dynamic     = "force-dynamic";
 export const maxDuration = 120;
@@ -78,6 +79,10 @@ export async function GET(request) {
   const monthISO = monthOverride || previousCalendarMonthISO();
 
   const supa = getServiceClient();
+  // Heartbeat open AFTER the Bearer check.
+  const cronRunId = await startCronRun(supa, "sc-bg-monthly-report");
+
+  try {
   const log = [];
   const results = [];
 
@@ -87,6 +92,7 @@ export async function GET(request) {
     .select("account_key, bg_report_recipients")
     .not("bg_report_recipients", "is", null);
   if (mapErr) {
+    await finishCronRun(supa, cronRunId, { status: "failed", errorMessage: `sc_qbo_account_map: ${mapErr.message}` });
     return NextResponse.json({ ok: false, phase: "sc_qbo_account_map", error: mapErr.message }, { status: 500 });
   }
 
@@ -95,6 +101,11 @@ export async function GET(request) {
 
   if (targetAccounts.length === 0) {
     log.push(`no accounts opted in (bg_report_recipients IS NULL on every row)${accountOverride ? ` OR account=${accountOverride} not found` : ""}`);
+    // Legitimate healthy outcome (no accounts opted in yet). Close success.
+    await finishCronRun(supa, cronRunId, {
+      status: "success",
+      summary: { monthISO, scanned: 0, sent: 0, dryRun, reason: "no_accounts_opted_in" },
+    });
     return NextResponse.json({ ok: true, monthISO, scanned: 0, sent: 0, log });
   }
 
@@ -179,13 +190,32 @@ export async function GET(request) {
     });
   }
 
+  const sentCount = results.filter((r) => r.sent).length;
+  // Heartbeat success close.
+  await finishCronRun(supa, cronRunId, {
+    status: "success",
+    summary: {
+      monthISO,
+      scanned: targetAccounts.length,
+      sent:    sentCount,
+      dryRun,
+    },
+  });
+
   return NextResponse.json({
     ok: true,
     monthISO,
     scanned: targetAccounts.length,
-    sent: results.filter((r) => r.sent).length,
+    sent: sentCount,
     dryRun,
     log,
     results,
   });
+  } catch (e) {
+    await finishCronRun(supa, cronRunId, {
+      status: "failed",
+      errorMessage: e?.message || String(e),
+    });
+    throw e;
+  }
 }

@@ -88,6 +88,7 @@ import {
 } from "@/lib/invoiceActions";
 import { updateInvoiceFields } from "@/lib/dataStore";
 import { downloadAndExtractPages } from "@/lib/extractionPages";
+import { startCronRun, finishCronRun } from "@/lib/cronRuns";
 
 export const runtime      = "nodejs";
 export const dynamic      = "force-dynamic";
@@ -131,6 +132,17 @@ export async function GET(request) {
   // to ai_scan_claimed_by so log-grepping can pair a claim to its worker.
   const workerId = request.headers.get("x-vercel-id") || `local-${randomUUID().slice(0, 8)}`;
 
+  // ─── Heartbeat open (post-auth) ──────────────────────────────────────
+  // Open AFTER the Bearer check so an unauthorized probe never writes a
+  // row. A null id means the insert failed (migration not applied yet,
+  // table missing, etc.); finishCronRun tolerates null, and the worker
+  // continues untouched. If this entire function times out at
+  // maxDuration = 300 the row stays `in_progress` and the watchdog
+  // treats that as the crash signal - do NOT add a catch-all that
+  // masks a timeout into a clean finish.
+  const supabase = getServiceClient();
+  const cronRunId = await startCronRun(supabase, "extract-line-items");
+
   const t0 = Date.now();
   const summary = {
     ok: true,
@@ -146,8 +158,6 @@ export async function GET(request) {
     reaped: 0,
     perInvoice: [],
   };
-
-  const supabase = getServiceClient();
 
   // ─── Reaper (li-4) ───────────────────────────────────────────────────
   // Rows at or over the crash ceiling are no longer claimable (the SQL
@@ -437,6 +447,19 @@ export async function GET(request) {
   }
 
   summary.tookMs = Date.now() - t0;
+
+  // Heartbeat close. The body does not throw - every per-row path catches
+  // internally. summary.ok === false means a claim/RPC error flipped it;
+  // otherwise this is a normal completion (including the "nothing to do"
+  // tick with claimed=0). A timeout never reaches this line; the row
+  // stays `in_progress` and the watchdog detects it. Do NOT wrap this
+  // in a try/catch that could swallow the signal.
+  await finishCronRun(supabase, cronRunId, {
+    status:       summary.ok ? "success" : "failed",
+    summary:      summary,
+    errorMessage: summary.ok ? null : (summary.claimError || "worker reported ok=false"),
+  });
+
   return NextResponse.json(summary);
 }
 

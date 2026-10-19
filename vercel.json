@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/sc-bg-monthly-report",
       "schedule": "0 13 4 * *"
+    },
+    {
+      "path": "/api/cron/cron-health",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

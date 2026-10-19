@@ -70,6 +70,7 @@ import { fireN3 } from "@/lib/billing/chaseNotifications";
 import { resolveChasePersonName } from "@/lib/billing/chasePersonName";
 import { getSalariedManagerEmails, getSalariedManagerEmailsBatch } from "@/lib/billing/getSalariedManagerEmails";
 import { isWeekFullyEntered } from "./isWeekFullyEntered";
+import { startCronRun, finishCronRun } from "@/lib/cronRuns";
 
 export const dynamic    = "force-dynamic";
 export const maxDuration = 60;
@@ -365,12 +366,22 @@ export async function GET(request) {
   // full pilot x stage matrix with send=false. Emits the raw fireN3
   // shapes so the G2/G3/G5/G7/G8/G9 assertions can run against real
   // data without dispatching mail. Query param, auth-gated.
+  //
+  // Deliberately NOT heartbeat-instrumented: this is a test harness, not
+  // a scheduled cron run. Writing a cron_runs row for it would pollute
+  // the watchdog's view of the real sc-chase cadence. The real scheduled
+  // path (fall-through below) is the only instrumented entry point.
   if (url0.searchParams.get("assert") === "full") {
     return acceptanceMatrix(request);
   }
 
   const nowUtc = new Date();
   const supa = getServiceClient();
+  // Heartbeat open AFTER the Bearer check and AFTER the acceptance-mode
+  // bypass, so only real scheduled ticks write a row.
+  const cronRunId = await startCronRun(supa, "sc-chase");
+
+  try {
   const log = [];
   const results = [];
 
@@ -382,6 +393,7 @@ export async function GET(request) {
   const nowOverride = url.searchParams.get("now");
   const effectiveNow = nowOverride ? new Date(nowOverride) : nowUtc;
   if (nowOverride && !Number.isFinite(effectiveNow.getTime())) {
+    await finishCronRun(supa, cronRunId, { status: "failed", errorMessage: `bad ?now: ${nowOverride}` });
     return NextResponse.json({ error: `bad ?now: ${nowOverride}` }, { status: 400 });
   }
   const dryRun = url.searchParams.get("dry_run") === "1";
@@ -401,8 +413,14 @@ export async function GET(request) {
     // predicate + ordering as scWeekFinalize's per-account call.
     getSalariedManagerEmailsBatch(supa, perMealList),
   ]);
-  if (accountsRes.error) return NextResponse.json({ ok: false, phase: "accounts", error: accountsRes.error.message }, { status: 500 });
-  if (mapRes.error)      return NextResponse.json({ ok: false, phase: "sc_qbo_account_map", error: mapRes.error.message }, { status: 500 });
+  if (accountsRes.error) {
+    await finishCronRun(supa, cronRunId, { status: "failed", errorMessage: `accounts: ${accountsRes.error.message}` });
+    return NextResponse.json({ ok: false, phase: "accounts", error: accountsRes.error.message }, { status: 500 });
+  }
+  if (mapRes.error) {
+    await finishCronRun(supa, cronRunId, { status: "failed", errorMessage: `sc_qbo_account_map: ${mapRes.error.message}` });
+    return NextResponse.json({ ok: false, phase: "sc_qbo_account_map", error: mapRes.error.message }, { status: 500 });
+  }
 
   const accountsByKey = new Map((accountsRes.data || []).map(r => [r.team_key, r]));
   const mapByKey      = new Map((mapRes.data      || []).map(r => [r.account_key, r]));
@@ -625,6 +643,23 @@ export async function GET(request) {
     });
   }
 
+  // Heartbeat success close. A tick that legitimately does nothing still
+  // finishes success - "ran, nothing due" is a healthy outcome. Per-stage
+  // and per-account counts are the smallest useful summary; the full
+  // results array lives on the HTTP response but not in the row.
+  const stagesFired = results.map(r => r.stage).filter(Boolean);
+  await finishCronRun(supa, cronRunId, {
+    status: "success",
+    summary: {
+      now:       effectiveNow.toISOString(),
+      dryRun,
+      scanned:   perMealList.length,
+      sent:      results.length,
+      stages:    stagesFired,
+      logLines:  log.length,
+    },
+  });
+
   return NextResponse.json({
     ok: true,
     now: effectiveNow.toISOString(),
@@ -634,4 +669,13 @@ export async function GET(request) {
     log,
     results,
   });
+  } catch (e) {
+    // Unexpected throw: close the heartbeat as failed, then rethrow so
+    // the response shape stays identical to pre-PR behavior (a 500).
+    await finishCronRun(supa, cronRunId, {
+      status: "failed",
+      errorMessage: e?.message || String(e),
+    });
+    throw e;
+  }
 }
