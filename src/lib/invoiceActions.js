@@ -81,6 +81,11 @@ function toLegacySubmission(c) {
     rejectedAt:        c.rejectedAt,
     correctedFromUuid: c.correctedFromUuid,
     dupeOverride:      c.dupeOverride,
+    // ap-requeue (2026-10-19): the AP admin's Re-queue button gates on
+    // this field to show only on rows terminal from the extractor's
+    // perspective ('failed' | 'pg_failed'). canonicalFromPgRow carries
+    // ai_scan_status; legacy pass-through here is additive.
+    aiScanStatus:      c.aiScanStatus,
   };
 }
 
@@ -1213,6 +1218,60 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
     }
 
     return { success: true, origSubmitter, origVendor, origInvNum, origAccount };
+  }
+
+  // ── Re-queue failed extraction ──
+  // ap-requeue (2026-10-19): resets the extraction state so the
+  // /api/cron/extract-line-items worker re-picks the row on its next
+  // tick. Pairs with li-4 - a re-queued row that genuinely cannot be
+  // extracted gets a fresh 10-crash allowance and the cron-health
+  // watchdog surfaces the reap rather than letting the loop recur.
+  //
+  // Eligibility: ai_scan_status IN ('failed','pg_failed') only. Never
+  // touch a 'complete' row (already extracted), 'queued' (already in
+  // the worker's queue), 'pending' (legacy), or 'photo-only' (vendor
+  // deliberately opted out). Reject with a clear error.
+  if (action === "invoice-requeue") {
+    const { uuid } = body;
+    if (!uuid) return { success: false, error: "Missing uuid" };
+
+    const orig = await getInvoiceSubmissionByUuid(uuid, { module: "ops" });
+    if (!orig) return { success: false, error: "Submission not found" };
+
+    const current = orig.aiScanStatus;
+    if (current !== "failed" && current !== "pg_failed") {
+      return {
+        success: false,
+        error: `Cannot re-queue: ai_scan_status is '${current || "null"}'. Only 'failed' or 'pg_failed' rows can be re-queued.`,
+      };
+    }
+
+    try {
+      // Clean fresh claim. Reset every extraction-state field through
+      // the dataStore field map (same path the worker writes). No raw
+      // SQL from the route.
+      await updateInvoiceFields(uuid, {
+        aiScanStatus:        "queued",
+        aiScanClaimedAt:     null,
+        aiScanClaimedBy:     null,
+        aiScanNextAttemptAt: null,
+        aiScanCrashCount:    0,
+        aiScanAttempt:       0,
+        aiScanError:         null,
+      }, { module: "ops" });
+    } catch (e) {
+      return { success: false, error: `Re-queue failed: ${e.message}` };
+    }
+
+    console.log(`[Invoice] Re-queued ${uuid} for extraction (was ${current}, by ${email})`);
+    return {
+      success: true,
+      uuid,
+      previousStatus: current,
+      vendor:        orig.vendorName || "",
+      invoiceNumber: orig.invoiceNumber || "",
+      account:       orig.accountKey || "",
+    };
   }
 
   // ── Dismiss Duplicate Flag ──

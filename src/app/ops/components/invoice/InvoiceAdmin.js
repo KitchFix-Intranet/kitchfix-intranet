@@ -160,6 +160,21 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
     } catch { showToast("Network error — try again", "error"); }
   }, [showToast, loadSubmissions]);
 
+  // ap-requeue (2026-10-19): send a 'failed' / 'pg_failed' extraction
+  // back to the worker's queue. Reset is server-side; this just posts
+  // and reloads. UI gate (below) hides the button on every other status.
+  const handleRequeue = useCallback(async (s) => {
+    try {
+      const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invoice-requeue", uuid: s.uuid }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Re-queued ${s.vendor} #${s.invoiceNumber || "-"} - worker picks it up on the next tick`, "success");
+        setAllSubmissions((prev) => prev.map((r) => r.uuid === s.uuid ? { ...r, aiScanStatus: "queued" } : r));
+      } else { showToast(data.error || "Failed to re-queue", "error"); }
+    } catch { showToast("Network error - try again", "error"); }
+  }, [showToast]);
+
   const handleDismissDupe = useCallback(async (s) => {
     try {
       const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -385,6 +400,11 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
                       {isDupe && (
                         <button className="oh-inv-hist-action-btn oh-inv-hist-action-btn--delete" onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); }}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>Delete Duplicate
+                        </button>
+                      )}
+                      {(s.aiScanStatus === "failed" || s.aiScanStatus === "pg_failed") && (
+                        <button className="oh-inv-hist-action-btn" onClick={(e) => { e.stopPropagation(); handleRequeue(s); }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>Re-queue
                         </button>
                       )}
                       {s.status !== "archived" && (
