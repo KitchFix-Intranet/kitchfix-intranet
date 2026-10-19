@@ -426,11 +426,16 @@ export async function GET(request) {
     // Post to Slack. Fail-soft on a missing webhook (same shape as the
     // retired sousai-daily): log to console.warn and continue, do NOT
     // 500 or throw.
-    const webhook = process.env.SLACK_OPS_HEALTH_WEBHOOK;
+    //
+    // Reuses SLACK_RECAP_WEBHOOK (#intranet-recap). That channel went
+    // quiet when /api/cron/backup-sheets was retired 2026-10-16 and the
+    // env var had zero code consumers until this watchdog revived it;
+    // no new webhook was created.
+    const webhook = process.env.SLACK_RECAP_WEBHOOK;
     const slackResults = [];
     for (const text of messages) {
       if (!webhook) {
-        console.warn(`[cron-health] SLACK_OPS_HEALTH_WEBHOOK unset; would post: ${text}`);
+        console.warn(`[cron-health] SLACK_RECAP_WEBHOOK unset; would post: ${text}`);
         slackResults.push({ posted: false, reason: "webhook_unset", text });
         continue;
       }
