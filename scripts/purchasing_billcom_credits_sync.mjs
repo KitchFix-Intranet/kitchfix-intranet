@@ -136,6 +136,39 @@ console.log(`    classes=${classMap.size} coa=${accountToNumber.size} (both cap-
 // rederive. Constraint on purchasing_actuals.gl_bucket allows
 // pl_cogs / reimbursable / sga / other only.
 
+// ─── 1b. Stored updated_time watermark (2026-10-19) ─────────────────
+//
+// Josh's API monitor flagged 27,961 of 29,003 bill.com calls (96%) as
+// per-id vendor-credit detail lookups, ~4,000/night. Cause: the
+// nightly window filter below was a literal `true`, so every credit
+// in the corpus got a detail fetch every run. The content-hash check
+// further down filters INSERTS, not FETCHES - it never saved a call.
+//
+// bill.com's updatedTime IS a real modification timestamp (verified
+// 2026-10-19 against 3,130 stored credits: values span 2015-2026,
+// only 18 moved in the last 7 days, and every multi-version credit
+// has as many distinct updated_time values as content hashes). So a
+// list-vs-stored updatedTime comparison is a sound skip signal.
+//
+// Fail-safe, not fail-silent: a credit we have never seen, or whose
+// list row carries no updatedTime, is always fetched.
+//
+// Loader note: billcom_raw_vendor_credits_latest is a VIEW, not a
+// base table. Verified 2026-10-19 that loadWithCapGuard's
+// count: 'exact' head read against the view returns the true
+// row count (3,130) and matches the paginated read; the HIT_CAP
+// guard therefore works correctly here. If PostgREST ever stops
+// counting the view (silent null), the fix is to count against
+// billcom_raw_vendor_credits with DISTINCT credit_id - documented
+// here so a future reader does not have to re-litigate.
+const storedUpdated = new Map();
+{
+  const rows = await loadWithCapGuard("billcom_raw_vendor_credits_latest",
+                                      "credit_id, updated_time");
+  for (const r of rows) storedUpdated.set(String(r.credit_id), r.updated_time || null);
+  console.log(`\n  watermark: ${storedUpdated.size} credits already stored`);
+}
+
 // ─── 2. Walk /vendor-credits via nextPage cursor ────────────────────
 console.log("\n  walking /vendor-credits...");
 const listRows = [];
@@ -163,14 +196,41 @@ if (!cursorExhausted) {
 }
 console.log(`    ${listRows.length} credits across ${pageNo} pages (cursor exhausted)`);
 
-// FYTD backfill vs nightly: fytd keeps every credit whose creditDate
-// falls in the FY window. Nightly keeps every credit that has changed
-// vs the latest observed hash for that credit_id (checked below).
+// fytd keeps every credit whose creditDate falls in the FY window and
+// always detail-fetches - it is the backfill path and must not trust a
+// watermark it may be rebuilding.
+//
+// nightly/manual detail-fetch only credits that are new to us or whose
+// list updatedTime differs from what we stored. Unchanged credits are
+// skipped entirely - no API call, no hash computation. (2026-10-19)
+//
+// Compare on epoch ms, not string equality: bill.com's list payload
+// includes milliseconds (".000+00:00"); Postgres's timestamptz
+// serialization drops them ("+00:00"). The two strings represent the
+// same instant but are not string-equal. Measured 2026-10-19 - a bare
+// `String(...) === String(...)` check returned 0/3,130 skipped.
+// toTs() parses both sides through Date and compares the resulting ms.
+const toTs = (s) => {
+  if (!s) return null;
+  const t = new Date(s).getTime();
+  return Number.isFinite(t) ? t : null;
+};
+let skippedUnchanged = 0;
 const inWindow = listRows.filter(r => {
   const d = String(r.creditDate || "").slice(0, 10);
-  return args.source === "fytd" ? (d >= FY_START && d <= FY_END) : true;
+  if (args.source === "fytd") return d >= FY_START && d <= FY_END;
+  if (!storedUpdated.has(String(r.id))) return true;        // never seen
+  const listTs = toTs(r.updatedTime);
+  if (listTs === null) return true;                         // no signal - fetch
+  const storedTs = toTs(storedUpdated.get(String(r.id)));
+  if (storedTs !== null && storedTs === listTs) { skippedUnchanged++; return false; }
+  return true;
 });
 console.log(`    ${inWindow.length} candidates (source=${args.source})`);
+if (args.source !== "fytd") {
+  console.log(`    ${skippedUnchanged} skipped as unchanged (no detail fetch)`);
+  console.log(`    detail calls this run: ${inWindow.length} (was ${listRows.length} before 2026-10-19)`);
+}
 
 // ─── 3. Fetch details + upsert raw ───────────────────────────────────
 console.log("\n  fetching credit details + upserting raw...");

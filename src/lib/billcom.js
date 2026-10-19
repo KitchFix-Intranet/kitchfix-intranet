@@ -232,9 +232,19 @@ const HASH_EXCLUDE_TOP = {
   account:            ["updatedTime", "cacheAt", "__meta"],
   class:              ["updatedTime", "cacheAt", "__meta"],
   vendor:             ["updatedTime", "cacheAt", "__meta"],
-  // R-71 Stage 2 (2026-09-04): vendor-credits. updatedTime + createdTime
-  // are audit fields that tick on every fetch; exclude so re-fetching
-  // the same content doesn't produce a bogus hash-change insert.
+  // R-71 Stage 2 (2026-09-04): vendor-credits. Exclude updatedTime +
+  // createdTime from the content hash so a re-fetch of unchanged content
+  // can never produce a spurious version row (belt-and-braces).
+  //
+  // Correction 2026-10-19: an earlier revision of this comment claimed
+  // "updatedTime ticks on every fetch". That is wrong, and that claim
+  // is why nobody built the incremental-skip. Verified against 3,130
+  // stored credits in billcom_raw_vendor_credits_latest: updated_time
+  // spans 2015-2026, only 18 rows moved in the last 7 days, and every
+  // multi-version credit has as many distinct updated_time values as
+  // content hashes - the field moves with real content change.
+  // scripts/purchasing_billcom_credits_sync.mjs now uses it as the
+  // nightly skip watermark; this hash exclusion stays as a safety net.
   vendor_credit:      ["updatedTime", "createdTime", "cacheAt", "__meta"],
   vendor_credit_line: ["cacheAt", "__meta"],
 };

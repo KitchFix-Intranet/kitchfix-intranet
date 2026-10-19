@@ -282,3 +282,30 @@ node --env-file=.env.local scripts/probes/_probe_report_purchased_at_vs_txn_date
 ```
 
 Any week-cross > 0 in the second probe stops any merge PR - the calibration would have drifted.
+
+## Nightly billcom vendor-credits sync (R-71)
+
+`.github/workflows/purchasing-sync.yml` runs `scripts/purchasing_billcom_credits_sync.mjs` nightly at **07:30 UTC** between the bills sync and the Rippling sync (same workflow, three sequential steps). It walks `/vendor-credits` via `nextPage` cursor and ingests any credit whose content has changed into `billcom_raw_vendor_credits` + `billcom_raw_vendor_credit_lines`, then re-derives `purchasing_actuals` for every touched credit (source=`billcom_credit`).
+
+**Expected call volume (post-2026-10-19).** Nightly API usage drops from the full-corpus baseline (~3,100 detail calls, 1 per stored credit) to **low tens** (roughly 32 list-walk calls + one detail call per credit whose list-row `updatedTime` changed since the last run). Measured on a quiet night: 32 list + 3 detail = 35 calls total. Josh's rate-limit monitor should see the per-id `billcom/vendor-credits/{id}` share collapse accordingly.
+
+**Mechanics.**
+
+1. Before the walk, the script loads `(credit_id, updated_time)` from `billcom_raw_vendor_credits_latest` (cap-guarded against silent PostgREST truncation).
+2. During the walk, the list row's `updatedTime` is compared to the stored `updated_time` after parsing both through `Date(...).getTime()` (bill.com's list payload carries millis as `.000+00:00`; Postgres's `timestamptz` serialization drops them - string equality would false-negative every row).
+3. New credits (not in the watermark) and credits with a changed `updatedTime` are detail-fetched; unchanged credits are skipped entirely.
+4. The downstream content-hash insert filter + delete-then-insert `purchasing_actuals` rederive are unchanged; this edit is a payload reduction, not a logic change.
+5. `--source=fytd` (backfill) is explicitly untrusted: it ignores the watermark and detail-fetches every credit whose `creditDate` falls in the FY window. Use this when rebuilding history or after any schema change that invalidates the watermark.
+
+**Expected run output on a quiet night:**
+
+```
+  watermark: 3130 credits already stored
+  walking /vendor-credits...
+    3130 credits across 32 pages (cursor exhausted)
+    3 candidates (source=manual)
+    3127 skipped as unchanged (no detail fetch)
+    detail calls this run: 3 (was 3130 before 2026-10-19)
+```
+
+**If the skip count drops to 0** on a run (e.g. "3130 candidates / 0 skipped"), the watermark comparison is broken - most likely a timestamp-format regression. Instrument before patching: dump one list row's `updatedTime` + the stored `updated_time` for the same `credit_id` and confirm both parse to the same epoch ms. The 2026-10-19 ship landed with exactly this failure the first time; the fix was switching from string equality to `Date(...).getTime()`.
