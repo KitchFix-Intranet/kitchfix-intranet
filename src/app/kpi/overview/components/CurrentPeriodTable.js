@@ -31,7 +31,6 @@
 
 import "../../current-period.css";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { rollingOf, summaryFor } from "./currentPeriodRolling";
 import { weekHatchedDollars } from "@/app/kpi/labor/lib/weekHatched";
 
 const dollar0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
@@ -75,39 +74,36 @@ function stateClass(w) {
 // via phase is the reliable path). SC + fee subs hide because labor
 // board weeks lack meal_revenue and fee_prorate - the `meals > 0`
 // and `fee > 0` guards suppress them automatically.
+// Build 1 (2026-10-19). Ledger revenue cell. Stacks MEALS / SERVICE FEE
+// as sub-rows, REVENUE as the total row (top-rule, bigger), and the
+// "N of X confirmed" partial-services note beneath. The basis word
+// prefix ("confirmed" / "partial" / "forecast") that led the single
+// big value in the prior shape is retired - the week header pill
+// already names the week's state.
+//
+// Suppression preserved from the prior shape: meals/fee rows hide when
+// the value is zero, the fee-only future-week marker still fires with
+// its own copy, and the dashRow placeholder (every raw week zero against
+// a positive budget_revenue) still renders a single "—".
 function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
   const isFuture = phase === "future";
-  const isClosed = phase === "closed";
-  const basis = isFuture ? "forecast"
-              : isClosed ? "verified"
-              : (w.revenue_basis || "");
   const lbWk = (labor?.board?.weeks || [])[i] || null;
   const meals = Number(lbWk?.meal_revenue ?? w.meal_revenue ?? 0);
   const fee   = Number(lbWk?.fee_prorate  ?? w.fee_prorate  ?? 0);
   const conf  = Number(lbWk?.confirmed_services || 0);
   const totl  = Number(lbWk?.total_services || 0);
+  const basis = isFuture ? "forecast" : (w.revenue_basis || "");
   const noteText = (phase === "running" && basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
-  // Kevin R-137 step 3 (2026-09-21). Fee-only week marker on future.
-  // A week with revenue but no service days bills the service fee and
-  // serves nobody - without a label a $3,554 week beside three $13,949
-  // weeks reads as a scheduling gap. Condition consumes fields the
-  // labor board already ships (service_days added 2026-09-16,
-  // week_revenue existing).
   const lbSvcDays = Number(lbWk?.service_days ?? 0);
   const wkRev = Number(lbWk?.week_revenue ?? w.week_revenue ?? amount ?? 0);
   const feeOnlyWeek = isFuture && lbSvcDays === 0 && wkRev > 0;
-  // Kevin R-137.1 step 1 (2026-09-21). Revenue dash on the "budget
-  // fallback" state: period cell reads $52,061 from budget while the
-  // four raw week_revenue values are all zero. Reading `forecast $0`
-  // × 4 against that period cell breaks Invariant 1 on the face of
-  // the grid and lies about the state ("assert a forecast, and its
-  // value is zero" - both cannot be true).
-  //
-  // Scope: only when the parent computed the dashRow flag - which
-  // means every revRaw was 0 AND budget_revenue > 0. A genuine $0
-  // week inside a column that ties (TBR - FL P13 week 4) is NOT
-  // dashed - it keeps reading `forecast $0` and its column keeps
-  // summing to the period cell.
+  // Polish (2026-10-19). Forecast cue - italic + muted - on any
+  // week whose revenue isn't settled (future, partial, forecast
+  // basis). Closed + verified weeks render normal weight so WK3/WK4
+  // projection does not look identical to a closed-week actual.
+  const isForecast = isFuture || basis === "forecast" || basis === "partial";
+  const fcCls = isForecast ? " kpi-ov-cp-lv-fc" : "";
+
   if (dashRow) {
     return (
       <div className="kpi-ov-cp-v">
@@ -115,139 +111,171 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
       </div>
     );
   }
+  if (feeOnlyWeek) {
+    return (
+      <>
+        <div className="kpi-ov-cp-v">
+          <span className={`kpi-ov-cp-big${fcCls ? " kpi-ov-cp-big-fc" : ""}`}>{dollar0(amount)}</span>
+        </div>
+        <div className="kpi-ov-cp-csub kpi-ov-cp-mute" style={{ marginTop: 2 }}>service fee only · no services</div>
+      </>
+    );
+  }
+  const showSubs = meals > 0 || fee > 0;
+  if (!showSubs) {
+    return (
+      <>
+        <div className="kpi-ov-cp-v">
+          <span className={`kpi-ov-cp-big${fcCls ? " kpi-ov-cp-big-fc" : ""}`}>{dollar0(amount)}</span>
+        </div>
+        {isForecast && <div className="kpi-ov-cp-revnote">forecast</div>}
+        {noteText && <div className="kpi-ov-cp-revnote">{noteText}</div>}
+      </>
+    );
+  }
   return (
     <>
-      <div className="kpi-ov-cp-big"><span className="kpi-ov-cp-pre">{basis}</span>{dollar0(amount)}</div>
-      {feeOnlyWeek && <div className="kpi-ov-cp-csub kpi-ov-cp-mute" style={{ marginTop: 2 }}>service fee only · no services</div>}
-      {!feeOnlyWeek && meals > 0 && <div className="kpi-ov-cp-sub">Service Calendar: <b>{dollar0(meals)}</b></div>}
-      {!feeOnlyWeek && fee > 0 && <div className="kpi-ov-cp-sub" style={{ marginTop: 2 }}>Service fee: <b>{dollar0(fee)}</b></div>}
-      {noteText && <div className="kpi-ov-cp-vd kpi-ov-cp-mute">{noteText}</div>}
+      {meals > 0 && (
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">MEALS</span>
+          <span className={`kpi-ov-cp-lv kpi-ov-cp-lv-budget${fcCls}`}>{dollar0(meals)}</span>
+        </div>
+      )}
+      {fee > 0 && (
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">SERVICE FEE</span>
+          <span className={`kpi-ov-cp-lv kpi-ov-cp-lv-budget${fcCls}`}>{dollar0(fee)}</span>
+        </div>
+      )}
+      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-total">
+        <span className="kpi-ov-cp-lk">REVENUE</span>
+        <span className={`kpi-ov-cp-lv${fcCls}`}>{dollar0(amount)}</span>
+      </div>
+      {isForecast && !noteText && <div className="kpi-ov-cp-revnote">forecast</div>}
+      {noteText && <div className="kpi-ov-cp-revnote">{noteText}</div>}
     </>
   );
 }
 
-// Kevin R-128 Part 3 items 1 + A + F (2026-09-19). Cell body
-// restructures:
-//   - Item A. `.v` flex row baseline-aligned right, `.of` small text
-//     LEFT of `.big` (so every value ends on the same edge).
-//   - Item F. `spent` and `to spend` prefixes gone. Pending and
-//     forecast show the value alone; closed and current show `of $G`
-//     as the left-side hint.
-//   - Item 1. `splitHrly` / `splitSal` render a `Hrly $X · Sal $Y`
-//     line under the value on salary view + PLAN. Rolling replaces
-//     the split with the delta line (Part 4: salary is fixed, so a
-//     re-spread budget has no meaningful split; row height must hold).
-//     Hourly view never renders the split.
-//   - Verdict unifies to `$X left · mute` for every non-over case,
-//     matching the render. The prior `▼ $X under · green` branch for
-//     closed labor is gone: colour rule (Kevin item 9 side): red is
-//     over, grey is under, green is only revenue running ahead.
-//   - `goalRolling` still switches the effective goal on open weeks
-//     in rolling; `dlt` still shows on open weeks in rolling.
-//   - C3 (envelope exceeded, isC3): open weeks read `$0 · already
-//     over` per Part 4 ("C3 keeps its current shape") plus item F
-//     ("to spend" gone).
-function CostCellBody({ w, goal, goalRolling, landed, isLabor, mode, dlt, isC3, splitHrly, splitSal, isTotal, phase, dashRow }) {
+// Build 1 (2026-10-19). Ledger cost cell. Three-line vertical block
+// per cell: BUDGET / SPENT / verdict. Label on the left, value on the
+// right. Verdict picks:
+//   - OVER + up-triangle (U+25B2) in red when spent exceeds budget
+//     (any phase).
+//   - UNDER + down-triangle (U+25BC) in green when spent is at or
+//     below budget on a CLOSED week (period is done).
+//   - LEFT (grey, no triangle) when spent is below budget on the
+//     CURRENT in-progress week - the race is still on, "under" is
+//     not a verdict yet.
+//
+// Rounding tie (Fix 1, 2026-10-19). BUDGET, SPENT, and the verdict
+// value are all rendered through dollar0, which rounds. Compute the
+// verdict from the ROUNDED components (gR - lR), not from the raw
+// difference, so a reader subtracting the two displayed values gets
+// the same answer the verdict prints. Prior shape rounded all three
+// independently and could drift a dollar on cells where the raw
+// SPENT - BUDGET differed from (round SPENT) - (round BUDGET).
+//
+// Future weeks keep the bare-budget shape (no SPENT, no verdict) -
+// nothing has happened there. Dash placeholder preserved for the
+// R-136.1 "every raw week zero against a positive envelope" state.
+//
+// The salary-view 3100 split (Hourly + Salary) renders as two
+// stacked ledger rows between SPENT and the verdict, matching the
+// ledger shape. Hourly view ships splitHrly=null and the two rows
+// do not render. The brief's "do not touch the salary gate" binds
+// the data path; the inline-wrapping style is retired to match the
+// surrounding ledger (fix 2, 2026-10-19).
+//
+// Progress bar + rolling delta line are gone (brief items 1 + 2).
+function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) {
   const isFuture = w.state === "not_started";
-  const isClosed = w.state === "closed";
-  const l = Number(landed || 0);
-  const gEffective = mode === "rolling" && !isClosed ? Number(goalRolling || 0) : Number(goal || 0);
-  const isRolling = mode === "rolling";
-  // Kevin R-133 step 3 (2026-09-20). `phaseClosed` = the RANGE is a
-  // closed single period. Distinct from `isClosed` (this WEEK's state
-  // === "closed"), which also fires for closed weeks inside a running
-  // range. On phaseClosed every week is closed and the cell renders
-  // the verdict pair (▲ over / ▼ under) rather than the running
-  // shape's `$X left` / `▲ over` split. No bar per the approved
-  // render (period cell keeps its bar; week cells lose it).
-  const phaseClosed = phase === "closed";
-  const showSplit = splitHrly != null && splitSal != null && !isRolling && !phaseClosed;
-  const showDelta = isRolling && !isClosed && dlt != null && Math.abs(dlt) > 0;
-  const splitLine = showSplit ? (
-    <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
+  const isCurrent = w.state === "in_progress";
+  const g = Math.round(Number(goal || 0));
+  const l = Math.round(Number(landed || 0));
+  // Polish (2026-10-19). HOURLY / SALARY sit under BUDGET as a
+  // decomposition - indented, muted. They sum to the week BUDGET on
+  // week / future cells; on the period cell they move inside the
+  // sub-note (full period $X) because they sum to the full period,
+  // not to BUDGET . TO DATE.
+  const splitLines = splitHrly != null && splitSal != null ? (
+    <>
+      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+        <span className="kpi-ov-cp-lk">HOURLY</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(splitHrly)}</span>
+      </div>
+      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+        <span className="kpi-ov-cp-lk">SALARY</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(splitSal)}</span>
+      </div>
+    </>
   ) : null;
-  const deltaLine = showDelta ? (
-    <div className={`kpi-ov-cp-dlt ${dlt < 0 ? "kpi-ov-cp-dlt-trim" : "kpi-ov-cp-dlt-cush"}`}>
-      {dlt < 0 ? `▼ ${dollar0(-dlt)} less than plan` : `▲ ${dollar0(dlt)} more than plan`}
-    </div>
-  ) : null;
-  // C3 · open weeks clamp to $0 in Rolling; cell shows "already over".
-  if (isRolling && isC3 && !isClosed) {
-    return (
-      <>
-        <div className="kpi-ov-cp-v">
-          <span className="kpi-ov-cp-big kpi-ov-cp-over">{dollar0(0)}</span>
-        </div>
-        <div className="kpi-ov-cp-vd kpi-ov-cp-over">already over</div>
-      </>
-    );
-  }
+
   if (isFuture) {
-    // Kevin R-136 hotfix ruling 2026-09-21. Dash placeholder when
-    // the row has no active week and a positive envelope. Distinct
-    // from a genuine $0 week beside a positive sibling (kept as $0).
+    // Polish (2026-10-19). Future week carries the BUDGET label so it
+    // reads as part of the ledger family, not a bare number.
     return (
       <>
-        <div className="kpi-ov-cp-v">
-          <span className={`kpi-ov-cp-big${dashRow ? " kpi-ov-cp-dash" : ""}`}>
-            {dashRow ? "—" : dollar0(gEffective)}
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">BUDGET</span>
+          <span className={`kpi-ov-cp-lv kpi-ov-cp-lv-budget${dashRow ? " kpi-ov-cp-dash" : ""}`}>
+            {dashRow ? "—" : dollar0(g)}
           </span>
         </div>
-        {splitLine}
-        {deltaLine}
+        {splitLines}
       </>
     );
   }
-  const g = gEffective;
-  const over = l > g && g > 0;
-  // Kevin R-133 step 3 (2026-09-20). Closed-phase week cells: verdict
-  // pair ▲ over / ▼ under per the approved render, red / grey per
-  // R-128 Part 3 colour rule ("red is over, grey is under, green is
-  // only revenue running ahead"). No bar on closed week cells - the
-  // period column keeps its bar as a period-level scan.
+  // Closed OR current (in-progress). Build the verdict row.
   //
-  // PR B (Kevin ruling 2026-09-23) supersedes R-128 Part 3 item F for
-  // the week-cell shape. Item F dropped the bare `spent` / `to spend`
-  // prefix that used to lead the value. PR B adds a full-phrase line
-  // BELOW the value (`spent of $Y budget`) - a different construction
-  // Kevin asked for by name after the walkthrough. Not a revert of
-  // item F; the reader wants the relationship stated under the number.
-  if (phaseClosed) {
-    const verdictText = over ? `▲ ${dollar0(l - g)} over` : `▼ ${dollar0(g - l)} under`;
-    const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
-    return (
-      <>
-        <div className="kpi-ov-cp-v">
-          <span className="kpi-ov-cp-big">{dollar0(l)}</span>
-        </div>
-        <div className="kpi-ov-cp-fl">spent of <b>{dollar0(g)}</b> budget</div>
-        <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
-      </>
-    );
+  // Fix A (2026-10-20). Prior code gated OVER on `l > g && g > 0`,
+  // which mislabelled negative-budget weeks (the gate failed on g <= 0
+  // so the branch fell to UNDER and printed a negative dollar from
+  // dollar0(g - l) where l > 0 and g < 0 yields a negative diff).
+  // The verdict is decided purely by sign(spent - budget); the triangle
+  // carries direction; the printed dollar is always positive via
+  // Math.abs. Mirrors `PerCostCellBody` and the labor WeekTable
+  // `VsBudget` renderer.
+  const delta = l - g;
+  let verdictKey, verdictMod;
+  let verdictValue;
+  if (isCurrent) {
+    // Current week: LEFT = max(0, -delta). An in-progress week that is
+    // already over budget shows LEFT at zero (muted grey) rather than
+    // declaring OVER - the race is still on until the week closes.
+    const left = delta < 0 ? -delta : 0;
+    verdictKey = "LEFT";
+    verdictValue = <>{dollar0(left)}</>;
+    verdictMod = "kpi-ov-cp-lr-left";
+  } else if (delta > 0) {
+    verdictKey = "OVER";
+    verdictValue = <><span className="kpi-ov-cp-tri">▲</span>{dollar0(delta)}</>;
+    verdictMod = "kpi-ov-cp-lr-over";
+  } else if (delta < 0) {
+    verdictKey = "UNDER";
+    verdictValue = <><span className="kpi-ov-cp-tri">▼</span>{dollar0(-delta)}</>;
+    verdictMod = "kpi-ov-cp-lr-under";
+  } else {
+    // Exact tie (post-round). Muted "EVEN" row at zero, no triangle.
+    verdictKey = "EVEN";
+    verdictValue = <>{dollar0(0)}</>;
+    verdictMod = "kpi-ov-cp-lr-left";
   }
-  const pctBar = g > 0 ? Math.min(100, (l / g) * 100) : 0;
-  // Kevin R-128 Part 3 item 6 (2026-09-19). Total row's week bar
-  // paints navy regardless of over/under - the per-row bars already
-  // carry over/under signaling; the total bar's role is "share of
-  // the total envelope used", so it stays a neutral scan of the
-  // combined position.
-  const barColor = isTotal
-    ? "var(--navy-700, #153968)"
-    : (over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
-  const verdictText = over ? `▲ ${dollar0(l - g)} over` : `${dollar0(g - l)} left`;
-  const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
   return (
     <>
-      <div className="kpi-ov-cp-v">
-        <span className="kpi-ov-cp-big">{dollar0(l)}</span>
+      <div className="kpi-ov-cp-lr">
+        <span className="kpi-ov-cp-lk">BUDGET</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(g)}</span>
       </div>
-      <div className="kpi-ov-cp-fl">spent of <b>{dollar0(g)}</b> budget</div>
-      {splitLine}
-      <div className="kpi-ov-cp-bar" style={{ marginBottom: 4 }}>
-        <i style={{ width: `${pctBar}%`, background: barColor }} />
+      {splitLines}
+      <div className="kpi-ov-cp-lr">
+        <span className="kpi-ov-cp-lk">SPENT</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(l)}</span>
       </div>
-      <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
-      {deltaLine}
+      <div className={`kpi-ov-cp-lr kpi-ov-cp-lr-del ${verdictMod}`}>
+        <span className="kpi-ov-cp-lk">{verdictKey}</span>
+        <span className="kpi-ov-cp-lv">{verdictValue}</span>
+      </div>
     </>
   );
 }
@@ -345,31 +373,32 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
   );
 }
 
-// Kevin R-128 Part 3 items A + 1 + 9 (2026-09-19). Period-column
-// body for cost rows. Item A moves the small text left of the big
-// value. Item 1 renders the salary/hourly period split under the
-// value on the 3100 row when salary view is active AND mode is
-// PLAN. Item 9 wires pace into the footer (see caller).
+// Build 1 (2026-10-19). Honest period column. Replaces the prior
+// "left of $G budget" + pace-clock treatment with a to-date comparison
+// against closed weeks only. The old shape read "left" against the
+// full-period envelope while closed weeks had already run over - the
+// board called the period under budget while the reality was over.
 //
-// Future range: `$X + per-week/per-day`. Kevin R-136 (2026-09-21):
-// dropped the "to spend" sub the future branch used to carry - the
-// period pill reads "THE PLAN" so the words were redundant, matching
-// R-128 item F's rule for the other phases. Future ranges have no
-// landed to pace against and no split to show, per Part 4 ("Next
-// period has only two states; the Plan/Rolling toggle does not
-// render on a future range").
-// Kevin R-133 step 3 (2026-09-20), superseded by PR B (2026-09-23).
-// Takes `phase` (not `isFuture`) so closed can be its own branch. PR B
-// shape (matches the running branch): big + `left of $G budget` below +
-// bar + verdict (`▲ $Y over` red / `▼ $Y under` grey). No `X% used`
-// footer per Kevin's approved render.
-// No split line (item 1 running-only), no pace text (dayFrac = 1 on
-// closed collapses on_pace to full budget).
-function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitHrly, splitSal, paceText, paceClass, isTotal }) {
+// Shape:
+//   BUDGET . TO DATE   = sum of each CLOSED week's budget
+//   SPENT . TO DATE    = sum of each CLOSED week's spent
+//   verdict            = OVER up-triangle red / UNDER down-triangle green
+//   sub-note           = full period $<envelope> . <n> of 4 wk closed
+//
+// Future range: unchanged - keeps the bare envelope + per-week /
+// per-day sub. Nothing has landed; there is no to-date to compare.
+//
+// Closed range: every week is closed, so the ledger math collapses
+// to envelope-vs-landed (btd === envelope, std === landed, closedCount
+// === 4) and the sub-note's "N of 4" reads "4 of 4 wk closed".
+//
+// Partial-week spend is NEVER folded into the to-date comparison -
+// the current (in-progress) week sits outside both btd and std. The
+// mid-week spend is still visible on its own week cell; the period
+// column states only what has settled.
+function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal }) {
   const isFuture = phase === "future";
-  const isClosed = phase === "closed";
   const G = Number(envelope || 0);
-  const L = Number(landed || 0);
   if (isFuture) {
     const perWeek = G / 4;
     const perDay  = serviceDays > 0 ? G / serviceDays : 0;
@@ -384,68 +413,50 @@ function PerCostCellBody({ envelope, landed, dayFrac, phase, serviceDays, splitH
       </>
     );
   }
-  const usedPct = G > 0 ? Math.round(Math.min(100, (L / G) * 100)) : 0;
-  if (isClosed) {
-    const over = L > G && G > 0;
-    const barColor = isTotal
-      ? "var(--navy-700, #153968)"
-      : (over ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
-    // PR B item B1 + Flag A revision (Kevin ruling 2026-09-23). Pace
-    // span removed; `.kpi-ov-cp-pc` retired. `X% used` footer removed
-    // per Kevin's approved render (2026-09-23 follow-up). Wording
-    // matches the running branch: constant `left of $G budget`, big =
-    // G - L (goes negative on over-budget). Column header says "WHAT
-    // IS LEFT"; a "spent" flip on the over case would contradict the
-    // heading. Closed keeps its explicit over/under verdict in
-    // `.kpi-ov-cp-vd` under the bar - the period is done and the
-    // reader wants the final position stated.
-    // NOTE: this branch is currently dormant - the parent never
-    // passes isClosedRange=true today (see :514-518). Kept in-shape
-    // for the step-2 rewiring that will surface closed periods here.
-    const bigValue = G - L;
-    const verdictText = over ? `▲ ${dollar0(L - G)} over` : `▼ ${dollar0(G - L)} under`;
-    const verdictClass = over ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
-    return (
-      <>
-        <div className="kpi-ov-cp-v">
-          <span className="kpi-ov-cp-big">{dollar0(bigValue)}</span>
-        </div>
-        <div className="kpi-ov-cp-fl">left of <b>{dollar0(G)}</b> budget</div>
-        <div className="kpi-ov-cp-bar">
-          <i style={{ width: `${usedPct}%`, background: barColor }} />
-        </div>
-        <div className={`kpi-ov-cp-vd ${verdictClass}`}>{verdictText}</div>
-      </>
-    );
-  }
-  const hot = G > 0 && (L / G) > (dayFrac + 0.005);
-  const barColor = isTotal
-    ? "var(--navy-700, #153968)"
-    : (hot ? "var(--red-600, #B9000C)" : "var(--green-600, #008330)");
-  const splitLine = (splitHrly != null && splitSal != null) ? (
-    <div className="kpi-ov-cp-sp">Hrly <b>{dollar0(splitHrly)}</b> · Sal <b>{dollar0(splitSal)}</b></div>
+  // Rounding tie (Fix 1, 2026-10-19). Pre-round BUDGET and SPENT so
+  // the verdict value equals (displayed SPENT) - (displayed BUDGET)
+  // to the dollar. See the matching note in CostCellBody.
+  const btd = Math.round(Number(budgetToDate || 0));
+  const std = Math.round(Number(spentToDate || 0));
+  const delta = std - btd;
+  const over = delta > 0;
+  const verdictKey = over ? "OVER" : "UNDER";
+  const verdictMod = over ? "kpi-ov-cp-lr-over" : "kpi-ov-cp-lr-under";
+  const arrow = over ? "▲" : "▼";
+  // Polish (2026-10-19). HOURLY / SALARY group with "full period $X"
+  // in the sub-note because they sum to the full period envelope, not
+  // to BUDGET . TO DATE. Rendered as indented ledger sub-rows between
+  // the two lines of the sub-note.
+  const splitLines = (splitHrly != null && splitSal != null) ? (
+    <>
+      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+        <span className="kpi-ov-cp-lk">HOURLY</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(splitHrly)}</span>
+      </div>
+      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+        <span className="kpi-ov-cp-lk">SALARY</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(splitSal)}</span>
+      </div>
+    </>
   ) : null;
-  // PR B items B1 + B3 (Kevin ruling 2026-09-23, Flag A revision).
-  // Period column always reads `left of $G budget`. Big value = G - L,
-  // which goes negative when over-budget; the negative sign carries
-  // the over story. Wording stays constant with the column header
-  // ("WHAT IS LEFT"); a case-based "spent" flip would make the row
-  // contradict its own heading. Pace span retired (`.kpi-ov-cp-pc` gone).
-  const bigValue = G - L;
-  // paceText / paceClass now unused (pace span removed). Kept in the
-  // signature so upstream callers do not need to change; drop next
-  // time this component's props are refactored.
-  void paceText; void paceClass;
   return (
     <>
-      <div className="kpi-ov-cp-v">
-        <span className="kpi-ov-cp-big">{dollar0(bigValue)}</span>
+      <div className="kpi-ov-cp-lr">
+        <span className="kpi-ov-cp-lk">BUDGET · TO DATE</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(btd)}</span>
       </div>
-      <div className="kpi-ov-cp-fl">left of <b>{dollar0(G)}</b> budget</div>
-      {splitLine}
-      <div className="kpi-ov-cp-bar">
-        <i style={{ width: `${usedPct}%`, background: barColor }} />
-        <span className="kpi-ov-cp-clk" style={{ left: `${Math.round(dayFrac * 100)}%` }} />
+      <div className="kpi-ov-cp-lr">
+        <span className="kpi-ov-cp-lk">SPENT · TO DATE</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(std)}</span>
+      </div>
+      <div className={`kpi-ov-cp-lr kpi-ov-cp-lr-del ${verdictMod}`}>
+        <span className="kpi-ov-cp-lk">{verdictKey}</span>
+        <span className="kpi-ov-cp-lv"><span className="kpi-ov-cp-tri">{arrow}</span>{dollar0(Math.abs(delta))}</span>
+      </div>
+      <div className="kpi-ov-cp-pernote">
+        <div className="kpi-ov-cp-pernote-line">full period <b>{dollar0(G)}</b></div>
+        {splitLines}
+        <div className="kpi-ov-cp-pernote-line">{closedCount} of 4 wk closed</div>
       </div>
     </>
   );
@@ -673,6 +684,70 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       };
     };
 
+    // Kevin ruling 2026-10-20 (supersedes R-136 step 6a). On the running
+    // phase the weekly 3100 budget is revenue-spread, not the per-week
+    // residual (`week_hourly_allowed` = merged allowance minus static
+    // salary/4, which went negative on low-revenue weeks).
+    //
+    // Shape per week:
+    //   HOURLY  = share of (period hourly envelope) proportional to
+    //             the week's revenue, allocated via `allocateWeeks` so
+    //             the four shares sum to the hourly envelope exactly.
+    //             Dead weeks (zero revenue) floor at 0.
+    //   SALARY  = static salary, equal shares across the four weeks,
+    //             allocated via `allocateWeeks` so the four shares sum
+    //             to the salary period exactly. Hourly view = 0.
+    //   BUDGET  = HOURLY + SALARY  (per week; ties on screen).
+    //
+    // The PERIOD TOTAL is unchanged: Σ(HOURLY) + Σ(SALARY) = hourly
+    // envelope + salary period = merged envelope = batr. The labor-%
+    // KPI reads batr, which is unchanged.
+    //
+    // Only running phase uses this path. Future keeps its existing
+    // packGoal-clamped allocation; closed is frozen pending its own
+    // Kevin ruling.
+    const row3100 = stmtByLine.get("3100");
+    const envelope3100 = row3100
+      ? (Number(row3100.budget_at_this_revenue || 0) > 0
+          ? Number(row3100.budget_at_this_revenue)
+          : Number(row3100.period_budget || 0))
+      : 0;
+    const salaryToggleOn3100 = labor?.salary_included === true
+      || (stmtByLine.get("3100.1") != null && stmtByLine.get("3100.2") != null);
+    const salaryPeriod3100 = salaryToggleOn3100
+      ? Number(stmtByLine.get("3100.2")?.period_budget || 0)
+      : 0;
+    const hourlyEnvelope3100 = Math.max(0, envelope3100 - salaryPeriod3100);
+    // Hourly share distribution:
+    //   revSum > 0  → revenue-weighted. Pre-scale the per-week raw to
+    //                 envelope size (same shape non-labor goalFor uses:
+    //                 `g = w.week_revenue * ratio`), then allocateWeeks
+    //                 corrects rounding drift. The raw MUST be envelope-
+    //                 sized or allocateWeeks's uniform-shift step would
+    //                 produce (rev - shift), not (rev × ratio).
+    //   revSum = 0  → equal-split (Kevin ruling 2026-10-21): when the
+    //                 revenue volume driver is absent across every
+    //                 week, phase by uniform time (envelope/4 per
+    //                 week). allocateWeeks([1,1,1,1], env) delivers
+    //                 integer shares summing to env exactly.
+    //
+    // Gate: requires hourlyEnvelope > 0. If the salary period exceeds
+    // merged envelope (3100.1.batr < 0), hourly envelope clamps to 0
+    // and this path returns null - the raw-residual fallback handles
+    // that separate data anomaly without this preview introducing a
+    // tie/display conflict (merged envelope < salary alone).
+    const hourly3100Shares = (phase === "running" && hourlyEnvelope3100 > 0)
+      ? (revSum > 0
+          ? allocateWeeks(
+              weeks.map(w => Number(w.week_revenue || 0) * (hourlyEnvelope3100 / revSum)),
+              hourlyEnvelope3100,
+            )
+          : allocateWeeks([1, 1, 1, 1], hourlyEnvelope3100))
+      : null;
+    const salary3100Shares = (phase === "running" && salaryToggleOn3100 && salaryPeriod3100 > 0)
+      ? allocateWeeks([1, 1, 1, 1], salaryPeriod3100)
+      : null;
+
     const goalFor = (line) => {
       const row = stmtByLine.get(line);
       if (!row) return { goal: [null, null, null, null], sum: 0, batr: 0, effectivePct: 0, allDash: false };
@@ -707,6 +782,19 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       // trigger fallback; a real zero (never observed in production
       // but plausible on a $0-budget line) survives.
       if (line === "3100") {
+        // Running phase · revenue-spread path (Kevin ruling 2026-10-20,
+        // supersedes R-136 step 6a). Pre-computed above.
+        if (hourly3100Shares) {
+          const salaryArr = salary3100Shares || [0, 0, 0, 0];
+          const goalArr = hourly3100Shares.map((h, i) => Number(h) + Number(salaryArr[i] || 0));
+          return {
+            goal: goalArr,
+            sum: goalArr.reduce((s, v) => s + v, 0),
+            batr: envelope3100,
+            effectivePct: pctOfRev(envelope3100),
+            allDash: false,
+          };
+        }
         // Kevin R-133 step 3 (2026-09-20). Salary-toggle detection.
         // On CP + NP the Overview resolver ships 3100.1/3100.2 sub
         // rows when include_salary=1 (sub1/sub2 non-null), and that
@@ -1235,6 +1323,21 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // the delta line, keeping row height flat.
     const splitFor3100 = (() => {
       if (!salaryPath) return null;
+      // Running phase · use the pre-computed revenue-spread shares
+      // (Kevin ruling 2026-10-20). HOURLY = allocated share of the
+      // hourly envelope; SALARY = equal-split allocation of the salary
+      // period. Guarantees HOURLY + SALARY = BUDGET on each week + the
+      // per-week ties to goalFor exactly.
+      if (hourly3100Shares && salary3100Shares) {
+        const per = hourly3100Shares.map((h, i) => ({
+          hrly: Number(h),
+          sal: Number(salary3100Shares[i]),
+        }));
+        const hrlyTotal = per.reduce((s, x) => s + x.hrly, 0);
+        const salTotal  = per.reduce((s, x) => s + x.sal,  0);
+        return { per, hrlyTotal, salTotal };
+      }
+      // Future / closed / stale route fallback: raw labor fields.
       const lbWks = labor?.board?.weeks || [];
       const byStart = new Map(lbWks.filter(w => w.week_start).map(w => [w.week_start, w]));
       const per = weeks.map(w => {
@@ -1256,10 +1359,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   const ready = !!(derived && labor && purch && !error);
   const { box: liftBox, gridRef } = useLift(ready);
 
-  // Section B · mode state. PLAN is default. C4 (future range) does
-  // not reach this component - the parent gate never mounts the CP
-  // table on a future range - so no explicit C4 handling here.
-  const [mode, setMode] = useState("plan");
+  // Build 1 (2026-10-19). PLAN/ROLLING retired. Mode is always plan;
+  // no state, no toggle, no rolling respread, no summary card.
 
   // Kevin R-137 step 4 (2026-09-21). Off-season detection. Runs
   // BEFORE the weeks.length !== 4 gate so dark hourly accounts
@@ -1407,67 +1508,14 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     (s, w) => s + Number(w.service_days || 0), 0
   );
 
-  // Section B · precompute rolling data per cost line. On R-110 future
-  // range this block is skipped entirely - closedFlags is all false,
-  // no cost line has landed, and the toggle does not render.
+  // Build 1 (2026-10-19). Per-week closed flags + currentIdx. closedFlags
+  // feeds the honest period column (sums only closed-week budgets +
+  // spents). currentIdx still drives the lift column + status strip.
+  // The rolling precompute, perLine map, and __TOT__ aggregate are
+  // retired alongside the PLAN/ROLLING toggle.
   const closedFlags = weeks.map(w => (w.state || "") === "closed");
   const currentIdx = weeks.findIndex(w => (w.state || "") === "in_progress");
-  const perLine = new Map();
-  if (phase === "running") {
-    for (const row of derived.rows) {
-      if (row.rev || row.tot) continue;  // total handled separately below
-      const gi = derived.goalFor(row.line);
-      const landed = derived.landedFor(row.line);
-      const rr = rollingOf(gi.goal, landed, gi.batr, closedFlags, derived.rev);
-      const sm = summaryFor(gi.goal, rr.rolling, closedFlags, currentIdx);
-      perLine.set(row.line, {
-        plan: gi.goal,
-        rolling: rr.rolling,
-        landed,
-        envelope: gi.batr,
-        actual: landed.reduce((s, v) => s + v, 0),
-        isC1: rr.isC1,
-        isC2: rr.isC2,
-        isC3: rr.isC3,
-        totalDelta: sm.totalDelta,
-        thisWeekDelta: sm.thisWeekDelta,
-        trim: sm.trim,
-        name: row.name,
-        isLabor: row.isLabor,
-      });
-    }
-    // Kevin R-128 Part 3 item 6 (2026-09-19, review-fix 2026-09-19).
-    // Aggregate total row's rolling data by summing per-line
-    // plan/rolling/landed across the four cost lines. Round each
-    // contribution to whole dollars BEFORE the sum (matches item 6's
-    // "adds up on screen" invariant applied to the rolling delta
-    // line and value display).
-    const totRow = derived.rows.find(r => r.tot);
-    if (totRow && perLine.size > 0) {
-      const totalPlan = weeks.map((_, wi) =>
-        [...perLine.values()].reduce((s, pl) => s + Math.round(Number(pl.plan[wi] || 0)), 0)
-      );
-      const totalRolling = weeks.map((_, wi) =>
-        [...perLine.values()].reduce((s, pl) => s + Math.round(Number(pl.rolling[wi] || 0)), 0)
-      );
-      const totalLandedRoll = weeks.map((_, wi) =>
-        [...perLine.values()].reduce((s, pl) => s + Math.round(Number(pl.landed[wi] || 0)), 0)
-      );
-      perLine.set("__TOT__", {
-        plan: totalPlan,
-        rolling: totalRolling,
-        landed: totalLandedRoll,
-        envelope: totRow._batr,
-        actual: totalLandedRoll.reduce((s, v) => s + v, 0),
-        isC1: false, isC2: false, isC3: false,
-        totalDelta: 0, thisWeekDelta: 0, trim: false,
-        name: totRow.name, isLabor: false,
-      });
-    }
-  }
-  const anyLine = perLine.size ? perLine.values().next().value : null;
-  const isC1 = anyLine ? anyLine.isC1 : false;
-  const isC2 = anyLine ? anyLine.isC2 : false;
+  const closedCount = closedFlags.filter(Boolean).length;
 
   // Status strip copy per render.
   //   CP:     "P10 · week 2 of 4 · day 10 of 28 · closes 10/04"
@@ -1542,30 +1590,12 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
 
   return (
     <>
-      {/* Section B · status strip + PLAN / ROLLING toggle on CP.
-          On R-110 (future range) the pill copy switches to `Planning
-          view` and the toggle does NOT render - Rolling has no
-          meaning against a period where nothing has landed. */}
+      {/* Build 1 (2026-10-19). Status strip, with the PLAN / ROLLING
+          toggle retired. The strip now carries only the state pill +
+          sub text. */}
       <div className="kpi-ov-cp-status">
         <span className="kpi-ov-cp-stpill">{statusPill}</span>
         <span className="kpi-ov-cp-status-sub">{statusSub.map((s, i) => <Fragment key={i}>{s}</Fragment>)}</span>
-        <span className="kpi-ov-cp-status-ml" />
-        {phase === "running" && (
-          <span className="kpi-ov-cp-seg" role="group" aria-label="Budget mode">
-            <button
-              type="button"
-              className={mode === "plan" ? "kpi-ov-cp-seg-on" : ""}
-              onClick={() => setMode("plan")}
-              aria-pressed={mode === "plan"}
-            >PLAN</button>
-            <button
-              type="button"
-              className={mode === "rolling" ? "kpi-ov-cp-seg-on" : ""}
-              onClick={() => setMode("rolling")}
-              aria-pressed={mode === "rolling"}
-            >ROLLING</button>
-          </span>
-        )}
       </div>
     <div className="kpi-ov-cp-card kpi-ov-cp-t-navy" data-r112-card="1">
       <div
@@ -1613,7 +1643,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             <span className="kpi-ov-cp-pill kpi-ov-cp-pill-navy">
               {phase === "future" ? "the plan"
                : phase === "closed" ? "Final"
-               : "what is left"}
+               : "period · to date"}
             </span>
           </div>
           <div className="kpi-ov-cp-hcl2">
@@ -1724,10 +1754,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                     {isRev
                       ? <RevCellBody w={w} amount={derived.rev[i]} labor={labor} i={i} phase={phase} dashRow={!!derived.revDashRow} />
                       : (() => {
-                          // Kevin R-128 Part 3 item 6: total row's rolling
-                          // data lives at perLine.get("__TOT__").
-                          const pl = isTot ? perLine.get("__TOT__") : perLine.get(row.line);
-                          const dlt = pl ? (pl.rolling[i] - pl.plan[i]) : 0;
+                          // Build 1 (2026-10-19). Rolling precompute
+                          // retired - no mode, no goalRolling, no delta.
+                          // Split line preserved on 3100 for salary view.
                           const sp = (row.line === "3100" && derived.splitFor3100)
                             ? derived.splitFor3100.per[i]
                             : null;
@@ -1735,15 +1764,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                             <CostCellBody
                               w={wForCell}
                               goal={goalInfo.goal[i]}
-                              goalRolling={pl ? pl.rolling[i] : goalInfo.goal[i]}
                               landed={isFuture ? 0 : landed[i]}
-                              isLabor={row.isLabor}
-                              mode={phase === "running" ? mode : "plan"}
-                              dlt={dlt}
-                              isC3={pl ? pl.isC3 : false}
                               splitHrly={sp ? sp.hrly : null}
                               splitSal={sp ? sp.sal : null}
-                              isTotal={isTot}
                               phase={phase}
                               dashRow={isTot ? !!row._allDash : !!goalInfo.allDash}
                             />
@@ -1766,42 +1789,33 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 {isRev
                   ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} />
                   : (() => {
-                      // Kevin R-128 Part 3 item 9 (2026-09-19). Pace on
-                      // period cost cells. delta = landed - envelope × dayFrac.
-                      // Over pace = red (over-spending relative to time in
-                      // period). Under pace = mute (under-spending is grey
-                      // for every cost row per the colour rule; invoice lag
-                      // on non-labor + genuine savings on labor both grey).
-                      // Skipped on future range (no landed, no pace). Kevin
-                      // R-133 (2026-09-20): also skipped on closed range -
-                      // dayFrac = 1 on a finished period so "on pace"
-                      // collapses to the full budget, and the delta becomes
-                      // the variance the closed footer already shows.
-                      const G = Number(goalInfo.batr || 0);
-                      const L = Number(actual || 0);
-                      let paceText = null, paceClass = null;
-                      if (phase === "running" && G > 0) {
-                        const onPace = G * dayFrac;
-                        const delta = L - onPace;
-                        if (Math.abs(delta) >= 1) {
-                          paceText = delta > 0
-                            ? `▲ ${dollar0(delta)} over pace`
-                            : `▼ ${dollar0(-delta)} under pace`;
-                          paceClass = delta > 0 ? "kpi-ov-cp-over" : "kpi-ov-cp-mute";
+                      // Build 1 (2026-10-19). Honest period column.
+                      // Sum closed-week budgets + spents for the to-date
+                      // comparison. On closed phase every week is closed
+                      // so the sums collapse to envelope / full landed.
+                      // On running phase the current/future weeks are
+                      // excluded - the brief's pin: never fold the
+                      // in-progress partial spend into the comparison.
+                      const perWeekGoal = goalInfo.goal || [];
+                      const perWeekLanded = landed || [];
+                      let budgetToDate = 0;
+                      let spentToDate = 0;
+                      for (let wi = 0; wi < weeks.length; wi += 1) {
+                        if (closedFlags[wi]) {
+                          budgetToDate += Number(perWeekGoal[wi] || 0);
+                          spentToDate  += Number(perWeekLanded[wi] || 0);
                         }
                       }
                       return (
                         <PerCostCellBody
                           envelope={goalInfo.batr}
-                          landed={actual}
-                          dayFrac={dayFrac}
+                          budgetToDate={budgetToDate}
+                          spentToDate={spentToDate}
+                          closedCount={closedCount}
                           phase={phase}
                           serviceDays={serviceDaysTotal}
                           splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
                           splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
-                          paceText={paceText}
-                          paceClass={paceClass}
-                          isTotal={isTot}
                         />
                       );
                     })()}
@@ -1856,66 +1870,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         </div>
       </div>
     )}
-    {/* Section B · summary card. Rolling mode only. Kevin R-133 (2026-
-        09-20): explicit `phase === "running"` gate - the toggle does
-        not render on future or closed, so mode is fixed at "plan"
-        there, but a stale mode value cannot accidentally re-open the
-        card. */}
-    {phase === "running" && mode === "rolling" && perLine.size > 0 && (
-      <div className="kpi-ov-cp-rollcard">
-        <div className="kpi-ov-cp-rollcard-t">To land the period on budget</div>
-        <div className="kpi-ov-cp-rollcard-lead">
-          Each open week now carries <b>its share of what is left</b>, not its own plan. Closed weeks do not move.
-        </div>
-        {isC1 ? (
-          <div className="kpi-ov-cp-rollcard-empty">
-            <b>Nothing to redistribute yet</b> · week 1 is still running.
-          </div>
-        ) : (
-          <div
-            className="kpi-ov-cp-rollcard-lines"
-            style={{ gridTemplateColumns: `repeat(${perLine.size}, minmax(0, 1fr))` }}
-          >
-            {[...perLine.values()].map((pl, i) => {
-              if (pl.isC3) {
-                return (
-                  <div key={pl.name + "-" + i} className="kpi-ov-cp-rollcard-ln">
-                    <div className="kpi-ov-cp-rollcard-ln-nm">{pl.name}</div>
-                    <div className="kpi-ov-cp-rollcard-ln-v kpi-ov-cp-rollcard-ln-v-trim">
-                      ▼ {dollar0(-pl.totalDelta)} over the period
-                    </div>
-                    <div className="kpi-ov-cp-rollcard-ln-s">
-                      already past the envelope · nothing left to spend
-                    </div>
-                  </div>
-                );
-              }
-              const trim = pl.trim;
-              const arrow = trim ? "▼" : "▲";
-              const totalAbs = Math.abs(pl.totalDelta);
-              const thisAbs = Math.abs(pl.thisWeekDelta);
-              return (
-                <div key={pl.name + "-" + i} className="kpi-ov-cp-rollcard-ln">
-                  <div className="kpi-ov-cp-rollcard-ln-nm">{pl.name}</div>
-                  <div className={`kpi-ov-cp-rollcard-ln-v ${trim ? "kpi-ov-cp-rollcard-ln-v-trim" : "kpi-ov-cp-rollcard-ln-v-cush"}`}>
-                    {arrow} {dollar0(totalAbs)}
-                  </div>
-                  {isC2 ? (
-                    <div className="kpi-ov-cp-rollcard-ln-s">
-                      {trim ? "to trim across" : "of cushion across"} the open week
-                    </div>
-                  ) : (
-                    <div className="kpi-ov-cp-rollcard-ln-s">
-                      {trim ? "to trim" : "of cushion"} across the open weeks · <b>{dollar0(thisAbs)}</b> of it this week
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    )}
+    {/* Build 1 (2026-10-19). Rolling summary card retired alongside
+        the PLAN / ROLLING toggle. */}
     </>
   );
 }
