@@ -301,7 +301,7 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) 
 // comparison - the period is over. `projection` on closed is Σ week
 // revenue = the actual earned amount (revProj sourced from the same
 // sum upstream).
-function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue, mealsTotal, feeTotal }) {
+function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue, mealsTotal, feeTotal, feeRevenueDisplay }) {
   const isFuture = phase === "future";
   if (phase === "closed") {
     return (
@@ -379,12 +379,13 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
   const fTot = Number(feeTotal || 0);
   const hasSplit = mTot > 0 || fTot > 0;
   if (!hasSplit) {
+    const bareSub = feeRevenueDisplay ? "guaranteed management fee" : "period revenue";
     return (
       <>
         <div className="kpi-ov-cp-v">
           <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
         </div>
-        <div className="kpi-ov-cp-fl kpi-ov-cp-mute">period revenue</div>
+        <div className="kpi-ov-cp-fl kpi-ov-cp-mute">{bareSub}</div>
       </>
     );
   }
@@ -638,6 +639,31 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // budget by construction. On running CP keep FY target_pct
     // (R-105).
     const revSum = weeks.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
+
+    // Fee-account revenue display (Kevin ruling 2026-10-21).
+    //
+    // When the week_rail reports zero revenue on every week (fee
+    // accounts take no SC meals; their 2300 fee budget may be zero so
+    // the per-week fee prorate is also zero) but kpi_budgets DOES
+    // carry a revenue budget on the account's revenue lines (typically
+    // 2400.1 for a management-fee account), treat that budget as the
+    // guaranteed management fee for display: spread it equally across
+    // the period's weeks for the Revenue row, use it as the period
+    // projection, and use it as the labor-% denominator (the labor-%
+    // is a KPI on fee accounts, so a zero read today is a bug, not a
+    // number to preserve).
+    //
+    // The resolver and its week_rail output are not touched. Cost
+    // cells on the current-period card (goalFor/landedFor paths)
+    // read from statement_rows, not week_rail, so they stay byte-
+    // identical. The hourly 3100 spread's gate reads the raw revSum
+    // (not overridden) and continues to fall into the equal-split
+    // path (unchanged from today). The WeekRail detail fold still
+    // reads week_rail directly and would show its pre-fix zero for
+    // fee accounts; separate follow-up for the resolver side if that
+    // surface ever renders alongside the CP table.
+    const feeRevenueDisplay = phase === "running" && revSum === 0 && budgetRevenue > 0;
+    const feeRevenueTotal = feeRevenueDisplay ? Math.round(budgetRevenue) : 0;
 
     // Kevin R-136 step 6a (2026-09-21). `revSum || 1` in the old code
     // rendered dollars as a percent when a period had no revenue:
@@ -976,7 +1002,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // actuals - Kevin's ruling: do not touch them, not by a dollar.
     // Running keeps the same behaviour.
     const revRaw = weeks.map(w => Number(w.week_revenue || 0));
-    const rev = phase === "future"
+    const rev = feeRevenueDisplay
+      ? allocateWeeks([1, 1, 1, 1], feeRevenueTotal)
+      : phase === "future"
       ? allocateWeeks(revRaw, revRaw.reduce((s, v) => s + v, 0))
       : revRaw;
     // Kevin R-137.1 step 1 (2026-09-21). Revenue dashRow flag. Fires
@@ -1002,7 +1030,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // ($132,079 on TBJ P9). revConf is not shown on closed - PerRev
     // CellBody's closed branch renders "earned $X · the period, as
     // closed" without a confirmed comparison - so its value is inert.
-    const revProj = phase !== "running"
+    const revProj = feeRevenueDisplay
+      ? feeRevenueTotal
+      : phase !== "running"
       ? rev.reduce((s, v) => s + v, 0)
       : Number(revCard?.projected_period_revenue || 0);
     const revConf = phase !== "running"
@@ -1087,8 +1117,15 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const pb = Number(row.period_budget || 0);
       return batr > 0 ? batr : pb;
     })();
-    const laborPctRunningAchieved = revSum > 0
-      ? (_r139RunningEnvelope / revSum) * 100
+    // 2026-10-21. On the fee-account revenue display path, the labor-%
+    // denominator uses the guaranteed revenue (budgetRevenue) in place
+    // of the raw revSum, so the labor-% KPI reads a real figure rather
+    // than 0.00% - which was a bug on management-fee accounts whose
+    // revenue never flowed through the SC-based week_rail. Per-meal
+    // accounts take the else branch and stay byte-identical.
+    const _r139RunningDenom = feeRevenueDisplay ? feeRevenueTotal : revSum;
+    const laborPctRunningAchieved = _r139RunningDenom > 0
+      ? (_r139RunningEnvelope / _r139RunningDenom) * 100
       : 0;
     const laborPct = (
       phase === "future"  ? laborPctFromStmt
@@ -1264,6 +1301,16 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         rowSet === "labor"      ? ROWS_LABOR
       : rowSet === "purchasing" ? ROWS_PURCHASING
       :                           ROWS_OVERVIEW;
+    // 2026-10-21. On the fee-account revenue display path, the Revenue
+    // row's sub reads "guaranteed management fee" instead of
+    // "meals + service fee" / "what each week earns" / "what you are
+    // ordering for" - all of which lie on a management-fee account
+    // whose revenue is a flat contractual amount, not a per-meal flow.
+    if (feeRevenueDisplay) {
+      for (const r of rows) {
+        if (r.rev) r.sub = "guaranteed management fee";
+      }
+    }
 
     // Kevin R-137 step 5 (2026-09-21). Closed off season: drop the
     // "% of revenue" sub on every cost row when the period had no
@@ -1433,7 +1480,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, feeRevenueDisplay };
   }, [payload, weeks, labor, purch, rowSet, isFuture, phase]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -1867,7 +1914,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
-                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} mealsTotal={derived.mealsPeriodTotal} feeTotal={derived.feePeriodTotal} />
+                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} mealsTotal={derived.mealsPeriodTotal} feeTotal={derived.feePeriodTotal} feeRevenueDisplay={derived.feeRevenueDisplay} />
                   : (() => {
                       // Build 1 (2026-10-19). Honest period column.
                       // Sum closed-week budgets + spents for the to-date
