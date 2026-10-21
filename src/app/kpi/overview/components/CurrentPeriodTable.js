@@ -301,7 +301,7 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) 
 // comparison - the period is over. `projection` on closed is Σ week
 // revenue = the actual earned amount (revProj sourced from the same
 // sum upstream).
-function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue }) {
+function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue, mealsTotal, feeTotal }) {
   const isFuture = phase === "future";
   if (phase === "closed") {
     return (
@@ -352,23 +352,63 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
       </>
     );
   }
-  // PR B item B4 (Kevin ruling 2026-09-23, walkthrough). Revenue period
-  // cell reads big period-revenue total + "period revenue" label below.
-  // Gone: `left to earn`, the delta figure, the progress bar, the
-  // `confirmed of projection · pace` footer. Matches every other cell
-  // on the board (number first, qualifier beneath). Kevin approved the
-  // render with this exact shape. Includes forecast weeks; only part
-  // is confirmed - Kevin has seen and approved.
+  // Running branch · MEALS / SERVICE FEE / REVENUE ledger (2026-10-21).
+  // Mirrors the week cell's `RevCellBody` ledger so the period column
+  // reads the same way as its four weeks.
+  //
+  // Rounding (Kevin ruling 2026-10-21): the period total and the per-
+  // week MEALS/FEE sub-feeds drift by a dollar or two at the week level,
+  // so a cell cannot simultaneously (a) self-add, (b) match the
+  // authoritative period total, and (c) have each sub-line equal the
+  // sum of that sub-line across the four week cells. Rule:
+  //   REVENUE total  = Math.round(projection) - authoritative,
+  //                    byte-identical to today's bare render.
+  //   SERVICE FEE    = Math.round(feeTotal)   - clean sum.
+  //   MEALS          = REVENUE - SERVICE FEE  - absorbs the residual,
+  //                    so the cell self-adds and the sub-dollar drift
+  //                    lands on the messier Meals line.
+  //
+  // Guard: when neither meals nor fee is present (management-fee
+  // accounts, legacy routes), fall back to today's bare render. The
+  // adaptive management-fee treatment belongs to Build 2.
   //
   // Params `confirmed`, `dayFrac` still received (upstream API stable);
-  // now unused. Kept to avoid churn on the caller signature.
+  // unused here. Kept to avoid churn on the caller signature.
   void confirmed; void dayFrac;
+  const mTot = Number(mealsTotal || 0);
+  const fTot = Number(feeTotal || 0);
+  const hasSplit = mTot > 0 || fTot > 0;
+  if (!hasSplit) {
+    return (
+      <>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
+        </div>
+        <div className="kpi-ov-cp-fl kpi-ov-cp-mute">period revenue</div>
+      </>
+    );
+  }
+  const revTot = Math.round(Number(projection || 0));
+  const feeR = Math.round(fTot);
+  const mealsR = revTot - feeR;
   return (
     <>
-      <div className="kpi-ov-cp-v">
-        <span className="kpi-ov-cp-big">{dollar0(projection)}</span>
+      {mealsR > 0 && (
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">MEALS</span>
+          <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(mealsR)}</span>
+        </div>
+      )}
+      {feeR > 0 && (
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">SERVICE FEE</span>
+          <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(feeR)}</span>
+        </div>
+      )}
+      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-total">
+        <span className="kpi-ov-cp-lk">REVENUE</span>
+        <span className="kpi-ov-cp-lv">{dollar0(revTot)}</span>
       </div>
-      <div className="kpi-ov-cp-fl kpi-ov-cp-mute">period revenue</div>
     </>
   );
 }
@@ -383,7 +423,14 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
 //   BUDGET . TO DATE   = sum of each CLOSED week's budget
 //   SPENT . TO DATE    = sum of each CLOSED week's spent
 //   verdict            = OVER up-triangle red / UNDER down-triangle green
-//   sub-note           = full period $<envelope> . <n> of 4 wk closed
+//   standing block:
+//     FULL PERIOD BUDGET = the full-period envelope
+//       HOURLY / SALARY  = indented split (salary caller only)
+//     LEFT TO SPEND      = full-period budget minus SPENT . TO DATE,
+//                          negative in red when settled spend has
+//                          already exceeded the whole-period budget;
+//                          omitted when envelope <= 0
+//     N of 4 wk closed   = settled-weeks count
 //
 // Future range: unchanged - keeps the bare envelope + per-week /
 // per-day sub. Nothing has landed; there is no to-date to compare.
@@ -423,6 +470,17 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
   const verdictKey = over ? "OVER" : "UNDER";
   const verdictMod = over ? "kpi-ov-cp-lr-over" : "kpi-ov-cp-lr-under";
   const arrow = over ? "▲" : "▼";
+  // Standing block: FULL PERIOD BUDGET and LEFT TO SPEND tie to the
+  // dollar via (gR - std). std is already rounded one line above, so
+  // (displayed FULL PERIOD BUDGET) - (displayed LEFT TO SPEND) equals
+  // the displayed SPENT . TO DATE exactly.
+  //
+  // LEFT TO SPEND goes negative when the settled weeks have already
+  // spent more than the whole-period budget - render honestly in the
+  // over colour (R-136 running/closed rule: never clamp a real
+  // negative on a running or closed period; clamping is future-only).
+  const gR = Math.round(G);
+  const leftToSpend = gR - std;
   // Polish (2026-10-19). HOURLY / SALARY group with "full period $X"
   // in the sub-note because they sum to the full period envelope, not
   // to BUDGET . TO DATE. Rendered as indented ledger sub-rows between
@@ -454,9 +512,18 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
         <span className="kpi-ov-cp-lv"><span className="kpi-ov-cp-tri">{arrow}</span>{dollar0(Math.abs(delta))}</span>
       </div>
       <div className="kpi-ov-cp-pernote">
-        <div className="kpi-ov-cp-pernote-line">full period <b>{dollar0(G)}</b></div>
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">FULL PERIOD BUDGET</span>
+          <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(gR)}</span>
+        </div>
         {splitLines}
-        <div className="kpi-ov-cp-pernote-line">{closedCount} of 4 wk closed</div>
+        {gR > 0 && (
+          <div className={`kpi-ov-cp-lr kpi-ov-cp-pernote-left${leftToSpend < 0 ? " kpi-ov-cp-lr-over" : ""}`}>
+            <span className="kpi-ov-cp-lk">LEFT TO SPEND</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(leftToSpend)}</span>
+          </div>
+        )}
+        <div className="kpi-ov-cp-pernote-line kpi-ov-cp-pernote-wkclosed">{closedCount} of 4 wk closed</div>
       </div>
     </>
   );
@@ -941,6 +1008,19 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const revConf = phase !== "running"
       ? 0
       : Number(revCard?.hero_actual || 0);
+    // Period-level MEALS / SERVICE FEE sums (2026-10-21). Mirrors the
+    // per-week fallback chain in RevCellBody so the breakdown figures
+    // match what each week cell shows. Raw sums (no per-week round);
+    // consumer rounds once and derives MEALS as REVENUE - SERVICE FEE
+    // to absorb sub-dollar drift on the Meals line.
+    const mealsPeriodTotal = weeks.reduce((s, w, i) => {
+      const lbWk = (labor?.board?.weeks || [])[i] || null;
+      return s + Number(lbWk?.meal_revenue ?? w?.meal_revenue ?? 0);
+    }, 0);
+    const feePeriodTotal = weeks.reduce((s, w, i) => {
+      const lbWk = (labor?.board?.weeks || [])[i] || null;
+      return s + Number(lbWk?.fee_prorate ?? w?.fee_prorate ?? 0);
+    }, 0);
 
     // Kevin R-133 step 3 (2026-09-20). Salary-path detection. On
     // running CP and NP the Overview resolver ships 3100.1/3100.2 as
@@ -1353,7 +1433,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal };
   }, [payload, weeks, labor, purch, rowSet, isFuture, phase]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -1787,7 +1867,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
-                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} />
+                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} mealsTotal={derived.mealsPeriodTotal} feeTotal={derived.feePeriodTotal} />
                   : (() => {
                       // Build 1 (2026-10-19). Honest period column.
                       // Sum closed-week budgets + spents for the to-date
