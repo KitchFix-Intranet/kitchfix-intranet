@@ -525,6 +525,195 @@
 .kpi-app .kpi-ov-cp-over { color: var(--red-600, #B9000C); }
 .kpi-app .kpi-ov-cp-mute { color: var(--n-600); }
 .kpi-app .kpi-ov-cp-mute-strong { color: var(--n-700, #475569); }
+
+/* Build 1 (2026-10-19). Ledger-style cell content. Replaces the stacked
+   .kpi-ov-cp-v + .kpi-ov-cp-fl + .kpi-ov-cp-vd + .kpi-ov-cp-bar shape
+   with a label-left / value-right ledger row. Reused by CostCellBody
+   (BUDGET / SPENT / verdict), PerCostCellBody (BUDGET . TO DATE /
+   SPENT . TO DATE / verdict), and RevCellBody (MEALS / SERVICE FEE /
+   REVENUE). The verdict row carries a top rule and a bigger value.
+   The revenue cell's REVENUE row uses the same shape via -total. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr + .kpi-ov-cp-lr {
+  margin-top: 5px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lk {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  color: var(--n-500);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lv {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-900);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lv-budget {
+  color: var(--n-700, #475569);
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lv-spent {
+  color: var(--n-900);
+  font-weight: 800;
+}
+/* Verdict row (OVER / UNDER / LEFT). Top rule, bigger value. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-del {
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid var(--n-200, #F0EEE7);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-del .kpi-ov-cp-lk {
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-del .kpi-ov-cp-lv {
+  font-size: var(--kpi-t-medium);
+  font-weight: 800;
+}
+/* Triangle arrow inside the verdict value. Slightly smaller than the
+   figure and nudged up a hair to sit on the baseline. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-tri {
+  font-size: 0.78em;
+  margin-right: 3px;
+  vertical-align: 1px;
+}
+/* Verdict colour modifiers. OVER = red, UNDER = green, LEFT = grey
+   (current week in-progress - the race is still on, no triangle). */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-over .kpi-ov-cp-lk,
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-over .kpi-ov-cp-lv {
+  color: var(--red-600, #B9000C);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-under .kpi-ov-cp-lk,
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-under .kpi-ov-cp-lv {
+  color: var(--green-600, #008330);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-left .kpi-ov-cp-lk,
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-left .kpi-ov-cp-lv {
+  color: var(--n-600);
+}
+/* Revenue cell's REVENUE total row - top rule like the verdict row,
+   but a navy tint instead of over/under colour. Keeps the ledger
+   family readable as one shape across cost and revenue cells. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-total {
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid var(--n-200, #F0EEE7);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-total .kpi-ov-cp-lk {
+  font-weight: 800;
+  color: var(--navy-700, #153968);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-total .kpi-ov-cp-lv {
+  font-size: var(--kpi-t-medium);
+  font-weight: 800;
+  color: var(--navy-700, #153968);
+}
+/* Period column: bump verdict + REVENUE value sizes slightly so the
+   period cell reads as the summary of its row. */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-lr-del .kpi-ov-cp-lv,
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-lr-total .kpi-ov-cp-lv {
+  font-size: var(--kpi-t-value);
+}
+/* Period-column sub-note under the verdict:
+   "full period $X . N of 4 wk closed". Right-aligned, muted. Dashed
+   top rule so the sub-note parses as "below the row's primary math". */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote {
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  color: var(--n-600);
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--n-200, #F0EEE7);
+  text-align: right;
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote b {
+  color: var(--n-900);
+  font-weight: 700;
+}
+/* Revenue cell partial-services note (same shape, no top rule - the
+   REVENUE total row above already has one). */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-revnote {
+  font-size: var(--kpi-t-meta);
+  font-weight: 500;
+  color: var(--n-500);
+  margin-top: 5px;
+  text-align: right;
+}
+
+/* Build 1 polish (2026-10-19). Decomposition sub-row - indented,
+   smaller, muted. HOURLY / SALARY sit beneath BUDGET (or beneath
+   "full period $X" on the period cell) and read as a breakdown. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub {
+  margin-top: 3px;
+  padding-left: 14px;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub .kpi-ov-cp-lk {
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  color: var(--n-500);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub .kpi-ov-cp-lv,
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub .kpi-ov-cp-lv.kpi-ov-cp-lv-budget {
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  color: var(--n-600);
+}
+/* Followed by a non-sub row (e.g., SPENT after HOURLY/SALARY)? Give
+   it a touch of extra breathing room so the decomposition reads as
+   grouped with BUDGET above. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub + .kpi-ov-cp-lr:not(.kpi-ov-cp-lr-sub) {
+  margin-top: 7px;
+}
+
+/* Period-column sub-note on TWO lines (polish 2026-10-19). First
+   line: "full period $X". Then the HOURLY / SALARY decomposition
+   (optional, +Salary only). Last line: "N of 4 wk closed". */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote-line {
+  display: block;
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote-line + .kpi-ov-cp-pernote-line {
+  margin-top: 2px;
+}
+/* Sub-rows inside the pernote: lose the sub-row indent-styling-vs-
+   normal boundary (parent is pernote which carries its own meta size
+   already) and give a small margin from the "full period" line. */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-lr-sub {
+  margin-top: 2px;
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-lr-sub + .kpi-ov-cp-pernote-line {
+  margin-top: 4px;
+}
+
+/* Forecast revenue cue (polish 2026-10-19). Italic + muted colour on
+   MEALS / SERVICE FEE / REVENUE values when the week's revenue is
+   not yet settled (future / forecast / partial basis). Closed-
+   confirmed weeks render normal weight so projection does not look
+   identical to actuals. Applies alongside kpi-ov-cp-lv-budget and
+   kpi-ov-cp-lr-total overrides so navy on REVENUE total yields to
+   the muted forecast colour. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lv.kpi-ov-cp-lv-fc {
+  font-style: italic;
+  color: var(--n-500);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lv-budget.kpi-ov-cp-lv-fc {
+  color: var(--n-500);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-total .kpi-ov-cp-lv.kpi-ov-cp-lv-fc {
+  color: var(--n-500);
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big-fc {
+  font-style: italic;
+  color: var(--n-500);
+}
 /* Kevin R-136 hotfix (2026-09-21). Absent-value placeholder on the
    future phase when a row has no active week (every raw goal <= 0)
    and a positive period envelope. Renders "—" in the week cell.

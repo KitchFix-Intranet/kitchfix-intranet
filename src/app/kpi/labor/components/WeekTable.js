@@ -19,7 +19,7 @@
 //
 // All prose moves out of the tbody into the ? popover (V9-19).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { periodOf, periodStartISO, periodEndISO } from "../lib/periods.js";
 import { flagForV42State } from "../lib/weekFlag.js";
@@ -1247,8 +1247,8 @@ function FragmentRows({
         // computed rate anymore.
         const weekOpen = expandedWeeks.has(w.week_start);
         return (
-          <>
-            <tr key={w.week_start} className={`kpi-tbl-week ${isAttn ? "kpi-tbl-attn" : ""}`}>
+          <Fragment key={w.week_start}>
+            <tr className={`kpi-tbl-week ${isAttn ? "kpi-tbl-attn" : ""}`}>
               <td>
                 <button
                   type="button"
@@ -1344,7 +1344,7 @@ function FragmentRows({
                 workerWeekRates={workerWeekRates}
               />
             ))}
-          </>
+          </Fragment>
         );
       })}
     </>
