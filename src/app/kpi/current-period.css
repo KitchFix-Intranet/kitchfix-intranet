@@ -692,6 +692,26 @@
   margin-top: 4px;
 }
 
+/* Full-period standing block (2026-10-21). Replaces the bare "full
+   period $X" sub-note line with a FULL PERIOD BUDGET / LEFT TO SPEND
+   pair, with the HOURLY / SALARY split (when present) grouped under
+   the budget line because it decomposes the budget, not the standing.
+   LEFT TO SPEND reads as the primary standing figure (heavier weight
+   via .kpi-ov-cp-lv-spent); it goes red via the shared .kpi-ov-cp-lr-
+   over modifier when settled spend has already blown the whole-period
+   budget. The wk-closed line drops a stop smaller and lighter so the
+   standing figure reads above the settled-weeks count. */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-pernote-left {
+  margin-top: 5px;
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-pernote-wkclosed {
+  margin-top: 6px;
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Forecast revenue cue (polish 2026-10-19). Italic + muted colour on
    MEALS / SERVICE FEE / REVENUE values when the week's revenue is
    not yet settled (future / forecast / partial basis). Closed-
