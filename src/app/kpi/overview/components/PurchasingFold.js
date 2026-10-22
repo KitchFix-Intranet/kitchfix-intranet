@@ -576,6 +576,7 @@ function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent =
                 key={band.week_start}
                 band={band}
                 showVehicle={showVehicle}
+                periodCurrent={periodCurrent}
                 open={!!expandedWeeks?.has(band.week_start)}
                 onToggle={() => onToggleWeek?.(band.week_start)}
               />
@@ -595,7 +596,7 @@ function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent =
   );
 }
 
-function PurchasingWeekBand({ band, showVehicle, open, onToggle }) {
+function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, onToggle }) {
   // Editorial (2026-09-25). Status column retired: leading label
   // columns drop from 4 (vendor + type + status + number) to 3 (vendor
   // + type + number). Both the computed colSpan for empty-week rows
@@ -673,7 +674,9 @@ function PurchasingWeekBand({ band, showVehicle, open, onToggle }) {
                     </span>
                   )}
                   {rail && (
-                    <span className="kpi-ov-pf-vneedscoding">Needs coding</span>
+                    periodCurrent
+                      ? <span className="kpi-ov-pf-vneedscoding">Needs coding</span>
+                      : <span className="kpi-ov-pf-vuncoded">uncoded</span>
                   )}
                 </span>
                 {sub && (
