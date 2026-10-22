@@ -178,6 +178,22 @@ if (args.dryRun) {
   process.exit(0);
 }
 
+// ─── Empty-set guard (loader side) ──────────────────────────────────
+//
+// A broken or partial nightly report can parse to zero above-floor
+// rows. The engine-side function returns 0 without touching anything
+// in that case; the loader also skips the RPC entirely so the warning
+// is visible in the log before the call. No hard error - an empty
+// set is a legitimate no-op (quiet-period weeks, a wholly off-season
+// run, a partial feed we'd rather observe than silently rebuild).
+if (aboveFloor.length === 0) {
+  console.warn("WARNING: zero above-floor rows - skipping swap, no write");
+  console.log(`pre-floor rows after (unchanged): count=${preBefore.count} sum=${preBefore.sum.toFixed(2)}`);
+  const dur = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`done: inserted=0 (empty-set guard) duration=${dur}s`);
+  process.exit(0);
+}
+
 // ─── Atomic DELETE + INSERT via the swap RPC ────────────────────────
 //
 // Owner ruling 2026-10-22: a half-completed loader must not leave the
@@ -186,7 +202,9 @@ if (args.dryRun) {
 // transaction - a RAISE inside INSERT rolls the DELETE back, so pre-
 // run state is intact on any failure. Scope is clamped inside the
 // function: only source='rippling_spend' AND txn_date >= floor can be
-// touched. Pre-floor rows cannot be reached from this call.
+// touched. Pre-floor rows cannot be reached from this call. The
+// function also carries its own empty-set guard as belt-and-
+// suspenders against the loader-side check above.
 //
 // Shape stripped of diagnostic underscore fields before send.
 const insertRows = aboveFloor.map(s => ({

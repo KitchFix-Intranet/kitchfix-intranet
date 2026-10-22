@@ -61,6 +61,14 @@ BEGIN
     RAISE EXCEPTION 'swap_card_actuals_above_floor: floor below cutover: %', p_floor;
   END IF;
 
+  -- Empty-set guard. An empty insert set (a broken/partial nightly
+  -- report, or a genuinely quiet period) must not delete the current
+  -- period and leave it empty. Refuse to touch anything and return 0;
+  -- the loader logs the empty set loudly.
+  IF jsonb_array_length(p_rows) = 0 THEN
+    RETURN 0;
+  END IF;
+
   -- Delete the above-floor set. Pre-floor rows stay intact by the
   -- WHERE clause; the hard-floor guard above enforces the same
   -- invariant for any adversarial p_floor the caller might pass.
@@ -121,12 +129,15 @@ GRANT EXECUTE ON FUNCTION swap_card_actuals_above_floor(DATE, JSONB) TO service_
 COMMENT ON FUNCTION swap_card_actuals_above_floor(DATE, JSONB) IS
   'Stage 2 cutover (2026-10-22). Atomic DELETE+INSERT for '
   'purchasing_actuals rows where source=''rippling_spend'' AND '
-  'txn_date >= p_floor. Pre-floor rows never touched - a hard-floor '
-  'guard RAISEs if p_floor is below the 2026-10-05 cutover so '
-  'closed Finance history can never be deleted regardless of caller '
-  'input. A partial INSERT failure rolls back the DELETE so the '
-  'current period cannot be left empty. derived_at is set to NOW() '
-  'per row for the verify probe''s pre-floor-touched check.';
+  'txn_date >= p_floor. Two engine-side guards: hard-floor RAISEs if '
+  'p_floor is below the 2026-10-05 cutover so closed Finance history '
+  'can never be deleted regardless of caller input; empty-set '
+  'RETURNs 0 without touching anything if p_rows is an empty array '
+  'so a broken/partial nightly report cannot leave the current '
+  'period empty. A partial INSERT failure rolls back the DELETE so '
+  'the current period cannot be left in an inconsistent state. '
+  'derived_at is set to NOW() per row for the verify probe''s pre-'
+  'floor-touched check.';
 
 COMMIT;
 
