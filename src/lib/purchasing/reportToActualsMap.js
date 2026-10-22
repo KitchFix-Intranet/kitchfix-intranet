@@ -239,7 +239,11 @@ export function mapReportRowToActualsShape(reportRow, dbCategoryMap) {
 
   const shape = {
     source: "rippling_spend",
-    source_bill_id: null, // parent reference stays in source_line_id scheme
+    // source_bill_id = parent Rippling Transaction ID; assigned by
+    // assignSourceLineIds alongside the composite source_line_id so
+    // PurchasingFold's group-by-(source, source_bill_id) binds split
+    // GL lines of one charge into a single detail row.
+    source_bill_id: null,
     source_line_id: null, // assigned by assignSourceLineIds
     account_key,
     excluded,
@@ -329,6 +333,12 @@ export function assignSourceLineIds(shapes) {
     });
     idxs.forEach((shapeIdx, ordinal) => {
       shapes[shapeIdx].source_line_id = `${key}::${ordinal}`;
+      // Parent Rippling Transaction ID carries forward on source_bill_id
+      // so PurchasingFold's `buildTransactions` can group split GL lines
+      // of one charge into a single row. Prior shape left this null and
+      // every post-cutover card charge was skipped by the group-by-bill
+      // loop in the detail table.
+      shapes[shapeIdx].source_bill_id = shapes[shapeIdx]._parent_txn_id || null;
       if (ordinal > maxOrdinal) maxOrdinal = ordinal;
     });
   }
