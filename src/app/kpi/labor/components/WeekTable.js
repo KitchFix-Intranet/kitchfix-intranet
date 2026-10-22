@@ -20,7 +20,8 @@
 // All prose moves out of the tbody into the ? popover (V9-19).
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
+import { fmt$, fmtHrs } from "../lib/formatting.js";
+import { fmtWeekRange } from "@/lib/kpi/overview/formatting";
 import { periodOf, periodStartISO, periodEndISO } from "../lib/periods.js";
 import { flagForV42State } from "../lib/weekFlag.js";
 // PR-C - pure aggregate builder in a plain-JS module so the OT-chip
@@ -1259,7 +1260,7 @@ function FragmentRows({
                 >
                   <span className="kpi-tbl-weekbtn-main">
                     <span className="kpi-tbl-chev">{weekOpen ? "⌄" : "›"}</span>
-                    {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
+                    {fmtWeekRange(w.week_start, w.week_end)}
                     <OTTag ot={w.hours_overtime} />
                   </span>
                   {/* Kevin ruling 2026-10-05 (table polish). The

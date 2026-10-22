@@ -56,6 +56,26 @@ export function formatDayLabel(iso) {
   return `${wd} ${m[2]}/${m[3]}`;
 }
 
+// Shared week-row label for the overview's two ledger tables (labor
+// WeekTable + purchasing PurchasingFold). Normalized "M/D - M/D" with
+// a thin-space en-dash separator, no year (the period name supplies
+// it) and no "Week ·" prefix. Both ledgers used to render different
+// shapes - labor "10/19/26 – 10/25/26" and purchasing "Week · 10-19 -
+// 10-25" - and this helper is the single source of truth for the
+// unified house style.
+export function fmtWeekRange(startIso, endIso) {
+  const pick = (iso) => {
+    if (!iso) return null;
+    const m = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    return `${Number(m[2])}/${Number(m[3])}`;
+  };
+  const a = pick(startIso);
+  const b = pick(endIso);
+  if (!a || !b) return null;
+  return `${a} – ${b}`;
+}
+
 // R-114 (Kevin 2026-09-17). Two-decimal percent. One decimal made
 // computed figures look invented - $75,000 next to 60.0% read as
 // hardcoded when the true total was $74,999.06 and the true ratio

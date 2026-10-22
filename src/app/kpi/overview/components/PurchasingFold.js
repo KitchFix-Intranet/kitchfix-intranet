@@ -51,6 +51,7 @@
 import { useMemo, useState } from "react";
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import { weekStartsInRange } from "@/app/kpi/labor/lib/periods";
+import { fmtWeekRange } from "@/lib/kpi/overview/formatting";
 import { CARD_FEED_PAUSED } from "./CurrentPeriodReview";
 
 const HELP_BODY = (
@@ -290,19 +291,23 @@ function uncodedCardCount(rows) {
   return { n, total: round2(s) };
 }
 
-// Fold header summary. Reads uncoded card charge count + dollar amount
-// from payload.card_charges (loadCardCharges in src/lib/purchasing/
-// loaders.js). Rendered on the header at --kpi-t-meta so the collapsed
-// fold still names the work outstanding. Zero-uncoded state renders
-// nothing rather than "0 charges" - a collapsed fold with a busy label
-// on a quiet account reads louder than the account deserves.
-function foldHeaderSummary(payload) {
-  const cc = payload?.card_charges;
-  if (!cc) return null;
-  const n = Number(cc.total_count || 0);
+// Fold header summary. Mirrors labor's `{count} hrs · {dollars}` shape:
+// the count of in-scope transactions and the period total, computed
+// from the same `derived` totals the footer uses so the collapsed fold
+// names a figure that always matches the open fold. Returns null when
+// the fold has nothing to show (no derived or zero transactions).
+//
+// Prior shape read payload.card_charges.total_count + total_amount for
+// an "awaiting coding" count. That figure diverged from the uncoded-
+// strip number inside the fold (two different sources: card_charges
+// vs the detail's own uncodedCardCount), so the collapsed and open
+// states disagreed. The accurate pending nudge now lives only in the
+// uncoded strip inside the fold.
+function foldHeaderSummaryFromDerived(derived) {
+  if (!derived) return null;
+  const n = derived.transactions?.length || 0;
   if (n <= 0) return null;
-  const amt = fmt0(cc.total_amount || 0);
-  return `${n} card ${n === 1 ? "charge" : "charges"} awaiting coding · ${amt}`;
+  return `${n} ${n === 1 ? "charge" : "charges"} · ${fmt0(derived.foot.total)}`;
 }
 
 // Kevin ruling 2026-10-13 (cleanup). The `account` prop was accepted but
@@ -310,12 +315,6 @@ function foldHeaderSummary(payload) {
 // it in the same PR. Dropped from the signature.
 export default function PurchasingFold({ payload, error, start, end, today, open, onToggle, billbackPeriod, periodCurrent = false }) {
   const actuals = Array.isArray(payload?.actuals) ? payload.actuals : null;
-  // Card-coding chrome (header badge, feed-updating banner, uncoded
-  // strip) renders ONLY on the running single-period mount. Closed /
-  // CY mounts pass periodCurrent={false} so a closed Finance period
-  // does not display fake pending work or Food-inflating uncoded
-  // messaging. The underlying table + buckets render on every mount.
-  const headerSummary = periodCurrent ? foldHeaderSummary(payload) : null;
   // Kevin ruling 2026-10-12. Purchasing weeks collapse by default; a chevron
   // on the band row expands that week's transactions. Mirrors the labor
   // WeekTable disclosure. Set keyed by week_start ISO so toggling preserves
@@ -418,6 +417,12 @@ export default function PurchasingFold({ payload, error, start, end, today, open
       showVehicle: foot.vehicle !== 0,
     };
   }, [actuals, start, end, today]);
+
+  // Header summary renders on every mount (CP and Closed/CY): the
+  // period total shape is a plain roll-up, not pending-work chrome,
+  // so there is no need to gate on periodCurrent here. Null falls
+  // through to render nothing (zero transactions / loading).
+  const headerSummary = foldHeaderSummaryFromDerived(derived);
 
   return (
     <div
@@ -588,7 +593,7 @@ function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent =
               />
             ))}
             <tr className="kpi-ov-cp-led-foot" data-kpi-ov="purchasing-ledger-foot">
-              <td className="kpi-ov-cp-led-l" colSpan={3}>Period</td>
+              <td className="kpi-ov-cp-led-l" colSpan={3}>Period total</td>
               <td>{fmt0(foot.food)}</td>
               <td>{fmt0(foot.packaging)}</td>
               {showVehicle && <td>{fmt0(foot.vehicle)}</td>}
@@ -615,7 +620,9 @@ function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, on
   // only the lone-td empty-week row, which was leaving one blank cell
   // at the right.
   const colSpan = 3 + (showVehicle ? 5 : 4); // vendor + type + number + buckets + total column count
-  const dtRange = `${band.week_start.slice(5)} – ${band.week_end.slice(5)}`;
+  // Unified "M/D - M/D" week-row label (no year, no "Week ·" prefix).
+  // Shared with the labor WeekTable via fmtWeekRange.
+  const dtRange = fmtWeekRange(band.week_start, band.week_end);
   const stateTag = band.state === "in-progress" ? "kpi-ov-pf-wband-run"
                 : band.state === "ahead"       ? "kpi-ov-pf-wband-ahead"
                 :                                "kpi-ov-pf-wband-settled";
@@ -638,7 +645,7 @@ function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, on
             data-wk={band.week_start}
           >
             <span className="kpi-ov-pf-chev" aria-hidden="true">{open ? "⌄" : "›"}</span>
-            <span className="kpi-ov-pf-wband-label">{`Week · ${dtRange}`}</span>
+            <span className="kpi-ov-pf-wband-label">{dtRange}</span>
             {band.state === "in-progress" && (
               <span className="kpi-ov-pf-wband-tag">
                 <span className="kpi-ov-pf-wband-dot" aria-hidden="true" />
