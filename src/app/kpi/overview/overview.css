@@ -87,13 +87,15 @@
   padding-left: var(--kpi-sp-3);
 }
 
-/* Direction words on the ticker. Routed through --status-* semantic
-   tokens 2026-10-22: every verdict color in overview tables comes
-   from one of entered / overdue / needs - no raw primitive color
-   where a semantic exists. .kpi-ov-wait keeps amber (it is action-
-   needed, same tone family as needs). */
-.kpi-app .kpi-ov-good { color: var(--status-entered-fg); }
-.kpi-app .kpi-ov-bad  { color: var(--status-overdue-fg); }
+/* Verdict text + direction words on the ticker. Routed 2026-10-22
+   through TEXT-semantic tokens (good -> --text-success = green-600;
+   bad -> --text-danger = red-500) so the P&L tables keep the familiar
+   text contrast, and through STATUS tokens on warn / wait (both are
+   action-needed, same tone family as the needs chip). Chip pills
+   below use --status-*-fg on --status-*-subtle - that is chip
+   context, not verdict text, and stays as-is. */
+.kpi-app .kpi-ov-good { color: var(--text-success); }
+.kpi-app .kpi-ov-bad  { color: var(--text-danger); }
 .kpi-app .kpi-ov-warn { color: var(--status-needs-fg); }
 .kpi-app .kpi-ov-wait { color: var(--status-needs-fg); }
 .kpi-app .kpi-ov-nb   { color: var(--n-700); font-weight: 600; }
@@ -1391,8 +1393,8 @@
    table carries the verdict colour. Red when % of rev above target
    %, green when at or below. Target % stays neutral (grey, in the
    plan band). */
-.kpi-app .kpi-ov-tband tbody td.kpi-ov-good { color: var(--status-entered-fg); font-weight: 800; }
-.kpi-app .kpi-ov-tband tbody td.kpi-ov-bad  { color: var(--status-overdue-fg); font-weight: 800; }
+.kpi-app .kpi-ov-tband tbody td.kpi-ov-good { color: var(--text-success); font-weight: 800; }
+.kpi-app .kpi-ov-tband tbody td.kpi-ov-bad  { color: var(--text-danger); font-weight: 800; }
 /* Group header row - text-align: center forced with a compound
    ancestor selector so `.kpi-ov-cl th { text-align: right }` (later
    in the file, same specificity as `.kpi-ov-tband-grp th`) cannot

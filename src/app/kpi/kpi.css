@@ -3844,8 +3844,8 @@
   width: var(--kpi-vb-delta); text-align: right;
   font-variant-numeric: var(--num-tabular);
 }
-.kpi-vb-d-good { color: var(--status-entered-fg); }
-.kpi-vb-d-bad  { color: var(--status-overdue-fg); }
+.kpi-vb-d-good { color: var(--text-success); }
+.kpi-vb-d-bad  { color: var(--text-danger); }
 .kpi-vb-d-neut { color: var(--n-600); }
 .kpi-vb-d-mute { color: var(--n-300); font-weight: 500; }
 
