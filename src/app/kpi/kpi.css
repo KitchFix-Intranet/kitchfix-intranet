@@ -3419,7 +3419,11 @@
   font-variant-numeric: var(--num-tabular);
 }
 .kpi-tbl tbody td:first-child { text-align: left; color: var(--n-900); }
-.kpi-tbl-ot { color: var(--amber-600); font-weight: 700; }
+/* OT is informational (the hours happened; nothing to action
+   retroactively). Routed to --status-upcoming-fg 2026-10-22 - neutral
+   tone family. Amber is reserved for action-needed signals
+   (unapproved, uncoded) per the overview chip discipline. */
+.kpi-tbl-ot { color: var(--status-upcoming-fg); font-weight: 700; }
 
 /* Period band (V9-8) - data row, sticky under header (V9-11).
    Kevin ruling 2026-10-05 (artifact "KPI Tables · Band System",
@@ -3568,8 +3572,11 @@
 /* V9-2 exception rendering - amber left edge + chip. V36 - warm
    cream fill removed; only the amber inset marks the flagged week
    against the cool page. */
+/* Attention left-rail on in-progress / incomplete week rows is
+   action-needed (sev != complete). Routed to --status-needs-strong
+   2026-10-22 - amber tone family for action-needed signals. */
 .kpi-tbl-attn > td { background: var(--n-50); }
-.kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--amber-600); }
+.kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--status-needs-strong); }
 
 /* V9-2 flag chip beside row label. */
 .kpi-tbl-flag {
@@ -3582,8 +3589,11 @@
   vertical-align: 1px;
   letter-spacing: 0.03em;
 }
-.kpi-flag-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
-.kpi-flag-bad  { background: var(--red-100); color: var(--red-700); border-color: #F5C6C6; }
+/* Flag tones routed through --status-* 2026-10-22. warn = action-
+   needed (unapproved), bad = overdue (severe action-needed), mute =
+   off (neutral, settled). */
+.kpi-flag-warn { background: var(--status-needs-subtle); color: var(--status-needs-fg); border-color: var(--status-needs-bd); }
+.kpi-flag-bad  { background: var(--status-overdue-subtle); color: var(--status-overdue-fg); border-color: var(--status-overdue-bd); }
 .kpi-flag-mute { background: var(--n-100); color: var(--text-subtle); border-color: var(--n-200); }
 /* V42 REVISED (State 3a hygiene) - softer amber for a closed-week
    `awaiting approval` flag. Same amber family as kpi-flag-warn so
@@ -3591,10 +3601,16 @@
    lighter so it does not compete with State 2 (anomaly) or State 3b
    (money) at the same read level. Owner ruling 2026-08-20: state a
    condition, do not verdict the operator. */
+/* Softer amber for the closed-week `awaiting approval` flag. Still
+   action-needed (same family as kpi-flag-warn), just visibly lighter
+   so it does not compete with the sharper warn chip. Routed through
+   --status-needs-subtle for the surface, --status-needs-fg for the
+   text; same semantic family. */
 .kpi-flag-warn.kpi-flag-warn-soft {
-  background: var(--amber-50, #FEF3E2);
-  color: #92580A;
-  border-color: #F7E5C4;
+  background: var(--status-needs-subtle);
+  color: var(--status-needs-fg);
+  border-color: var(--status-needs-bd);
+  opacity: 0.9;
 }
 /* HS FB1 breadcrumb 2026-08-26 - compact glyph-only anomaly chip on
    account + worker child rows. Same amber as kpi-flag-warn (same
@@ -3607,12 +3623,16 @@
   letter-spacing: 0;
 }
 
-/* V9-16 OT tag on a row containing OT. */
+/* OT tag on a row containing OT. OT is informational (the hours
+   happened; nothing to action retroactively), so this chip is routed
+   through --status-upcoming-* 2026-10-22 - neutral tone family.
+   Amber reserved for action-needed signals. */
 .kpi-tbl-otflag {
   display: inline-block;
   font-size: var(--kpi-t-label); font-weight: 800;
-  color: #92580A; background: var(--amber-100);
-  border: 1px solid #F3D9AE;
+  color: var(--status-upcoming-fg);
+  background: var(--status-upcoming-subtle);
+  border: 1px solid var(--status-upcoming-bd);
   border-radius: 3px;
   padding: 0 var(--kpi-sp-1);
   margin-left: var(--kpi-sp-2);
@@ -3648,7 +3668,7 @@
 }
 .kpi-tbl-child:hover > td { background: var(--n-100); }
 .kpi-tbl-child.kpi-tbl-attn > td { background: var(--n-50); }
-.kpi-tbl-child.kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--amber-600); }
+.kpi-tbl-child.kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--status-needs-strong); }
 .kpi-tbl-accountbtn {
   background: transparent; border: 0; cursor: pointer;
   color: inherit; font: inherit; padding: 0;
@@ -3805,13 +3825,13 @@
 .kpi-vb-bar > i {
   position: absolute; left: 0; top: 0; bottom: 0;
   border-radius: 3px;
-  background: var(--green-500);
+  background: var(--status-entered-strong);
 }
-.kpi-vb-bar > i.kpi-vb-fill-over { background: var(--green-500); }
+.kpi-vb-bar > i.kpi-vb-fill-over { background: var(--status-entered-strong); }
 .kpi-vb-bar > .kpi-vb-over {
   position: absolute; top: 0; bottom: 0;
   border-radius: 0 3px 3px 0;
-  background: var(--red-700);
+  background: var(--status-overdue-fg);
 }
 .kpi-vb-bar > .kpi-vb-tick {
   position: absolute; top: calc(-4px * var(--kf-scale)); bottom: calc(-4px * var(--kf-scale));
@@ -3824,8 +3844,8 @@
   width: var(--kpi-vb-delta); text-align: right;
   font-variant-numeric: var(--num-tabular);
 }
-.kpi-vb-d-good { color: var(--green-700); }
-.kpi-vb-d-bad  { color: var(--red-700); }
+.kpi-vb-d-good { color: var(--text-success); }
+.kpi-vb-d-bad  { color: var(--text-danger); }
 .kpi-vb-d-neut { color: var(--n-600); }
 .kpi-vb-d-mute { color: var(--n-300); font-weight: 500; }
 

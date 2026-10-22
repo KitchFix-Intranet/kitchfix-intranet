@@ -1039,13 +1039,15 @@
   background: var(--navy);
   color: var(--n-0);
 }
+/* Uncoded-strip above the ledger table (purchasing fold). Action-
+   needed signal; routed to --status-needs-* 2026-10-22. */
 .kpi-app .kpi-ov-cp-led-warn {
   margin: 0;
   padding: 10px 18px;
   font-size: var(--kpi-t-body);
   font-weight: 700;
-  color: var(--amber-600);
-  background: var(--amber-50);
+  color: var(--status-needs-fg);
+  background: var(--status-needs-subtle);
   border-bottom: 1px solid var(--n-300);
 }
 .kpi-app .kpi-ov-cp-led-scroll {
@@ -1230,6 +1232,12 @@
 .kpi-app .kpi-ov-pf-wband-label {
   color: var(--navy-700);
 }
+/* In-progress week chip. 2026-10-22: tone shifted from amber to
+   neutral - in-progress is informational, not a call to action, and
+   amber is reserved for action-needed signals (uncoded, Needs
+   coding) elsewhere in this fold. Routed to --status-upcoming-*
+   (neutral family). Also harmonizes with labor WeekTable's in-
+   progress treatment. */
 .kpi-app .kpi-ov-pf-wband-tag {
   display: inline-flex;
   align-items: center;
@@ -1239,7 +1247,7 @@
   font-weight: 800;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: var(--amber-600);
+  color: var(--status-upcoming-fg);
 }
 .kpi-app .kpi-ov-pf-wband-tag-ahead {
   color: var(--navy-500);
@@ -1248,7 +1256,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--amber-500);
+  background: var(--status-upcoming-strong);
   display: inline-block;
 }
 
@@ -1278,7 +1286,8 @@
   padding-left: calc(34px - 3px);
 }
 .kpi-app [data-kpi-ov="purchasing-txn"][data-status-rail="1"] > td:first-child {
-  border-left-color: var(--amber-500);
+  /* Action-needed row rail - routed to --status-needs-strong 2026-10-22. */
+  border-left-color: var(--status-needs-strong);
 }
 .kpi-app [data-kpi-ov="purchasing-txn"][data-status-rail="1"] > td {
   background: #FFFCF7;
@@ -1308,7 +1317,9 @@
   letter-spacing: 0.2px;
 }
 .kpi-app .kpi-ov-pf-vsub-warn {
-  color: var(--amber-700);
+  /* Action-needed sub-line variant - routed to --status-needs-fg
+     2026-10-22. */
+  color: var(--status-needs-fg);
 }
 /* Card-charge detail sub-line: person · "memo" · receipt indicator.
    Inherits .kpi-ov-pf-vsub tone (muted, meta font size). Truncates on
@@ -1333,7 +1344,8 @@
   margin-left: 8px;
   font-size: var(--kpi-t-meta);
   font-weight: 700;
-  color: var(--amber-600);
+  /* Action-needed: route to --status-needs-fg 2026-10-22. */
+  color: var(--status-needs-fg);
   letter-spacing: 0.2px;
 }
 /* Closed / CY twin of .kpi-ov-pf-vneedscoding. Same chip shape, muted
@@ -1345,7 +1357,9 @@
   margin-left: 8px;
   font-size: var(--kpi-t-meta);
   font-weight: 700;
-  color: var(--n-600);
+  /* Closed-period informational: route to --status-off-fg 2026-10-22
+     (neutral settled tone). */
+  color: var(--status-off-fg);
   letter-spacing: 0.2px;
 }
 
