@@ -15,6 +15,12 @@
 --   - Only purchasing_actuals rows WHERE source='rippling_spend'.
 --   - Only rows WHERE gl_line_code IS NULL (already-coded rows are
 --     never re-coded).
+--   - Only rows WHERE excluded = FALSE. The 2026-10-22 narrowing:
+--     excluded rows are hidden from the detail (paginateActuals reads
+--     excluded = FALSE), so re-coding them changes nothing a user
+--     sees. 765 of 833 P10 uncoded card rows were excluded; this
+--     filter puts them firmly out of reach even if a caller passes
+--     their ids.
 --   - Only rows WHERE txn_date BETWEEN 2026-09-07 AND 2026-10-04
 --     (P10, FY2026). Any row outside this window - including every
 --     above-floor row the nightly swap owns, and every pre-cutover
@@ -103,6 +109,7 @@ BEGIN
      WHERE id = v_id
        AND source = 'rippling_spend'
        AND gl_line_code IS NULL
+       AND excluded = FALSE
        AND txn_date BETWEEN DATE '2026-09-07' AND DATE '2026-10-04';
 
     GET DIAGNOSTICS v_row = ROW_COUNT;
@@ -119,13 +126,13 @@ COMMENT ON FUNCTION apply_card_coding_backfill(JSONB) IS
   'One-time P10 card-coding backfill (2026-10-22). Updates '
   'gl_line_code, gl_bucket, excluded, derived_at on '
   'purchasing_actuals rows where source=''rippling_spend'' AND '
-  'gl_line_code IS NULL AND txn_date BETWEEN 2026-09-07 AND '
-  '2026-10-04. The WHERE clause is the hard scope guard - a bad id '
-  'in p_rows cannot touch any row outside P10, any non-card row, or '
-  'any already-coded row. Idempotent on re-run (gl_line_code IS NULL '
-  'no longer holds after the first run). Companion to '
-  'swap_card_actuals_above_floor; the two RPCs have disjoint '
-  'txn_date scopes.';
+  'gl_line_code IS NULL AND excluded = FALSE AND txn_date BETWEEN '
+  '2026-09-07 AND 2026-10-04. The WHERE clause is the hard scope '
+  'guard - a bad id in p_rows cannot touch any row outside P10, any '
+  'non-card row, any already-coded row, or any excluded row. '
+  'Idempotent on re-run (gl_line_code IS NULL no longer holds after '
+  'the first run). Companion to swap_card_actuals_above_floor; the '
+  'two RPCs have disjoint txn_date scopes.';
 
 COMMIT;
 

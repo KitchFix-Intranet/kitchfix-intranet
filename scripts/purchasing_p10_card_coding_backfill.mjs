@@ -244,14 +244,19 @@ async function main() {
 
   const DATE_TOLERANCE_DAYS = 2;
 
-  // Uncoded P10 card rows in purchasing_actuals (the correction target).
+  // Uncoded, non-excluded P10 card rows in purchasing_actuals (the
+  // correction target). Narrowed 2026-10-22: excluded rows are hidden
+  // from the detail (paginateActuals reads excluded = FALSE), so
+  // re-coding them changes nothing visible. The RPC's WHERE clause
+  // also enforces excluded = FALSE as the hard scope guard.
   const uncodedActuals = await pageAll(() => supa.from("purchasing_actuals")
     .select("id, account_key, vendor_or_merchant, txn_date, amount, gl_line_code, excluded, source")
     .eq("source", "rippling_spend")
+    .eq("excluded", false)
     .gte("txn_date", P10_START)
     .lte("txn_date", P10_END)
     .is("gl_line_code", null));
-  console.log(`P10 uncoded card rows (correction target): ${uncodedActuals.length}`);
+  console.log(`P10 uncoded, non-excluded card rows (correction target): ${uncodedActuals.length}`);
 
   // ─── Classify ────────────────────────────────────────────────────
   // toCode: new gl_line_code set AND no excluded-invariant conflict.
@@ -331,11 +336,16 @@ async function main() {
   const before = await sumBucketsP10Cards(supa);
   const projectedAfter = { food: before.sums.food, packaging: before.sums.packaging, vehicle: before.sums.vehicle, billed: before.sums.billed };
   for (const t of toCode) {
-    // was: uncoded + excluded=FALSE -> routed to food
-    projectedAfter.food -= Number(t._actuals.amount || 0);
+    // Only subtract from Food if the row was ACTUALLY in Food before:
+    // the uncoded-to-Food rule only applies to excluded=FALSE rows.
+    // An uncoded + excluded=TRUE row routes to no bucket, so no
+    // subtraction is owed. (The narrowed scope filters excluded rows
+    // out of toCode entirely, so this guard is defensive; it stays so
+    // the dry-run math is correct under any future scope widening.)
+    const wasInFood = bucketOfActualsRow(t._actuals.gl_line_code, t._actuals.excluded) === "food";
+    if (wasInFood) projectedAfter.food -= Number(t._actuals.amount || 0);
     const newBucket = bucketOfActualsRow(t.gl_line_code, t.excluded);
     if (newBucket != null) projectedAfter[newBucket] += Number(t._actuals.amount || 0);
-    // excluded=TRUE drops out of all four buckets (not surfaced in table).
   }
   console.log("");
   console.log("── P10 card bucket totals ──");
