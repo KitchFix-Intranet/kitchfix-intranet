@@ -313,7 +313,7 @@ export async function paginateInvoiceSubmissions(supa, { members, start, end, in
 // - do not read it"). `?drill=lines` still ships every column - the
 // row-level table needs the full shape.
 export const ACTUALS_COLS_DEFAULT = "source, gl_line_code, amount, account_key, txn_date";
-export const ACTUALS_COLS_DRILL   = "id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at, vendor_or_merchant";
+export const ACTUALS_COLS_DRILL   = "id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at, vendor_or_merchant, employee_name, has_receipt, memo";
 export async function paginateActuals(supa, { members, start, end, pageSize, includeLines }) {
   const PS = pageSize && pageSize > 0 && pageSize <= V6_PAGE_DEFAULT ? pageSize : V6_PAGE_DEFAULT;
   const cols = includeLines ? ACTUALS_COLS_DRILL : ACTUALS_COLS_DEFAULT;

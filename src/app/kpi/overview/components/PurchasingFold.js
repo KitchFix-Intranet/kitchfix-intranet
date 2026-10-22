@@ -202,6 +202,9 @@ function buildTransactions(rows) {
         codedLines: 0,
         uncodedLines: 0,
         rawLines: [],
+        // Card charge detail (rippling_spend); consistent across a
+        // parent txn's GL-split lines, so first non-null wins.
+        person: null, hasReceipt: null, memo: null,
       };
       groups.set(key, g);
     }
@@ -211,6 +214,9 @@ function buildTransactions(rows) {
     if (r.source === "rippling_spend") {
       if (r.gl_line_code) g.codedLines += 1;
       else                g.uncodedLines += 1;
+      if (g.person == null && r.employee_name) g.person = r.employee_name;
+      if (g.hasReceipt == null && r.has_receipt != null) g.hasReceipt = r.has_receipt;
+      if (g.memo == null && r.memo) g.memo = r.memo;
     }
     if (b === "sga") { /* drop from columns; sga_removed carries the total for invoices */ }
     else if (b) {
@@ -682,6 +688,15 @@ function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, on
                 {sub && (
                   <span className={`kpi-ov-pf-vsub${sub.warn ? " kpi-ov-pf-vsub-warn" : ""}`}>
                     {sub.text}
+                  </span>
+                )}
+                {r.source === "rippling_spend" && (r.person || r.memo || r.hasReceipt != null) && (
+                  <span className="kpi-ov-pf-vsub kpi-ov-pf-vcarddetail">
+                    {[
+                      r.person,
+                      r.memo ? `"${r.memo}"` : null,
+                      r.hasReceipt === true ? "receipt" : r.hasReceipt === false ? "no receipt" : null,
+                    ].filter(Boolean).join(" · ")}
                   </span>
                 )}
               </td>

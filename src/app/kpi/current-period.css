@@ -1310,6 +1310,19 @@
 .kpi-app .kpi-ov-pf-vsub-warn {
   color: var(--amber-700);
 }
+/* Card-charge detail sub-line: person · "memo" · receipt indicator.
+   Inherits .kpi-ov-pf-vsub tone (muted, meta font size). Truncates on
+   a single line so a long memo never widens the table past the 375px
+   floor; the row disclosure is the escape hatch when the full memo
+   matters. Only rendered for rippling_spend rows that have at least
+   one of the three fields; mutually exclusive with the invoice
+   statusSub, so stacking is not possible. */
+.kpi-app .kpi-ov-pf-vcarddetail {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 /* Kevin ruling 2026-10-05 (table polish). "Needs coding" moves off
    the sub-line and sits inline next to the vendor name so the row
    stays one line. Real text (not an icon), --kpi-t-meta in amber-
