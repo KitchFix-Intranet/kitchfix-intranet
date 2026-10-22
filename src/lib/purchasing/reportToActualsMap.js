@@ -1,3 +1,13 @@
+// ─── Cutover floor ───────────────────────────────────────────────────
+//
+// The dead API walk owned card spend up to 2026-10-05 (P11 start).
+// Starting with that date, the report-based ingest is the source of
+// truth. Pre-floor rows in purchasing_actuals (source='rippling_spend')
+// stay exactly as the API walk left them - Finance-signed closed
+// periods are not restated. Any report-based writer applies this
+// floor; the dry-run also surfaces totals above vs below it.
+export const CARD_REPORT_SOURCE_FLOOR = "2026-10-05";
+
 // src/lib/purchasing/reportToActualsMap.js
 //
 // Pure mapping functions - report CSV row (projected shape as it lives
