@@ -823,6 +823,7 @@ export default function KpiOverviewPage() {
                     open={purchasingFoldOpen}
                     onToggle={() => setPurchasingFoldOpen(o => !o)}
                     billbackPeriod={data.billback_period}
+                    periodCurrent={true}
                   />
                 )}
               </>
@@ -941,7 +942,10 @@ export default function KpiOverviewPage() {
             />
             {/* R-150 · Purchasing fold on Closed / CY single-account
                 branch (the "non-chart" one, chart lives inside the
-                split above). Single-period only. */}
+                split above). Single-period only. periodCurrent=false
+                here so the card-coding chrome (header badge, feed
+                banner, uncoded strip) does not render on a closed /
+                verified period - the table + buckets still render. */}
             {rangeSelection?.kind === "period" && (
               <PurchasingFold
                 payload={purchasingLedger}
@@ -952,6 +956,7 @@ export default function KpiOverviewPage() {
                 open={purchasingFoldOpen}
                 onToggle={() => setPurchasingFoldOpen(o => !o)}
                 billbackPeriod={data.billback_period}
+                periodCurrent={false}
               />
             )}
           </>

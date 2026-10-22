@@ -302,9 +302,14 @@ function foldHeaderSummary(payload) {
 // Kevin ruling 2026-10-13 (cleanup). The `account` prop was accepted but
 // never read inside this component. Callers in page.js stopped passing
 // it in the same PR. Dropped from the signature.
-export default function PurchasingFold({ payload, error, start, end, today, open, onToggle, billbackPeriod }) {
+export default function PurchasingFold({ payload, error, start, end, today, open, onToggle, billbackPeriod, periodCurrent = false }) {
   const actuals = Array.isArray(payload?.actuals) ? payload.actuals : null;
-  const headerSummary = foldHeaderSummary(payload);
+  // Card-coding chrome (header badge, feed-updating banner, uncoded
+  // strip) renders ONLY on the running single-period mount. Closed /
+  // CY mounts pass periodCurrent={false} so a closed Finance period
+  // does not display fake pending work or Food-inflating uncoded
+  // messaging. The underlying table + buckets render on every mount.
+  const headerSummary = periodCurrent ? foldHeaderSummary(payload) : null;
   // Kevin ruling 2026-10-12. Purchasing weeks collapse by default; a chevron
   // on the band row expands that week's transactions. Mirrors the labor
   // WeekTable disclosure. Set keyed by week_start ISO so toggling preserves
@@ -441,7 +446,7 @@ export default function PurchasingFold({ payload, error, start, end, today, open
       {open && (
         <>
           <div className="kpi-ov-cb">
-            {CARD_FEED_PAUSED && (
+            {periodCurrent && CARD_FEED_PAUSED && (
               <div
                 className="kpi-ov-cp-mute"
                 data-kpi-ov="purchasing-card-feed-paused"
@@ -468,6 +473,7 @@ export default function PurchasingFold({ payload, error, start, end, today, open
                   derived={derived}
                   expandedWeeks={expandedWeeks}
                   onToggleWeek={toggleWeek}
+                  periodCurrent={periodCurrent}
                 />
                 <PurchasingGoalRow billbackPeriod={billbackPeriod} />
               </>
@@ -541,11 +547,11 @@ function PurchasingGoalRow({ billbackPeriod }) {
   );
 }
 
-function PurchasingTable({ derived, expandedWeeks, onToggleWeek }) {
+function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent = false }) {
   const { uncoded, weekBands, foot, showVehicle } = derived;
   return (
     <>
-      {uncoded.n > 0 && (
+      {periodCurrent && uncoded.n > 0 && (
         <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-uncoded">
           {uncoded.n} card {uncoded.n === 1 ? "charge has" : "charges have"} no P&amp;L line yet · {fmt0(uncoded.total)} · they count toward Food until someone codes them
         </div>
