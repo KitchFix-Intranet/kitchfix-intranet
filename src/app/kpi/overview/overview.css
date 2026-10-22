@@ -1703,6 +1703,32 @@
 .kpi-app .kpi-ov-fold-trigger .kpi-ov-fold-summary + .kpi-ov-fold-cv {
   margin-left: var(--kpi-sp-2);
 }
+/* Warm-refetch chip (2026-10-22). Fires when a labor fetch is in
+   flight AND an existing payload is still rendered - the fold's
+   rates=1 refetch after open. Quiet: muted meta text, no border,
+   subtle opacity pulse so it reads as alive without competing with
+   the fold summary next to it. The cold / no-data case uses the
+   full "Loading labor detail..." branch inside the fold body
+   instead. */
+.kpi-app .kpi-ov-fold-loading {
+  margin-left: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
+  font-style: italic;
+  animation: kpi-ov-fold-loading-pulse 1.4s ease-in-out infinite;
+}
+@keyframes kpi-ov-fold-loading-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-app .kpi-ov-fold-loading { animation: none; opacity: 0.8; }
+}
+.kpi-app .kpi-ov-fold-trigger .kpi-ov-fold-loading + .kpi-ov-fold-cv {
+  margin-left: var(--kpi-sp-2);
+}
 
 /* Editorial (2026-09-25) · fold panel shell. The fold ships with the
    .kpi-ov-card chrome (border + radius + shadow) which reads as a

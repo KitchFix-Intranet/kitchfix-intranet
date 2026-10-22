@@ -371,8 +371,26 @@ export default function KpiOverviewPage() {
     // declaration-order confusion.
     if (["ALL", "EAST", "WEST"].includes(fetchAccount)) return;
     const ctrl = new AbortController();
-    setLaborLedger(null);
-    setLaborLedgerError(null);
+    // Cold vs warm refetch (2026-10-22). Opening the labor fold adds
+    // `rates=1` to the URL, which refires this effect (laborLedgerOpen
+    // is in the deps). On CP the rolling grid also derives from
+    // laborLedger (R-109 one-table derivation), so an unconditional
+    // setLaborLedger(null) at the top blanks BOTH the grid and the
+    // fold on every open - reads as a full-section reload. Fix: null
+    // only on a COLD load (account / range / preview / salary toggle
+    // actually changed). A WARM run (same data-shape key, only
+    // laborLedgerOpen or useCpTable flipped) keeps the existing
+    // payload rendered; the in-flight fetch replaces it when it
+    // resolves, now with rates=1. laborLedgerLoading flips true for
+    // the window so LaborLedger can show a quiet in-fold indicator.
+    const dataShapeKey = `${fetchAccount}|${start}|${end}|${urlPreview || ""}|${urlIncludeSalary ? "1" : "0"}`;
+    const coldLoad = prevLaborKeyRef.current !== dataShapeKey;
+    prevLaborKeyRef.current = dataShapeKey;
+    if (coldLoad) {
+      setLaborLedger(null);
+      setLaborLedgerError(null);
+    }
+    setLaborLedgerLoading(true);
     const p = new URLSearchParams({ account: fetchAccount, start, end });
     if (urlPreview) p.set("preview", urlPreview);
     if (urlIncludeSalary) p.set("include_salary", "1");
@@ -396,10 +414,12 @@ export default function KpiOverviewPage() {
       .then((d) => {
         if (ctrl.signal.aborted) return;
         setLaborLedger(d);
+        setLaborLedgerLoading(false);
       })
       .catch((e) => {
         if (e?.name === "AbortError") return;
         setLaborLedgerError(String(e?.message || e));
+        setLaborLedgerLoading(false);
       });
     return () => ctrl.abort();
   }, [fetchAccount, start, end, urlPreview, urlIncludeSalary, laborLedgerOpen, useCpTable]);
@@ -517,6 +537,13 @@ export default function KpiOverviewPage() {
   const [billbackLedgerOpen, setBillbackLedgerOpen] = useState(false);
   const [laborLedger, setLaborLedger] = useState(null);
   const [laborLedgerError, setLaborLedgerError] = useState(null);
+  // Cold vs warm refetch state. laborLedgerLoading is true while a
+  // labor fetch is in flight; the ref tracks the data-shape key of
+  // the last run so the effect can decide cold (wipe laborLedger)
+  // vs warm (keep the existing payload rendered). See the effect's
+  // "Cold vs warm" comment for the full rationale.
+  const [laborLedgerLoading, setLaborLedgerLoading] = useState(false);
+  const prevLaborKeyRef = useRef(null);
   // R-150 (2026-09-22). Purchasing fold state + fetch. Single-period
   // only; the fetch fires on every range (mirrors labor's cadence),
   // adds ?drill=lines only when the range is a single period. Failure
@@ -730,6 +757,7 @@ export default function KpiOverviewPage() {
             <LaborLedger
               labor={laborLedger}
               laborError={laborLedgerError}
+              loading={laborLedgerLoading}
               account={account}
               start={start}
               end={end}
@@ -801,6 +829,7 @@ export default function KpiOverviewPage() {
                 <LaborLedger
                   labor={laborLedger}
                   laborError={laborLedgerError}
+                  loading={laborLedgerLoading}
                   account={account}
                   start={start}
                   end={end}
@@ -923,6 +952,7 @@ export default function KpiOverviewPage() {
             <LaborLedger
               labor={laborLedger}
               laborError={laborLedgerError}
+              loading={laborLedgerLoading}
               account={account}
               start={start}
               end={end}
@@ -973,6 +1003,7 @@ export default function KpiOverviewPage() {
           <LaborLedger
             labor={laborLedger}
             laborError={laborLedgerError}
+            loading={laborLedgerLoading}
             account={account}
             start={start}
             end={end}
