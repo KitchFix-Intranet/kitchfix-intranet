@@ -1323,6 +1323,18 @@
   color: var(--amber-600);
   letter-spacing: 0.2px;
 }
+/* Closed / CY twin of .kpi-ov-pf-vneedscoding. Same chip shape, muted
+   neutral tone - factual label on a verified period, not a call to
+   action. Period-awareness is threaded from the fold's periodCurrent
+   prop via PurchasingWeekBand. */
+.kpi-app .kpi-ov-pf-vuncoded {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  color: var(--n-600);
+  letter-spacing: 0.2px;
+}
 
 /* Kevin ruling 2026-10-06: the transaction-number cell links to the
    stamped PDF for post-cutover invoice_submissions rows. The anchor
