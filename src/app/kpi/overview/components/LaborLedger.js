@@ -56,7 +56,7 @@ import { inferRangeSelection } from "@/app/kpi/labor/lib/periods";
 //   - account, start, end, today: passed straight into the
 //            aggregation helpers and WeekTable.
 //   - open, onToggle: controlled fold state owned by the page.
-export default function LaborLedger({ labor, laborError, account, start, end, today, open, onToggle }) {
+export default function LaborLedger({ labor, laborError, loading = false, account, start, end, today, open, onToggle }) {
   // Row-level disclosure state stays local to the ledger. Kevin
   // ruling: "Row-level disclosure stays." Period and week chevrons
   // are presentation, not tooling.
@@ -176,6 +176,22 @@ export default function LaborLedger({ labor, laborError, account, start, end, to
         >
           {headerSummary && (
             <span className="kpi-ov-fold-summary" data-kpi-ov="labor-fold-summary">{headerSummary}</span>
+          )}
+          {/* Warm-refetch indicator (2026-10-22). Fires only when a
+              labor fetch is in flight AND an existing payload is
+              still rendered - i.e. opening the fold triggered the
+              rates=1 refetch; the CP grid + fold stay put and this
+              chip signals that per-worker rates are on the way. The
+              cold / no-data case is handled by the
+              `labor-ledger-loading` branch inside the fold body. */}
+          {loading && labor && (
+            <span
+              className="kpi-ov-fold-loading"
+              data-kpi-ov="labor-fold-loading"
+              aria-live="polite"
+            >
+              loading rates…
+            </span>
           )}
           <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
         </button>
