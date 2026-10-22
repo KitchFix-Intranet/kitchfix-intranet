@@ -174,6 +174,20 @@ async function main() {
     process.exit(3);
   }
 
+  // Loader 3 (Stage 2 cutover 2026-10-22): write above-floor rows
+  // (txn_date >= CARD_REPORT_SOURCE_FLOOR) into purchasing_actuals
+  // (source='rippling_spend'). Pre-floor history (API-walk-sourced
+  // closed Finance periods) is NEVER touched. Delete-then-insert
+  // scoped to above-floor so recoded content_hash rows do not
+  // accumulate.
+  const actualsLoaderCode = await runLoader(args.dest, "purchasing_report_to_actuals_load.mjs");
+  if (actualsLoaderCode !== 0) {
+    console.error(`ACTUALS LOADER exited ${actualsLoaderCode}`);
+    await writeDeriveRun({ status: "failed", linesWritten: null, errorMessage: `actuals loader exit ${actualsLoaderCode}` });
+    await cleanup();
+    process.exit(3);
+  }
+
   const countAfter = await seedCountBefore();
   const inserted = countAfter - countBefore;
   console.log(`rippling_report_seen_txns row count AFTER: ${countAfter}   inserted this run: ${inserted}`);
