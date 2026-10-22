@@ -92,6 +92,10 @@ export const KPI_PREVIEW_ALLOWLIST = [
   // Chernikovich, Director of Culinary, SLT - full corporate access.
   "s.castro@kitchfix.com",
   "britt@kitchfix.com",
+  // 2026-10-22: KPI preview cohort add (training).
+  "s.lynch@kitchfix.com",
+  "d.diaz@kitchfix.com",
+  "m.richards@kitchfix.com",
 ];
 
 /**
