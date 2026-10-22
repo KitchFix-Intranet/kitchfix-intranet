@@ -47,6 +47,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   buildDbCategoryMap,
   mapReportRowToActualsShape,
+  resolveAccountKey,
 } from "../src/lib/purchasing/reportToActualsMap.js";
 
 // P10 FY2026 bounds (28-day period, same shape as every other
@@ -55,6 +56,17 @@ import {
 // between the two would be a scope leak - keep them in sync by hand.
 const P10_START = "2026-09-07";
 const P10_END   = "2026-10-04";
+
+// Report-read window is widened by +/-2 days so a P10 purchasing_actuals
+// row can see a report twin that drifted outside P10 by up to 2 days
+// (e.g. Comcast at txn_date 2026-10-04 vs report purchased_at 2026-10-05).
+// The MATCH still enforces +/-2 days on the shape's txn_date (which is
+// the report's purchased_at); widening the SOURCE query here just makes
+// those boundary twins visible. The RPC's hard P10 txn_date WHERE on
+// purchasing_actuals is unchanged - the row being UPDATE'd is still P10,
+// only the coding source is allowed to drift to the shoulder days.
+const REPORT_READ_START = "2026-09-05";
+const REPORT_READ_END   = "2026-10-06";
 
 function parseArgs(argv) {
   const args = { apply: false };
@@ -173,21 +185,31 @@ async function main() {
   const dbCategoryMap = buildDbCategoryMap(catMapResp.data || []);
   console.log(`category map: ${dbCategoryMap.size} labelled entries`);
 
-  // Report rows for P10 (every snapshot of every charge).
+  // Report rows for P10 plus +/-2 day shoulder (every snapshot of
+  // every charge). The shoulder widens the SOURCE pool so a P10 PA
+  // row's twin that drifted 1-2 days past the period edge is visible
+  // to the match; the match's +/-2d filter still bounds which rows
+  // can pair, and the RPC's hard P10 WHERE still bounds which PA rows
+  // get UPDATE'd.
   const reportRowsRaw = await pageAll(() => supa.from("rippling_report_txns")
     .select("parent_txn_id, purchased_at, posted_date, vendor_name, vendor, amount, category_name, work_location, memo, line_item_memo, has_receipt, employee, employee_id, gl_sync_status, last_seen_at")
-    .gte("purchased_at", P10_START)
-    .lte("purchased_at", P10_END)
+    .gte("purchased_at", REPORT_READ_START)
+    .lte("purchased_at", REPORT_READ_END)
     .order("last_seen_at", { ascending: false }));
-  console.log(`report rows read (P10, all snapshots): ${reportRowsRaw.length}`);
+  console.log(`report rows read (${REPORT_READ_START}..${REPORT_READ_END}, all snapshots): ${reportRowsRaw.length}`);
 
-  // Latest state per (vendor_name, purchased_at, amount). The query
-  // orders by last_seen_at DESC, so a first-wins pass gives latest-
-  // wins per business-identity key.
+  // Latest state per (resolved_account_key, vendor_name, purchased_at,
+  // amount). The query orders by last_seen_at DESC, so first-wins
+  // gives latest-wins per business-identity key. Resolving account_key
+  // here (via the same resolveAccountKey the match uses downstream)
+  // prevents two different-account charges with the same vendor /
+  // date / amount from collapsing - that bug would silently code one
+  // account's charge with another account's GL.
   const seen = new Set();
   const reportLatest = [];
   for (const r of reportRowsRaw) {
-    const key = `${dkey(r.vendor_name)}|${dkey(r.purchased_at)}|${Number(r.amount)}`;
+    const acct = resolveAccountKey(r.work_location).account_key || "";
+    const key = `${acct}|${dkey(r.vendor_name)}|${dkey(r.purchased_at)}|${Number(r.amount)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     reportLatest.push(r);
