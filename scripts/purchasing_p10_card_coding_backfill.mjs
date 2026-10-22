@@ -4,12 +4,20 @@
  *
  * One-time P10 card-coding backfill. Reads the current coding state
  * from rippling_report_txns (the nightly report feed), matches to the
- * P10 uncoded rippling_spend rows in purchasing_actuals on
- * (account_key, vendor_or_merchant, txn_date, amount), derives
+ * P10 uncoded rippling_spend rows in purchasing_actuals on same
+ * account_key + same vendor + exact amount + purchased_at within
+ * +/-2 days of txn_date (the two feeds disagree on the day for ~1-2
+ * days on many charges; exact-date matching misses them), derives
  * gl_line_code / gl_bucket / excluded via the same loader helpers the
  * nightly swap uses, and either reports the proposed correction
  * (dry-run, default) or applies it via apply_card_coding_backfill RPC
  * (requires explicit --apply).
+ *
+ * The date tolerance applies to the MATCH only. The apply function's
+ * WHERE clause stays pinned to purchasing_actuals.txn_date BETWEEN
+ * 2026-09-07 AND 2026-10-04; a matched report row whose purchased_at
+ * drifts to 10/05 is fine - it is only the coding source, the row
+ * being UPDATE'd is still the P10 PA row.
  *
  * This is a correction to CLOSED Finance history. P10 is below the
  * swap_card_actuals_above_floor hard floor (>= 2026-10-05) by design -
@@ -189,13 +197,52 @@ async function main() {
   // Derive shapes using the same loader logic the nightly swap uses.
   const reportShapes = reportLatest.map(r => mapReportRowToActualsShape(r, dbCategoryMap));
 
-  // Index report shapes by match key.
-  const reportByKey = new Map();
+  // Index report shapes by (account_key, vendor_or_merchant, amount).
+  // Lookup is a +/-2 day scan within each bucket; see classify loop
+  // below. Latest-state dedup already collapsed same-(vendor, date,
+  // amount) duplicates, so a bucket of size > 1 means genuinely
+  // different purchased_at values for the same (account, vendor,
+  // amount) charge - the small-day-delta tiebreak decides which one
+  // couples with the PA row, and we surface an AMBIGUITY line
+  // whenever more than one candidate falls inside the window.
+  const reportByVendorAmount = new Map();
   for (let i = 0; i < reportShapes.length; i++) {
     const s = reportShapes[i];
-    const key = `${dkey(s.account_key)}|${dkey(s.vendor_or_merchant)}|${dkey(s.txn_date)}|${Number(s.amount)}`;
-    if (!reportByKey.has(key)) reportByKey.set(key, { shape: s, source: reportLatest[i] });
+    const key = `${dkey(s.account_key)}|${dkey(s.vendor_or_merchant)}|${Number(s.amount)}`;
+    if (!reportByVendorAmount.has(key)) reportByVendorAmount.set(key, []);
+    reportByVendorAmount.get(key).push({ shape: s, source: reportLatest[i] });
   }
+
+  // |purchased_at - txn_date| in whole days. Null / unparseable date
+  // returns Infinity so the row cannot win a match.
+  function dayDelta(aIso, bIso) {
+    if (!aIso || !bIso) return Number.POSITIVE_INFINITY;
+    const a = Date.parse(aIso + "T00:00:00Z");
+    const b = Date.parse(bIso + "T00:00:00Z");
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.POSITIVE_INFINITY;
+    return Math.abs(Math.round((a - b) / 86400000));
+  }
+
+  // Pick the match for one uncoded PA row from a bucket of candidates:
+  // smallest |delta| first, latest last_seen_at as tiebreak. Returns
+  // { picked, inWindow } so the caller can surface ambiguities.
+  function pickWithinWindow(bucket, paTxnDate, maxDays) {
+    const inWindow = [];
+    for (const c of bucket) {
+      const d = dayDelta(c.shape.txn_date, paTxnDate);
+      if (d <= maxDays) inWindow.push({ ...c, delta: d });
+    }
+    if (inWindow.length === 0) return { picked: null, inWindow };
+    inWindow.sort((x, y) => {
+      if (x.delta !== y.delta) return x.delta - y.delta;
+      const lx = String(x.source.last_seen_at || "");
+      const ly = String(y.source.last_seen_at || "");
+      return ly.localeCompare(lx);
+    });
+    return { picked: inWindow[0], inWindow };
+  }
+
+  const DATE_TOLERANCE_DAYS = 2;
 
   // Uncoded P10 card rows in purchasing_actuals (the correction target).
   const uncodedActuals = await pageAll(() => supa.from("purchasing_actuals")
@@ -217,17 +264,28 @@ async function main() {
   const stillUncoded = [];
   const excludedFlipDeferred = [];
   const noMatch = [];
+  const ambiguities = [];
   for (const a of uncodedActuals) {
-    const key = `${dkey(a.account_key)}|${dkey(a.vendor_or_merchant)}|${dkey(a.txn_date)}|${Number(a.amount)}`;
-    const hit = reportByKey.get(key);
-    if (!hit) { noMatch.push(a); continue; }
-    const r = hit.shape;
+    const key = `${dkey(a.account_key)}|${dkey(a.vendor_or_merchant)}|${Number(a.amount)}`;
+    const bucket = reportByVendorAmount.get(key) || [];
+    const { picked, inWindow } = pickWithinWindow(bucket, a.txn_date, DATE_TOLERANCE_DAYS);
+    if (!picked) { noMatch.push(a); continue; }
+
+    // Ambiguity: more than one DISTINCT purchased_at inside the window
+    // for this (account, vendor, amount). Surface for review; the
+    // smallest-delta tiebreak still resolves the pick.
+    const distinctDates = new Set(inWindow.map(c => dkey(c.shape.txn_date)));
+    if (distinctDates.size > 1) {
+      ambiguities.push({ actuals: a, inWindow, picked });
+    }
+
+    const r = picked.shape;
     const newGl = r.gl_line_code;
     const newExcl = Boolean(r.excluded);
 
-    if (newGl == null && !newExcl) { stillUncoded.push({ actuals: a, report: hit.source }); continue; }
+    if (newGl == null && !newExcl) { stillUncoded.push({ actuals: a, report: picked.source }); continue; }
     if (newExcl && a.account_key != null) {
-      excludedFlipDeferred.push({ actuals: a, report: hit.source, newGl, newExcl });
+      excludedFlipDeferred.push({ actuals: a, report: picked.source, newGl, newExcl });
       continue;
     }
     toCode.push({
@@ -236,8 +294,8 @@ async function main() {
       gl_bucket: r.gl_bucket,
       excluded: newExcl,
       _actuals: a,
-      _report: hit.source,
-      _reportCategory: hit.source.category_name,
+      _report: picked.source,
+      _reportCategory: picked.source.category_name,
     });
   }
 
@@ -249,7 +307,8 @@ async function main() {
   console.log(`to code (safe apply)                 : ${toCode.length}`);
   console.log(`still uncoded in report (leave)      : ${stillUncoded.length}`);
   console.log(`excluded-flip DEFERRED               : ${excludedFlipDeferred.length}`);
-  console.log(`no match on (acct, vendor, date, $) : ${noMatch.length}`);
+  console.log(`no match (acct, vendor, amount, +/-${DATE_TOLERANCE_DAYS}d): ${noMatch.length}`);
+  console.log(`ambiguous (multi-date candidates)    : ${ambiguities.length}`);
 
   // Per-gl breakdown of the apply set.
   const byGl = new Map();
@@ -311,9 +370,19 @@ async function main() {
   }
   if (noMatch.length > 0) {
     console.log("");
-    console.log(`── no match on (account, vendor, date, amount) (${noMatch.length}) ──`);
+    console.log(`── no match on (account, vendor, amount) within +/-${DATE_TOLERANCE_DAYS} days (${noMatch.length}) ──`);
     for (const a of noMatch) {
       console.log(`  id=${a.id}  acct=${dkey(a.account_key)}  ${dkey(a.vendor_or_merchant)}  ${dkey(a.txn_date)}  amount=${fmt0(a.amount)}`);
+    }
+  }
+  if (ambiguities.length > 0) {
+    console.log("");
+    console.log(`── AMBIGUITY: more than one distinct purchased_at within +/-${DATE_TOLERANCE_DAYS} days (${ambiguities.length}) ──`);
+    for (const row of ambiguities) {
+      const a = row.actuals;
+      const dates = row.inWindow.map(c => `${dkey(c.shape.txn_date)}(d=${c.delta})`).join(", ");
+      const pickedDate = dkey(row.picked.shape.txn_date);
+      console.log(`  id=${a.id}  acct=${dkey(a.account_key)}  ${dkey(a.vendor_or_merchant)}  PA ${dkey(a.txn_date)}  amount=${fmt0(a.amount)}  candidates=[${dates}]  picked=${pickedDate}`);
     }
   }
 
