@@ -209,6 +209,14 @@ export function parseHasReceipt(raw) {
 // row cannot be inserted. The caller decides what to do with those
 // (dry-run counts them; the real load path refuses to proceed if any
 // unmapped rows are present).
+//
+// source_line_id is deliberately NOT set here. Report rows that share
+// a Transaction ID (one txn with multiple category rows) MUST land as
+// distinct purchasing_actuals rows under the UNIQUE (source,
+// source_line_id) constraint. A composite key is assigned by
+// `assignSourceLineIds` (below) across the full result set so an
+// ordinal can disambiguate the rare (txn, category) duplicate case
+// deterministically.
 
 export function mapReportRowToActualsShape(reportRow, dbCategoryMap) {
   // reportRow is the shape from rippling_report_txns (or the live CSV
@@ -232,7 +240,7 @@ export function mapReportRowToActualsShape(reportRow, dbCategoryMap) {
   const shape = {
     source: "rippling_spend",
     source_bill_id: null, // parent reference stays in source_line_id scheme
-    source_line_id: reportRow.content_hash || reportRow.parent_txn_id,
+    source_line_id: null, // assigned by assignSourceLineIds
     account_key,
     excluded,
     gl_line_code: glRes.gl_line_code,
@@ -256,6 +264,73 @@ export function mapReportRowToActualsShape(reportRow, dbCategoryMap) {
   shape._unmapped_category     = Boolean(glRes.unmapped);
   shape._uncoded_to_food       = isUncodedToFood(shape.gl_line_code, reconcileStatus);
   shape._reconcile_status_known = reconcileStatus != null;
+  // Carry the originating report row's keys so assignSourceLineIds
+  // can compose a stable composite key without the loader having to
+  // pass both arrays.
+  shape._parent_txn_id = reportRow.parent_txn_id || null;
+  shape._category_name = reportRow.category_name || null;
+  shape._content_hash  = reportRow.content_hash  || null;
 
   return shape;
+}
+
+// ─── Category slug for source_line_id composition ───────────────────
+//
+// Deterministic: lowercase + non-alphanumeric -> underscore + run-of-
+// underscores collapsed + trimmed. Empty category -> "uncoded".
+// Length capped at 48 chars so the composite source_line_id does not
+// run away on an unusually long category label.
+export function categorySlug(categoryName) {
+  const raw = (categoryName == null ? "" : String(categoryName)).trim();
+  if (!raw) return "uncoded";
+  let s = raw.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!s) return "uncoded";
+  if (s.length > 48) s = s.slice(0, 48);
+  return s;
+}
+
+// ─── Assign source_line_id to a set of mapped shapes ────────────────
+//
+// Composite key: `${parent_txn_id}::${category_slug}::${ordinal}`.
+//
+// - parent_txn_id: the report's Transaction ID (parent).
+// - category_slug: deterministic slug of Category Name.
+// - ordinal: 0 for singleton (parent, category) groups; 0..N-1
+//   assigned by a stable sort within duplicate groups so re-runs on
+//   the same CSV produce the same source_line_id for each row.
+//
+// Stable sort inside each group: amount DESC, then content_hash ASC
+// (content_hash is unique per row, so this is a total order on each
+// group's rows).
+//
+// Returns { shapes, stats } where stats carries counts of duplicate
+// groups and the max ordinal observed (for the loader to log). The
+// shapes array is the same list with source_line_id populated.
+export function assignSourceLineIds(shapes) {
+  const groups = new Map(); // key -> indexes[]
+  for (let i = 0; i < shapes.length; i++) {
+    const s = shapes[i];
+    const parent = s._parent_txn_id || "";
+    const slug = categorySlug(s._category_name);
+    const key = `${parent}::${slug}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  }
+  let duplicateGroups = 0;
+  let maxOrdinal = 0;
+  for (const [key, idxs] of groups) {
+    if (idxs.length > 1) duplicateGroups += 1;
+    idxs.sort((ia, ib) => {
+      const a = shapes[ia];
+      const b = shapes[ib];
+      const d = Number(b.amount || 0) - Number(a.amount || 0);
+      if (d !== 0) return d;
+      return String(a._content_hash || "").localeCompare(String(b._content_hash || ""));
+    });
+    idxs.forEach((shapeIdx, ordinal) => {
+      shapes[shapeIdx].source_line_id = `${key}::${ordinal}`;
+      if (ordinal > maxOrdinal) maxOrdinal = ordinal;
+    });
+  }
+  return { shapes, stats: { duplicateGroups, maxOrdinal } };
 }

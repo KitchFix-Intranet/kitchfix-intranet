@@ -53,8 +53,17 @@ BEGIN
     RAISE EXCEPTION 'swap_card_actuals_above_floor: p_rows must be a JSON array (got %)', jsonb_typeof(p_rows);
   END IF;
 
+  -- Hard-floor guard. Closed Finance periods (P10 and earlier for
+  -- FY2026, pre-cutover API-walk history) must never be reachable by
+  -- this function, no matter what the caller passes. Any caller
+  -- attempt to lower the floor fails loudly here before DELETE runs.
+  IF p_floor < DATE '2026-10-05' THEN
+    RAISE EXCEPTION 'swap_card_actuals_above_floor: floor below cutover: %', p_floor;
+  END IF;
+
   -- Delete the above-floor set. Pre-floor rows stay intact by the
-  -- WHERE clause; nothing in this function can touch them.
+  -- WHERE clause; the hard-floor guard above enforces the same
+  -- invariant for any adversarial p_floor the caller might pass.
   DELETE FROM purchasing_actuals
    WHERE source = 'rippling_spend'
      AND txn_date >= p_floor;
@@ -63,6 +72,12 @@ BEGIN
   -- failure (NOT NULL violation, UNIQUE constraint, check-constraint
   -- violation) raises an exception which rolls the whole function
   -- (DELETE included) back to the pre-call state.
+  --
+  -- derived_at is set explicitly to NOW() so every inserted row
+  -- carries this run's write timestamp. The verify probe keys on
+  -- (txn_date < floor AND derived_at >= today) to detect any pre-
+  -- floor row that was touched today; explicit NOW() here makes the
+  -- post-run assertion straightforward.
   INSERT INTO purchasing_actuals (
     source, source_bill_id, source_line_id,
     account_key, excluded,
@@ -70,7 +85,8 @@ BEGIN
     txn_date, posting_date,
     amount, vendor_or_merchant, paid, approx_date,
     reconcile_status, employee_name, employee_id,
-    has_receipt, memo
+    has_receipt, memo,
+    derived_at
   )
   SELECT
     (r->>'source')::TEXT,
@@ -91,7 +107,8 @@ BEGIN
     NULLIF(r->>'employee_id', '')::TEXT,
     CASE WHEN r ? 'has_receipt' AND r->>'has_receipt' IS NOT NULL
          THEN (r->>'has_receipt')::BOOLEAN ELSE NULL END,
-    NULLIF(r->>'memo', '')::TEXT
+    NULLIF(r->>'memo', '')::TEXT,
+    NOW()
   FROM jsonb_array_elements(p_rows) AS r;
 
   GET DIAGNOSTICS v_inserted = ROW_COUNT;
@@ -104,9 +121,12 @@ GRANT EXECUTE ON FUNCTION swap_card_actuals_above_floor(DATE, JSONB) TO service_
 COMMENT ON FUNCTION swap_card_actuals_above_floor(DATE, JSONB) IS
   'Stage 2 cutover (2026-10-22). Atomic DELETE+INSERT for '
   'purchasing_actuals rows where source=''rippling_spend'' AND '
-  'txn_date >= p_floor. Pre-floor rows never touched. A partial '
-  'INSERT failure rolls back the DELETE so the current period '
-  'cannot be left empty.';
+  'txn_date >= p_floor. Pre-floor rows never touched - a hard-floor '
+  'guard RAISEs if p_floor is below the 2026-10-05 cutover so '
+  'closed Finance history can never be deleted regardless of caller '
+  'input. A partial INSERT failure rolls back the DELETE so the '
+  'current period cannot be left empty. derived_at is set to NOW() '
+  'per row for the verify probe''s pre-floor-touched check.';
 
 COMMIT;
 

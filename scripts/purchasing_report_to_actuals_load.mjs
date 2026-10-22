@@ -47,6 +47,7 @@ import {
   CARD_REPORT_SOURCE_FLOOR,
   buildDbCategoryMap,
   mapReportRowToActualsShape,
+  assignSourceLineIds,
 } from "../src/lib/purchasing/reportToActualsMap.js";
 
 function parseArgs(argv) {
@@ -116,12 +117,18 @@ for (const r of csvRows) {
   aboveFloor.push(shape);
 }
 
+// Compose source_line_id = parent_txn_id::category_slug::ordinal.
+// Ordinal disambiguates the rare (txn, category) duplicate; stable
+// across runs via amount-desc + content_hash tiebreak sort.
+const { stats: slidStats } = assignSourceLineIds(aboveFloor);
+
 console.log(`csv_rows: ${csvRows.length}`);
 console.log(`above_floor (txn_date >= ${CARD_REPORT_SOURCE_FLOOR}): ${aboveFloor.length}`);
 console.log(`below_floor (not written): ${countBelowFloor}`);
 console.log(`no_txn_date (dropped): ${countNoDate}`);
 console.log(`unmapped_work_location (rows): ${countUnmappedWl}  (distinct labels: ${unmappedWlSet.size})`);
 console.log(`unmapped_category (rows -> Food fallback): ${countUnmappedCat}  (distinct labels: ${unmappedCatSet.size})`);
+console.log(`source_line_id composite: duplicate_txn_category_groups=${slidStats.duplicateGroups}  max_ordinal=${slidStats.maxOrdinal}`);
 
 // Stop and report if there is an unmapped Work location - we never
 // want to silently drop or mis-attribute card spend to an account
