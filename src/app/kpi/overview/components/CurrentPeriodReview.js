@@ -21,6 +21,12 @@
 
 const dollar0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
 
+// Temporary: the Rippling card-spend feed is down (dead since 2026-10-06) and
+// being rebuilt. While paused, the uncoded-card "needs a P&L line" nag is
+// stale and unactionable, so we hide it. Flip to false to restore when the
+// feed is live again.
+export const CARD_FEED_PAUSED = true;
+
 export default function CurrentPeriodReview({ labor, purchasing }) {
   const items = [];
 
@@ -88,6 +94,7 @@ function laborPendingSummary(labor) {
 }
 
 function purchasingPendingSummary(purchasing) {
+  if (CARD_FEED_PAUSED) return null;
   if (!purchasing) return null;
   // Kevin ruling 2026-09-24. Point the Needs Review headline at
   // `purchasing.card_charges` (same source the Purchasing Detail fold
