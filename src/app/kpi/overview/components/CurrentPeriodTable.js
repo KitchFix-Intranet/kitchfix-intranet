@@ -487,7 +487,7 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
 // the current (in-progress) week sits outside both btd and std. The
 // mid-week spend is still visible on its own week cell; the period
 // column states only what has settled.
-function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal }) {
+function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null }) {
   const isFuture = phase === "future";
   const G = Number(envelope || 0);
   if (isFuture) {
@@ -514,17 +514,22 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
   const verdictKey = over ? "OVER" : "UNDER";
   const verdictMod = over ? "kpi-ov-cp-lr-over" : "kpi-ov-cp-lr-under";
   const arrow = over ? "▲" : "▼";
-  // Standing block: FULL PERIOD BUDGET and LEFT TO SPEND tie to the
-  // dollar via (gR - std). std is already rounded one line above, so
-  // (displayed FULL PERIOD BUDGET) - (displayed LEFT TO SPEND) equals
-  // the displayed SPENT . TO DATE exactly.
-  //
-  // LEFT TO SPEND goes negative when the settled weeks have already
-  // spent more than the whole-period budget - render honestly in the
-  // over colour (R-136 running/closed rule: never clamp a real
-  // negative on a running or closed period; clamping is future-only).
+  // Standing block tie (Direction A, 2026-10-23). LEFT TO SPEND now
+  // reflects what the team actually has left to run the period:
+  // full-period envelope minus the SUM of closed-week spend AND the
+  // in-progress week's spend. Prior rule ignored the running week,
+  // which overstated runway by WK3's $Xk on every running period.
+  // Rounding discipline: pre-round the in-progress spend so the
+  // displayed tie holds -
+  //   (displayed FULL PERIOD BUDGET) - (displayed LEFT TO SPEND)
+  //   = (displayed Spent closed) + (displayed Spent so far this week)
+  // to the dollar. On a closed period inProgSpent is 0 so leftToSpend
+  // collapses to (gR - std), byte-identical to prior prod.
   const gR = Math.round(G);
-  const leftToSpend = gR - std;
+  const inProgR = Math.round(Number(inProgSpent || 0));
+  const inProgBudR = Math.round(Number(inProgBudget || 0));
+  const totalSpentSoFar = std + inProgR;
+  const leftToSpend = gR - totalSpentSoFar;
   // Polish (2026-10-19). HOURLY / SALARY group with "full period $X"
   // in the sub-note because they sum to the full period envelope, not
   // to BUDGET . TO DATE. Rendered as indented ledger sub-rows between
@@ -543,18 +548,45 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
   ) : null;
   return (
     <>
+      {/* Zone 1 - closed weeks over/under. Eyebrow carries the N-of-4
+          count (retired from the bottom "wk closed" subnote). Budget /
+          Spent labels drop the "TO DATE" wording - the eyebrow states
+          the frame honestly, and "to date" (which reads as
+          "through today") was always wrong on a cell that excludes
+          the in-progress week. Math is unchanged. */}
+      <div className="kpi-ov-cp-zone-head">CLOSED WEEKS · {closedCount} of 4</div>
       <div className="kpi-ov-cp-lr">
-        <span className="kpi-ov-cp-lk">BUDGET · TO DATE</span>
+        <span className="kpi-ov-cp-lk">Budget</span>
         <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(btd)}</span>
       </div>
       <div className="kpi-ov-cp-lr">
-        <span className="kpi-ov-cp-lk">SPENT · TO DATE</span>
+        <span className="kpi-ov-cp-lk">Spent</span>
         <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(std)}</span>
       </div>
       <div className={`kpi-ov-cp-lr kpi-ov-cp-lr-del ${verdictMod}`}>
         <span className="kpi-ov-cp-lk">{verdictKey}</span>
         <span className="kpi-ov-cp-lv"><span className="kpi-ov-cp-tri">{arrow}</span>{dollar0(Math.abs(delta))}</span>
       </div>
+      {/* Zone 2 - this week. Running-period only (currentWeekNo null
+          on closed periods -> omitted). Spent so far / of budget on
+          the running week, so the team can reconcile the period's
+          runway with what's visible in the week columns. The
+          in-progress week is still EXCLUDED from the closed-weeks
+          over/under above by design (folding half-spent dollars into
+          the comparison would fake an "under"). */}
+      {currentWeekNo != null && (
+        <>
+          <div className="kpi-ov-cp-zone-head kpi-ov-cp-zone-sep">THIS WEEK · WK {currentWeekNo}</div>
+          <div className="kpi-ov-cp-lr">
+            <span className="kpi-ov-cp-lk">Spent so far</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(inProgR)} of {dollar0(inProgBudR)}</span>
+          </div>
+        </>
+      )}
+      {/* Zone 3 - full-period standing. LEFT TO SPEND now subtracts
+          this-week spend too (Direction A fix 2026-10-23). Subnote
+          "after $X spent so far" replaces the old "N of 4 wk closed"
+          (the count moved to the Zone-1 eyebrow). */}
       <div className="kpi-ov-cp-pernote">
         <div className="kpi-ov-cp-lr">
           <span className="kpi-ov-cp-lk">FULL PERIOD BUDGET</span>
@@ -567,7 +599,9 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
             <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(leftToSpend)}</span>
           </div>
         )}
-        <div className="kpi-ov-cp-pernote-line kpi-ov-cp-pernote-wkclosed">{closedCount} of 4 wk closed</div>
+        {gR > 0 && (
+          <div className="kpi-ov-cp-pernote-line kpi-ov-cp-pernote-after">after {dollar0(totalSpentSoFar)} spent so far</div>
+        )}
       </div>
     </>
   );
@@ -1986,6 +2020,16 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           spentToDate  += Number(perWeekLanded[wi] || 0);
                         }
                       }
+                      // Direction A (2026-10-23). Surface the in-progress
+                      // week's spend + budget on the period cell so the
+                      // "this week" zone and LEFT TO SPEND reconcile with
+                      // the week columns. currentIdx is -1 on closed
+                      // periods -> all three fall to safe defaults
+                      // (zero / null) and the running-only zone is
+                      // omitted inside PerCostCellBody.
+                      const inProgSpent  = currentIdx >= 0 ? Number(perWeekLanded[currentIdx] || 0) : 0;
+                      const inProgBudget = currentIdx >= 0 ? Number(perWeekGoal[currentIdx]  || 0) : 0;
+                      const currentWeekNo = currentIdx >= 0 ? currentIdx + 1 : null;
                       return (
                         <PerCostCellBody
                           envelope={goalInfo.batr}
@@ -1996,6 +2040,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           serviceDays={serviceDaysTotal}
                           splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
                           splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
+                          inProgSpent={inProgSpent}
+                          inProgBudget={inProgBudget}
+                          currentWeekNo={currentWeekNo}
                         />
                       );
                     })()}
