@@ -648,6 +648,47 @@
   text-align: right;
 }
 
+/* vs-projection caption (2026-10-22). Subtle sub-label under the
+   REVENUE total: eyebrow + arrow + amount, optional "to date"
+   qualifier. Must read lighter than the REVENUE total above it.
+   Revenue axis is INVERTED from cost rows - over reads GOOD (green,
+   routed to --text-success), under reads BAD (red, routed to
+   --text-danger). Verdict TEXT, not chip context, so --text-* tokens
+   (PR #1323 trap: --status-*-fg are near-black pill foregrounds). */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vsproj {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: var(--kpi-t-meta);
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vsproj-eyebrow {
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vsproj-amt {
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vsproj-over {
+  color: var(--text-success);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vsproj-under {
+  color: var(--text-danger);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-vsproj-qual {
+  font-size: var(--kpi-t-label);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--n-500);
+  text-transform: lowercase;
+}
+
 /* Build 1 polish (2026-10-19). Decomposition sub-row - indented,
    smaller, muted. HOURLY / SALARY sit beneath BUDGET (or beneath
    "full period $X" on the period cell) and read as a breakdown. */
