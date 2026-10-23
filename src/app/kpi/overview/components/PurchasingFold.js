@@ -52,7 +52,6 @@ import { useMemo, useState } from "react";
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import { weekStartsInRange } from "@/app/kpi/labor/lib/periods";
 import { fmtWeekRange } from "@/lib/kpi/overview/formatting";
-import { CARD_FEED_PAUSED } from "./CurrentPeriodReview";
 
 const HELP_BODY = (
   <>
@@ -457,15 +456,6 @@ export default function PurchasingFold({ payload, error, start, end, today, open
       {open && (
         <>
           <div className="kpi-ov-cb">
-            {periodCurrent && CARD_FEED_PAUSED && (
-              <div
-                className="kpi-ov-cp-mute"
-                data-kpi-ov="purchasing-card-feed-paused"
-                style={{ padding: "10px 18px", fontSize: "var(--kpi-t-meta)", fontWeight: 600 }}
-              >
-                Card spend feed updating - back online this week
-              </div>
-            )}
             {error ? (
               <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-error">
                 Purchasing detail could not load: {error}

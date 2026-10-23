@@ -2365,6 +2365,17 @@ export async function resolveOverview({
         meal_revenue: r2(mealRev),
         fee_prorate: r2(feePerWeek),
         week_revenue: r2(weekRevTotal),
+        // 2026-10-22. Meal-only pair on confirmed-in-denom days:
+        // what the Service Calendar forecast called vs what actually
+        // happened on the SAME day set. The service fee cancels out
+        // of the delta (contractual, flat), so Overview's per-week
+        // + per-period "vs projection" caption is meal-only. Zero
+        // on forecast / not-started weeks (no confirmed days ->
+        // nothing accrues on either side), so the client's render
+        // guard `revenue_actual_confirmed > 0` naturally suppresses
+        // the caption on those weeks.
+        revenue_actual_confirmed: r2(Number(w.week_actual_revenue_in_denom || 0)),
+        revenue_projection_confirmed: r2(Number(w.week_projected_revenue_in_denom || 0)),
         cost_target: costTarget != null ? r2(costTarget) : null,
         cost_landed: r2(laborSpent + purchSpent),
         labor_landed: r2(laborSpent),
@@ -2372,6 +2383,12 @@ export async function resolveOverview({
         unapproved_hours: Number(w.unapproved_hours || 0),
       };
     });
+    // Period-to-date pair across the four weeks. A forecast / not-
+    // started week contributes 0 on both sides so the period figures
+    // reflect confirmed-day accumulation only - the client renders
+    // the period caption as a true sum, not a client re-derivation.
+    const revenueActualConfirmedPeriod = rows.reduce((s, r) => s + Number(r.revenue_actual_confirmed || 0), 0);
+    const revenueProjectionConfirmedPeriod = rows.reduce((s, r) => s + Number(r.revenue_projection_confirmed || 0), 0);
     week_rail = {
       period_no: rng.period_no,
       running_week_no: runningWeekNoOut,
@@ -2381,6 +2398,8 @@ export async function resolveOverview({
       // for each week's caveat line. Two-week rule holds at the
       // boundary by construction.
       weeks: rows,
+      revenue_actual_confirmed_period: r2(revenueActualConfirmedPeriod),
+      revenue_projection_confirmed_period: r2(revenueProjectionConfirmedPeriod),
     };
   }
 

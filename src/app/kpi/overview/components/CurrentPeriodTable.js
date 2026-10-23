@@ -97,6 +97,18 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
   const lbSvcDays = Number(lbWk?.service_days ?? 0);
   const wkRev = Number(lbWk?.week_revenue ?? w.week_revenue ?? amount ?? 0);
   const feeOnlyWeek = isFuture && lbSvcDays === 0 && wkRev > 0;
+  // 2026-10-22 (vs-projection caption). Meal-only over / under on the
+  // SAME confirmed-in-denom day set. Fee cancels (flat, contractual),
+  // so comparing meal actual to meal projection on the same days is
+  // the honest delta. Guard: render only when there's confirmed meal
+  // revenue to compare against - forecast / not-started weeks have
+  // zero on both sides and naturally drop out. REVENUE axis is
+  // INVERTED from cost rows: over -> good (green), under -> bad (red).
+  const revActualConfirmed = Number(w.revenue_actual_confirmed || 0);
+  const revProjConfirmed   = Number(w.revenue_projection_confirmed || 0);
+  const vsProjDelta = revActualConfirmed - revProjConfirmed;
+  const showVsProj = revActualConfirmed > 0;
+  const vsProjInProgress = w.state === "in_progress";
   // Polish (2026-10-19). Forecast cue - italic + muted - on any
   // week whose revenue isn't settled (future, partial, forecast
   // basis). Closed + verified weeks render normal weight so WK3/WK4
@@ -128,6 +140,7 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
         <div className="kpi-ov-cp-v">
           <span className={`kpi-ov-cp-big${fcCls ? " kpi-ov-cp-big-fc" : ""}`}>{dollar0(amount)}</span>
         </div>
+        {showVsProj && <VsProjCaption delta={vsProjDelta} toDate={vsProjInProgress} />}
         {isForecast && <div className="kpi-ov-cp-revnote">forecast</div>}
         {noteText && <div className="kpi-ov-cp-revnote">{noteText}</div>}
       </>
@@ -151,9 +164,31 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
         <span className="kpi-ov-cp-lk">REVENUE</span>
         <span className={`kpi-ov-cp-lv${fcCls}`}>{dollar0(amount)}</span>
       </div>
+      {showVsProj && <VsProjCaption delta={vsProjDelta} toDate={vsProjInProgress} />}
       {isForecast && !noteText && <div className="kpi-ov-cp-revnote">forecast</div>}
       {noteText && <div className="kpi-ov-cp-revnote">{noteText}</div>}
     </>
+  );
+}
+
+// 2026-10-22 (vs-projection caption). Subtle sub-label under the
+// REVENUE total: eyebrow + arrow + amount, optional "to date"
+// qualifier. REVENUE axis is INVERTED from cost rows - over reads
+// GOOD (green --text-success), under reads BAD (red --text-danger).
+// Verdict TEXT, not chip context, so --text-* tokens, not
+// --status-*-fg (PR #1323 trap).
+function VsProjCaption({ delta, toDate }) {
+  const over = delta >= 0;
+  const arrow = over ? "▲" : "▼";
+  const toneCls = over ? "kpi-ov-cp-vsproj-over" : "kpi-ov-cp-vsproj-under";
+  return (
+    <div className="kpi-ov-cp-vsproj" data-kpi-ov="cp-vsproj">
+      <span className="kpi-ov-cp-vsproj-eyebrow">vs proj</span>
+      <span className={`kpi-ov-cp-vsproj-amt ${toneCls}`}>
+        {arrow} {dollar0(Math.abs(delta))}
+      </span>
+      {toDate && <span className="kpi-ov-cp-vsproj-qual">to date</span>}
+    </div>
   );
 }
 
@@ -301,7 +336,7 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) 
 // comparison - the period is over. `projection` on closed is Σ week
 // revenue = the actual earned amount (revProj sourced from the same
 // sum upstream).
-function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue, mealsTotal, feeTotal, feeRevenueDisplay }) {
+function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue, mealsTotal, feeTotal, feeRevenueDisplay, revActualConfirmedPeriod = 0, revProjConfirmedPeriod = 0 }) {
   const isFuture = phase === "future";
   if (phase === "closed") {
     return (
@@ -392,6 +427,13 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
   const revTot = Math.round(Number(projection || 0));
   const feeR = Math.round(fTot);
   const mealsR = revTot - feeR;
+  // 2026-10-22 (vs-projection caption on period total). Running
+  // phase: period is mid-flight, so the "to date" qualifier is
+  // always present. Guard on confirmed > 0 so a period before any
+  // confirmed days (empty running P1 at season start) renders no
+  // caption.
+  const vsProjPeriodDelta = Number(revActualConfirmedPeriod || 0) - Number(revProjConfirmedPeriod || 0);
+  const showVsProjPeriod = Number(revActualConfirmedPeriod || 0) > 0;
   return (
     <>
       {mealsR > 0 && (
@@ -410,6 +452,7 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
         <span className="kpi-ov-cp-lk">REVENUE</span>
         <span className="kpi-ov-cp-lv">{dollar0(revTot)}</span>
       </div>
+      {showVsProjPeriod && <VsProjCaption delta={vsProjPeriodDelta} toDate={true} />}
     </>
   );
 }
@@ -1051,6 +1094,16 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const lbWk = (labor?.board?.weeks || [])[i] || null;
       return s + Number(lbWk?.fee_prorate ?? w?.fee_prorate ?? 0);
     }, 0);
+    // 2026-10-22 (vs-projection caption on period total). Prefer the
+    // resolver's week_rail period sums - a true sum emitted upstream,
+    // not a client re-derivation. Fall back to summing per-week
+    // fields if the resolver's period figures are absent (older
+    // payload shape); either way, forecast / not-started weeks
+    // contribute 0 by construction.
+    const revActualConfirmedPeriod = Number(payload?.week_rail?.revenue_actual_confirmed_period
+      ?? weeks.reduce((s, w) => s + Number(w?.revenue_actual_confirmed || 0), 0));
+    const revProjConfirmedPeriod = Number(payload?.week_rail?.revenue_projection_confirmed_period
+      ?? weeks.reduce((s, w) => s + Number(w?.revenue_projection_confirmed || 0), 0));
 
     // Kevin R-133 step 3 (2026-09-20). Salary-path detection. On
     // running CP and NP the Overview resolver ships 3100.1/3100.2 as
@@ -1480,7 +1533,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, feeRevenueDisplay };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
   }, [payload, weeks, labor, purch, rowSet, isFuture, phase]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -1914,7 +1967,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
-                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} mealsTotal={derived.mealsPeriodTotal} feeTotal={derived.feePeriodTotal} feeRevenueDisplay={derived.feeRevenueDisplay} />
+                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} mealsTotal={derived.mealsPeriodTotal} feeTotal={derived.feePeriodTotal} feeRevenueDisplay={derived.feeRevenueDisplay} revActualConfirmedPeriod={derived.revActualConfirmedPeriod} revProjConfirmedPeriod={derived.revProjConfirmedPeriod} />
                   : (() => {
                       // Build 1 (2026-10-19). Honest period column.
                       // Sum closed-week budgets + spents for the to-date

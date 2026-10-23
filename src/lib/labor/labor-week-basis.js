@@ -202,6 +202,14 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     // revenue-sum on This period reads this field so its count and
     // figure agree by construction.
     actualRevInDenom: 0,
+    // Projection baseline for the SAME confirmed-in-denom days that
+    // actualRevInDenom sums. Retains projected_revenue on days that
+    // have an actual (otherwise discarded on the has_actuals branch),
+    // so a closed / elapsed day has something to compare against for
+    // the Overview's "vs projection" caption. Same R-85 inDenom guard
+    // -> same row set -> the over / under reconciles with the
+    // displayed actual.
+    projectedRevInDenom: 0,
     daysWithService: new Set(),
     daysWithConfirmedSvc: new Set(),
     // R-110 (2026-09-16). Distinct dates in this week that carry a
@@ -230,6 +238,12 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       // R-85 denominator: this row only contributes to
       // actualRevInDenom if it also had a real projection.
       if (inDenom) bucket.actualRevInDenom += Number(r.actual_revenue || 0);
+      // Mirror actualRevInDenom for the projection side. Same guard,
+      // same row set, so the pair reconciles - sum of either across
+      // confirmed-in-denom days matches a direct SC query that
+      // filters on has_actuals=true AND has_projection AND
+      // projected_revenue>0.
+      if (inDenom) bucket.projectedRevInDenom += Number(r.projected_revenue || 0);
       bucket.daysWithConfirmedSvc.add(r.service_date);
     } else if (inDenom) {
       // Real projected service - client planned to serve, hasn't been
@@ -249,7 +263,7 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     const bucket = byWeek.get(ws);
     const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * MS_PER_DAY).toISOString().slice(0, 10);
 
-    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev, actualRevInDenom } = bucket;
+    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev, actualRevInDenom, projectedRevInDenom } = bucket;
     const totalSvcs = confirmedSvcs + projectedSvcs;       // meaningful denominator
     const basis = totalSvcs === 0
       ? "forecast"                                         // no meaningful services -> nothing to compare
@@ -286,6 +300,11 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       // contribute. Overview's confirmed-weeks-sum on This period
       // sums this so its "N of X confirmed" count matches its figure.
       actual_revenue_in_denom: Math.round(actualRevInDenom * 100) / 100,
+      // 2026-10-22 (vs-projection caption). Projection baseline on
+      // the SAME confirmed-in-denom days actual_revenue_in_denom
+      // sums. Enables Overview to show per-week + per-period
+      // "vs proj" on confirmed days only.
+      projected_revenue_in_denom: Math.round(projectedRevInDenom * 100) / 100,
       projected_revenue: Math.round(projectedRev * 100) / 100,
       revenue: basis === "forecast"
         ? Math.round(projectedRev * 100) / 100             // pure forecast: projections only
@@ -498,6 +517,13 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     w.service_days = basis.service_days;
     w.week_actual_revenue = basis.actual_revenue;
     w.week_projected_revenue = basis.projected_revenue;
+    // 2026-10-22 (vs-projection caption on Overview). Confirmed-in-
+    // denom pair - the SC projection retained on days that have an
+    // actual, so Overview can show per-week + per-period
+    // over / under on confirmed days only. See labor-week-basis
+    // bucket for the mirror-of-actualRevInDenom invariant.
+    w.week_actual_revenue_in_denom = basis.actual_revenue_in_denom;
+    w.week_projected_revenue_in_denom = basis.projected_revenue_in_denom;
 
     const periodNo = periodOf(w.week_start);
     const isVerified = periodNo != null && verifiedTotals.has(periodNo);
