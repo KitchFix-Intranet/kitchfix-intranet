@@ -62,13 +62,38 @@ A build that violates one is a bounce.
 
 `accounts.pnl_tab_name` carries the workbook tab name, including the `TXR-VISTOR` misspelling, which is load-bearing for the ETL.
 
+**Two `pnl_tab_name` values are KNOWN-WRONG-BUT-LOAD-BEARING** (Kevin 2026-08-06):
+
+- `TBJ - NY` has `pnl_tab_name = 'TBJ-BUF'` - should be `TBJ - NY`.
+- `TXR - TX - V` has `pnl_tab_name = 'TXR-VISTOR'` (missing `I`) - should be `TXR - TX - V`.
+
+**Correct sequence to fix, do NOT change the column in isolation**:
+
+1. Finance renames the tabs in the source workbook. Kevin's action, outside this repo.
+2. A new upload arrives carrying the corrected tab names.
+3. **Then** `pnl_tab_name` is updated in its own migration with a pre-flight asserting the current values.
+
+**The trap:** a reader sees `pnl_tab_name = 'TBJ-BUF'`, knows Kevin ruled it wrong, and "fixes" the column. The parser silently stops finding TBJ-NY's data on the next upload and nobody connects the two.
+
 ### 2.1 Arlington
 
 **H and V are separate accounts completely** (D11). No shared cost, no allocation rule. Each buys its own food, packaging, and supplies and codes them at scan time; each carries its own labor budget.
 
 **Rippling separates them via department and work location - not job code.** Work locations: `"Arlington, TX (TXR-HOME)"` and `"Arlington, TX Visitor (TXR-VISITOR)"`. Departments: `"Hourly Kitchen - 3100.1 - TXR - Home Side"` and `"Hourly Kitchen - 3100.1 - TXR- Visiting Side"`, both under a shared `"Arlington TXR"` parent.
 
-**Open operational question, not technical:** do chefs actually clock out of one department and into the other when they cross the split? The API records it; whether the humans do it is workflow discipline. **Confirm with Grant Lawson and Jordan Rodgers before trusting TXR-V's labor line.** If they do not, V's labor will be wrong and nothing in the data will say so.
+**Question CLOSED 2026-08-06.** Kevin: *"TXR H and TXR V are separate accounts with separate employees and separate clock in and clock outs."* Three independent Rippling structures agree - department, work location, and schedule (the schedule list carries `TXR - Home, Arlington, TX` and `TXR - Visitor, Arlington, TX` as separate entries). Attribution is trustworthy.
+
+**Rippling configuration cleanup item, non-blocking.** Four workers currently assigned to `Hourly Kitchen - 3100.1 - TXR- Visiting Side` carry a work_location of `Arlington, TX (TXR-HOME)` instead of `Arlington, TX Visitor`. All four are TERMINATED (2020-21 era) with 0 time entries, so attribution is not affected - department drives attribution, work_location is a cross-check, and the four have no dollars either way. Reported for Rippling-side cleanup:
+
+```
+worker_id                                status       title             time entries
+65b9442da767cbc65519e279                 TERMINATED   Dishwasher/Prep   0
+65baeae47c5f88bbc40beca9                 TERMINATED   Cook              0
+65f1f10761de96ec846b54e1                 TERMINATED   Cook              0
+66563c3263dfbb6ae8a022fe                 TERMINATED   Cook              0
+```
+
+Grant Lawson has been TERMINATED (2026-08-06). Josh Forkner (previously Sous Chef on `Salary Wages - 3100.2 - TXR - Home Side`) is TXR-TX-H's site leader. Jordan Rodgers remains TXR-TX-V's Executive Chef.
 
 ---
 
@@ -130,7 +155,9 @@ Activation is fiscal-year keyed. A change in circumstance is a row for the next 
 | TXR-VISTOR | 98,280 | 3,931 | 4.0% inflation |
 | TBJ-FL | 398,408 | 28,474 | 4% inflation **+ fun money** |
 | STL-FL | 0 | 24,999 | **fun money only** |
-| STL-MO | 0 | 0 | code used for **Supplies** |
+| STL-MO | 0 | 0 | historically miscoded to **Supplies** - AP correcting (Kevin 2026-08-06); code is not a real split, historical rows remain miscoded until AP moves them |
+
+**TBJ-FL arithmetic note (Kevin 2026-08-06):** the $28,474 total against $398,408 general food composes as $25,000 fun money + $3,474 residual. That residual is 0.87% of general food, not the 4% inflation allocation the other five accounts carry. Either TBJ-FL has no 4% allocation on top of its fun money, or the fun money is slightly under $25,000. Small line; noted rather than smoothed.
 
 ### 3.6 The naming trap
 
@@ -138,7 +165,9 @@ Activation is fiscal-year keyed. A change in circumstance is a row for the next 
 
 ### 3.7 Same-code collisions
 
-STL-MO `3200.2` = Supplies · STL-FL `3200.1` = Resale Food · STL-MO `3200.3` = Linen · TXR-AZ `3200.1.1` / `3200.1.2` sub-codes. Plus the reimbursables reroute (§5.2). `code_remap (account_key, source_code, pnl_line)` is a hard prerequisite for any cost rollup.
+STL-FL `3200.1` = Resale Food · STL-MO `3200.3` = Linen · TXR-AZ `3200.1.1` / `3200.1.2` sub-codes. Plus the reimbursables reroute (§5.2). `code_remap (account_key, source_code, pnl_line)` is a hard prerequisite for any cost rollup.
+
+**STL-MO `3200.2` struck from the list (Kevin 2026-08-06):** the Supplies mapping was a coding error, not a real split. AP is moving the money. A remap may still be needed **for the historical window only**, and that window closes once AP finishes the correction.
 
 ---
 
@@ -203,6 +232,8 @@ Standard printed menu. Buffets $30-$50/person, flat stations $400-$1,000, MTO gr
 
 **Source: `labor_sold_revenue` tab in `Intranet Master Data Collection 4.0`.** Chef-written per homestand, append-with-revision. **D9: stays on Google Sheets for 2026** - the sanctioned exception, because TXR-V sales logic changes in 2027. Storage moves to Postgres now (§9.5); consumer logic does not get rebuilt.
 
+**Revenue line: `2400.1`, not `2400.2` (Kevin 2026-08-06, reverses D3).** The **living tracker (`Budget_vs_Actual`) has TXR-V's revenue on `2400.2`**, and `gl_codes` currently agrees. Both are wrong per the approved Clean budget, which books TXR-V revenue to `2400.1`. **PR 2's parser must not trust the tracker's line assignment for TXR-V** - the correct line is `2400.1` per Kevin, regardless of what the source file says. Follow-up item: `gl_codes` needs its own correcting migration for TXR-V.
+
 Reconciliation, latest-per-homestand on the `sc_homestand_schedule` period map:
 
 | Period | Sold revenue |
@@ -235,6 +266,8 @@ Unexplained; needs a cause before this feeds a tile. Candidates: tax treatment, 
 | Contribution margin | 2.2% ($13,326/yr) | - |
 
 Next lowest budgeted CM is TBJ-BUF at 29.7%. **This is the account where a data defect is most consequential** - at 2.2% contribution, an error of a few thousand dollars flips it between profit and loss on screen. N2 applies here first.
+
+**Leadership change 2026-08-06.** Grant Lawson (previously Executive Chef) has been TERMINATED. **Josh Forkner is site leader**, promoted from Sous Chef on `Salary Wages - 3100.2 - TXR - Home Side`. Numbers on this account carry the additional context of a mid-year leadership change on the thinnest margin in the portfolio.
 
 ---
 
@@ -358,6 +391,8 @@ Every salaried manager is bonus eligible on hitting their COGS budget (D15). **T
 
 **No salary above site-leader level is accessible to anyone outside Kevin, Josh, and Joe.** Corporate and SLT compensation is out of scope entirely - not filtered, **absent**.
 
+**Role is a property of a person over time, not a static assignment.** Worked example (2026-08-06): Josh Forkner was in `Salary Wages - 3100.2 - TXR - Home Side` as a Sous Chef, and `3100.2` was hidden from him. As TXR-TX-H's site leader he now sees it. This is exactly the case §8 exists for - the identity model must resolve to the current role, not a stale assignment.
+
 ### 8.2 The subtraction problem, and how grain solves it
 
 ```
@@ -471,6 +506,15 @@ One lookup gives account attribution **and** the `3100.1` / `3100.2` split.
 
 **Work location is many-to-one and cannot be the key.** TBR-FL has two clock-in locations - Port Charlotte (kitchen) and Englewood (stadium) - both landing on `TBR - FL`. Work location remains a **cross-check**; surface every disagreement.
 
+**Rippling exposes at least three structures that look like they identify an account: department, work location, and schedule. None is authoritative on its own, and they are not one-to-one with each other.**
+
+| Site | Departments | Work locations | Schedules | Accounts |
+|---|---:|---:|---:|---:|
+| TXR Arlington | 2 (H, V) | 2 (HOME, VISITOR) | 2 (Home, Visitor) | 2 (H, V) |
+| TBR Florida | 1 hourly + 1 salary | **1** (combined `Englewood, FL/Port Charlotte, FL (TBR-FL)`) | **2** (Englewood, Port Charlotte) | **1** (TBR-FL) |
+
+`department_id` is the attribution key (D24). Work location is a cross-check. **Schedule is neither** - it is operational scheduling structure and carries no account meaning on its own. A future integration that reaches for whichever identifier is closest to hand will get one of these two sites wrong. See also D32 - the name misleading case (`- REDS` = CIN-AZ, not CIN-OH).
+
 **Unmapped departments go to a visible bucket** (N5). A probe alerts when a new `department_id` appears.
 
 **The map requires Kevin's row-by-row sign-off before PR 8b builds against it.** A department mapping to nothing fails loudly and is safe. A department mapping to the wrong account produces a plausible number on the wrong P&L.
@@ -569,7 +613,7 @@ Rippling's `merged_earning_type_name` field for regular time changed value betwe
 |---|---|---|---|
 | D1 | SF classification | Follow the P&L | 08-03 |
 | D2 | TXR-V in scope | In scope; Sheets source for 2026, funnel tile | 08-03 |
-| D3 | `2400.2` real | Real - TXR-V's revenue line in the tracker | 08-03 |
+| D3 | ~~`2400.2` real~~ **REVERSED** | ~~Real - TXR-V's revenue line in the tracker~~ **Kevin 2026-08-06: TXR-V revenue is `2400.1`, per the approved Clean budget.** The living tracker and `gl_codes` both show `2400.2` and are wrong. `gl_codes` needs its own correcting migration. PR 2's parser must not trust the tracker's line assignment for TXR-V | 08-03 / **reversed 08-06** |
 | D4 | Fee-account variance | Suppress percentage | 08-03 |
 | D5 | `users` in scope | In scope, after the upload | 08-03 |
 | D6 | RDO visibility | RDOs see every account | 08-03 |
@@ -582,7 +626,7 @@ Rippling's `merged_earning_type_name` field for regular time changed value betwe
 | D13 | Labor band source | Rippling + PG budget plane. No money tile on the Sheets labor stack | 08-03 |
 | D14 | TXR-H hourly | **$110,000.** ~$40k moved to salary post-budget. Total 3100 unchanged | 08-03 |
 | D15 | Bonus eligibility | Every salaried manager, on COGS budgets | 08-03 |
-| D15b | Bonus target | **Total COGS** - labor, salary, food, packaging, vehicle | 08-03 |
+| D15b | Bonus target | **Total COGS** - labor, salary, food, packaging, vehicle. **Confirmed 2026-08-06.** | 08-03 |
 | D16 | Weekly flash report | Not in v1. Revisit as labor-only post-Rippling | 08-03 |
 | D17 | CORP | **Out of scope entirely.** Private to CEO and VPO | 08-03 |
 | D18 | `3200.2` | 4% inflation savings + fun money at STL-FL and TBJ-FL | 08-03 |
@@ -626,15 +670,22 @@ Nothing.
 ### Needs investigation
 - The TXR-V **-8.7% gap** between sold revenue through P7 and the P&L. Tax treatment, the 4% card surcharge, or post-cut revisions.
 - Whether the **fee-account price contamination** extends beyond TXR-V to the other four.
-- Whether **TXR chefs actually clock between the H and V departments** when crossing the split (§2.1).
+- ~~Whether **TXR chefs actually clock between the H and V departments** when crossing the split (§2.1).~~ **CLOSED 2026-08-06** - Kevin: separate accounts, separate employees, separate clock-in/out. Three Rippling structures agree.
 - Whether an unrecognised `department_id` can appear mid-year, and what alerts on it.
-- **The fiscal year end is undefined.** `SC_SPREADSHEET_MAPPING.md` says 357 days / 51 weeks with a three-week P13; `SOUSAI_AGENT_PLAN.md` says 13-by-4 = 364. `SC_STATUS.md` confirms there is no fiscal-calendar generator - `sc_day_metadata` is seeded from Joe's service workbooks and mirrors where service stops, not where the fiscal year ends. **357 days cannot be a fiscal year: it drifts 8 days annually and breaks year-over-year period comparability.** Decides where 7 days of salary, lease, and utility accrual land - FY2026 P13 or FY2027 P1. **Question for Joe.** `periodForDate` carries `FY2026_END` as a single provisional constant pending the ruling.
+- **The fiscal year end is answered indirectly, needs one-line confirmation.** Kevin 2026-08-06: *"Service calendar stops at 12/20 because there are no continued services for the holidays. Salaried managers are full time year round so when there are no services on SC they are still paid salary as a year round employee."* Confirms `sc_day_metadata` is a service calendar, not a fiscal one. **Inference:** if salaried staff are paid year-round, the fiscal year cannot have a gap - 13 x 28 = 364 days from FY2026 P1 (2025-12-29) puts P13's last day at **2026-12-27**, FY2027 P1 opens 2026-12-28. `FY2026_END` stays provisional until Kevin confirms that specific inference.
+- **Rippling worker-assignment cleanup for TXR-V.** 4 workers in `Hourly Kitchen - 3100.1 - TXR- Visiting Side` assigned to work_location `Arlington, TX (TXR-HOME)` instead of `Arlington, TX Visitor`. All 4 TERMINATED with 0 time entries; no attribution impact. Rippling config cleanup, not a data defect.
 
 ### With Joe
-1. `3200.2` at STL-MO - used entirely for Supplies. Real split or seed error?
-2. TBJ-FL resale composition - $28,474 total, ~$15,936 at 4%, leaving ~$12,538 fun money against STL-FL's $24,999. Per-account or should they match? *(parked)*
-3. STL-FL `3200.1` labelled "Resale Food Costs" in `gl_codes`.
-4. Which GL code is authoritative for TXR-V revenue - `2400.1` or `2400.2` - and who reclassified it between the Clean budget and the tracker.
+1. ~~`3200.2` at STL-MO~~ - **CLOSED 2026-08-06.** Kevin: *"This was money that was inputted in the wrong category and AP needs to move that money. STL MO should not be putting costs to that account."* Coding error, not a real split. Historical rows remain miscoded until AP corrects.
+2. ~~TBJ-FL resale composition~~ - **CLOSED 2026-08-06.** Kevin: *"they ARE both 25k."* Arithmetic residual of $3,474 (0.87%, not 4%) noted in §3.5 for the record.
+3. STL-FL `3200.1` labelled "Resale Food Costs" in `gl_codes`. *(still open)*
+4. ~~Which GL code is authoritative for TXR-V revenue~~ - **CLOSED 2026-08-06.** Kevin: `2400.1`. Reverses D3. `gl_codes` currently has `2400.2` and needs its own correcting migration - see new item below.
+
+### New items (Kevin 2026-08-06)
+- **`gl_codes` TXR-V correction** - currently `2400.2`, should be `2400.1` per D3 reversal. Own migration with pre-flight asserting the current value before it changes. Do not fold into another PR.
+- **`accounts.pnl_tab_name` renames for TBJ-NY and TXR-TX-V** - blocked on finance renaming the workbook tabs first. See §2.
+- **Q7 bonus target confirmed as Total COGS** (D15b). No change beyond recording the confirmation.
+- **Q8 `sc_daily_actuals` test rows at STL-MO and TXR-TX-H** - Kevin: *"testing UX/UI and SC code engine as part of the build, they will eventually be removed."* Standing caution: current row counts are not operational truth until that cleanup lands.
 
 ### With Rippling
 - What tier unlocks **"Call a public API"** - it would enable both card-spend egress and a pay-run push, and pay-run is the bigger prize.
