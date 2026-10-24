@@ -1,0 +1,37 @@
+{
+  "q12": {
+    "TBR-FL": {
+      "rows": 147,
+      "spend": 11865.830000000007,
+      "classifier_non_food": 132
+    },
+    "TBJ-FL": {
+      "rows": 131,
+      "spend": 12449.299999999987,
+      "classifier_non_food": 104
+    },
+    "STL-FL": {
+      "rows": 173,
+      "spend": 15137.319999999989,
+      "classifier_non_food": 147
+    }
+  },
+  "q16": {
+    "TBR-FL": {
+      "rows": 59,
+      "spend": 395.13,
+      "classifier_non_food": 59
+    },
+    "TBJ-FL": {
+      "rows": 37,
+      "spend": 261.7099999999999,
+      "classifier_non_food": 37
+    },
+    "STL-FL": {
+      "rows": 95,
+      "spend": 164.62000000000006,
+      "classifier_non_food": 95
+    }
+  },
+  "verdict": "confirmed non-food; no change"
+}

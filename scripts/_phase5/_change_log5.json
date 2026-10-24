@@ -1,0 +1,454 @@
+{
+  "meta": {
+    "phase": "5",
+    "build_date": "2026-08-14",
+    "rule": "Kevin's answers + analyst decisions applied; publication threshold=25% with caveat 25-35%; STL projected meals denominator",
+    "publication_threshold_pct": 25,
+    "caveat_band": [
+      25,
+      35
+    ]
+  },
+  "steps_applied": {
+    "step1": {
+      "rows": 20,
+      "spend": 4483.2,
+      "lbs": 406.1
+    },
+    "step2": {
+      "rows": 427,
+      "spend": 35654.37,
+      "lbs": 23729.1
+    }
+  },
+  "fused_ambiguous_skipped_count": 89,
+  "catch_weight_reclassified_count": 362,
+  "beverage_reclassified_count": 374,
+  "beverage_unresolved": 198,
+  "protein_mix_updates": [
+    {
+      "account": "TBR-FL",
+      "type": "beef",
+      "before": {
+        "lbs": 2127.3,
+        "coverage_spend_pct": 76.6,
+        "dollars_per_lb": 7.66
+      },
+      "after": {
+        "lbs": 2120.3,
+        "coverage_spend_pct": 75.4,
+        "dollars_per_lb": 7.56
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBR-FL",
+      "type": "poultry",
+      "before": {
+        "lbs": 2597.3,
+        "coverage_spend_pct": 62.8,
+        "dollars_per_lb": 2.1
+      },
+      "after": {
+        "lbs": 2617.6,
+        "coverage_spend_pct": 66.3,
+        "dollars_per_lb": 2.2
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBR-FL",
+      "type": "pork",
+      "before": {
+        "lbs": 1940.9,
+        "coverage_spend_pct": 63.3,
+        "dollars_per_lb": 4.24
+      },
+      "after": {
+        "lbs": 2386.9,
+        "coverage_spend_pct": 64.4,
+        "dollars_per_lb": 3.51
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBR-FL",
+      "type": "seafood",
+      "before": {
+        "lbs": 592.4,
+        "coverage_spend_pct": 76,
+        "dollars_per_lb": 6.88
+      },
+      "after": {
+        "lbs": 592.4,
+        "coverage_spend_pct": 76,
+        "dollars_per_lb": 6.88
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBR-FL",
+      "type": "plant_or_egg",
+      "before": {
+        "lbs": 0,
+        "coverage_spend_pct": 0,
+        "dollars_per_lb": null
+      },
+      "after": {
+        "lbs": 0,
+        "coverage_spend_pct": 0,
+        "dollars_per_lb": null
+      },
+      "publication_status": "not comparable (plant_or_egg mixed count/weight)"
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "beef",
+      "before": {
+        "lbs": 3127.2,
+        "coverage_spend_pct": 84.8,
+        "dollars_per_lb": 4.42
+      },
+      "after": {
+        "lbs": 2176.1,
+        "coverage_spend_pct": 69.3,
+        "dollars_per_lb": 5.2
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "poultry",
+      "before": {
+        "lbs": 5185.9,
+        "coverage_spend_pct": 62.2,
+        "dollars_per_lb": 1.57
+      },
+      "after": {
+        "lbs": 5383.9,
+        "coverage_spend_pct": 75.2,
+        "dollars_per_lb": 1.83
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "pork",
+      "before": {
+        "lbs": 995.4,
+        "coverage_spend_pct": 46.4,
+        "dollars_per_lb": 2.76
+      },
+      "after": {
+        "lbs": 1513.2,
+        "coverage_spend_pct": 67,
+        "dollars_per_lb": 2.62
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "seafood",
+      "before": {
+        "lbs": 1085.1,
+        "coverage_spend_pct": 79.6,
+        "dollars_per_lb": 4.3
+      },
+      "after": {
+        "lbs": 1047.9,
+        "coverage_spend_pct": 75.1,
+        "dollars_per_lb": 4.2
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "plant_or_egg",
+      "before": {
+        "lbs": 0,
+        "coverage_spend_pct": 0,
+        "dollars_per_lb": null
+      },
+      "after": {
+        "lbs": 310.2,
+        "coverage_spend_pct": 9.4,
+        "dollars_per_lb": 0.98
+      },
+      "publication_status": "not comparable (plant_or_egg mixed count/weight)"
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "other",
+      "before": {
+        "lbs": 0,
+        "coverage_spend_pct": 0,
+        "dollars_per_lb": null
+      },
+      "after": {
+        "lbs": 0,
+        "coverage_spend_pct": 0,
+        "dollars_per_lb": null
+      },
+      "publication_status": "suppressed (0% below 25% threshold)"
+    },
+    {
+      "account": "STL-FL",
+      "type": "beef",
+      "before": {
+        "lbs": 4046,
+        "coverage_spend_pct": 81.4,
+        "dollars_per_lb": 9.66
+      },
+      "after": {
+        "lbs": 9676.5,
+        "coverage_spend_pct": 84.1,
+        "dollars_per_lb": 4.17
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "STL-FL",
+      "type": "poultry",
+      "before": {
+        "lbs": 7051.3,
+        "coverage_spend_pct": 68.3,
+        "dollars_per_lb": 1.96
+      },
+      "after": {
+        "lbs": 11021.2,
+        "coverage_spend_pct": 84,
+        "dollars_per_lb": 1.54
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "STL-FL",
+      "type": "pork",
+      "before": {
+        "lbs": 1864.3,
+        "coverage_spend_pct": 63.4,
+        "dollars_per_lb": 3.19
+      },
+      "after": {
+        "lbs": 2111.5,
+        "coverage_spend_pct": 68.8,
+        "dollars_per_lb": 3.06
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "STL-FL",
+      "type": "seafood",
+      "before": {
+        "lbs": 693.3,
+        "coverage_spend_pct": 40.2,
+        "dollars_per_lb": 11.61
+      },
+      "after": {
+        "lbs": 2629.8,
+        "coverage_spend_pct": 91.8,
+        "dollars_per_lb": 6.99
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "STL-FL",
+      "type": "plant_or_egg",
+      "before": {
+        "lbs": 0,
+        "coverage_spend_pct": 0,
+        "dollars_per_lb": null
+      },
+      "after": {
+        "lbs": 0,
+        "coverage_spend_pct": 0,
+        "dollars_per_lb": null
+      },
+      "publication_status": "not comparable (plant_or_egg mixed count/weight)"
+    },
+    {
+      "account": "STL-FL",
+      "type": "other_meat",
+      "before": {
+        "lbs": 251.1,
+        "coverage_spend_pct": 84.2,
+        "dollars_per_lb": 14.58
+      },
+      "after": {
+        "lbs": 251.1,
+        "coverage_spend_pct": 84.2,
+        "dollars_per_lb": 14.58
+      },
+      "publication_status": "publish"
+    },
+    {
+      "account": "STL-FL",
+      "type": "other",
+      "before": {
+        "lbs": 110,
+        "coverage_spend_pct": 5.3,
+        "dollars_per_lb": 0.88
+      },
+      "after": {
+        "lbs": 117.9,
+        "coverage_spend_pct": 79.6,
+        "dollars_per_lb": 12.29
+      },
+      "publication_status": "publish"
+    }
+  ],
+  "weight_coverage_updates": [
+    {
+      "account": "TBR-FL",
+      "before": {
+        "food_lbs": 19395,
+        "food_spend_weight_set": 50956.66,
+        "coverage_food_spend_pct": 46.1,
+        "coverage_core_food_spend_pct": 46.5
+      },
+      "after": {
+        "food_lbs": 22385.5,
+        "food_spend_weight_set": 53735.01,
+        "coverage_food_spend_pct": 48.6,
+        "coverage_core_food_spend_pct": 49
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "before": {
+        "food_lbs": 34743.7,
+        "food_spend_weight_set": 69951.86,
+        "coverage_food_spend_pct": 45.2,
+        "coverage_core_food_spend_pct": 47.5
+      },
+      "after": {
+        "food_lbs": 41609,
+        "food_spend_weight_set": 76130.9,
+        "coverage_food_spend_pct": 49.2,
+        "coverage_core_food_spend_pct": 50.1
+      }
+    },
+    {
+      "account": "STL-FL",
+      "before": {
+        "food_lbs": 54834.5,
+        "food_spend_weight_set": 171258.06,
+        "coverage_food_spend_pct": 67.8,
+        "coverage_core_food_spend_pct": 64.4
+      },
+      "after": {
+        "food_lbs": 68080,
+        "food_spend_weight_set": 157207.77,
+        "coverage_food_spend_pct": 62.2,
+        "coverage_core_food_spend_pct": 71.9
+      }
+    }
+  ],
+  "per_meal_updates": [
+    {
+      "account": "STL-FL",
+      "change": "swap actual/mixed meals denominator for 2027-projected 18,860 (per Kevin Q6)",
+      "window_meals_used": 18860,
+      "window_dollars_per_meal": 13.4,
+      "window_lbs_per_meal": 3.61
+    }
+  ],
+  "cells_cleared_25pct": [
+    {
+      "account": "TBR-FL",
+      "cell": "protein_mix.beef.dollars_per_lb",
+      "coverage_pct": 75.4,
+      "dollars_per_lb": 7.56
+    },
+    {
+      "account": "TBR-FL",
+      "cell": "protein_mix.poultry.dollars_per_lb",
+      "coverage_pct": 66.3,
+      "dollars_per_lb": 2.2
+    },
+    {
+      "account": "TBR-FL",
+      "cell": "protein_mix.pork.dollars_per_lb",
+      "coverage_pct": 64.4,
+      "dollars_per_lb": 3.51
+    },
+    {
+      "account": "TBR-FL",
+      "cell": "protein_mix.seafood.dollars_per_lb",
+      "coverage_pct": 76,
+      "dollars_per_lb": 6.88
+    },
+    {
+      "account": "TBJ-FL",
+      "cell": "protein_mix.beef.dollars_per_lb",
+      "coverage_pct": 69.3,
+      "dollars_per_lb": 5.2
+    },
+    {
+      "account": "TBJ-FL",
+      "cell": "protein_mix.poultry.dollars_per_lb",
+      "coverage_pct": 75.2,
+      "dollars_per_lb": 1.83
+    },
+    {
+      "account": "TBJ-FL",
+      "cell": "protein_mix.pork.dollars_per_lb",
+      "coverage_pct": 67,
+      "dollars_per_lb": 2.62
+    },
+    {
+      "account": "TBJ-FL",
+      "cell": "protein_mix.seafood.dollars_per_lb",
+      "coverage_pct": 75.1,
+      "dollars_per_lb": 4.2
+    },
+    {
+      "account": "STL-FL",
+      "cell": "protein_mix.beef.dollars_per_lb",
+      "coverage_pct": 84.1,
+      "dollars_per_lb": 4.17
+    },
+    {
+      "account": "STL-FL",
+      "cell": "protein_mix.poultry.dollars_per_lb",
+      "coverage_pct": 84,
+      "dollars_per_lb": 1.54
+    },
+    {
+      "account": "STL-FL",
+      "cell": "protein_mix.pork.dollars_per_lb",
+      "coverage_pct": 68.8,
+      "dollars_per_lb": 3.06
+    },
+    {
+      "account": "STL-FL",
+      "cell": "protein_mix.seafood.dollars_per_lb",
+      "coverage_pct": 91.8,
+      "dollars_per_lb": 6.99
+    },
+    {
+      "account": "STL-FL",
+      "cell": "protein_mix.other_meat.dollars_per_lb",
+      "coverage_pct": 84.2,
+      "dollars_per_lb": 14.58
+    },
+    {
+      "account": "STL-FL",
+      "cell": "protein_mix.other.dollars_per_lb",
+      "coverage_pct": 79.6,
+      "dollars_per_lb": 12.29
+    }
+  ],
+  "cells_with_caveat_25_35": [],
+  "cells_suppressed_below_25pct": [
+    {
+      "account": "TBJ-FL",
+      "cell": "protein_mix.other.dollars_per_lb",
+      "coverage_pct": 0
+    }
+  ],
+  "dollar_invariance_check": {
+    "pass": true,
+    "issues": []
+  }
+}

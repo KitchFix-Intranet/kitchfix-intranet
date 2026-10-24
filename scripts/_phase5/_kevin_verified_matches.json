@@ -1,0 +1,990 @@
+{
+  "overrides": [
+    {
+      "vendor": "Sysco",
+      "item_number": "5134733",
+      "description_head": "WHLFIMP EGG WHOLE W/CITRIC AC",
+      "description": "WHLFIMP EGG WHOLE W/CITRIC AC 34730-64458-00",
+      "pack_as_printed": "220 LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7309544",
+      "description_head": "BHB/NPM STEAK RIBEYE BNLS  TL CH CAH",
+      "description": "BHB/NPM STEAK RIBEYE BNLS 1TL CH CAH",
+      "pack_as_printed": "1412 OZ",
+      "per_case_lb": 10.5
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "2952014",
+      "description_head": "NATALIE JUICE ORANGE FRESH",
+      "description": "NATALIE JUICE ORANGE FRESH 120001",
+      "pack_as_printed": "1212 OZ",
+      "per_case_lb": 9
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "0269720",
+      "description_head": "ZEPHYHL WATER SPRING",
+      "description": "ZEPHYHL WATER SPRING 11479631",
+      "pack_as_printed": "2420 OZ",
+      "per_case_lb": 30
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7557301",
+      "description_head": "HORMEL BACON LAYOUT APPLEWOOD",
+      "description": "HORMEL BACON LAYOUT APPLEWOOD 13/17 55253",
+      "pack_as_printed": "115 LB",
+      "per_case_lb": 15
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "0269720",
+      "description_head": "ZEPHYHL WATER SPRING",
+      "description": "ZEPHYHL WATER SPRING",
+      "pack_as_printed": "2420 OZ",
+      "per_case_lb": 30
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "6050116",
+      "description_head": "CGRVIMP JUICE APPLE",
+      "description": "CGRVIMP JUICE APPLE 100% ASEPTIC 2812",
+      "pack_as_printed": "1246 OZ",
+      "per_case_lb": 34.5
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7792187",
+      "description_head": "SYS CLS CHICKEN CVP THIGH BNLS SKLS",
+      "description": "SYS CLS CHICKEN CVP THIGH BNLS SKLS 14301",
+      "pack_as_printed": "410 LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7203474",
+      "description_head": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO",
+      "description": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO 4754",
+      "pack_as_printed": "410 LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "5216221",
+      "description_head": "DAILYS BACON LAYFLAT C/C",
+      "description": "DAILYS BACON LAYFLAT C/C 10/14 APL GF",
+      "pack_as_printed": "115LB",
+      "per_case_lb": 15
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "6050173",
+      "description_head": "CGRVCLS JUICE CRNBRY",
+      "description": "CGRVCLS JUICE CRNBRY 27% CCKTL ASEPTIC 2816",
+      "pack_as_printed": "1246 OZ",
+      "per_case_lb": 34.5
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "1495019",
+      "description_head": "HORMEL BACON SLAB C/C  /",
+      "description": "HORMEL BACON SLAB C/C 9/13 SMK BLK GF 49337",
+      "pack_as_printed": "115 LB",
+      "per_case_lb": 15
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "5001346",
+      "description_head": "SYS CLS CHICKEN CVP THGH B/I SM HAL",
+      "description": "SYS CLS CHICKEN CVP THGH B/I SM HAL 5001346",
+      "pack_as_printed": "410 LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7200653",
+      "description_head": "WHLFCLS EGG LIQ SCRAMBLED MIX",
+      "description": "WHLFCLS EGG LIQ SCRAMBLED MIX 89356-09749-00",
+      "pack_as_printed": "152 LB",
+      "per_case_lb": 30
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "2047951",
+      "description_head": "SAUSAMY SAUSAGE CHICKEN LNK APPLE MAPL",
+      "description": "SAUSAMY SAUSAGE CHICKEN LNK APPLE MAPL",
+      "pack_as_printed": "101 LB",
+      "per_case_lb": 10
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7278782",
+      "description_head": "CALIFIA MILK OAT BARISTA BLEND",
+      "description": "CALIFIA MILK OAT BARISTA BLEND 420697CA",
+      "pack_as_printed": "1232 OZ",
+      "per_case_lb": 24
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7792187",
+      "description_head": "SYS CLS CHICKEN CVP THIGH BNLS SKLS",
+      "description": "SYS CLS CHICKEN CVP THIGH BNLS SKLS 44581",
+      "pack_as_printed": "410 LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7203474",
+      "description_head": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO",
+      "description": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO",
+      "pack_as_printed": "410 LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "5848072",
+      "description_head": "JDMTCLS RICE",
+      "description": "JDMTCLS RICE 103 LONG GRAIN B1JM50560",
+      "pack_as_printed": "150 LB",
+      "per_case_lb": 50
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "1079383",
+      "description_head": "PROPACK BANANA FRESH GREEN TIP",
+      "description": "PROPACK BANANA FRESH GREEN TIP",
+      "pack_as_printed": "110LB",
+      "per_case_lb": 10
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "6438545",
+      "description_head": "RNCHGRL BACON LAYFLAT RANDOM SMK",
+      "description": "RNCHGRL BACON LAYFLAT RANDOM SMK 10139862895",
+      "pack_as_printed": "115LB",
+      "per_case_lb": 15
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "7557301",
+      "description_head": "HORMEL BACON LAYOUT APPLEWOOD",
+      "description": "HORMEL BACON LAYOUT APPLEWOOD 13/17",
+      "pack_as_printed": "115 LB",
+      "per_case_lb": 15
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "4418752",
+      "description_head": "PROPACK ASPARAGUS FRESH STANDARD",
+      "description": "PROPACK ASPARAGUS FRESH STANDARD",
+      "pack_as_printed": "111 LB",
+      "per_case_lb": 11
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "1158542",
+      "description_head": "PROPACK BANANA FRESH GREEN TIP",
+      "description": "PROPACK BANANA FRESH GREEN TIP",
+      "pack_as_printed": "140LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "5001346",
+      "description_head": "SYS CLS CHICKEN CVP THGH B/I SM HAL",
+      "description": "SYS CLS CHICKEN CVP THGH B/I SM HAL",
+      "pack_as_printed": "410 LB",
+      "per_case_lb": 40
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "52J4733",
+      "description_head": "WELFIMP EGG WHOLE W/CITRIC AC",
+      "description": "WELFIMP EGG WHOLE W/CITRIC AC 34730-44458-00",
+      "pack_as_printed": "120 LB",
+      "per_case_lb": 20
+    },
+    {
+      "vendor": "Sysco",
+      "item_number": "2334732",
+      "description_head": "SYS CLS CHICKEN CVP DRUMSTICKS JMBO",
+      "description": "SYS CLS CHICKEN CVP DRUMSTICKS JMBO 14200",
+      "pack_as_printed": "140 LB",
+      "per_case_lb": 40
+    }
+  ],
+  "matches": [
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "5134733",
+        "description_head": "WHLFIMP EGG WHOLE W/CITRIC AC",
+        "description": "WHLFIMP EGG WHOLE W/CITRIC AC 34730-64458-00",
+        "pack_as_printed": "220 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 18,
+      "hit_spend": 3730.649999999999,
+      "hit_ids": [
+        "e9aaa37b-fd05-4b09-b9c7-a81530d667e5",
+        "7e3361e8-957b-4857-ad01-eb876415980a",
+        "43cff936-b162-4426-8313-e84bfccb471a",
+        "ac3a2b3f-d81e-4f1d-b31d-40a0a4778329",
+        "ac7a7ed8-ed6a-43ba-9bd6-6c33fce4b0ee",
+        "947e2316-5174-4704-86bd-9d41695fc795",
+        "8a520f10-0cc6-4259-98f9-5680859b3305",
+        "c71eb05f-0f89-4e9c-94f5-1dd7a42c0473",
+        "ac011f69-0047-4c68-98a0-88a067c4d7c2",
+        "81a0d429-ed95-4353-bfc1-887f955dd61c",
+        "d402207f-8afc-4227-865c-623945a810c6",
+        "99b303b0-90e3-4be9-bcd1-0ea2f31aaef1",
+        "25748317-0073-4abb-a0ff-4c09caa78128",
+        "3c8a2626-41e9-4736-9ffd-f73e6ba5e581",
+        "1b086c83-4351-4f59-9e8d-eaa1a3eedec7",
+        "b9b6e984-2ec8-4ebd-80ee-d000de7b3b40",
+        "708759d2-317f-4488-b766-25748b0fd331",
+        "dc430bf3-c6c4-4a30-9d68-6179ee799e4e"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7309544",
+        "description_head": "BHB/NPM STEAK RIBEYE BNLS  TL CH CAH",
+        "description": "BHB/NPM STEAK RIBEYE BNLS 1TL CH CAH",
+        "pack_as_printed": "1412 OZ",
+        "per_case_lb": 10.5
+      },
+      "hit_rows": 1,
+      "hit_spend": 1775.18,
+      "hit_ids": [
+        "4f0ca6bc-514d-4a68-95fc-f9f76e808d29"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "2952014",
+        "description_head": "NATALIE JUICE ORANGE FRESH",
+        "description": "NATALIE JUICE ORANGE FRESH 120001",
+        "pack_as_printed": "1212 OZ",
+        "per_case_lb": 9
+      },
+      "hit_rows": 14,
+      "hit_spend": 2470.9300000000003,
+      "hit_ids": [
+        "62d22230-f806-4762-b983-40f493450e40",
+        "a3966c8f-e801-4e8c-91e3-97a9e3901551",
+        "5eca9565-7acc-4d27-a4f5-637994c70b60",
+        "1527aadf-9e54-42cf-949f-1fe20794ffd6",
+        "7d947a6e-dd26-4a21-9a00-60dfe0499cfd",
+        "8d2713a0-11d0-432f-a772-6411531cdc8f",
+        "3b24164f-0a7c-4f93-9eef-4141dbbb0503",
+        "43f549db-f29a-48f4-b80b-7fa9d2b2c68b",
+        "5503b2bc-7d01-491c-9f36-b6e20579dba8",
+        "a315340c-83c8-40fe-a24d-903b65c6a5a1",
+        "080f840f-898f-4f52-b635-9aeb96e891a1",
+        "bd93bde2-aa4b-4aa0-b13e-1ad6c2239b66",
+        "b43eb058-18d6-47ed-98cc-56f8daa2e404",
+        "480f66a6-f39b-466a-a82b-ae781a060fb0"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "0269720",
+        "description_head": "ZEPHYHL WATER SPRING",
+        "description": "ZEPHYHL WATER SPRING 11479631",
+        "pack_as_printed": "2420 OZ",
+        "per_case_lb": 30
+      },
+      "hit_rows": 7,
+      "hit_spend": 2693.9,
+      "hit_ids": [
+        "99ae0fd5-8d0f-499c-ab7f-b6ef4282a41d",
+        "e01d4308-c314-4087-8393-4ec514aa91f6",
+        "fe8ac3a4-c7fb-40af-9407-68977897dc69",
+        "e9f5b642-1c25-4586-b344-194c481dcea9",
+        "86f79693-886d-4921-a6c8-b8e9abbbf061",
+        "f85b295c-e366-4ca8-ac54-3153cc667a7b",
+        "07f3f30e-3c07-4a4d-8f95-03d268d21990"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7557301",
+        "description_head": "HORMEL BACON LAYOUT APPLEWOOD",
+        "description": "HORMEL BACON LAYOUT APPLEWOOD 13/17 55253",
+        "pack_as_printed": "115 LB",
+        "per_case_lb": 15
+      },
+      "hit_rows": 21,
+      "hit_spend": 2740.8600000000006,
+      "hit_ids": [
+        "fcf68e00-7998-4497-aeb9-e7010d73e168",
+        "f3e496c7-7f93-4d16-ae03-07afefeaa8c2",
+        "f19dcafe-afc8-4275-85bc-e5502e969d32",
+        "4a33c3e4-2d30-433a-9426-188fa3a5e3c1",
+        "33ca9a74-8235-44ed-a0af-f317900ba1d8",
+        "c5521829-2fd6-4929-8d16-3ce42208751a",
+        "438a856a-d3ab-4272-98d8-6e00d9cbadfa",
+        "cb35d836-ac21-4933-9d96-e5c0b6cf7123",
+        "855b4492-2988-4522-b4b5-1b2617a18e59",
+        "94d716ee-d70f-4e9b-9262-97bcdd5a57fb",
+        "3467b497-f213-4178-9a55-ab188f2aa5f3",
+        "b9d3f912-01d4-40ea-bcaf-d092709dc6f4",
+        "ec9a95da-4a99-4d49-9432-406f49a4f09e",
+        "e76ecab5-1759-4d6b-82bc-452c5a74e380",
+        "defd0f24-4627-4441-bdc8-12feecc3cd7c",
+        "9e14b80e-f0e6-4514-ac75-e9a15032aa36",
+        "3f0da3d6-051e-465e-b2ed-c515fc901c59",
+        "c3593dbf-9790-44c0-80f8-d17ed58a4e00",
+        "60ccf6de-b65c-416f-8cb0-b5cc77b53411",
+        "ab5bea51-2024-48e0-8b21-3686dab8e989",
+        "c33fb178-e47e-42d4-a0c4-797321979b53"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "0269720",
+        "description_head": "ZEPHYHL WATER SPRING",
+        "description": "ZEPHYHL WATER SPRING",
+        "pack_as_printed": "2420 OZ",
+        "per_case_lb": 30
+      },
+      "hit_rows": 7,
+      "hit_spend": 2693.9,
+      "hit_ids": [
+        "99ae0fd5-8d0f-499c-ab7f-b6ef4282a41d",
+        "e01d4308-c314-4087-8393-4ec514aa91f6",
+        "fe8ac3a4-c7fb-40af-9407-68977897dc69",
+        "e9f5b642-1c25-4586-b344-194c481dcea9",
+        "86f79693-886d-4921-a6c8-b8e9abbbf061",
+        "f85b295c-e366-4ca8-ac54-3153cc667a7b",
+        "07f3f30e-3c07-4a4d-8f95-03d268d21990"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "6050116",
+        "description_head": "CGRVIMP JUICE APPLE",
+        "description": "CGRVIMP JUICE APPLE 100% ASEPTIC 2812",
+        "pack_as_printed": "1246 OZ",
+        "per_case_lb": 34.5
+      },
+      "hit_rows": 9,
+      "hit_spend": 1678.8,
+      "hit_ids": [
+        "85cdbe3a-5a6b-427b-baa7-18823c2bfb33",
+        "01e93907-7c0e-4731-a94f-2ddecf604cca",
+        "0d417a67-c649-4d0e-b195-1970662cd9bf",
+        "a1beb59a-58ee-45a4-b18b-5cd7b4ed56c3",
+        "8aa128ce-0e14-48b0-ab4a-65b54c5b4d62",
+        "2123fee7-87de-4b66-8f89-59663b17a658",
+        "8c3b2b9a-1a77-414c-bb22-d82bab2b8db4",
+        "7015ef3b-fcbc-4531-b20a-db8779fa60ea",
+        "64b174ea-6b74-41c6-ab3d-4286bccd4318"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7792187",
+        "description_head": "SYS CLS CHICKEN CVP THIGH BNLS SKLS",
+        "description": "SYS CLS CHICKEN CVP THIGH BNLS SKLS 14301",
+        "pack_as_printed": "410 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 29,
+      "hit_spend": 3672.969999999999,
+      "hit_ids": [
+        "7a02de22-3d49-449a-ba50-0210cae571cc",
+        "e09268f4-d50c-4e36-bf07-17e1ad58a969",
+        "dd90cbb5-a168-4bf2-935c-de71a47c7b11",
+        "7572fef5-05ad-43f6-8a4d-efcff5b96609",
+        "256fe510-17cd-4e7a-916d-0515e458c10d",
+        "0dedd95a-ac6f-42a3-935f-983f8112b2fd",
+        "d0fd88c2-e147-40f3-b431-eecdbe3394c9",
+        "048fd769-787e-4eb3-931b-f9a47f10b8e7",
+        "b9790133-be51-464c-8d81-238b0f9a3172",
+        "ac56ff69-c948-4d4c-b041-3e79ffce454c",
+        "5d76e6f6-37b3-4db4-99d0-0679ccdc304d",
+        "41e652bf-24d5-4418-80f3-655b55bdef7e",
+        "940866af-0755-4020-97a8-62cb914d92ad",
+        "c49e0a90-8733-4b55-81c2-ef426b62b14e",
+        "358a2dd9-658e-473c-9e50-5ab18801eb75",
+        "a47d77d9-426c-41a4-bcd6-f506e70f9b8b",
+        "0f7a46db-2e8c-47e1-84b4-2c8144e34fe1",
+        "be6ae2e3-9208-4c94-9c93-a5f83b3cd3d1",
+        "31b4f995-c917-48e3-8f42-5c6c10b725b1",
+        "18dc59e3-35bd-4370-8675-10bcc5e2abf5",
+        "723faf1f-105d-4f28-b412-0b7d3b11cbf1",
+        "205bf780-9c98-458e-87a9-f1b09bf233b6",
+        "c848d79c-7da2-4b18-8012-8d11e7e58871",
+        "2bf6fd3b-9caa-45c3-8838-df8d35122756",
+        "ef4d7ecc-69ca-442b-bb7a-f402f26f2a05",
+        "a944f689-b04e-43dc-a432-7f7fb1e345a5",
+        "8d273640-380b-4a2b-bbe8-23680a15e144",
+        "9e4c2d27-cdba-41fa-a706-ef7facf76e7d",
+        "acf12084-0d1b-45be-bd72-a154a393a183"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7203474",
+        "description_head": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO",
+        "description": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO 4754",
+        "pack_as_printed": "410 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 27,
+      "hit_spend": 3711.740000000001,
+      "hit_ids": [
+        "473d9dee-28d4-4a3b-8a13-55b06564701c",
+        "9df345b4-e033-430c-a11b-3955f1d98afc",
+        "4158fc1c-5bd5-48c1-b089-a7ff715436fa",
+        "22976337-c77f-4eb0-9266-98d8564def05",
+        "8726e0cd-d3ec-4784-b8e3-0144d6cd0ad7",
+        "bd2a9f63-b7b0-44bc-b378-955fed29fbdc",
+        "f5bf5b3b-55b0-423f-84d6-133c3adf4fec",
+        "5d8eeb9e-577c-4497-8252-0d63da555daa",
+        "30289c05-34b5-48f5-99da-4f312800c6ec",
+        "8fac0551-b1dd-4e9a-b392-9296d7fa7ecb",
+        "65e858a0-f0ed-42d2-a065-f6aaa0bedb0f",
+        "6ef159dd-b9ca-44ae-b696-b4eebb61907d",
+        "c0a533c9-81d5-44f4-ac09-e8b7c98d92b5",
+        "d38f6c07-a296-457d-93b5-9b81e249edf9",
+        "8463e9eb-1ea2-4b0b-bd43-5f2f4269853d",
+        "50b912bc-cb64-4989-a8cc-e8be8be01c0f",
+        "11c9682e-65c0-447c-9e8d-35d7f3bb514a",
+        "cf239191-7599-411d-bd96-6a0f1dc09447",
+        "e175ed5e-1847-4c7f-974c-f205d3ed6520",
+        "2f95f79a-9f52-44e4-a29c-13aa027fa2af",
+        "c1518712-a129-44bf-a987-c6e79851744d",
+        "648ca14e-f65e-4a7f-8243-226759d4d309",
+        "19b3bfa9-6d0f-42aa-bdee-ede940ec3871",
+        "5f3beaf8-1895-4158-af07-c1e83fb8f472",
+        "1617b017-9fc5-4f5a-ab2c-29edb3f492f2",
+        "7a86083d-7039-4e64-9ba9-e8c0a4cb4c30",
+        "4eb7d10a-bb50-4f27-850b-0248739e8469"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "5216221",
+        "description_head": "DAILYS BACON LAYFLAT C/C",
+        "description": "DAILYS BACON LAYFLAT C/C 10/14 APL GF",
+        "pack_as_printed": "115LB",
+        "per_case_lb": 15
+      },
+      "hit_rows": 12,
+      "hit_spend": 1945.3300000000004,
+      "hit_ids": [
+        "c5f6c4e9-6588-4dfe-8390-1185fc539ea2",
+        "7d5854a2-9cc5-4977-b7cf-3022a8251eee",
+        "8610293b-582f-40a0-b6ca-af5e4c771323",
+        "f3d59977-e44d-4e93-aaf4-a88b70546ecf",
+        "e23056c6-cf49-43ce-afc8-10f6f6fd4183",
+        "1251998d-29cf-4205-bc55-d169fba00aa2",
+        "d71c0cf7-4b19-46ae-ab51-94d4e6b5e260",
+        "4c1741c0-bcd5-43d1-a83e-4c89c402c1e0",
+        "a476a75d-b6ed-41eb-a240-930429e51010",
+        "12529a65-f108-44d6-9098-119642d265df",
+        "fe75281e-87c1-40ce-86ba-0674975efdfa",
+        "1251998d-29cf-4205-bc55-d169fba00aa2"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "6050173",
+        "description_head": "CGRVCLS JUICE CRNBRY",
+        "description": "CGRVCLS JUICE CRNBRY 27% CCKTL ASEPTIC 2816",
+        "pack_as_printed": "1246 OZ",
+        "per_case_lb": 34.5
+      },
+      "hit_rows": 8,
+      "hit_spend": 810.8900000000001,
+      "hit_ids": [
+        "720471a0-4466-47ed-ba0d-dddfd916d423",
+        "58c390c0-f7d5-4f82-b6fd-0b8110da4dde",
+        "b0520bcd-215c-42ce-9d1d-eeeb4cd5e126",
+        "39365c6c-9938-44f4-bcca-0842572c874d",
+        "10f074e6-77a8-409a-959f-2d14289611b0",
+        "efbf63d4-5b99-4a22-a4c7-d3a7154cffad",
+        "99be4c09-100f-4fb9-ac51-ad54f912731e",
+        "9e258ef3-f085-4291-9b39-67947ffde5fb"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "1495019",
+        "description_head": "HORMEL BACON SLAB C/C  /",
+        "description": "HORMEL BACON SLAB C/C 9/13 SMK BLK GF 49337",
+        "pack_as_printed": "115 LB",
+        "per_case_lb": 15
+      },
+      "hit_rows": 18,
+      "hit_spend": 3306.0099999999993,
+      "hit_ids": [
+        "b9ac37c5-944d-4a61-ae88-03e043c408e6",
+        "907a848e-e10f-4a55-93f6-887a4455db7f",
+        "737ee298-3f69-4b87-8b01-164bb6744cd7",
+        "0fb4f7b3-f98c-4979-96ca-2e6fb09051db",
+        "da75ddca-11d5-4fc4-bc04-1b2edc1ee6b1",
+        "31bc4921-7f34-4209-9475-33628b6a8a23",
+        "e5e88d5c-7488-4c20-a78a-053c3e686b6a",
+        "211846db-0fd4-42dd-aee4-163dce5c3713",
+        "749e05fb-4750-473e-bd52-a0909b1af292",
+        "0dee78d6-ea82-4658-974e-7b5bd1cef4b2",
+        "f562f542-bc98-4df6-8eca-7c8fa8a6339a",
+        "7de6542a-58c5-4689-bd4c-35e07c567126",
+        "0b9f3b47-9f0b-4c85-895c-c3c11f811fa4",
+        "23df5020-24f3-495a-9c06-147d7a54b39e",
+        "d42124ef-ebac-40ab-887c-c5cc26109212",
+        "0815ab85-6fa0-44dc-b690-e16090c73d09",
+        "496f92b9-20f1-4af3-88f9-b47754f975b1",
+        "7264d9a5-95f2-4786-b1b9-e5fa2db69ade"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "5001346",
+        "description_head": "SYS CLS CHICKEN CVP THGH B/I SM HAL",
+        "description": "SYS CLS CHICKEN CVP THGH B/I SM HAL 5001346",
+        "pack_as_printed": "410 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 16,
+      "hit_spend": 1450.3000000000002,
+      "hit_ids": [
+        "10b8711d-765a-4446-accc-c2ae12e44bc8",
+        "b1277942-bb4f-41f2-9d4e-69a7aa0b5b95",
+        "089dad44-adf3-43ff-ae61-ed33568a446d",
+        "08eed3a0-9494-4e11-af1d-6ff9e5e38ee7",
+        "fc4fb5ea-814e-40d1-b41a-263818553dc6",
+        "6d6621b1-049f-4ce1-b7d7-2904f65506f1",
+        "4dd31932-1e98-4058-b4a0-d0361f5d12ba",
+        "08eed3a0-9494-4e11-af1d-6ff9e5e38ee7",
+        "00aa31f8-ee7f-4559-ad10-6dc58522720e",
+        "a5361462-eec2-4e62-abb5-9b51e47d3e09",
+        "6a09ea92-0642-4d54-a572-0c76b9c27f44",
+        "59b71f4c-1358-4626-aa91-87204c6d6e7d",
+        "7099db0d-ed05-4eef-aafd-e03a358e2053",
+        "dd279450-0792-49a6-b23c-5c6691b79899",
+        "89af1eff-09f1-4219-b9a7-2237ff20089c",
+        "f4ccb37a-1634-454a-9e2d-795f8c075868"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7200653",
+        "description_head": "WHLFCLS EGG LIQ SCRAMBLED MIX",
+        "description": "WHLFCLS EGG LIQ SCRAMBLED MIX 89356-09749-00",
+        "pack_as_printed": "152 LB",
+        "per_case_lb": 30
+      },
+      "hit_rows": 3,
+      "hit_spend": 692.45,
+      "hit_ids": [
+        "c5e2564e-60c9-423d-bab3-10e2fbb95e72",
+        "1a735ec7-7238-4523-a3c4-ba26673b78b0",
+        "597a1bf4-cdda-4285-9d39-dee0dc077a84"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "2047951",
+        "description_head": "SAUSAMY SAUSAGE CHICKEN LNK APPLE MAPL",
+        "description": "SAUSAMY SAUSAGE CHICKEN LNK APPLE MAPL",
+        "pack_as_printed": "101 LB",
+        "per_case_lb": 10
+      },
+      "hit_rows": 8,
+      "hit_spend": 1113.8200000000002,
+      "hit_ids": [
+        "c554e30b-e0fa-4f32-ab91-c09b35205591",
+        "4e41478a-b901-4dab-b3d9-a69804cbbb8d",
+        "8c276c1a-b4f7-4360-a2f7-1a994bf7c6e0",
+        "f2337f76-945f-463d-94fc-b5139db9162d",
+        "15963f36-c262-44b1-a2b1-5ac5babd39fa",
+        "79375e4d-3b0a-42ac-877d-589a801cc826",
+        "4f3bfc53-3c9a-49f5-b774-d906c13edc94",
+        "f2337f76-945f-463d-94fc-b5139db9162d"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7278782",
+        "description_head": "CALIFIA MILK OAT BARISTA BLEND",
+        "description": "CALIFIA MILK OAT BARISTA BLEND 420697CA",
+        "pack_as_printed": "1232 OZ",
+        "per_case_lb": 24
+      },
+      "hit_rows": 13,
+      "hit_spend": 985.8499999999998,
+      "hit_ids": [
+        "c5e7b439-d5b1-4528-877e-f927e9456a7b",
+        "5e0a20bc-00a8-48b2-b62a-59e979bda6ea",
+        "2fc89e9c-4a8c-4255-befd-58d8835110a4",
+        "20938db9-2413-4f6d-8593-c60a240b6ea1",
+        "7ec5e695-9154-45ce-bad6-dc4b89eca21f",
+        "bbdb72b2-b77c-4729-b825-6a9433258a41",
+        "724c98e8-6a3c-4edb-a264-27839ff62aa9",
+        "7d9e3a74-b7dd-4bca-9433-9a623371c2e9",
+        "9a374af6-cf7f-48fb-80ce-f8900a8327e9",
+        "5bf41dc7-342d-4e48-a5bf-ad52c3954bdf",
+        "b4720a8f-08a2-48df-9876-a29813c64e7f",
+        "81c76599-7309-4602-affc-1c165a3e787c",
+        "70a34f8e-670e-4acd-b111-0ab9cd988b7e"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7792187",
+        "description_head": "SYS CLS CHICKEN CVP THIGH BNLS SKLS",
+        "description": "SYS CLS CHICKEN CVP THIGH BNLS SKLS 44581",
+        "pack_as_printed": "410 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 29,
+      "hit_spend": 3672.969999999999,
+      "hit_ids": [
+        "7a02de22-3d49-449a-ba50-0210cae571cc",
+        "e09268f4-d50c-4e36-bf07-17e1ad58a969",
+        "dd90cbb5-a168-4bf2-935c-de71a47c7b11",
+        "7572fef5-05ad-43f6-8a4d-efcff5b96609",
+        "256fe510-17cd-4e7a-916d-0515e458c10d",
+        "0dedd95a-ac6f-42a3-935f-983f8112b2fd",
+        "d0fd88c2-e147-40f3-b431-eecdbe3394c9",
+        "048fd769-787e-4eb3-931b-f9a47f10b8e7",
+        "b9790133-be51-464c-8d81-238b0f9a3172",
+        "ac56ff69-c948-4d4c-b041-3e79ffce454c",
+        "5d76e6f6-37b3-4db4-99d0-0679ccdc304d",
+        "41e652bf-24d5-4418-80f3-655b55bdef7e",
+        "940866af-0755-4020-97a8-62cb914d92ad",
+        "c49e0a90-8733-4b55-81c2-ef426b62b14e",
+        "358a2dd9-658e-473c-9e50-5ab18801eb75",
+        "a47d77d9-426c-41a4-bcd6-f506e70f9b8b",
+        "0f7a46db-2e8c-47e1-84b4-2c8144e34fe1",
+        "be6ae2e3-9208-4c94-9c93-a5f83b3cd3d1",
+        "31b4f995-c917-48e3-8f42-5c6c10b725b1",
+        "18dc59e3-35bd-4370-8675-10bcc5e2abf5",
+        "723faf1f-105d-4f28-b412-0b7d3b11cbf1",
+        "205bf780-9c98-458e-87a9-f1b09bf233b6",
+        "c848d79c-7da2-4b18-8012-8d11e7e58871",
+        "2bf6fd3b-9caa-45c3-8838-df8d35122756",
+        "ef4d7ecc-69ca-442b-bb7a-f402f26f2a05",
+        "a944f689-b04e-43dc-a432-7f7fb1e345a5",
+        "8d273640-380b-4a2b-bbe8-23680a15e144",
+        "9e4c2d27-cdba-41fa-a706-ef7facf76e7d",
+        "acf12084-0d1b-45be-bd72-a154a393a183"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7203474",
+        "description_head": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO",
+        "description": "SYS CLS CHICKEN CVP BRST B/S RDM JUMBO",
+        "pack_as_printed": "410 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 27,
+      "hit_spend": 3711.740000000001,
+      "hit_ids": [
+        "473d9dee-28d4-4a3b-8a13-55b06564701c",
+        "9df345b4-e033-430c-a11b-3955f1d98afc",
+        "4158fc1c-5bd5-48c1-b089-a7ff715436fa",
+        "22976337-c77f-4eb0-9266-98d8564def05",
+        "8726e0cd-d3ec-4784-b8e3-0144d6cd0ad7",
+        "bd2a9f63-b7b0-44bc-b378-955fed29fbdc",
+        "f5bf5b3b-55b0-423f-84d6-133c3adf4fec",
+        "5d8eeb9e-577c-4497-8252-0d63da555daa",
+        "30289c05-34b5-48f5-99da-4f312800c6ec",
+        "8fac0551-b1dd-4e9a-b392-9296d7fa7ecb",
+        "65e858a0-f0ed-42d2-a065-f6aaa0bedb0f",
+        "6ef159dd-b9ca-44ae-b696-b4eebb61907d",
+        "c0a533c9-81d5-44f4-ac09-e8b7c98d92b5",
+        "d38f6c07-a296-457d-93b5-9b81e249edf9",
+        "8463e9eb-1ea2-4b0b-bd43-5f2f4269853d",
+        "50b912bc-cb64-4989-a8cc-e8be8be01c0f",
+        "11c9682e-65c0-447c-9e8d-35d7f3bb514a",
+        "cf239191-7599-411d-bd96-6a0f1dc09447",
+        "e175ed5e-1847-4c7f-974c-f205d3ed6520",
+        "2f95f79a-9f52-44e4-a29c-13aa027fa2af",
+        "c1518712-a129-44bf-a987-c6e79851744d",
+        "648ca14e-f65e-4a7f-8243-226759d4d309",
+        "19b3bfa9-6d0f-42aa-bdee-ede940ec3871",
+        "5f3beaf8-1895-4158-af07-c1e83fb8f472",
+        "1617b017-9fc5-4f5a-ab2c-29edb3f492f2",
+        "7a86083d-7039-4e64-9ba9-e8c0a4cb4c30",
+        "4eb7d10a-bb50-4f27-850b-0248739e8469"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "5848072",
+        "description_head": "JDMTCLS RICE",
+        "description": "JDMTCLS RICE 103 LONG GRAIN B1JM50560",
+        "pack_as_printed": "150 LB",
+        "per_case_lb": 50
+      },
+      "hit_rows": 22,
+      "hit_spend": 998.8900000000001,
+      "hit_ids": [
+        "55ef49a8-1f4f-4b03-967c-7c40d1ffc156",
+        "49695911-786b-4ffe-a341-d78db28d3a1c",
+        "1a215550-d464-41ad-af97-5c35be6f6929",
+        "de3e497c-c333-4e2e-a77d-b0f2e3bcdd8b",
+        "4404723b-599d-483c-be3b-bfe163c032a5",
+        "a726fd0c-0ebe-4927-aa58-b2df0d711198",
+        "4d12062d-f622-4ade-847f-c5195cfdb782",
+        "de3e497c-c333-4e2e-a77d-b0f2e3bcdd8b",
+        "18db4256-f937-4c60-8924-20009d141b7d",
+        "f558a886-0ebf-4126-9f61-ff2bb9471648",
+        "1094155b-425f-4273-8320-311a29845e6a",
+        "ca63b944-61b3-4dc5-852f-204890509c96",
+        "6c8dc153-be3b-408e-be87-e1f2b328b603",
+        "55878b7c-578d-4715-8cd2-9a591a06563a",
+        "c35c28f6-021d-4b34-8ba6-dfa96959380e",
+        "901fdde2-7796-4bb8-921e-ebdba8a8973a",
+        "0913c99b-2b15-437b-a5bb-ee886d5def4c",
+        "1f92cce0-a2c8-42fa-9973-b2cee8bc6f51",
+        "3c3bb7dd-28a1-438e-b6a3-78bcd7b3e878",
+        "90b05c1f-6b38-442d-b3ad-5a1d9c188a61",
+        "bc0264b6-1491-48b5-b4f1-811eed97ba5a",
+        "3e80527e-6bd9-4ce3-81f1-37df065ee031"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "1079383",
+        "description_head": "PROPACK BANANA FRESH GREEN TIP",
+        "description": "PROPACK BANANA FRESH GREEN TIP",
+        "pack_as_printed": "110LB",
+        "per_case_lb": 10
+      },
+      "hit_rows": 23,
+      "hit_spend": 637.91,
+      "hit_ids": [
+        "8577977a-3a6c-4375-ac6d-47c74585508b",
+        "c26e212a-789b-4983-9477-dc68d6827d1b",
+        "7621251a-fee6-4384-997f-8d10924360ff",
+        "1b995e27-fb91-495e-9908-e4f7d3e17bb8",
+        "09cc73e8-d937-4a49-b06d-a43172828ddb",
+        "7bbbb36d-6380-4a0e-a435-a805125ff5e7",
+        "197c611b-a5ad-4c13-8b29-6d022c93f248",
+        "01623e74-fd83-4bd9-8273-51a808cecb9e",
+        "da99ecde-b90a-446e-bd9c-ce6ddb3d3a22",
+        "e22dec0c-4cfa-42e4-8526-05fa6ec74535",
+        "330d2943-5995-4258-8f0f-854f4a1f64f0",
+        "868028c3-21bd-4d8d-a79f-9b986ff566f8",
+        "9c5553d9-d92d-4cb1-91af-9e1fd5b071ac",
+        "0bf90eff-0397-42f6-ae21-d6c4e2e9cd18",
+        "93a1ce6b-ee0c-4fee-9af3-fe2131748f6d",
+        "fee18c4c-33a1-45d4-b16c-4dab10b2c04b",
+        "fd4c5457-af34-43bf-ba6c-0eb95a09b83b",
+        "0a09384c-9b57-4df9-9705-0a833d727f40",
+        "64783840-962c-4af3-918f-f132fbfd96ab",
+        "29fdc5a8-6411-42fe-be45-4bcfaf572370",
+        "f83d6721-81fc-4507-a94c-062fc320f894",
+        "fd154026-500a-418d-8c85-eab8b92b4bae",
+        "4643bf16-a9b4-48be-b8f4-bb5e5d70d128"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "6438545",
+        "description_head": "RNCHGRL BACON LAYFLAT RANDOM SMK",
+        "description": "RNCHGRL BACON LAYFLAT RANDOM SMK 10139862895",
+        "pack_as_printed": "115LB",
+        "per_case_lb": 15
+      },
+      "hit_rows": 5,
+      "hit_spend": 710.68,
+      "hit_ids": [
+        "f98e2ab9-7156-4e96-9947-2674fac43ada",
+        "163d4aeb-4095-4363-ac4d-f18a1eef520b",
+        "deff6046-c071-4ad7-a2f7-4922ddb7674e",
+        "01255ead-6db2-4828-b7a6-054c2d8e3a7d",
+        "deff6046-c071-4ad7-a2f7-4922ddb7674e"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "7557301",
+        "description_head": "HORMEL BACON LAYOUT APPLEWOOD",
+        "description": "HORMEL BACON LAYOUT APPLEWOOD 13/17",
+        "pack_as_printed": "115 LB",
+        "per_case_lb": 15
+      },
+      "hit_rows": 21,
+      "hit_spend": 2740.8600000000006,
+      "hit_ids": [
+        "fcf68e00-7998-4497-aeb9-e7010d73e168",
+        "f3e496c7-7f93-4d16-ae03-07afefeaa8c2",
+        "f19dcafe-afc8-4275-85bc-e5502e969d32",
+        "4a33c3e4-2d30-433a-9426-188fa3a5e3c1",
+        "33ca9a74-8235-44ed-a0af-f317900ba1d8",
+        "c5521829-2fd6-4929-8d16-3ce42208751a",
+        "438a856a-d3ab-4272-98d8-6e00d9cbadfa",
+        "cb35d836-ac21-4933-9d96-e5c0b6cf7123",
+        "855b4492-2988-4522-b4b5-1b2617a18e59",
+        "94d716ee-d70f-4e9b-9262-97bcdd5a57fb",
+        "3467b497-f213-4178-9a55-ab188f2aa5f3",
+        "b9d3f912-01d4-40ea-bcaf-d092709dc6f4",
+        "ec9a95da-4a99-4d49-9432-406f49a4f09e",
+        "e76ecab5-1759-4d6b-82bc-452c5a74e380",
+        "defd0f24-4627-4441-bdc8-12feecc3cd7c",
+        "9e14b80e-f0e6-4514-ac75-e9a15032aa36",
+        "3f0da3d6-051e-465e-b2ed-c515fc901c59",
+        "c3593dbf-9790-44c0-80f8-d17ed58a4e00",
+        "60ccf6de-b65c-416f-8cb0-b5cc77b53411",
+        "ab5bea51-2024-48e0-8b21-3686dab8e989",
+        "c33fb178-e47e-42d4-a0c4-797321979b53"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "4418752",
+        "description_head": "PROPACK ASPARAGUS FRESH STANDARD",
+        "description": "PROPACK ASPARAGUS FRESH STANDARD",
+        "pack_as_printed": "111 LB",
+        "per_case_lb": 11
+      },
+      "hit_rows": 7,
+      "hit_spend": 639.83,
+      "hit_ids": [
+        "aeff2ae2-b598-49a8-b0c8-3e8b16160984",
+        "542f5455-7406-44b0-aeff-fde30089b3f6",
+        "c3252a87-aa48-41af-8ee8-d109f489d9e7",
+        "23c71954-1358-4be4-b691-6dbbc34c2566",
+        "fc265cfe-84cb-4d08-ac7e-149b4b218b42",
+        "23c71954-1358-4be4-b691-6dbbc34c2566",
+        "0a62c04e-1617-4d38-9853-fd359afd3c2a"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "1158542",
+        "description_head": "PROPACK BANANA FRESH GREEN TIP",
+        "description": "PROPACK BANANA FRESH GREEN TIP",
+        "pack_as_printed": "140LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 22,
+      "hit_spend": 639.3600000000001,
+      "hit_ids": [
+        "5ad4d08c-0127-44f6-92e6-b04ad24c783a",
+        "5bf6155e-e072-4c0b-b138-c06a5f37959a",
+        "6599c94d-a616-4bb5-bf6b-aab009362e9e",
+        "43cc3918-c136-4603-8057-e727483a24e7",
+        "651fe1fd-0785-4622-9cee-8e7095dfe530",
+        "a886039d-2fd2-4035-b257-9b11e33cb147",
+        "8f44e4ca-e83f-4a81-b08b-e308ef12811b",
+        "bf78787f-e85d-4d02-8f7e-6fb3d06758ad",
+        "7757d839-46ee-42b7-87a7-2251cc38f680",
+        "e42d95f0-90b3-4d72-a9c8-884e3db5643d",
+        "2a1ddd2f-069c-4c06-b541-270cb5f0751a",
+        "fda1cefc-2908-4ca7-af3b-015d87ed5a6c",
+        "179e5617-e722-4db5-9ffe-ed0f558ff70c",
+        "1c978b88-0b12-469d-88ba-7accadbc4fb2",
+        "d932e8a4-a6d9-405d-970d-e530f88c2708",
+        "f4faa166-6313-4462-9c24-b612aa388c0e",
+        "1fb0ff25-7878-43c1-a06c-b3fbf444a8c9",
+        "f7868705-669e-4a43-89d4-e5ca38e79dbf",
+        "2dcf571c-6480-4e1b-8129-c917bdd3f652",
+        "f565dafa-3cff-4fba-bb22-e8a2d70f6679",
+        "991ab205-a741-4eee-83c1-86da9b56f474",
+        "179e5617-e722-4db5-9ffe-ed0f558ff70c"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "5001346",
+        "description_head": "SYS CLS CHICKEN CVP THGH B/I SM HAL",
+        "description": "SYS CLS CHICKEN CVP THGH B/I SM HAL",
+        "pack_as_printed": "410 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 16,
+      "hit_spend": 1450.3000000000002,
+      "hit_ids": [
+        "10b8711d-765a-4446-accc-c2ae12e44bc8",
+        "b1277942-bb4f-41f2-9d4e-69a7aa0b5b95",
+        "089dad44-adf3-43ff-ae61-ed33568a446d",
+        "08eed3a0-9494-4e11-af1d-6ff9e5e38ee7",
+        "fc4fb5ea-814e-40d1-b41a-263818553dc6",
+        "6d6621b1-049f-4ce1-b7d7-2904f65506f1",
+        "4dd31932-1e98-4058-b4a0-d0361f5d12ba",
+        "08eed3a0-9494-4e11-af1d-6ff9e5e38ee7",
+        "00aa31f8-ee7f-4559-ad10-6dc58522720e",
+        "a5361462-eec2-4e62-abb5-9b51e47d3e09",
+        "6a09ea92-0642-4d54-a572-0c76b9c27f44",
+        "59b71f4c-1358-4626-aa91-87204c6d6e7d",
+        "7099db0d-ed05-4eef-aafd-e03a358e2053",
+        "dd279450-0792-49a6-b23c-5c6691b79899",
+        "89af1eff-09f1-4219-b9a7-2237ff20089c",
+        "f4ccb37a-1634-454a-9e2d-795f8c075868"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "52J4733",
+        "description_head": "WELFIMP EGG WHOLE W/CITRIC AC",
+        "description": "WELFIMP EGG WHOLE W/CITRIC AC 34730-44458-00",
+        "pack_as_printed": "120 LB",
+        "per_case_lb": 20
+      },
+      "hit_rows": 1,
+      "hit_spend": 225.7,
+      "hit_ids": [
+        "f20a1bf8-53f8-4812-8d33-4b48bc230330"
+      ]
+    },
+    {
+      "override": {
+        "vendor": "Sysco",
+        "item_number": "2334732",
+        "description_head": "SYS CLS CHICKEN CVP DRUMSTICKS JMBO",
+        "description": "SYS CLS CHICKEN CVP DRUMSTICKS JMBO 14200",
+        "pack_as_printed": "140 LB",
+        "per_case_lb": 40
+      },
+      "hit_rows": 6,
+      "hit_spend": 336.29,
+      "hit_ids": [
+        "f0b69ad4-4769-4ad9-a393-f42f43a1d764",
+        "b1d133f7-031d-4487-a891-2c9d22763a10",
+        "c15f0a62-f6fc-415a-9111-7b17ec1bed24",
+        "4a9d3c84-e30a-416d-85b7-f53216a2aed8",
+        "a5fe7dc7-3941-49c4-bbf4-b3c4545d4006",
+        "8e5c82a1-a500-4374-90c5-05d62a977a04"
+      ]
+    }
+  ]
+}

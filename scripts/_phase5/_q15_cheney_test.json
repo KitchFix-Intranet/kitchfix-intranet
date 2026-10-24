@@ -1,0 +1,162 @@
+{
+  "buckets": {
+    "#": {
+      "rows": 40,
+      "spend": 14876.739999999996
+    },
+    "#N": {
+      "rows": 19,
+      "spend": 1828.2099999999998
+    }
+  },
+  "pound_n_test": {
+    "rows": 19,
+    "tested": 14,
+    "reconciled_as_lb_pattern": 13,
+    "reject": 1,
+    "details": [
+      {
+        "id": "e4ee0c4e-4249-404f-93fb-b14d9e1530b9",
+        "desc": "CATFISH FILLET 7-9OZ IQF",
+        "cat": "protein",
+        "up": 7.61,
+        "sh": 1,
+        "ep": 114.15,
+        "implied_weight_per_case": 15,
+        "in_bounds": true
+      },
+      {
+        "id": "6985cc54-d2e5-42e3-8b5a-51162422e1dc",
+        "desc": "HUSHPUPPY FROZEN W/ ONION",
+        "cat": "dry_goods",
+        "up": 3.18,
+        "sh": 1,
+        "ep": 63.6,
+        "implied_weight_per_case": 20,
+        "in_bounds": true
+      },
+      {
+        "id": "59beb3f8-5da5-420c-a630-0d55afa4e010",
+        "desc": "CHEESE CHEDDAR JACK SHREDDED FEATHER",
+        "cat": "dairy",
+        "up": 2.52,
+        "sh": 4,
+        "ep": 50.4,
+        "implied_weight_per_case": 5,
+        "in_bounds": true
+      },
+      {
+        "id": "168a6bf2-0eac-4d98-a5a7-3de5828f4a37",
+        "desc": "CHIX THIGH BONE IN / SKIN ON HALAL",
+        "cat": "protein",
+        "up": 1.24,
+        "sh": 2,
+        "ep": 99.2,
+        "implied_weight_per_case": 40,
+        "in_bounds": true
+      },
+      {
+        "id": "a415f22f-289b-4739-a1dc-21d11d89af4b",
+        "desc": "SAUSAGE BREAKFAST CHUB MILD",
+        "cat": "protein",
+        "up": 6.19,
+        "sh": 1,
+        "ep": 74.28,
+        "implied_weight_per_case": 12,
+        "in_bounds": true
+      },
+      {
+        "id": "9320f660-8bd8-459c-b4b5-046721b419fb",
+        "desc": "CHIX THIGH BONE IN / SKIN ON HALAL",
+        "cat": "protein",
+        "up": 1.35,
+        "sh": 1,
+        "ep": 54,
+        "implied_weight_per_case": 40,
+        "in_bounds": true
+      },
+      {
+        "id": "ac982e00-6046-47b4-982c-649ed57f9983",
+        "desc": "BEEF STK PHILLY SIRLOIN PUCK STYLE",
+        "cat": "protein",
+        "up": 8.46,
+        "sh": 2,
+        "ep": 169.2,
+        "implied_weight_per_case": 9.999999999999998,
+        "in_bounds": true
+      },
+      {
+        "id": "a94b41bd-026f-4cb8-b0d2-45716d8da69d",
+        "desc": "CHEESE PARMESAN SHAVED",
+        "cat": "dairy",
+        "up": 4.81,
+        "sh": 1,
+        "ep": 48.1,
+        "implied_weight_per_case": 10.000000000000002,
+        "in_bounds": true
+      },
+      {
+        "id": "f0dd2c7f-68a5-4df5-8646-fa957da5c3da",
+        "desc": "HUSHPUPPY FROZEN W/ ONION",
+        "cat": "dry_goods",
+        "up": 3.18,
+        "sh": 1,
+        "ep": 63.6,
+        "implied_weight_per_case": 20,
+        "in_bounds": true
+      },
+      {
+        "id": "6c7db33a-25b8-403d-ba35-f0916a6d5a40",
+        "desc": "BEEF STK PHILLY SIRLOIN PUCK STYLE",
+        "cat": "protein",
+        "up": 6.33,
+        "sh": 2,
+        "ep": 126.6,
+        "implied_weight_per_case": 10,
+        "in_bounds": true
+      },
+      {
+        "id": "41382810-cde9-45af-9ac4-00fcb388e655",
+        "desc": "TURKEY SAUSAGE LINK READY TO COOK BEEF CASING",
+        "cat": "protein",
+        "up": 4.86,
+        "sh": 1,
+        "ep": 48.6,
+        "implied_weight_per_case": 10,
+        "in_bounds": true
+      },
+      {
+        "id": "8439784d-11e8-4300-b518-34834f6da12e",
+        "desc": "TURKEY SAUSAGE LINK READY TO COOK BEEF CASING",
+        "cat": "protein",
+        "up": 10,
+        "sh": 1,
+        "ep": 48.6,
+        "implied_weight_per_case": 4.86,
+        "in_bounds": false
+      },
+      {
+        "id": "989f01b2-e1a2-4eb0-81bd-a4877ae15ee7",
+        "desc": "CHIX DRUMSTICKS CVP",
+        "cat": "protein",
+        "up": 0.72,
+        "sh": 3,
+        "ep": 86.4,
+        "implied_weight_per_case": 40,
+        "in_bounds": true
+      },
+      {
+        "id": "2b59834c-54f4-4740-93b3-137bf6403243",
+        "desc": "SHRIMP 16/20 RAW P&D T/OFF BT BLACK TIGER",
+        "cat": "protein",
+        "up": 9.87,
+        "sh": 4,
+        "ep": 394.8,
+        "implied_weight_per_case": 10.000000000000002,
+        "in_bounds": true
+      }
+    ]
+  },
+  "reconcile_rate_pct": 92.85714285714286,
+  "adopt_convention": true
+}
