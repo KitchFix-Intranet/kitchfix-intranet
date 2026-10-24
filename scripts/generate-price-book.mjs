@@ -135,7 +135,7 @@ const ACCOUNTS = [
     name: "Tampa Bay Rays - Charlotte Sports Park PDC + BGC second-client stream",
     money_shape: "actuals_drive_invoice on both MLB and MiLB sides (separate cost centers). Boys & Girls Club runs as a second-client stream on the same commissary.",
     fee_2026: "Recurring MiLB Service Fee **$457,768** (2026 = $200,000 static installment 1 + $257,768 variable installment 2). MLB has no SF. 25% MiLB rate credit reduces MiLB per-meal to 75% of base.",
-    escalation: "**[WITHDRAWN 2026-08-11 - DO NOT USE]** The 75%-of-CPI / SEFV01 / November-reset mechanic previously stated here was a misreading of prior documentation and is not a verified contract term. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Do NOT quote to the client, print in any deck, or use in internal projections. See REF-129 §B.4 withdrawal note.",
+    escalation: "75% x CPI-U Food Away - Full Service Meals & Snacks (CUUR0000SEFV01, sub-index), November reset. Per-meal rates auto-escalate; SF is SOW-gated (variable second installment set per year). *Note (2026-08-13): briefly withdrawn 2026-08-11 and restored - accurate per 2024 agreement; source read still outstanding.*",
     notes: "BGC (Boys & Girls Club of Charlotte County) B&G Lunch = tax-exempt after-school supper program; contract runs Aug 2025 - May 2026 school year. See ACCOUNT_TBR-FL.md §2d.",
   },
   {

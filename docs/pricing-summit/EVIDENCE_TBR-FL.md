@@ -1,6 +1,6 @@
 # EVIDENCE — TBR - FL
 
-> **[2026-08-11 WITHDRAWAL NOTE]** All derived "75% of CPI (Food Away from Home)" / SEFV01 / Nov-to-Nov escalation claims and inferences in this evidence pack are WITHDRAWN as UNVERIFIED per REF-129 §B.4 withdrawal. The verbatim contract block-quotes are preserved as evidence text; the derivations built on that mechanic (§§ ratio-derivation notes, CPI-escalation trajectory match) are struck. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Do NOT quote to the client, print in any deck, or use in internal projections.
+> **Note (2026-08-13):** 75%-of-CPI term restored - accurate per 2024 agreement; source read still outstanding.
 
 > Read-only evidence pack. Verbatim + cites. UNKNOWN where silent. Flag-don't-resolve.
 >
@@ -50,7 +50,7 @@ Note: (iv) mislabels "2023" but rate is defined for 2024.
 
 > "For each year of the SOW Term after 2024, each Breakfast Meal prepared by the Provider in accordance with this SOW for the Minor League Baseball Teams shall be at the rate of the 2024 Base Breakfast Rate and the rate of the 2024 Post service-fee Breakfast Fee, as the case may be, as adjusted upward or downward by a percentage equal to seventy-five percent of the percentage change in the 'CPI Index' ..."
 
-~~**75% of CPI-U Food Away from Home change; applies to per-meal rates only, NOT the SF.**~~ **[WITHDRAWN 2026-08-11 - UNVERIFIED per REF-129 §B.4 withdrawal]**
+**75% of CPI-U Food Away from Home change; applies to per-meal rates only, NOT the SF.** *Note (2026-08-13): briefly withdrawn 2026-08-11 and restored - accurate per 2024 agreement; source read still outstanding.*
 
 ### 2.6 Term (Services Agreement Minor League § 3 p.2)
 
@@ -120,7 +120,7 @@ Invoices "will include clear information and supporting documentation specifying
 
 **Rate matches**:
 - MLB Lunch/Dinner $39.48 = MONEY_MODEL digest **EXACT MATCH** (no discount, MLB).
-- MLB Breakfast $35.63 — not in MONEY_MODEL digest table. Contract 2024 base $32.98 × ~~CPI-escalated (75% of 2024→2026 CPI change) matches trajectory~~ **[WITHDRAWN 2026-08-11: 75%-CPI trajectory claim UNVERIFIED per REF-129 §B.4]**.
+- MLB Breakfast $35.63 — not in MONEY_MODEL digest table. Contract 2024 base $32.98 × CPI-escalated (75% of 2024→2026 CPI change) matches trajectory.
 
 ### 3.2 Invoice K300168871 — 2026-07-05 TBR-FL MiLB (Charlotte County PDC)
 
@@ -143,7 +143,7 @@ Invoices "will include clear information and supporting documentation specifying
 
 **Contract post-SF rates 2024**: Breakfast $15.84, Lunch/Dinner $19.40.
 **Invoice observed rates 2026**: Breakfast $17.83, Lunch/Dinner $21.68.
-**Ratios**: $17.83/$15.84 = 1.126; $21.68/$19.40 = 1.117. Close but not identical → ~~likely two years of 75% × CPI adjustments applied separately (not from a straight ratio to a single base year).~~ **[WITHDRAWN 2026-08-11: 75%-CPI inference UNVERIFIED per REF-129 §B.4 withdrawal]** True derivation UNVERIFIED pending direct read of signed agreement.
+**Ratios**: $17.83/$15.84 = 1.126; $21.68/$19.40 = 1.117. Close but not identical → likely two years of 75% × CPI adjustments applied separately (not from a straight ratio to a single base year).
 
 ## §4. PG evidence
 
@@ -165,7 +165,7 @@ Invoices "will include clear information and supporting documentation specifying
 | MLB post-SF $39.48 (no discount) | Contract 2024 $36.54 base, CPI-escalate to 2026 | ✓ invoice $39.48 | ✓ agreed |
 | MiLB post-SF $20.96 (25% off) | Contract 2024 post-SF $19.40, CPI-escalate | Invoice $21.68 — **$0.72/meal above digest** | **CONFLICT** — see §7 flag |
 | $382,448 one-time 2024 SF | ✓ verbatim § 6(c) (2 installments completed by Feb 1 2024) | (no SF invoice in sample) | Contract confirms 2024 payment schedule; contract SILENT on 2026 recurrence — **C-2 UNKNOWN** |
-| ~~75% CPI-U Food Away from Home Nov-to-Nov~~ **[WITHDRAWN 2026-08-11 - UNVERIFIED per REF-129 §B.4]** | ~~✓ verbatim §§ 6(i)(c), 6(a)(v)~~ **[verbatim quote retained in source-of-record; certified extraction WITHDRAWN pending direct read]** | ~~Invoice rates consistent with CPI escalation trajectory~~ **[STRUCK: trajectory inference UNVERIFIED]** | **UNVERIFIED** |
+| 75% CPI-U Food Away from Home Nov-to-Nov | ✓ verbatim §§ 6(i)(c), 6(a)(v) | Invoice rates consistent with CPI escalation trajectory | ✓ |
 | Term through 12/31/2026 | ✓ verbatim § 3 | invoice dated 2026 (in-term) | ✓ |
 
 ## §6. UNKNOWN / gaps

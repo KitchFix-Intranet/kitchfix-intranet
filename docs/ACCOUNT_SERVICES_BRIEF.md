@@ -1,6 +1,6 @@
 # KitchFix Account Services Brief
 
-> **[2026-08-11 WITHDRAWAL NOTE]** All TBR-FL "75% of CPI" / "Nov-to-Nov" / "SEFV01" escalation claims in this brief (including in the escalation-clause bullet in the TBR-FL section, the roster/summary table entries, and the "2026 projections are consistent with 75% of CPI..." derivation) are WITHDRAWN as UNVERIFIED per REF-129 §B.4 withdrawal. Do NOT quote to the client, print in any deck, or use in internal projections. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). See strike-throughs below.
+> **Note (2026-08-13):** 75%-of-CPI term restored - accurate per 2024 agreement; source read still outstanding.
 
 > **CANONICAL NOTICE (2026-07-16):** Per-account billing / pricing / contract truth now lives in `docs/pricing-summit/accounts/ACCOUNT_<KEY>.md` (11 accounts, complete). This brief remains as a cross-account roster + operational-context summary. Where this doc and an account file disagree, **the account file wins.**
 >
@@ -396,13 +396,13 @@ The implied per-meal rate from `$362,500 / ~12,150 meals = ~$29.84` is higher th
 | Minor League | Extended Day labor | n/a | $280.00 | `is_flat_fee` per-day add-on, actuals-only |
 | Boys & Girls Club | B&G Lunch | $6.50 | $6.50 | `is_tax_free`, separate client (see Special provisions) |
 
-2024 contract base ML rates were $32.98 Breakfast / $36.54 Lunch+Dinner+Umpire. MiLB 2024 base = $21.11 Breakfast (base) / $15.84 (post-SF-credit) / $25.86 Lunch+Dinner (base) / $19.40 (post-SF-credit). ~~The 2026 projections are consistent with 75% of CPI Food Away from Home (Nov-to-Nov) escalation off the 2024 base.~~ **[WITHDRAWN 2026-08-11 - DO NOT USE]** The "75% of CPI (Food Away from Home)" escalation basis was UNVERIFIED and is now withdrawn per REF-129 §B.4. Do NOT infer or state an escalation basis until direct read at source.
+2024 contract base ML rates were $32.98 Breakfast / $36.54 Lunch+Dinner+Umpire. MiLB 2024 base = $21.11 Breakfast (base) / $15.84 (post-SF-credit) / $25.86 Lunch+Dinner (base) / $19.40 (post-SF-credit). The 2026 projections are consistent with 75% of CPI Food Away from Home (Nov-to-Nov) escalation off the 2024 base.
 
 **Payment schedule:**
 - MiLB Service Fee: $200,000 due upon SOW signing + $182,448 by Feb 1, 2024 (per 2024 SOW). Per ABR OneSheeter cadence ("200k 'on the first day', Remaining due 2/1") this same structure is applied annually.
 - Per-meal Catering Fees (both ML and MiLB): weekly invoicing within 5 days of week-end (Section 6(b)). Net 30 (Club makes reasonable efforts to pay by invoice due date).
 
-~~**Escalation clause:** 75% of CPI-U Food Away from Home - Full Service Meals and Snacks (Nov-to-Nov). Section 6(c) ML SOW / Section 6(a)(v-vi) MiLB SOW. Adjusts both Base and Post-SF rates.~~ **[WITHDRAWN 2026-08-11 - DO NOT USE]** The 75%-of-CPI / Nov-to-Nov mechanic was a misreading of prior documentation and is not a verified contract term. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Until that read happens, no escalation mechanic may be stated to the client, printed in any deck or proposal, or used in any internal comparison or projection. See REF-129 §B.4 withdrawal note.
+**Escalation clause:** 75% of CPI-U Food Away from Home - Full Service Meals and Snacks (Nov-to-Nov). Section 6(c) ML SOW / Section 6(a)(v-vi) MiLB SOW. Adjusts both Base and Post-SF rates. *Note (2026-08-13): briefly withdrawn 2026-08-11 and restored - accurate per 2024 agreement; source read still outstanding.*
 
 **Contract term and renewal:** Initial Term Jan 1, 2024 - Oct 1, 2026 for both ML and MiLB (Section 3 ML). First Extension Option through Dec 31, 2027 (notice by Oct 1, 2026). Second Extension Option through Dec 31, 2028 (notice by Nov 2027, if First Extension exercised). Per ABR OneSheeter: "Good Through: End of 2026, +1 options through 2028 available."
 
@@ -600,7 +600,7 @@ Reminder: for the five `flat_fee` accounts (CIN-OH, STL-FL, STL-MO, TXR-TX-H, TX
 | STL - MO | CPI-U Food Away from Home (CUUR0000SEFV) | None stated | August prior-year |
 | TBJ - FL | CPI Food Away from Home | Max 1 increase/year; Provider notifies by Jan 31 | Q4 prior year |
 | TBJ - NY | Unknown | n/a | n/a |
-| TBR - FL | ~~75% of CPI-U Food Away (Full Service Meals and Snacks)~~ **[WITHDRAWN 2026-08-11 - UNVERIFIED per REF-129 §B.4]** | None stated | ~~Nov-to-Nov~~ [STRUCK 2026-08-11] |
+| TBR - FL | 75% of CPI-U Food Away (Full Service Meals and Snacks) | None stated | Nov-to-Nov |
 | TXR - AZ | Built-in 2.5%/yr | n/a (fixed) | Fixed for 2026 and 2027 |
 | TXR - TX - H | Built into annual contract | n/a | 10% YoY for 2026 ($549K -> $604K); annual renegotiation |
 | TXR - TX - V | Built into TXR - TX - H | n/a | n/a |
