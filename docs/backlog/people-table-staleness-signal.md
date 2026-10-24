@@ -66,6 +66,30 @@ The class is: **any table whose consumers assume it reflects "up-to-date"** need
 - `docs/backlog/SILENT_FAILURE_SWEEP.md` (if it exists) - this is another instance of that pattern.
 - `project_cron_liveness_gap.md` (memory) - Shape B lands cleanly as part of that arc.
 
+## The durable lesson: a swap-and-replace table has no memory of being wrong
+
+Filed 2026-09-17 alongside the second incident.
+
+`sc_export_ledger` is append-only. Every push attempt records a row - test, failed, superseded, invoiced - with `qbo_doc_number` populated only when the push succeeded. When Kevin asked "was any CIN-AZ / TXR-AZ P8 invoice ever sent to a client" the answer was in the table: zero non-null `qbo_doc_number` values across every row for those accounts. The append-only shape let the reseed proceed safely, because the history proved no client had ever received an invoice from the system.
+
+`labor_actuals` is swap-and-replace. Every derive fully replaces the account's rows in one transaction via `swap_labor_actuals_for_account`. When Kevin asked "what did TXR April look like in May" the answer is unrecoverable. Not a lookup problem: the row that was in the table in May was overwritten in June, and again in July, and again on 2026-09-16 when Anna's promotion propagated retroactively. There is no artifact.
+
+Same class of decision - "should this table retain prior states or overwrite them" - and opposite outcome:
+
+- `sc_export_ledger` retained history because AR/AP evidence needs a paper trail. The correctness question the PR-A reseed answered ("was anyone billed") required that trail.
+- `labor_actuals` swapped because the design assumed "current derive is always right and history is noise." That assumption survived until a re-derive changed a closed period's number and no one could point to the prior number to say what changed.
+
+**When designing a table whose rows are written by a periodic derive, the choice of append vs swap-and-replace is a load-bearing correctness decision, not a schema convenience.** If the numbers this table produces will EVER be quoted in a report, an email, a paystub, a P&L review, or a decision-making conversation - the table needs to retain enough history to answer "what did the report see when it was sent." The swap shape says nothing was ever wrong, because nothing that was ever true is still there.
+
+Concrete asks for the post-training arc:
+
+1. Add `labor_actuals_history` (or `labor_actuals` gets `derived_at` in its PK and stops swap-replacing). Every derive writes a new version rather than overwriting.
+2. Retention policy: keep at least one version per fiscal-period-close. Kevin should be able to ask "what did TXR P5 labor look like at the moment P5 closed" and get the answer.
+3. `labor_actuals_daily` and `labor_salary_actuals` follow the same rule.
+4. Anywhere else that swap-replaces (grep for `swap_.*_for_account` and equivalents in the schema) - review each: does its output ever get read at a decision moment? If yes, append-only.
+
+The rule name for the GOTCHAS entry when this arc lands: **"A derive-target table has memory or it has none - decide before it gets quoted."**
+
 ## Sequencing
 
 - **Shape A**: shipped 2026-09-17 in `fix/rippling-sync-slack-guard-and-staleness-probe`.
