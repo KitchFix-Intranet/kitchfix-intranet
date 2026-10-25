@@ -530,22 +530,13 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
   const inProgBudR = Math.round(Number(inProgBudget || 0));
   const totalSpentSoFar = std + inProgR;
   const leftToSpend = gR - totalSpentSoFar;
-  // Polish (2026-10-19). HOURLY / SALARY group with "full period $X"
-  // in the sub-note because they sum to the full period envelope, not
-  // to BUDGET . TO DATE. Rendered as indented ledger sub-rows between
-  // the two lines of the sub-note.
-  const splitLines = (splitHrly != null && splitSal != null) ? (
-    <>
-      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
-        <span className="kpi-ov-cp-lk">HOURLY</span>
-        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(splitHrly)}</span>
-      </div>
-      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
-        <span className="kpi-ov-cp-lk">SALARY</span>
-        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(splitSal)}</span>
-      </div>
-    </>
-  ) : null;
+  // Snug (Option A, 2026-10-24). HOURLY / SALARY split folds into
+  // the "after $X spent so far" subnote inline instead of standing as
+  // two separate ledger rows. Saves 2 lines on the labor row, matches
+  // the approved density mock. Values + formatting unchanged (3100
+  // only - splitHrly / splitSal are null on other rows).
+  const hasSplit = splitHrly != null && splitSal != null;
+  const splitSuffix = hasSplit ? ` · hrly ${dollar0(splitHrly)} / sal ${dollar0(splitSal)}` : "";
   return (
     <>
       {/* Zone 1 - closed weeks over/under. Eyebrow carries the N-of-4
@@ -592,7 +583,6 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
           <span className="kpi-ov-cp-lk">FULL PERIOD BUDGET</span>
           <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(gR)}</span>
         </div>
-        {splitLines}
         {gR > 0 && (
           <div className={`kpi-ov-cp-lr kpi-ov-cp-pernote-left${leftToSpend < 0 ? " kpi-ov-cp-lr-over" : ""}`}>
             <span className="kpi-ov-cp-lk">LEFT TO SPEND</span>
@@ -600,7 +590,7 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
           </div>
         )}
         {gR > 0 && (
-          <div className="kpi-ov-cp-pernote-line kpi-ov-cp-pernote-after">after {dollar0(totalSpentSoFar)} spent so far</div>
+          <div className="kpi-ov-cp-pernote-line kpi-ov-cp-pernote-after">after {dollar0(totalSpentSoFar)} spent so far{splitSuffix}</div>
         )}
       </div>
     </>
