@@ -629,8 +629,12 @@
   font-size: var(--kpi-t-meta);
   font-weight: 600;
   color: var(--n-600);
-  margin-top: 7px;
-  padding-top: 6px;
+  /* Snug (Option A, 2026-10-24). Vertical rhythm compressed from
+     7 / 6 so the three-zone period cell fits closer to the per-week
+     cells and the shared grid row no longer stretches on the
+     tallest column. */
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px dashed var(--n-200, #F0EEE7);
   text-align: right;
 }
@@ -751,7 +755,8 @@
    a sentence ("after $X spent so far"), so lowercase and lighter
    than an uppercase caps eyebrow. */
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-pernote-after {
-  margin-top: 4px;
+  /* Snug (Option A, 2026-10-24). 4 -> 2. */
+  margin-top: 2px;
   font-size: var(--kpi-t-meta);
   font-weight: 500;
   color: var(--n-500);
@@ -772,12 +777,29 @@
   text-transform: uppercase;
   color: var(--n-500);
   text-align: right;
-  margin-bottom: 3px;
+  /* Snug (Option A, 2026-10-24). 3 -> 2. */
+  margin-bottom: 2px;
 }
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-zone-head.kpi-ov-cp-zone-sep {
-  margin-top: 7px;
-  padding-top: 6px;
+  /* Snug (Option A, 2026-10-24). 7 / 6 -> 4 / 4. */
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px dashed var(--n-200, #F0EEE7);
+}
+/* Snug (Option A, 2026-10-24). Period-cell scoped overrides for the
+   base ledger-row rhythm. Base .kpi-ov-cp-cell .kpi-ov-cp-lr-del
+   carries 6 / 7 and .kpi-ov-cp-lr + .kpi-ov-cp-lr carries 5 across
+   every cell family (CostCellBody, RevCellBody, PerCostCellBody,
+   lifted current-week column). Per-cell overrides here compress the
+   period cell alone so the shared grid row no longer stretches to
+   match it, leaving per-week + lifted-column cells visually
+   unchanged. */
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-lr + .kpi-ov-cp-lr {
+  margin-top: 3px;
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-lr-del {
+  margin-top: 4px;
+  padding-top: 5px;
 }
 
 /* Forecast revenue cue (polish 2026-10-19). Italic + muted colour on
