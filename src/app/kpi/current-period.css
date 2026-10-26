@@ -565,6 +565,66 @@
   color: var(--n-900);
   font-weight: 800;
 }
+/* Billback / pass-through tones (2026-10-26). Reimbursable cost
+   lines on management-fee accounts (Food / Pack / Vehicle) show
+   Spent only - no budget, no verdict, no LEFT. Neutral muted
+   greyscale so the row reads as information, not scored. The lv
+   variant pairs with .kpi-ov-cp-lr-neutral on the week cells; the
+   big variant pairs with the period cell's big+caption shape. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lv-neutral {
+  color: var(--n-700);
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-big-neutral {
+  color: var(--n-700);
+  font-weight: 700;
+}
+/* Row label tag for billback-tagged rows (2026-10-26). Small muted
+   caps chip next to the row name ("Food · billed back"). Reads as a
+   frame tag, not a verdict chip - no colored tone, no border. */
+.kpi-app .kpi-ov-cp-rn .kpi-ov-cp-tag-billback {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--n-500);
+  padding: 1px 5px;
+  background: var(--n-100);
+  border-radius: 3px;
+  vertical-align: 1px;
+}
+
+/* Billback-total trailer lines (2026-10-26). On the Total row of a
+   billback account, each week cell + the period cell append a muted
+   "billed back $X" annotation under the normal verdict body. Reads
+   as context, not a verdict - lowercase label, neutral tone, hairline
+   top rule so it sits apart from the scored lines above. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-billback-trailer {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--n-200, #F0EEE7);
+}
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-billback-trailer .kpi-ov-cp-lk {
+  font-size: var(--kpi-t-label);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-transform: none;
+  color: var(--n-500);
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-pernote-billback {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--n-200, #F0EEE7);
+}
+.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-pernote-billback .kpi-ov-cp-lk {
+  font-size: var(--kpi-t-label);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-transform: none;
+  color: var(--n-500);
+}
 /* Verdict row (OVER / UNDER / LEFT). Top rule, bigger value. */
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-del {
   margin-top: 6px;

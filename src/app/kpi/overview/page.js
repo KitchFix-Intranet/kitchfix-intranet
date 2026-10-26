@@ -822,6 +822,19 @@ export default function KpiOverviewPage() {
                   purch={cpPurch}
                   error={cpEffectiveError}
                 />
+                {/* Billback goal pacing on the CP view (2026-10-26).
+                    Mounts beneath the cost grid so the operator sees
+                    the billed-back goal + progress on the main
+                    surface, not only inside the collapsed Purchasing
+                    fold. Gated the same way the main-overview surface
+                    gates: revenue_model === "management_fee" AND an
+                    annual goal exists in either payload shape. The
+                    card self-handles off-season / no-goal states
+                    without crashing. */}
+                {data.revenue_model === "management_fee"
+                  && (data.billback?.annual_goal != null
+                      || data.billback_period?.annual_goal != null)
+                  && <BillbackPeriodCard billbackPeriod={data.billback_period} />}
                 <CurrentPeriodReview
                   labor={cpLabor}
                   purchasing={cpPurch}
