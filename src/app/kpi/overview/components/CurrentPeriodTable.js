@@ -223,11 +223,24 @@ function VsProjCaption({ delta, toDate }) {
 // surrounding ledger (fix 2, 2026-10-19).
 //
 // Progress bar + rolling delta line are gone (brief items 1 + 2).
-function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) {
+function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow, neutralSpend = false, billbackLandedWeek = null }) {
   const isFuture = w.state === "not_started";
   const isCurrent = w.state === "in_progress";
   const g = Math.round(Number(goal || 0));
   const l = Math.round(Number(landed || 0));
+  // Billback (pass-through) rows: no budget to beat, no OVER / UNDER
+  // verdict, no LEFT. Render Spent only, muted. On a not-started
+  // week (CP WK4 ahead) landed is 0 - show the zero-dollar amount
+  // rather than a dash so the cell reads consistently across the
+  // four weeks.
+  if (neutralSpend) {
+    return (
+      <div className="kpi-ov-cp-lr kpi-ov-cp-lr-neutral">
+        <span className="kpi-ov-cp-lk">Spent</span>
+        <span className="kpi-ov-cp-lv kpi-ov-cp-lv-neutral">{dollar0(l)}</span>
+      </div>
+    );
+  }
   // Polish (2026-10-19). HOURLY / SALARY sit under BUDGET as a
   // decomposition - indented, muted. They sum to the week BUDGET on
   // week / future cells; on the period cell they move inside the
@@ -246,6 +259,18 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) 
     </>
   ) : null;
 
+  // Billback-total trailer (2026-10-26). On the Total row of a
+  // billback account each week cell appends the week's pass-through
+  // spend (3200 + 3400 + 3500) as a muted "billed back $X" line
+  // underneath the normal verdict body. Not scored, not red/green -
+  // factual annotation so the Total row's figure matches the row's
+  // visible dollars without conflating managed and pass-through.
+  const billbackTrailer = (billbackLandedWeek != null) ? (
+    <div className="kpi-ov-cp-lr kpi-ov-cp-lr-billback-trailer">
+      <span className="kpi-ov-cp-lk">billed back</span>
+      <span className="kpi-ov-cp-lv kpi-ov-cp-lv-neutral">{dollar0(Math.round(Number(billbackLandedWeek || 0)))}</span>
+    </div>
+  ) : null;
   if (isFuture) {
     // Polish (2026-10-19). Future week carries the BUDGET label so it
     // reads as part of the ledger family, not a bare number.
@@ -258,6 +283,7 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) 
           </span>
         </div>
         {splitLines}
+        {billbackTrailer}
       </>
     );
   }
@@ -311,6 +337,7 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow }) 
         <span className="kpi-ov-cp-lk">{verdictKey}</span>
         <span className="kpi-ov-cp-lv">{verdictValue}</span>
       </div>
+      {billbackTrailer}
     </>
   );
 }
@@ -487,9 +514,25 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
 // the current (in-progress) week sits outside both btd and std. The
 // mid-week spend is still visible on its own week cell; the period
 // column states only what has settled.
-function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null }) {
+function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null, neutralSpend = false, billbackLandedPeriod = null }) {
   const isFuture = phase === "future";
   const G = Number(envelope || 0);
+  // Billback (pass-through) rows: no envelope, no closed-weeks
+  // verdict, no LEFT TO SPEND. The period cell shows total spent
+  // across all four weeks + a muted "billed to client · pass-through"
+  // caption. Spent is summed from closed + in-progress; a future
+  // range would also render here, with the sum degenerating to 0.
+  if (neutralSpend) {
+    const periodSpent = Math.round(Number(spentToDate || 0) + Number(inProgSpent || 0));
+    return (
+      <>
+        <div className="kpi-ov-cp-v">
+          <span className="kpi-ov-cp-big kpi-ov-cp-big-neutral">{dollar0(periodSpent)}</span>
+        </div>
+        <div className="kpi-ov-cp-fl kpi-ov-cp-mute">billed to client · pass-through</div>
+      </>
+    );
+  }
   if (isFuture) {
     const perWeek = G / 4;
     const perDay  = serviceDays > 0 ? G / serviceDays : 0;
@@ -592,6 +635,19 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
         {gR > 0 && (
           <div className="kpi-ov-cp-pernote-line kpi-ov-cp-pernote-after">after {dollar0(totalSpentSoFar)} spent so far{splitSuffix}</div>
         )}
+        {/* Billback-total trailer (2026-10-26). On the Total row of a
+            billback account, append a muted "billed back $X" line
+            that sums the four weeks of pass-through spend
+            (3200 + 3400 + 3500). Neutral, no verdict, no comparison -
+            factual annotation so the Total row's figure matches what
+            the row shows above (managed labor budget vs spent) PLUS
+            the context of what also ran through the account. */}
+        {billbackLandedPeriod != null && (
+          <div className="kpi-ov-cp-lr kpi-ov-cp-pernote-billback">
+            <span className="kpi-ov-cp-lk">billed back</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-neutral">{dollar0(Math.round(Number(billbackLandedPeriod || 0)))}</span>
+          </div>
+        )}
       </div>
     </>
   );
@@ -659,6 +715,16 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
   // sites do not churn in this PR - only the branches that need the
   // closed case flip to `phase === ...`.
   const phase = isFuture ? "future" : (isClosedRange ? "closed" : "running");
+  // 2026-10-26 billback gate. An account is "billback" when the
+  // revenue model is management_fee AND an annual billback goal
+  // exists (either shape - billback is the multi-period payload,
+  // billback_period is single-period). Union both so neither surface
+  // alone has to carry the test. A goal-less management-fee hybrid
+  // ships with annual_goal=null on both payloads -> gate false ->
+  // the hybrid keeps its normal COGS budgets. Per-meal + PDC accounts
+  // are not management_fee so the gate is false by the first clause.
+  const billbackActive = payload?.revenue_model === "management_fee"
+    && (payload?.billback?.annual_goal != null || payload?.billback_period?.annual_goal != null);
   // Weeks · running reads Overview's week_rail (partial-week revenue
   // basis, ongoing figures); future + closed both read Labor's board
   // (week_rail is null on planned AND closed periods, gated in
@@ -1345,9 +1411,15 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     const ROWS_OVERVIEW = [
       { line: null, name: "Revenue", sub: "meals + service fee", rev: true },
       { line: "3100", name: "Kitchen labor", sub: subFor(laborSub, laborSubFutureOv, laborSubClosed), isLabor: true },
-      { line: "3200", name: "Food",      sub: subFor(foodSub, foodSubPOv, foodSubClosed) },
-      { line: "3400", name: "Pack. & Sup.", sub: subFor(packSub, packSubPOv, packSubClosed) },
-      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: subFor(vehSub, vehSubPOv, vehSubClosed) }] : []),
+      // Billback accounts (2026-10-26): Food / Pack / Vehicle are
+      // reimbursed by the client (pass-through), so there is no
+      // KitchFix-side budget to beat. Mark the row for the renderer
+      // to drop the budget / verdict treatment and show neutral spend
+      // tracking with a "billed back" tag. Non-billback accounts fall
+      // through to the normal budget-scored path.
+      { line: "3200", name: "Food",      sub: billbackActive ? "" : subFor(foodSub, foodSubPOv, foodSubClosed), billback: billbackActive },
+      { line: "3400", name: "Pack. & Sup.", sub: billbackActive ? "" : subFor(packSub, packSubPOv, packSubClosed), billback: billbackActive },
+      ...(hasVehicleLine ? [{ line: "3500", name: "Vehicle", sub: billbackActive ? "" : subFor(vehSub, vehSubPOv, vehSubClosed), billback: billbackActive }] : []),
     ];
     // Kevin R-129 change 2.1 (2026-09-19). Labor row name follows the
     // salary toggle. Salary on merges hourly + salary into one row -
@@ -1503,16 +1575,67 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const _allDashTotal = phase === "future"
         && totalBatr > 0
         && totalGoal.every(v => Number(v || 0) <= 0);
+      // Billback (2026-10-26 managed-verdict rework). On these
+      // accounts the Total row's over / under is computed on the
+      // MANAGED portion only (line 3100 labor); the pass-through
+      // spend (3200 + 3400 + 3500) is shown alongside as a neutral
+      // annotation. Labor is the one KitchFix-controlled cost line,
+      // so the only scored verdict on the account is labor. Prior
+      // revision tagged the Total row with the pass-through
+      // treatment, which mislabelled the labor portion as billed-
+      // back. Non-billback accounts keep the normal
+      // totalGoal / totalLanded / totalBatr path unchanged.
+      let totGoal        = totalGoal;
+      let totLanded      = totalLanded;
+      let totBatr        = totalBatr;
+      let totActualPer   = totalActualForPeriod;
+      let totAllDash     = _allDashTotal;
+      let billbackLandedArr = null;
+      let billbackLandedPeriod = null;
+      if (billbackActive) {
+        const laborGoal = goalFor("3100");
+        const laborGoalArr = laborGoal.goal.map(v => Number(v || 0));
+        const laborLandedArr = landedFor("3100").map(v => Number(v || 0));
+        const laborBatr = Number(laborGoal.batr || 0);
+        const laborLandedSum = laborLandedArr.reduce((s, v) => s + v, 0);
+        totGoal = laborGoalArr;
+        totLanded = laborLandedArr;
+        totBatr = laborBatr;
+        totActualPer = laborLandedSum;
+        totAllDash = phase === "future"
+          && laborBatr > 0
+          && laborGoalArr.every(v => Number(v || 0) <= 0);
+        const BILLBACK_LINES = ["3200", "3400", "3500"];
+        billbackLandedArr = weeks.map((_, wi) =>
+          BILLBACK_LINES.reduce((s, line) => s + Number(landedFor(line)[wi] || 0), 0)
+        );
+        billbackLandedPeriod = billbackLandedArr.reduce((s, v) => s + v, 0);
+      }
       rows.push({
         line: null,
         name: totName,
-        sub: totSub,
+        // Billback accounts (2026-10-26): drop the "% of revenue" sub.
+        // That percent referenced the full-COGS verdict; now the Total
+        // row's verdict is managed-only (labor), so a percent across
+        // all four cost lines is the wrong frame.
+        sub: billbackActive ? "" : totSub,
         tot: true,
-        _goal: totalGoal,
-        _landed: totalLanded,
-        _batr: totalBatr,
-        _actualForPeriod: totalActualForPeriod,
-        _allDash: _allDashTotal,
+        // Billback-total mode (2026-10-26). Routes the Total row's
+        // verdict to managed values (labor only) via the swapped
+        // _goal / _landed / _batr / _actualForPeriod / _allDash
+        // fields above, and surfaces the billed-back spend as a
+        // neutral annotation on each week + the period cell via
+        // _billbackLanded / _billbackLandedPeriod. Distinct from
+        // the pass-through `billback` flag on 3200 / 3400 / 3500,
+        // which routes those rows to the neutralSpend render.
+        billbackTotal: billbackActive,
+        _goal: totGoal,
+        _landed: totLanded,
+        _batr: totBatr,
+        _actualForPeriod: totActualPer,
+        _allDash: totAllDash,
+        _billbackLanded: billbackLandedArr,
+        _billbackLandedPeriod: billbackLandedPeriod,
       });
     }
 
@@ -1558,7 +1681,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     })();
 
     return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
-  }, [payload, weeks, labor, purch, rowSet, isFuture, phase]);
+  }, [payload, weeks, labor, purch, rowSet, isFuture, phase, billbackActive]);
 
   const ready = !!(derived && labor && purch && !error);
   const { box: liftBox, gridRef } = useLift(ready);
@@ -1930,6 +2053,9 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
               >
                 <div className="kpi-ov-cp-rn">
                   {row.line && <span className="kpi-ov-cp-glc">{row.line}</span>}{row.name}
+                  {row.billback && row.line && (
+                    <span className="kpi-ov-cp-tag-billback" title="This line is billed back to the client - pass-through, no KitchFix budget to beat.">billed back</span>
+                  )}
                 </div>
                 <div className="kpi-ov-cp-rg">{row.sub}</div>
               </div>
@@ -1973,6 +2099,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               splitSal={sp ? sp.sal : null}
                               phase={phase}
                               dashRow={isTot ? !!row._allDash : !!goalInfo.allDash}
+                              neutralSpend={!!row.billback}
+                              billbackLandedWeek={row.billbackTotal && Array.isArray(row._billbackLanded) ? Number(row._billbackLanded[i] || 0) : null}
                             />
                           );
                         })()}
@@ -2033,6 +2161,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           inProgSpent={inProgSpent}
                           inProgBudget={inProgBudget}
                           currentWeekNo={currentWeekNo}
+                          neutralSpend={!!row.billback}
+                          billbackLandedPeriod={row.billbackTotal ? Number(row._billbackLandedPeriod || 0) : null}
                         />
                       );
                     })()}
