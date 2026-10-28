@@ -350,12 +350,18 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
             Open in Drive
           </a>
         )}
-        <button
-          className="pb-action pb-action--ghost"
-          onClick={() => setReportOpen((r) => !r)}
-        >
-          Report issue
-        </button>
+        {/* Owner-only (2026-10-28). Report-issue POSTs to /api/playbook?action=
+            report-issue, and that endpoint is now owner-gated at the top of the
+            POST handler (isPlaybookOwner). A viewer clicking the button would
+            get a 403, so the affordance hides to match the gate. */}
+        {isOwner && (
+          <button
+            className="pb-action pb-action--ghost"
+            onClick={() => setReportOpen((r) => !r)}
+          >
+            Report issue
+          </button>
+        )}
         {isOwner && typeof onEdit === "function" && (
           <button
             className="pb-action pb-action--ghost"
@@ -367,46 +373,53 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         )}
       </div>
 
-      {/* Per-doc Ask Sous. Train 3: live. Clicking opens the overlay with
-          the ask prefilled "In {DOC-ID}: " and focus in the input. If the
-          parent didn't pass onOpenSous (e.g. admin dashboard), stays inert. */}
-      {typeof onOpenSous === "function" ? (
-        <button
-          type="button"
-          className="pb-sousai pb-sousai--live"
-          onClick={() => onOpenSous({
-            id: doc.id,
-            title: doc.title,
-            version: doc.version || null,
-            status: doc.status,
-            docClass: doc.doc_class,
-          })}
-          aria-label={`Ask Sous about ${doc.id}`}
-          title={`Ask Sous about ${doc.id}`}
-        >
-          <span className="pb-sousai-icon" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
-            </svg>
-          </span>
-          <span className="pb-sousai-text">Ask Sous about this doc</span>
-        </button>
-      ) : (
-        <div
-          className="pb-sousai"
-          role="button"
-          aria-disabled="true"
-          tabIndex={-1}
-          title="Ask Sous is only available inside the Playbook browse view"
-        >
-          <span className="pb-sousai-icon" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
-            </svg>
-          </span>
-          <span className="pb-sousai-text">Ask Sous about this doc</span>
-          <span className="pb-sousai-tag">Browse view only</span>
-        </div>
+      {/* Per-doc Ask Sous. Owner-only across the board (2026-10-28). The
+          Sous surface itself gates on SOUS_PREVIEW_ALLOWLIST (Kevin-only);
+          named SLT viewers read the Playbook but do not gain Sous, so the
+          whole affordance - live button AND inert "browse view only" tile -
+          is suppressed for non-owners. Nothing to render for them.
+          Owner branches:
+            onOpenSous passed (reader opened from /playbook) -> live button
+            onOpenSous omitted (reader opened from /playbook/admin) -> inert */}
+      {isOwner && (
+        typeof onOpenSous === "function" ? (
+          <button
+            type="button"
+            className="pb-sousai pb-sousai--live"
+            onClick={() => onOpenSous({
+              id: doc.id,
+              title: doc.title,
+              version: doc.version || null,
+              status: doc.status,
+              docClass: doc.doc_class,
+            })}
+            aria-label={`Ask Sous about ${doc.id}`}
+            title={`Ask Sous about ${doc.id}`}
+          >
+            <span className="pb-sousai-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+              </svg>
+            </span>
+            <span className="pb-sousai-text">Ask Sous about this doc</span>
+          </button>
+        ) : (
+          <div
+            className="pb-sousai"
+            role="button"
+            aria-disabled="true"
+            tabIndex={-1}
+            title="Ask Sous is only available inside the Playbook browse view"
+          >
+            <span className="pb-sousai-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+              </svg>
+            </span>
+            <span className="pb-sousai-text">Ask Sous about this doc</span>
+            <span className="pb-sousai-tag">Browse view only</span>
+          </div>
+        )
       )}
 
       {reportOpen && (
