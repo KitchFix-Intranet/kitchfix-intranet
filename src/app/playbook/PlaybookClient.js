@@ -94,7 +94,12 @@ export default function PlaybookClient() {
   if (loading)        return <LoadingState />;
   if (error)          return <ErrorState message={error} />;
   if (!boot)          return <ErrorState message="No data returned from bootstrap." />;
-  if (!boot.isOwner)  return <ComingSoonStub email={boot.email} />;
+  // Stub-gate on canView (2026-10-28). Historically the stub rendered for
+  // any non-owner; with the Playbook now readable by named SLT viewers,
+  // the stub is for people who are NOT in the viewer allowlist. canView
+  // is true for the owner + the three named viewers and false otherwise;
+  // writes stay owner-only via isOwner further down.
+  if (!boot.canView)  return <ComingSoonStub email={boot.email} />;
 
   return (
     <Playbook
@@ -852,18 +857,24 @@ function Hero({ query, setQuery, isOwner, heroImage, onOpenSous }) {
               </button>
             )}
           </div>
-          <button
-            type="button"
-            className="pb-sous-btn"
-            onClick={onOpenSous}
-            aria-label="Ask Sous"
-            title="Ask Sous"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
-            </svg>
-            <span>Ask Sous</span>
-          </button>
+          {/* Owner-only (2026-10-28). Named SLT viewers read the Playbook
+              but do NOT gain Sous access; SOUS_PREVIEW_ALLOWLIST is still
+              the sole Sous gate and remains Kevin-only. Hiding the button
+              is cosmetic; the real gate is server-side in canUseSous. */}
+          {isOwner && (
+            <button
+              type="button"
+              className="pb-sous-btn"
+              onClick={onOpenSous}
+              aria-label="Ask Sous"
+              title="Ask Sous"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+              </svg>
+              <span>Ask Sous</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

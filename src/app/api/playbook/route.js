@@ -36,6 +36,7 @@ import {
 } from "@/lib/dataStore";
 import {
   canViewPlaybook,
+  isPlaybookOwner,
   canUseSous,
   isCorporateEmail,
   visibleStatuses,
@@ -185,7 +186,12 @@ export async function GET(request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
   const actualEmail = session.user.email.toLowerCase().trim();
-  const isOwner = canViewPlaybook(actualEmail);
+  // Split (2026-10-28): isOwner gates every WRITE and the client-facing
+  // isOwner flag (hides edit affordances). canView gates READS - the
+  // Playbook page gate - and is true for the owner PLUS the three named
+  // SLT viewers in PLAYBOOK_VIEWERS.
+  const isOwner = isPlaybookOwner(actualEmail);
+  const canView = canViewPlaybook(actualEmail);
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
@@ -193,20 +199,23 @@ export async function GET(request) {
   try {
     // ── bootstrap ────────────────────────────────────────────────────────
     if (action === "bootstrap") {
-      // Non-owner: minimal payload, client shows coming-soon stub.
-      if (!isOwner) {
+      // Not allowed to read: minimal payload, client shows coming-soon stub.
+      if (!canView) {
         return NextResponse.json({
           email: actualEmail,
           isOwner: false,
+          canView: false,
           shelves: SHELVES,
           documents: [],
         });
       }
 
-      // Owner: full visible-doc set with status + access_level filters applied
-      // server-side. The access_level filter (pr-7-11) drops docs the viewer's
-      // tier can't see; restricted / slt cards never reach an unrestricted
-      // viewer's bootstrap response.
+      // Allowed viewer (owner or read-only): full visible-doc set with
+      // status + access_level filters applied server-side. The access_level
+      // filter (pr-7-11) drops docs the viewer's tier can't see; restricted
+      // / slt cards never reach an unrestricted viewer's bootstrap response.
+      // isOwner is the real owner flag (Kevin only); non-owner viewers get
+      // isOwner=false so the client hides every edit affordance.
       //
       // A6 admin/operator split: by default Retired is excluded for everyone
       // (operator reader). The admin dashboard passes include_retired=true so
@@ -235,7 +244,8 @@ export async function GET(request) {
       const canUsePage = await canUseSous(actualEmail, "page");
       return NextResponse.json({
         email: actualEmail,
-        isOwner: true,
+        isOwner,
+        canView: true,
         shelves: SHELVES,
         documents: visible,
         heroImage,
@@ -245,7 +255,7 @@ export async function GET(request) {
 
     // ── document detail ─────────────────────────────────────────────────
     if (action === "document") {
-      if (!isOwner) {
+      if (!canView) {
         return NextResponse.json({ error: "Not authorized" }, { status: 403 });
       }
       const id = searchParams.get("id");
@@ -633,9 +643,17 @@ export async function POST(request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
   const actualEmail = session.user.email.toLowerCase().trim();
-  if (!canViewPlaybook(actualEmail)) {
+  // Owner-gate every POST write (2026-10-28). Widening the read gate
+  // (canViewPlaybook now includes three SLT viewers) must NOT grant any
+  // write. Report-issue, update-document, pin, archive, restore,
+  // commit-mdx, update-issue - all owner-only. Each interior action
+  // additionally re-checks isOwner below (belt + suspenders); this
+  // top-level isPlaybookOwner is the primary refusal and matches the
+  // historical behaviour byte-for-byte for Kevin.
+  if (!isPlaybookOwner(actualEmail)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
+  const isOwner = true; // reached only via isPlaybookOwner above
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");

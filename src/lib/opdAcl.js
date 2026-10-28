@@ -4,12 +4,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Enforces three things, all app-layer (Postgres uses the service-role client,
-// which bypasses RLS — so RLS cannot be the boundary today):
+// which bypasses RLS - so RLS cannot be the boundary today):
 //
-//   1. PAGE GATE — the whole /playbook route is owner-only until launch.
-//   2. STATUS VISIBILITY — CORP sees in-build/draft etc.; everyone else sees
+//   1. PAGE GATE - the whole /playbook route is owner-only until launch.
+//   2. STATUS VISIBILITY - CORP sees in-build/draft etc.; everyone else sees
 //      Live only. Retired is never shown to any operator view (STD-005 §3.5).
-//   3. ACCESS TIER (pr-7-11) — hierarchical 3-tier gate on documents.access_level
+//   3. ACCESS TIER (pr-7-11) - hierarchical 3-tier gate on documents.access_level
 //      (unrestricted / restricted / slt). Membership lists are HARDCODED here
 //      so changes are auditable through git. Resolver functions below; called
 //      by the bootstrap filter, the document detail handler, and the SousAI
@@ -20,20 +20,43 @@
 //
 // SWAP POINT: audience is derived today from the live `contacts` table
 // (team_key === 'CORP'). When AUTH_MODEL.md ships the `users` table, replace the
-// body of isCorporateEmail() with a users.role lookup — nothing else changes.
+// body of isCorporateEmail() with a users.role lookup - nothing else changes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getServiceClient } from './supabase.js';
 
 // ── Synchronous (pure) ───────────────────────────────────────────────────────
 
-// Page gate. Owner-only for v1. Takes the ACTUAL authenticated email, never an
-// impersonated/effective one — mirrors performanceAcl's system-viewer asymmetry so
-// the gate can't be escalated if impersonation is ever added. Widen or remove at launch.
+// Page gate - SPLIT (2026-10-28). canViewPlaybook now means "can READ the
+// playbook," gated by the hardcoded PLAYBOOK_VIEWERS set below (owner +
+// three named SLT viewers). isPlaybookOwner is the original owner-only
+// check and remains the gate for editing, the admin cockpit, and every
+// POST write. Both take the ACTUAL authenticated email, never an
+// impersonated/effective one - mirrors performanceAcl's system-viewer
+// asymmetry so the gate can't be escalated if impersonation is ever added.
+//
+// Membership lists are HARDCODED here so changes are auditable through git -
+// adding or removing a viewer is a 1-line PR with a visible diff.
 export const PLAYBOOK_OWNER = 'k.fietek@kitchfix.com';
 
+// Who can READ the playbook (read-only unless also the owner). Expand this
+// list to grant read access; it does NOT grant edit / write / admin.
+export const PLAYBOOK_VIEWERS = Object.freeze(new Set([
+  'k.fietek@kitchfix.com',  // Kevin Fietek - Director of Operations (owner)
+  'josh@kitchfix.com',      // Joshua Katt - Founder & CEO
+  'britt@kitchfix.com',     // Brittany Chernikovich - Director of Culinary
+  'joe@kitchfix.com',       // Joseph Lessard - VP Operations
+]));
+
 export function canViewPlaybook(actualEmail) {
-  return (actualEmail || '').toLowerCase() === PLAYBOOK_OWNER;
+  return PLAYBOOK_VIEWERS.has((actualEmail || '').toLowerCase().trim());
+}
+
+// The historical owner-only check. Gates every WRITE (POST handler, admin
+// cockpit, update-document, pin, issue status, etc.) and sets the client-
+// facing `isOwner` flag that hides edit affordances.
+export function isPlaybookOwner(actualEmail) {
+  return (actualEmail || '').toLowerCase().trim() === PLAYBOOK_OWNER;
 }
 
 // ── Sous Reports viewer allowlist ─────────────────────────────────────────────
@@ -159,12 +182,20 @@ export async function canUseSous(email, surfaceOrDeps, maybeDeps) {
   deps = deps || {
     viewerTier: canUseSous_defaultViewerTier,
     isCorporateEmail: canUseSous_defaultIsCorporateEmail,
-    canViewPlaybook: canUseSous_defaultCanViewPlaybook,
+    isPlaybookOwner: canUseSous_defaultIsPlaybookOwner,
   };
-  // Panel surface delegates entirely to canViewPlaybook - the exact
-  // predicate the Playbook access check uses today. No second gate.
+  // Panel surface delegates to isPlaybookOwner (2026-10-28). Historically
+  // this delegated to canViewPlaybook because "panel open to anyone who
+  // can access the Playbook" captured the intent exactly when the
+  // Playbook was Kevin-only. With the viewer split (canViewPlaybook now
+  // includes the three read-only SLT viewers), delegating here would
+  // widen Sous as a side-effect - and Kevin's standing ruling keeps Sous
+  // locked to SOUS_PREVIEW_ALLOWLIST. Point this delegate at
+  // isPlaybookOwner so widening the read gate never widens Sous. Widening
+  // Sous panel access is its own decision; add the targets to
+  // SOUS_PREVIEW_ALLOWLIST or revise this delegate explicitly.
   if (surface === "panel") {
-    const check = deps.canViewPlaybook || canUseSous_defaultCanViewPlaybook;
+    const check = deps.isPlaybookOwner || canUseSous_defaultIsPlaybookOwner;
     return check(email) === true;
   }
   // Page surface: preview lock first, then pre-lock tier logic.
@@ -178,7 +209,7 @@ export async function canUseSous(email, surfaceOrDeps, maybeDeps) {
 // file supplying `deps` is not accidentally shadowed by a hoist issue.
 function canUseSous_defaultViewerTier(email) { return viewerTier(email); }
 async function canUseSous_defaultIsCorporateEmail(email) { return await isCorporateEmail(email); }
-function canUseSous_defaultCanViewPlaybook(email) { return canViewPlaybook(email); }
+function canUseSous_defaultIsPlaybookOwner(email) { return isPlaybookOwner(email); }
 
 // ── pr-7-11: 3-tier access gate ─────────────────────────────────────────────
 //
@@ -289,7 +320,7 @@ export function filterDocuments(documents, isCorporate) {
 // ── Async (single DB lookup) ─────────────────────────────────────────────────
 
 // v1 audience source of truth: contacts.team_key === 'CORP'.
-// Fails CLOSED (denies Drafts) on lookup error — never leak in-progress docs.
+// Fails CLOSED (denies Drafts) on lookup error - never leak in-progress docs.
 export async function isCorporateEmail(email) {
   if (!email) return false;
   const sb = getServiceClient();
