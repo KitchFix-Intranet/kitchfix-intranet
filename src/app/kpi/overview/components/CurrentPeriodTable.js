@@ -90,6 +90,26 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
   const lbWk = (labor?.board?.weeks || [])[i] || null;
   const meals = Number(lbWk?.meal_revenue ?? w.meal_revenue ?? 0);
   const fee   = Number(lbWk?.fee_prorate  ?? w.fee_prorate  ?? 0);
+  // Catering (2026-10-29). export_excluded SC services (TBR - FL /
+  // B&G Lunch today). Already inside the meals total emitted by the
+  // resolver, so the MEALS display line subtracts it when non-zero so
+  // MEALS + CATERING + SERVICE FEE === REVENUE. Zero on accounts
+  // without catering, which suppresses the sub-row through the
+  // catering > 0 guard below. Only present on week_rail rows (running
+  // phase); on closed/future `w` comes from the labor board and the
+  // breakdown rows don't render anyway (see the `meals > 0 || fee > 0`
+  // guard below).
+  const catering = Number(w?.catering_revenue ?? 0);
+  const mealsOnly = catering > 0 ? Math.max(0, meals - catering) : meals;
+  // Per-line forecast cue for catering: if the week overall is
+  // confirmed but catering is pure projection (zero confirmed catering
+  // services, > 0 projected catering services), the catering line
+  // specifically reads forecast even when the week-wide basis is not.
+  const cateringConfirmed = Number(w?.catering_confirmed_services || 0);
+  const cateringProjected = Number(w?.catering_projected_services || 0);
+  const cateringLineForecast = catering > 0
+    && cateringConfirmed === 0
+    && cateringProjected > 0;
   const conf  = Number(lbWk?.confirmed_services || 0);
   const totl  = Number(lbWk?.total_services || 0);
   const basis = isFuture ? "forecast" : (w.revenue_basis || "");
@@ -133,7 +153,7 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
       </>
     );
   }
-  const showSubs = meals > 0 || fee > 0;
+  const showSubs = meals > 0 || fee > 0 || catering > 0;
   if (!showSubs) {
     return (
       <>
@@ -148,10 +168,16 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
   }
   return (
     <>
-      {meals > 0 && (
+      {mealsOnly > 0 && (
         <div className="kpi-ov-cp-lr">
           <span className="kpi-ov-cp-lk">MEALS</span>
-          <span className={`kpi-ov-cp-lv kpi-ov-cp-lv-budget${fcCls}`}>{dollar0(meals)}</span>
+          <span className={`kpi-ov-cp-lv kpi-ov-cp-lv-budget${fcCls}`}>{dollar0(mealsOnly)}</span>
+        </div>
+      )}
+      {catering > 0 && (
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">CATERING</span>
+          <span className={`kpi-ov-cp-lv kpi-ov-cp-lv-budget${fcCls || (cateringLineForecast ? " kpi-ov-cp-lv-fc" : "")}`}>{dollar0(catering)}</span>
         </div>
       )}
       {fee > 0 && (
@@ -363,7 +389,7 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow, ne
 // comparison - the period is over. `projection` on closed is Σ week
 // revenue = the actual earned amount (revProj sourced from the same
 // sum upstream).
-function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue, mealsTotal, feeTotal, feeRevenueDisplay, revActualConfirmedPeriod = 0, revProjConfirmedPeriod = 0 }) {
+function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, budgetRevenue, mealsTotal, feeTotal, cateringTotal = 0, feeRevenueDisplay, revActualConfirmedPeriod = 0, revProjConfirmedPeriod = 0 }) {
   const isFuture = phase === "future";
   if (phase === "closed") {
     return (
@@ -453,7 +479,13 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
   }
   const revTot = Math.round(Number(projection || 0));
   const feeR = Math.round(fTot);
-  const mealsR = revTot - feeR;
+  // Catering (2026-10-29). Rounded sum of the week_rail's catering
+  // slice. MEALS absorbs the sub-dollar drift: REVENUE is the
+  // authoritative total, SERVICE FEE and CATERING are clean sums,
+  // MEALS = REVENUE - SERVICE FEE - CATERING so the three sub-rows
+  // always add to the big number.
+  const cateringR = Math.round(Number(cateringTotal || 0));
+  const mealsR = revTot - feeR - cateringR;
   // 2026-10-22 (vs-projection caption on period total). Running
   // phase: period is mid-flight, so the "to date" qualifier is
   // always present. Guard on confirmed > 0 so a period before any
@@ -467,6 +499,12 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
         <div className="kpi-ov-cp-lr">
           <span className="kpi-ov-cp-lk">MEALS</span>
           <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(mealsR)}</span>
+        </div>
+      )}
+      {cateringR > 0 && (
+        <div className="kpi-ov-cp-lr">
+          <span className="kpi-ov-cp-lk">CATERING</span>
+          <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(cateringR)}</span>
         </div>
       )}
       {feeR > 0 && (
@@ -1184,6 +1222,14 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       const lbWk = (labor?.board?.weeks || [])[i] || null;
       return s + Number(lbWk?.fee_prorate ?? w?.fee_prorate ?? 0);
     }, 0);
+    // Period-level CATERING sum (2026-10-29). Prefer the resolver's
+    // true sum from week_rail (zero on accounts without catering);
+    // fall back to summing per-week catering_revenue in case the
+    // payload omits the period total (older shape). PerRevCellBody
+    // uses this to split the CATERING line out of MEALS the same way
+    // the week cells do.
+    const cateringPeriodTotal = Number(payload?.week_rail?.catering_revenue_period
+      ?? weeks.reduce((s, w) => s + Number(w?.catering_revenue || 0), 0));
     // 2026-10-22 (vs-projection caption on period total). Prefer the
     // resolver's week_rail period sums - a true sum emitted upstream,
     // not a client re-derivation. Fall back to summing per-week
@@ -1680,7 +1726,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, cateringPeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
   }, [payload, weeks, labor, purch, rowSet, isFuture, phase, billbackActive]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -2119,7 +2165,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                 style={{ gridColumn: 6, gridRow: rlabGr }}
               >
                 {isRev
-                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} mealsTotal={derived.mealsPeriodTotal} feeTotal={derived.feePeriodTotal} feeRevenueDisplay={derived.feeRevenueDisplay} revActualConfirmedPeriod={derived.revActualConfirmedPeriod} revProjConfirmedPeriod={derived.revProjConfirmedPeriod} />
+                  ? <PerRevCellBody projection={derived.revProj} confirmed={derived.revConf} dayFrac={dayFrac} phase={phase} serviceDays={serviceDaysTotal} budgetRevenue={derived.budgetRevenue} mealsTotal={derived.mealsPeriodTotal} feeTotal={derived.feePeriodTotal} cateringTotal={derived.cateringPeriodTotal} feeRevenueDisplay={derived.feeRevenueDisplay} revActualConfirmedPeriod={derived.revActualConfirmedPeriod} revProjConfirmedPeriod={derived.revProjConfirmedPeriod} />
                   : (() => {
                       // Build 1 (2026-10-19). Honest period column.
                       // Sum closed-week budgets + spents for the to-date

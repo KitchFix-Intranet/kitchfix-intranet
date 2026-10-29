@@ -2352,6 +2352,15 @@ export async function resolveOverview({
       // move, which is the point of the fix.
       const mealRev = Number(w.week_actual_revenue || 0)
                     + Number(w.week_projected_revenue || 0);
+      // Catering slice (2026-10-29). export_excluded services only.
+      // Blended actual + projected like mealRev; emitted as its own
+      // field so the current-period cell can render a CATERING
+      // sub-row between MEALS and SERVICE FEE. Zero on accounts
+      // without an active export_excluded service (resolver returns 0
+      // on both actual + projected catering legs), so the client
+      // guard catering > 0 suppresses the row cleanly.
+      const cateringRev = Number(w.week_catering_actual_revenue || 0)
+                        + Number(w.week_catering_projected_revenue || 0);
       const weekRevTotal = mealRev + feePerWeek;
       const costTarget = cogsTargetPct != null ? weekRevTotal * (cogsTargetPct / 100) : null;
       const laborSpent = Number(w.spent || 0);
@@ -2363,6 +2372,9 @@ export async function resolveOverview({
         state: w.state,                           // "closed" | "in_progress" | "not_started"
         revenue_basis: w.revenue_basis || null,   // "confirmed" | "forecast" | "partial" | null
         meal_revenue: r2(mealRev),
+        catering_revenue: r2(cateringRev),
+        catering_confirmed_services: Number(w.week_catering_confirmed_services || 0),
+        catering_projected_services: Number(w.week_catering_projected_services || 0),
         fee_prorate: r2(feePerWeek),
         week_revenue: r2(weekRevTotal),
         // 2026-10-22. Meal-only pair on confirmed-in-denom days:
@@ -2389,6 +2401,13 @@ export async function resolveOverview({
     // the period caption as a true sum, not a client re-derivation.
     const revenueActualConfirmedPeriod = rows.reduce((s, r) => s + Number(r.revenue_actual_confirmed || 0), 0);
     const revenueProjectionConfirmedPeriod = rows.reduce((s, r) => s + Number(r.revenue_projection_confirmed || 0), 0);
+    // Period-level catering total (2026-10-29). True sum emitted
+    // upstream so the current-period cell's PerRevCellBody reads a
+    // single number instead of re-deriving from per-week fields that
+    // round at the week level. Zero on accounts without catering, so
+    // the client's catering > 0 guard suppresses the CATERING line
+    // on the period total as cleanly as on individual weeks.
+    const cateringRevenuePeriod = rows.reduce((s, r) => s + Number(r.catering_revenue || 0), 0);
     week_rail = {
       period_no: rng.period_no,
       running_week_no: runningWeekNoOut,
@@ -2400,6 +2419,7 @@ export async function resolveOverview({
       weeks: rows,
       revenue_actual_confirmed_period: r2(revenueActualConfirmedPeriod),
       revenue_projection_confirmed_period: r2(revenueProjectionConfirmedPeriod),
+      catering_revenue_period: r2(cateringRevenuePeriod),
     };
   }
 
