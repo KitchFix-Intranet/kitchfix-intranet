@@ -1255,7 +1255,14 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                   <span className="sc-workspace-band-sum">
                     {isFeeAccount
                       ? `${(wm.actMeals || 0).toLocaleString()} meals`
-                      : fmt$(wm.actRev)}
+                      /* Billable total: excludes export_excluded services
+                         (B&G Lunch etc. that invoice separately). Mirrors
+                         the finalize-overlay figure a few hundred lines
+                         below; falls back to actRev on older payloads
+                         (no billableActualRevenue in day.totals yet) so
+                         accounts with no export-excluded services display
+                         unchanged. */
+                      : fmt$(typeof wm.billableActRev === "number" ? wm.billableActRev : wm.actRev)}
                   </span>
                 </div>
               )}

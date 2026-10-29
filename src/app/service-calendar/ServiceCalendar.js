@@ -212,6 +212,11 @@ function aggregateWorkspaceMetrics(days, { groupBy = "fiscalWeek" } = {}) {
   const out = {
     projMeals: 0, actMeals: 0,
     projRev: 0, actRev: 0,
+    // Period-level billable sibling to actRev. Excludes export_excluded
+    // services (B&G Lunch, catering flagged as separately billed). Mirrors
+    // the per-week w.billableActRev below; falls back to actualRevenue
+    // for older payloads that pre-date billableActualRevenue in day.totals.
+    billableActRev: 0,
     complete: 0, needsEntry: 0, overdue: 0,
     // SC-043: service/game day counts drive the week-card denominators
     // + the "No service" / "No games" week variant. Kind-agnostic here;
@@ -281,7 +286,14 @@ function aggregateWorkspaceMetrics(days, { groupBy = "fiscalWeek" } = {}) {
       if (isDayComplete) out.gameDaysEntered++;
     }
     out.projRev += day.totals?.projectedRevenue || 0;
-    if (day.hasActuals) out.actRev += day.totals?.actualRevenue || 0;
+    if (day.hasActuals) {
+      out.actRev += day.totals?.actualRevenue || 0;
+      out.billableActRev += (
+        typeof day.totals?.billableActualRevenue === "number"
+          ? day.totals.billableActualRevenue
+          : (day.totals?.actualRevenue || 0)
+      );
+    }
     for (const ci of Object.keys(day.projected || {})) {
       const pv = day.projected[ci];
       if (pv != null) out.projMeals += pv;

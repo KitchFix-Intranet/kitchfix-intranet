@@ -82,8 +82,12 @@ export default function DrillRail({
 
   const m = periodMetrics || null;
 
-  // Hero derivation (always structural, never separately summed)
-  const heroActRev = m?.actRev || 0;
+  // Hero derivation (always structural, never separately summed).
+  // Billable total: excludes export_excluded services (B&G Lunch etc.
+  // that invoice separately). Falls back to actRev on older payloads
+  // that pre-date billableActualRevenue in day.totals so accounts with
+  // no export-excluded services display unchanged.
+  const heroActRev = typeof m?.billableActRev === "number" ? m.billableActRev : (m?.actRev || 0);
   const heroProjRev = m?.projRev || 0;
   const heroDaysEntered = m?.complete || 0;
   const heroTotalDays = m?.total || 0;
@@ -419,7 +423,11 @@ export default function DrillRail({
               : null}
           >
             {weekLines.map(({ key, label, wm, isCurrent }) => {
-              const money = incomplete ? "--" : fmt$(wm.actRev);
+              // Billable total mirrors the in-grid band + hero: excludes
+              // export_excluded services (B&G etc.). Falls back to actRev
+              // on older payloads with no billableActualRevenue field.
+              const weekMoney = typeof wm?.billableActRev === "number" ? wm.billableActRev : wm.actRev;
+              const money = incomplete ? "--" : fmt$(weekMoney);
               const tone = incomplete
                 ? "attention"
                 : (isCurrent ? "current" : "in-progress");
