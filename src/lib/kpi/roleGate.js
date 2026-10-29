@@ -96,6 +96,13 @@ export const KPI_PREVIEW_ALLOWLIST = [
   "s.lynch@kitchfix.com",
   "d.diaz@kitchfix.com",
   "m.richards@kitchfix.com",
+  // 2026-10-29: TBR - FL site team. Roles resolve from people (no
+  // kpi_roles rows): Coppolino is_site_leader -> site_leader; the two
+  // sous are active salaried -> site_manager. All three scoped to
+  // TBR - FL only; the fence was the only thing blocking them.
+  "j.coppolino@kitchfix.com",
+  "s.bailey@kitchfix.com",
+  "s.groves@kitchfix.com",
 ];
 
 /**
