@@ -2350,17 +2350,29 @@ export async function resolveOverview({
       // (byte-identical to prior behaviour); on forecast weeks
       // actual_revenue = 0 (byte-identical). Only partial weeks
       // move, which is the point of the fix.
+      // Closed-week catering projection carveout (owner ruling
+      // 2026-10-29). On a past week the catering (export_excluded)
+      // projection is a stand-in for a monthly B&G bill that never
+      // arrived - treat it as $0. Meals keep today's mix on every
+      // week. Running / future weeks are unchanged. Accounts with no
+      // export_excluded service have cateringProjRaw === 0, so the
+      // subtraction is a no-op and they are byte-identical. See
+      // src/lib/labor/labor-week-basis.js for the mirror rule.
+      const closed = w.state === "closed";
+      const cateringProjRaw = Number(w.week_catering_projected_revenue || 0);
       const mealRev = Number(w.week_actual_revenue || 0)
-                    + Number(w.week_projected_revenue || 0);
+                    + Number(w.week_projected_revenue || 0)
+                    - (closed ? cateringProjRaw : 0);
       // Catering slice (2026-10-29). export_excluded services only.
-      // Blended actual + projected like mealRev; emitted as its own
-      // field so the current-period cell can render a CATERING
-      // sub-row between MEALS and SERVICE FEE. Zero on accounts
-      // without an active export_excluded service (resolver returns 0
-      // on both actual + projected catering legs), so the client
-      // guard catering > 0 suppresses the row cleanly.
-      const cateringRev = Number(w.week_catering_actual_revenue || 0)
-                        + Number(w.week_catering_projected_revenue || 0);
+      // Emitted as its own field so the current-period cell can
+      // render a CATERING sub-row between MEALS and SERVICE FEE.
+      // Zero on accounts without catering, so the client guard
+      // catering > 0 suppresses the row. Closed weeks here collapse
+      // to actual-only; running + future keep the actual + projected
+      // mix.
+      const cateringRev = closed
+        ? Number(w.week_catering_actual_revenue || 0)
+        : Number(w.week_catering_actual_revenue || 0) + cateringProjRaw;
       const weekRevTotal = mealRev + feePerWeek;
       const costTarget = cogsTargetPct != null ? weekRevTotal * (cogsTargetPct / 100) : null;
       const laborSpent = Number(w.spent || 0);
