@@ -359,9 +359,20 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       // "vs proj" on confirmed days only.
       projected_revenue_in_denom: Math.round(projectedRevInDenom * 100) / 100,
       projected_revenue: Math.round(projectedRev * 100) / 100,
+      // Closed-week catering projection carveout (owner ruling
+      // 2026-10-29). A past week with no catering (export_excluded)
+      // actuals shows catering = $0, not its projection. B&G is
+      // billed monthly and separately, so a closed-week catering
+      // projection is a stand-in for a bill that never arrived -
+      // treat it as $0. Meals keep today's actual-or-projection mix
+      // on every week (per-day entry pattern is tight; projections
+      // mostly fill the current/future weeks). Running/future weeks
+      // and the forecast branch are unchanged. Accounts with no
+      // export_excluded service have cateringProjectedRev === 0, so
+      // the subtraction is a no-op and they are byte-identical.
       revenue: basis === "forecast"
         ? Math.round(projectedRev * 100) / 100             // pure forecast: projections only
-        : Math.round((actualRev + projectedRev) * 100) / 100, // confirmed or partial: mix
+        : Math.round((actualRev + projectedRev - (weekTemporalState(ws, today) === "closed" ? cateringProjectedRev : 0)) * 100) / 100,
       // Catering slice (2026-10-29). export_excluded services only.
       // Follows the same actual + projected split and basis logic;
       // numbers reconcile with their non-catering siblings as
@@ -374,9 +385,16 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       catering_projected_revenue_in_denom: Math.round(cateringProjectedRevInDenom * 100) / 100,
       catering_confirmed_services: cateringConfirmedSvcs,
       catering_projected_services: cateringProjectedSvcs,
-      catering_revenue: basis === "forecast"
-        ? Math.round(cateringProjectedRev * 100) / 100
-        : Math.round((cateringActualRev + cateringProjectedRev) * 100) / 100,
+      // Catering shown figure. Closed weeks: actuals only (owner
+      // ruling 2026-10-29; see `revenue` comment above). Running +
+      // future weeks keep today's actual-or-projection mix. Pure
+      // forecast weeks (no in-denom catering actuals or projections)
+      // stay on their projection as before.
+      catering_revenue: weekTemporalState(ws, today) === "closed"
+        ? Math.round(cateringActualRev * 100) / 100
+        : (basis === "forecast"
+          ? Math.round(cateringProjectedRev * 100) / 100
+          : Math.round((cateringActualRev + cateringProjectedRev) * 100) / 100),
     };
   });
   return { data };
