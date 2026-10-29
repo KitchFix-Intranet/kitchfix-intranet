@@ -138,6 +138,29 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
   const weekStarts = weekStartsInRange(start, end);
   if (weekStarts.length === 0) return { data: [] };
 
+  // Catering (2200) is the SC revenue stream that invoices separately
+  // from meals. The signal is sc_qbo_service_map.export_excluded = true
+  // (confirmed probe 2026-10-29: today only TBR - FL / B&G Lunch
+  // carries the flag). Build a Set<`${account_key}::${service_id}`> so
+  // the per-row loop below can bucket catering into its own
+  // accumulator without a second query per row.
+  const cateringKeySet = new Set();
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    const q = await supa
+      .from("sc_qbo_service_map")
+      .select("account_key, service_id")
+      .in("account_key", memberChunk)
+      .eq("export_excluded", true)
+      .eq("active", true);
+    if (q.error) return { error: q.error, scope: "sc_qbo_service_map" };
+    for (const r of q.data || []) {
+      if (r.account_key && r.service_id) {
+        cateringKeySet.add(`${r.account_key}::${r.service_id}`);
+      }
+    }
+  }
+  const isCatering = (r) => cateringKeySet.has(`${r.account_key}::${r.service_id}`);
+
   // Query sc_daily_revenue for the whole range, then bucket client-
   // side by week. Same filter Overview applies: NOT is_non_revenue.
   const rows = [];
@@ -192,6 +215,16 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
   for (const w of weekStarts) byWeek.set(w, {
     confirmedSvcs: 0, projectedSvcs: 0, emptySlotSvcs: 0,
     actualRev: 0, projectedRev: 0,
+    // Catering accumulators (2026-10-29). Parallel bookkeeping over
+    // the export_excluded subset so the current-period cell can render
+    // a CATERING sub-row consistent with the "N of X confirmed"
+    // behaviour applied to meals. Totals ARE included in actualRev /
+    // projectedRev above - catering is a slice of today's SC meal
+    // number, not an additional stream. Clients derive the meals-only
+    // display line as actual - catering (or projected - catering).
+    cateringActualRev: 0, cateringProjectedRev: 0,
+    cateringActualRevInDenom: 0, cateringProjectedRevInDenom: 0,
+    cateringConfirmedSvcs: 0, cateringProjectedSvcs: 0,
     // Kevin ratify R-92 PR-3 (2026-09-09). actualRevInDenom sums
     // actual_revenue ONLY from rows in the R-85 denominator
     // (has_projection && projected_revenue > 0). A confirmed week
@@ -230,11 +263,16 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     bucket.daysWithService.add(r.service_date);
     const inDenom = r.has_projection && Number(r.projected_revenue || 0) > 0;
     if (r.has_actuals || inDenom) bucket.daysWithMeaningfulService.add(r.service_date);
+    const catering = isCatering(r);
     if (r.has_actuals) {
       // Confirmed service. Counts in denominator regardless of what
       // was projected (a service that was served is a real service).
       bucket.confirmedSvcs += 1;
       bucket.actualRev += Number(r.actual_revenue || 0);
+      if (catering) {
+        bucket.cateringConfirmedSvcs += 1;
+        bucket.cateringActualRev += Number(r.actual_revenue || 0);
+      }
       // R-85 denominator: this row only contributes to
       // actualRevInDenom if it also had a real projection.
       if (inDenom) bucket.actualRevInDenom += Number(r.actual_revenue || 0);
@@ -244,12 +282,20 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       // filters on has_actuals=true AND has_projection AND
       // projected_revenue>0.
       if (inDenom) bucket.projectedRevInDenom += Number(r.projected_revenue || 0);
+      if (catering && inDenom) {
+        bucket.cateringActualRevInDenom += Number(r.actual_revenue || 0);
+        bucket.cateringProjectedRevInDenom += Number(r.projected_revenue || 0);
+      }
       bucket.daysWithConfirmedSvc.add(r.service_date);
     } else if (inDenom) {
       // Real projected service - client planned to serve, hasn't been
       // confirmed yet. Counts in denominator.
       bucket.projectedSvcs += 1;
       bucket.projectedRev += Number(r.projected_revenue || 0);
+      if (catering) {
+        bucket.cateringProjectedSvcs += 1;
+        bucket.cateringProjectedRev += Number(r.projected_revenue || 0);
+      }
     } else if (r.has_projection) {
       // Empty calendar slot - has_projection=true but projected_revenue=0.
       // Excluded from denominator per Kevin's ruling; tracked so the
@@ -263,7 +309,14 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     const bucket = byWeek.get(ws);
     const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * MS_PER_DAY).toISOString().slice(0, 10);
 
-    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev, actualRevInDenom, projectedRevInDenom } = bucket;
+    const {
+      confirmedSvcs, projectedSvcs, emptySlotSvcs,
+      actualRev, projectedRev,
+      actualRevInDenom, projectedRevInDenom,
+      cateringActualRev, cateringProjectedRev,
+      cateringActualRevInDenom, cateringProjectedRevInDenom,
+      cateringConfirmedSvcs, cateringProjectedSvcs,
+    } = bucket;
     const totalSvcs = confirmedSvcs + projectedSvcs;       // meaningful denominator
     const basis = totalSvcs === 0
       ? "forecast"                                         // no meaningful services -> nothing to compare
@@ -309,6 +362,21 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       revenue: basis === "forecast"
         ? Math.round(projectedRev * 100) / 100             // pure forecast: projections only
         : Math.round((actualRev + projectedRev) * 100) / 100, // confirmed or partial: mix
+      // Catering slice (2026-10-29). export_excluded services only.
+      // Follows the same actual + projected split and basis logic;
+      // numbers reconcile with their non-catering siblings as
+      // actual_revenue - catering_actual_revenue === meals-only actuals.
+      // Current-period cell renders a CATERING sub-row when
+      // catering_revenue > 0 for the range.
+      catering_actual_revenue: Math.round(cateringActualRev * 100) / 100,
+      catering_projected_revenue: Math.round(cateringProjectedRev * 100) / 100,
+      catering_actual_revenue_in_denom: Math.round(cateringActualRevInDenom * 100) / 100,
+      catering_projected_revenue_in_denom: Math.round(cateringProjectedRevInDenom * 100) / 100,
+      catering_confirmed_services: cateringConfirmedSvcs,
+      catering_projected_services: cateringProjectedSvcs,
+      catering_revenue: basis === "forecast"
+        ? Math.round(cateringProjectedRev * 100) / 100
+        : Math.round((cateringActualRev + cateringProjectedRev) * 100) / 100,
     };
   });
   return { data };
@@ -524,6 +592,14 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     // bucket for the mirror-of-actualRevInDenom invariant.
     w.week_actual_revenue_in_denom = basis.actual_revenue_in_denom;
     w.week_projected_revenue_in_denom = basis.projected_revenue_in_denom;
+    // Catering split (2026-10-29). Mirrors the meals pair but scoped
+    // to export_excluded services. Feeds the current-period cell's
+    // CATERING sub-row; present on every account but zero unless the
+    // account has an active export_excluded service.
+    w.week_catering_actual_revenue = basis.catering_actual_revenue;
+    w.week_catering_projected_revenue = basis.catering_projected_revenue;
+    w.week_catering_confirmed_services = basis.catering_confirmed_services;
+    w.week_catering_projected_services = basis.catering_projected_services;
 
     const periodNo = periodOf(w.week_start);
     const isVerified = periodNo != null && verifiedTotals.has(periodNo);
