@@ -101,19 +101,37 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
   // guard below).
   const catering = Number(w?.catering_revenue ?? 0);
   const mealsOnly = catering > 0 ? Math.max(0, meals - catering) : meals;
+  const conf  = Number(lbWk?.confirmed_services || 0);
+  const totl  = Number(lbWk?.total_services || 0);
+  const basis = isFuture ? "forecast" : (w.revenue_basis || "");
+  // "Settled done week" gate (owner ruling 2026-10-29). A week whose
+  // own state is closed AND whose basis is not pure forecast (at least
+  // one in-denominator service has an actual) is considered complete
+  // for all revenue lines - MEALS, CATERING, SERVICE FEE, REVENUE all
+  // render normal weight. Rationale: the only reason a closed TBR - FL
+  // week stays `partial` is that B&G (catering) actuals arrive on a
+  // monthly cycle; the meals are already fully entered. The projected
+  // catering slice trues up when the monthly B&G number lands.
+  //
+  // Does NOT affect running (in_progress) or future (not_started)
+  // weeks - those keep their to-date / forecast treatment and their
+  // "N of X confirmed" note. A closed week with ZERO actuals (pure
+  // forecast) stays italic - the `basis !== "forecast"` clause makes
+  // sure of that.
+  const weekSettled = w?.state === "closed" && basis !== "forecast";
+  const noteText = (!weekSettled && phase === "running" && basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
   // Per-line forecast cue for catering: if the week overall is
   // confirmed but catering is pure projection (zero confirmed catering
   // services, > 0 projected catering services), the catering line
   // specifically reads forecast even when the week-wide basis is not.
+  // Suppressed on a settled done week - the ruling above overrides
+  // this per-line cue on closed weeks that have any actuals.
   const cateringConfirmed = Number(w?.catering_confirmed_services || 0);
   const cateringProjected = Number(w?.catering_projected_services || 0);
-  const cateringLineForecast = catering > 0
+  const cateringLineForecast = !weekSettled
+    && catering > 0
     && cateringConfirmed === 0
     && cateringProjected > 0;
-  const conf  = Number(lbWk?.confirmed_services || 0);
-  const totl  = Number(lbWk?.total_services || 0);
-  const basis = isFuture ? "forecast" : (w.revenue_basis || "");
-  const noteText = (phase === "running" && basis === "partial" && totl > 0) ? `${conf} of ${totl} confirmed` : null;
   const lbSvcDays = Number(lbWk?.service_days ?? 0);
   const wkRev = Number(lbWk?.week_revenue ?? w.week_revenue ?? amount ?? 0);
   const feeOnlyWeek = isFuture && lbSvcDays === 0 && wkRev > 0;
@@ -133,7 +151,11 @@ function RevCellBody({ w, amount, labor, i, phase, dashRow }) {
   // week whose revenue isn't settled (future, partial, forecast
   // basis). Closed + verified weeks render normal weight so WK3/WK4
   // projection does not look identical to a closed-week actual.
-  const isForecast = isFuture || basis === "forecast" || basis === "partial";
+  // 2026-10-29: `partial` on a closed week with any actuals is now
+  // considered settled (owner ruling, see weekSettled above), so the
+  // forecast cue only fires on genuinely unsettled weeks - future,
+  // running, or closed-but-pure-forecast.
+  const isForecast = !weekSettled && (isFuture || basis === "forecast" || basis === "partial");
   const fcCls = isForecast ? " kpi-ov-cp-lv-fc" : "";
 
   if (dashRow) {
