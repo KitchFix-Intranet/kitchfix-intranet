@@ -31,15 +31,16 @@
 // the account roster is big enough that a hand-maintained allowlist
 // becomes a hazard.
 //
-// ─── Current state (2026-10-16) ───────────────────────────────────
+// ─── Current state (2026-10-29) ───────────────────────────────────
 //
 // The stub returns 'live' for accounts on LIVE_ACCOUNTS and 'test'
-// for everything else (default-deny). Three accounts are live as of
-// this PR: TBJ - FL, CIN - AZ, and TXR - AZ. CIN - AZ and TXR - AZ
-// were already live in sc_qbo_account_map (and pushing real invoices
-// on the server) when this stub was still returning 'test' for them;
-// this PR closes that pre-existing badge drift, it does NOT flip them
-// live. TBR - FL remains intentionally test.
+// for everything else (default-deny). Four accounts are live as of
+// this PR: TBJ - FL, CIN - AZ, TXR - AZ, and TBR - FL. CIN - AZ and
+// TXR - AZ were already live in sc_qbo_account_map (and pushing real
+// invoices on the server) when this stub was still returning 'test'
+// for them; the 2026-10-16 PR closed that pre-existing badge drift.
+// TBR - FL (QBO customer 17860) flipped live in Studio on 2026-10-29
+// and is added here in the same hand.
 //
 // The allowlist MUST be kept in sync with each Studio flip of
 // sc_qbo_account_map.qbo_mode: if an account is flipped to live in
@@ -58,6 +59,7 @@ const LIVE_ACCOUNTS = new Set([
   "TBJ - FL",
   "CIN - AZ",
   "TXR - AZ",
+  "TBR - FL",
 ]);
 
 /**
@@ -84,6 +86,7 @@ const LIVE_DESTINATIONS = {
   "TBJ - FL": "Rogers Blue Jays Baseball Partnership", // QBO customer 16971
   "CIN - AZ": "Cincinnati Reds (Goodyear, AZ)",        // QBO customer 17752
   "TXR - AZ": "Texas Rangers - Surprise, AZ",          // QBO customer 19000
+  "TBR - FL": "Tampa Bay Rays MiLB/MLB",               // QBO customer 17860
 };
 
 /**
