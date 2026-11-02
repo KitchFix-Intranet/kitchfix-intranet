@@ -58,6 +58,47 @@ export const API_VERSION = "2024-08-01";
 // hash.
 const NESTED_STRIP_KEYS = new Set(["display_value", "has_perm", "image"]);
 
+// Full ISO-8601 datetime with an EXPLICIT offset (either `Z` or
+// `+HH:MM` / `-HH:MM`). The regex is deliberately strict:
+//   - a date-only "2026-11-03" has no `T` -> no match -> pass through
+//   - "17:25:00" with no offset is ambiguous local time -> no match
+//   - a duration "P1D" / numeric id / free text has no T + no offset -> no match
+// A match is safe to canonicalize because the string unambiguously
+// denotes an instant.
+const ISO_DT_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+// Canonicalize ISO-8601 datetime strings carrying an explicit offset
+// to the single UTC form `toISOString()` emits
+// (`YYYY-MM-DDTHH:mm:ss.sssZ`). Non-string values and strings that do
+// not match the strict ISO pattern pass through byte-identical.
+//
+// Why this exists (2026-11-02 time_entries measurement):
+//   Rippling serializes the SAME INSTANT in two offset shapes between
+//   calls on `segments[].start_time` / `.end_time`:
+//     "2025-11-03T17:25:00+00:00"  <-> "2025-11-03T12:25:00-05:00"
+//   Both are the same wall-clock instant. The JSON string differs,
+//   the SHA-256 differs, and a new row lands even though nothing
+//   substantive changed. 10,766 of 11,773 adjacent-version pairs
+//   on rippling_raw_time_entries are this pattern (~97% noise).
+//
+// Why canonicalize at the hash input, not in the stored payload:
+//   The stored payload must stay byte-identical to what Rippling
+//   sent so downstream consumers see the shape the source emits.
+//   Only the hash INPUT is normalized - the payload passes through.
+//
+// Scope: applies at every depth and on every endpoint (time_entries,
+//   pay_segments, workers, users, time_entry_zo, compensations,
+//   spend_lines). All of them can carry a datetime that re-serializes
+//   between fetches; the users fix landed a per-endpoint exclude,
+//   this is the universal shape fix.
+function _canonicalizeScalar(v) {
+  if (typeof v !== "string") return v;
+  if (!ISO_DT_WITH_OFFSET.test(v)) return v;
+  const t = Date.parse(v);
+  if (!Number.isFinite(t)) return v;
+  return new Date(t).toISOString();
+}
+
 // Top-level volatile fields per object kind. Kept per-kind because
 // `worker` on a time_entry is a big denormalized blob that changes
 // with the worker's own edits; a pay_segment has no equivalent
@@ -210,7 +251,12 @@ export function firstPageUrl(path, limit = 100) {
 function _normalizeForHash(node, topExcludeSet) {
   if (node == null) return node;
   if (Array.isArray(node)) return node.map(v => _normalizeForHash(v, null));
-  if (typeof node !== "object") return node;
+  // Scalar branch. Canonicalize ISO-8601 datetime strings carrying
+  // an explicit offset to the single UTC form; everything else
+  // passes through byte-identical. See _canonicalizeScalar for the
+  // regex gate (date-only, duration, numeric id, free text all
+  // pass through untouched).
+  if (typeof node !== "object") return _canonicalizeScalar(node);
   const out = {};
   const keys = Object.keys(node).sort();
   for (const k of keys) {
