@@ -90,13 +90,24 @@ const HASH_EXCLUDE_TOP = {
   time_entry_zo: ["updated_at", "mongo_updated_at", "system_updated_at", "__meta"],
   // users: parallel to workers on this endpoint. Same shape reasoning
   // as workers - updated_at is the volatile marker and __meta is the
-  // scope-annotation envelope. Photos are top-level arrays of objects
-  // carrying signed-URL `image` fields; the universal nested-strip
-  // catches those without excluding the whole `photos` array (so a
-  // real photo id change still produces a new observation). Measured
-  // baseline for the first nightly is 1,126 users (parity with the
-  // workers count, per the C5.1 diagnostic).
-  users: ["updated_at", "__meta"],
+  // scope-annotation envelope.
+  //
+  // `photos`: added 2026-11-02. Original comment claimed the signed
+  // URL on each photo entry lived in `.image` and the universal
+  // nested-strip (NESTED_STRIP_KEYS: display_value, has_perm, image)
+  // would catch it. Measured: the actual field is `photos[].value`.
+  // Each `.value` is a CloudFront signed URL whose querystring
+  // (`Expires`, `Signature`, `Key-Pair-Id`) rotates on every fetch
+  // while the object path stays byte-identical, so the nested-strip
+  // missed the volatile key and every users row re-hashed nightly.
+  // Measured bloat before this fix: rippling_raw_users at 84,082 rows
+  // against 901 distinct rippling_id (~93 versions / user) since
+  // 2026-08-11. Strip the whole `photos` top-level array - the raw
+  // payload still carries it (we want the photo URL readable), it
+  // just no longer decides whether a user row is new. Trade-off: a
+  // real new photo upload will not produce a new observation. That
+  // is acceptable - the photo is cosmetic, not operational.
+  users: ["updated_at", "photos", "__meta"],
   // compensations: salary PR 1. One record per (worker, effective
   // period). `updated_at` moves whenever Rippling touches the record
   // even if the amount + effective date did not; strip it. `__meta`
