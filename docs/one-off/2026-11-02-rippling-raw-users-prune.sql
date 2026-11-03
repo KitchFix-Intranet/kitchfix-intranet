@@ -55,9 +55,11 @@ WITH to_keep AS (
   ORDER BY rippling_id, fetched_at DESC, id DESC
 )
 DELETE FROM rippling_raw_users
- WHERE id NOT IN (SELECT id FROM to_keep)
-RETURNING id;
--- Expect: ~83,181 rows returned (the superseded versions).
+ WHERE id NOT IN (SELECT id FROM to_keep);
+-- Expect DELETE to report ~83,181 rows (the superseded versions).
+-- RETURNING id was previously here; dropped because psql / Studio
+-- renders every returned id and shipping 83k ids is a UI-only cost
+-- that buys nothing a DELETE row count does not already report.
 
 
 -- ─── Post-check ─────────────────────────────────────────────────────
@@ -81,3 +83,19 @@ SELECT
 COMMIT;
 -- OR, if any of the above expectations fails:
 -- ROLLBACK;
+
+
+-- ─── VACUUM (must run after COMMIT, not inside the transaction) ─────
+--
+-- Deleting the rows leaves dead tuples that the composite index on
+-- (rippling_id, fetched_at DESC, id DESC) still walks past when the
+-- _latest view's DISTINCT ON scans. Without VACUUM the table reads
+-- as small while performing exactly as badly as before - the whole
+-- point of this prune (making the _latest view fit under the 8s
+-- statement_timeout) is lost. ANALYZE refreshes the planner stats
+-- so queries pick the right plan for the collapsed row count.
+--
+-- VACUUM cannot run inside a transaction, so this MUST be a
+-- separate statement after the COMMIT above.
+
+VACUUM (ANALYZE) rippling_raw_users;
