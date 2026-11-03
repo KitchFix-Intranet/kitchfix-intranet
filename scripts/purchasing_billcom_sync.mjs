@@ -54,6 +54,7 @@
 
 import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
+import { installCronHeartbeat } from "../src/lib/cronRunHeartbeat.js";
 import {
   fetchJson, extractRowsV2, extractRowsV3, billsFilteredUrl, chartOfAccountsUrl,
   classesUrl, vendorsUrl, contentHash, isPaid, glBucketFor,
@@ -128,6 +129,9 @@ if (!process.env.BILLCOM_PROXY_BASE) { console.error("BILLCOM_PROXY_BASE not set
 if (!process.env.BILLCOM_PROXY_KEY)  { console.error("BILLCOM_PROXY_KEY not set (never echoed)"); process.exit(1); }
 
 const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+
+// Per-lane heartbeat registered in cron-health MONITORED.
+const heartbeat = await installCronHeartbeat(supa, "purchasing-billcom");
 
 const startedAt = new Date();
 console.log(`purchasing_billcom_sync source=${args.source} dryRun=${args.dryRun} period=${args.period || "n/a"} started=${startedAt.toISOString()}`);
@@ -1107,6 +1111,18 @@ if (probesResult) {
   console.log(`  probes:        ${probesResult.allPass ? "ALL PASS" : "FAIL"}  ${probesResult.probes.map(p => `${p.id}=${p.pass ? "P" : "F"}`).join(" ")}`);
 }
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
+
+heartbeat.setSummary({
+  source: args.source,
+  dryRun: args.dryRun,
+  elapsed_sec: Number(totalSec),
+  ref_accounts: refAccountsResult && { ok: refAccountsResult.ok, count: refAccountsResult.count },
+  ref_classes:  refClassesResult  && { ok: refClassesResult.ok,  count: refClassesResult.count },
+  ref_vendors:  refVendorsResult  && { ok: refVendorsResult.ok,  count: refVendorsResult.count },
+  bills:        billsResult && { ok: billsResult.ok, bills_inserted: billsResult.billsInserted, lines_inserted: billsResult.linesInserted },
+  derive:       deriveResult && { ok: deriveResult.ok, rows_written: deriveResult.rowsWritten, per_bill_failures: deriveResult.perBillFailures?.length ?? 0 },
+  probes:       probesResult && { all_pass: probesResult.allPass },
+});
 
 // Exit code
 if (!refAccountsResult?.ok || !refClassesResult?.ok || !refVendorsResult?.ok || !billsResult?.ok || !deriveResult?.ok) process.exit(2);

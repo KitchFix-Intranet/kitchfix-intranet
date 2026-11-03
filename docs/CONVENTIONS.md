@@ -269,6 +269,20 @@ if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}
 
 When adding a cron, register the schedule in `vercel.json` and the auth check in the route. Log start and outcome via `logEventSA({ category: "system", action: "cron_start" })` so failures are visible in Analytics.
 
+### Nightly scripts: register the lane in `MONITORED` in the same PR
+
+**The rule.** A new scheduled script (anything that runs on a cron, scheduled Action, or similar) registers its lane in `src/app/api/cron/cron-health/route.js` `MONITORED` **in the same PR that creates the script**. A job not in the registry is a job nobody is watching.
+
+**Why this exists.** The 2026-11-02 audit found three nightly failures that had been running for 2, 8 and 27 days unnoticed. The 27-day one hid because one workflow ran three independent lanes in one job and returned the worst exit code; one red X covered three lanes, two of them perfectly healthy. The remediation registered each lane as its own entry in `MONITORED`.
+
+**How.** The script calls `installCronHeartbeat(supa, "<lane>")` from `src/lib/cronRunHeartbeat.js` right after it constructs its Supabase client. The helper writes to `cron_runs` on every exit path (success, handled failure, uncaught exception). Then add a matching entry to `MONITORED` with:
+
+- `maxSilenceMs` sized to the schedule plus a small margin (30 h for nightly, 8 d for weekly, 33 d for monthly).
+- `staleRunMs` tracking the observed runtime, not the workflow `timeout-minutes`. Floor at 15 minutes.
+- `model: "newest"` unless the script fires more often than the watchdog's 15-minute cadence - that case uses `model: "window"` with `windowMs` (see `extract-line-items`).
+
+**Per lane, not per workflow.** If one workflow runs three independent walks (e.g. `purchasing-sync.yml`'s bill.com + credits + rippling spend), each walk gets its own `installCronHeartbeat` call and its own `MONITORED` entry. Sharing a lane name across walks reintroduces the 27-day gap.
+
 ---
 
 ## React patterns

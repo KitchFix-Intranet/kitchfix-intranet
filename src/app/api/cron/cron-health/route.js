@@ -108,10 +108,93 @@ const MONITORED = [
     maxSilenceMs:  33 * 24 * 60 * 60 * 1000,    // 33 days (monthly + 2-day margin)
     staleRunMs:    Math.max(15 * 60 * 1000, 2 * 120 * 1000), // 2x maxDuration(120s)
   },
+
+  // ─── Nightly Rippling + bill.com lanes (2026-11-03) ─────────────────
+  // Each lane is a separate heartbeat. Prior to this, purchasing-sync.yml
+  // ran three lanes in one job and returned the worst exit code - one
+  // red X covered three independent lanes and the spend-lines walk sat
+  // dead for 27 days under a billcom "red" that was really success +
+  // success + fail. Registering per-lane makes each failure name itself.
+  // Scripts write via scripts/*_sync.mjs through installCronHeartbeat
+  // (see src/lib/cronRunHeartbeat.js); any lane added to those scripts
+  // must be registered here in the SAME PR, per docs/CONVENTIONS.md.
+  //
+  // maxSilenceMs is 30h for all five - nightly cadence + 6h margin.
+  // staleRunMs tracks the real observed runtime, not the workflow
+  // timeout-minutes, same convention the three jobs above use.
+  {
+    name:          "rippling-raw-sync",
+    model:         "newest",
+    maxSilenceMs:  30 * 60 * 60 * 1000,                     // 30 h
+    staleRunMs:    Math.max(15 * 60 * 1000, 90 * 60 * 1000),// 90 min (observed 28-33m, +2x margin)
+  },
+  {
+    name:          "purchasing-billcom",
+    model:         "newest",
+    maxSilenceMs:  30 * 60 * 60 * 1000,                     // 30 h
+    staleRunMs:    15 * 60 * 1000,                          // 15 min floor (observed ~1 min)
+  },
+  {
+    name:          "purchasing-billcom-credits",
+    model:         "newest",
+    maxSilenceMs:  30 * 60 * 60 * 1000,                     // 30 h
+    staleRunMs:    15 * 60 * 1000,                          // 15 min floor (observed <1 min)
+  },
+  {
+    name:          "purchasing-rippling-spend",
+    model:         "newest",
+    maxSilenceMs:  30 * 60 * 60 * 1000,                     // 30 h
+    staleRunMs:    15 * 60 * 1000,                          // 15 min floor (observed 10s-4m)
+  },
+  {
+    name:          "purchasing-report-ingest",
+    model:         "newest",
+    maxSilenceMs:  30 * 60 * 60 * 1000,                     // 30 h
+    staleRunMs:    15 * 60 * 1000,                          // 15 min floor (observed 1.5-2 min)
+  },
 ];
 
 const RE_ALERT_MS       = 6 * 60 * 60 * 1000;     // debounce window
 const ALL_CLEAR_EVERY_MS = 6 * 24 * 60 * 60 * 1000; // weekly-ish
+
+// ─── Raw-table growth check (2026-11-03) ─────────────────────────────────
+//
+// Both the 2026-11-01 derive_people incident and the 2026-11-03
+// derive_labor_actuals_daily incident were a Rippling raw table quietly
+// growing until its `_latest` view's DISTINCT ON crossed the 8s
+// statement_timeout. rippling_raw_users reached 84,082 rows against
+// 901 distinct ids over three months; rippling_raw_time_entries reached
+// 159,314 against 11,823 across a single transition day. Nothing watched
+// the table size, so both breakages surfaced as a downstream statement
+// timeout and NOT as "the raw ingest went weird".
+//
+// Alert on EITHER signal: cause (ratio) or consequence (absolute size).
+//   - RATIO > GROWTH_RATIO_THRESHOLD: the dedup is accepting changes
+//     every fetch when the record did not change. Healthy tables run
+//     1-4x (workers 4.1x post-prune transition; sits closer to 1-2x in
+//     steady state). 6x is unambiguously anomalous.
+//   - ROWS > GROWTH_SIZE_THRESHOLD: the view is already past the point
+//     where the _latest DISTINCT ON stays comfortably inside the 8s
+//     statement_timeout on cold cache. 50,000 gives real lead time;
+//     both prior incidents were well past this when they bit.
+//
+// Gated via GROWTH_CHECK_EVERY_MS using the watchdog's own
+// summary.lastGrowthCheckAt so this is roughly once a day, not every
+// 15 minutes. No new cron, no vercel.json change.
+const GROWTH_CHECK_EVERY_MS   = 24 * 60 * 60 * 1000; // once a day
+const GROWTH_RATIO_THRESHOLD  = 6;
+const GROWTH_SIZE_THRESHOLD   = 50_000;
+// rippling_raw_spend_lines is excluded: the Rippling custom-object
+// endpoint was retired 2026-10-07 and the table has been frozen at
+// 48,342 rows / 13,842 ids (3.5x) ever since. It sits just under the
+// size threshold forever and would only alarm on a surprise re-ingest
+// if the endpoint ever came back. Not worth the noise now.
+const GROWTH_WATCHED_TABLES = [
+  "rippling_raw_users",
+  "rippling_raw_workers",
+  "rippling_raw_compensations",
+  "rippling_raw_time_entries",
+];
 
 // ─── Time formatting ─────────────────────────────────────────────────────
 function fmtAgo(ms) {
@@ -324,13 +407,56 @@ async function readPriorWatchdogState(supa) {
     .maybeSingle();
   if (error) {
     console.warn(`[cron-health] prior-state read failed: ${error.message}`);
-    return { alerted: {}, lastAllClearAt: null };
+    return { alerted: {}, lastAllClearAt: null, lastGrowthCheckAt: null };
   }
   const s = data?.summary || {};
   return {
-    alerted:        s.alerted && typeof s.alerted === "object" ? s.alerted : {},
-    lastAllClearAt: typeof s.lastAllClearAt === "string" ? s.lastAllClearAt : null,
+    alerted:            s.alerted && typeof s.alerted === "object" ? s.alerted : {},
+    lastAllClearAt:     typeof s.lastAllClearAt === "string" ? s.lastAllClearAt : null,
+    lastGrowthCheckAt:  typeof s.lastGrowthCheckAt === "string" ? s.lastGrowthCheckAt : null,
   };
+}
+
+// ─── Raw-table growth check ──────────────────────────────────────────────
+//
+// Reads total-row count and distinct-rippling_id count for each watched
+// table and returns an alert string per table whose ratio or absolute
+// size trips a threshold. Read-only; never throws (catches and returns
+// a diagnostic alert so a lookup failure doesn't silently skip a
+// table).
+async function checkRawTableGrowth(supa) {
+  const alerts = [];
+  const measured = [];
+  for (const table of GROWTH_WATCHED_TABLES) {
+    try {
+      // Supabase JS: HEAD count + no row body. One round-trip per
+      // count; two counts per table (total + distinct) is 8 total,
+      // well under any cron-health time budget.
+      const totalResp = await supa.from(table).select("rippling_id", { count: "exact", head: true });
+      if (totalResp.error) throw new Error(`total count: ${totalResp.error.message}`);
+      const total = Number(totalResp.count || 0);
+      // Postgres doesn't expose COUNT(DISTINCT ...) via PostgREST
+      // directly. Approximate via the _latest view, which has one
+      // row per rippling_id by construction.
+      const distResp = await supa.from(`${table}_latest`).select("rippling_id", { count: "exact", head: true });
+      if (distResp.error) throw new Error(`distinct count via _latest: ${distResp.error.message}`);
+      const distinct = Number(distResp.count || 0);
+      const ratio = distinct > 0 ? total / distinct : 0;
+      measured.push({ table, total, distinct, ratio });
+      if (total > GROWTH_SIZE_THRESHOLD) {
+        alerts.push(`${table} rows=${total.toLocaleString()} > size threshold ${GROWTH_SIZE_THRESHOLD.toLocaleString()}`);
+      }
+      if (ratio > GROWTH_RATIO_THRESHOLD) {
+        alerts.push(`${table} ratio=${ratio.toFixed(1)}x (rows=${total.toLocaleString()} / distinct=${distinct.toLocaleString()}) > ratio threshold ${GROWTH_RATIO_THRESHOLD}x`);
+      }
+    } catch (e) {
+      // A lookup error is itself a problem - a vanished table or a
+      // permissions regression hides the growth signal. Surface it.
+      alerts.push(`${table} growth check failed: ${e?.message || e}`);
+      measured.push({ table, error: String(e?.message || e) });
+    }
+  }
+  return { alerts, measured };
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────
@@ -395,6 +521,35 @@ export async function GET(request) {
       }
     }
 
+    // ─── Raw-table growth check ─────────────────────────────────────────
+    // Gated once a day via lastGrowthCheckAt in prior state. Alerts
+    // merge with the job-silence stream; a growth alert on day one
+    // keyed by "growth:<table>" so a chronic over-threshold table
+    // re-alerts on the same RE_ALERT_MS debounce as a silent job.
+    const lastGrowthMs  = prior.lastGrowthCheckAt ? new Date(prior.lastGrowthCheckAt).getTime() : null;
+    const dueForGrowth  = lastGrowthMs == null || (nowMs - lastGrowthMs) > GROWTH_CHECK_EVERY_MS;
+    let growthMeasured  = null;
+    let nextGrowthAt    = prior.lastGrowthCheckAt;
+    if (dueForGrowth) {
+      const g = await checkRawTableGrowth(supa);
+      growthMeasured = g.measured;
+      nextGrowthAt = new Date(nowMs).toISOString();
+      for (const alertText of g.alerts) {
+        // Debounce per alert line (table identity + direction is
+        // encoded in the text) using the same alerted-map.
+        const key = `growth:${alertText.split(" ").slice(0, 2).join(" ")}`;
+        const priorAlertIso = prior.alerted[key];
+        const priorAlertMs  = priorAlertIso ? new Date(priorAlertIso).getTime() : null;
+        const dueForReAlert = priorAlertMs == null || (nowMs - priorAlertMs) > RE_ALERT_MS;
+        if (dueForReAlert) {
+          toAlert.push(alertText);
+          nextAlerted[key] = new Date(nowMs).toISOString();
+        } else {
+          nextAlerted[key] = priorAlertIso;
+        }
+      }
+    }
+
     const anyUnhealthy = perJob.some((p) => !p.verdict.healthy);
     const allHealthy   = !anyUnhealthy;
 
@@ -451,14 +606,16 @@ export async function GET(request) {
     // Close the watchdog's own row with the carried-forward state so the
     // NEXT tick can decide debounce + all-clear from it.
     const outSummary = {
-      checkedAt:       new Date(nowMs).toISOString(),
-      jobs:            perJob.map((p) => ({ job: p.job, healthy: p.verdict.healthy, reason: p.verdict.reason })),
-      alerted:         nextAlerted,
-      lastAllClearAt:  nextAllClearAt,
-      alertsThisTick:  toAlert.length,
-      allClearPosted:  dueForAllClear,
-      slack:           slackResults,
-      webhookPresent:  !!webhook,
+      checkedAt:          new Date(nowMs).toISOString(),
+      jobs:               perJob.map((p) => ({ job: p.job, healthy: p.verdict.healthy, reason: p.verdict.reason })),
+      alerted:            nextAlerted,
+      lastAllClearAt:     nextAllClearAt,
+      lastGrowthCheckAt:  nextGrowthAt,
+      growthMeasured:     growthMeasured,
+      alertsThisTick:     toAlert.length,
+      allClearPosted:     dueForAllClear,
+      slack:              slackResults,
+      webhookPresent:     !!webhook,
     };
     await finishCronRun(supa, cronRunId, { status: "success", summary: outSummary });
 

@@ -45,6 +45,7 @@
 import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { fetchPage, extractRows, firstPageUrl, contentHash, BASE } from "../src/lib/rippling.js";
+import { installCronHeartbeat } from "../src/lib/cronRunHeartbeat.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 
@@ -76,6 +77,11 @@ if (!SB_URL) { console.error("SUPABASE_URL not set"); process.exit(1); }
 if (!SB_KEY) { console.error("SUPABASE_SERVICE_ROLE_KEY not set"); process.exit(1); }
 
 const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+
+// Per-lane heartbeat registered in cron-health MONITORED. Catches every
+// process.exit path including handled failures and uncaught exceptions;
+// see src/lib/cronRunHeartbeat.js for the contract.
+const heartbeat = await installCronHeartbeat(supa, "rippling-raw-sync");
 
 const startedAt = new Date();
 console.log(`rippling_sync source=${args.source} dryRun=${args.dryRun} started=${startedAt.toISOString()}`);
@@ -486,5 +492,14 @@ if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, lines);
 }
 
+heartbeat.setSummary({
+  source: args.source,
+  dryRun: args.dryRun,
+  elapsed_sec: Number(totalSec),
+  time_entries: { ok: teResult.ok, examined: teResult.examined, inserted: teResult.inserted, unchanged: teResult.unchanged },
+  workers:      { ok: wkResult.ok, examined: wkResult.examined, inserted: wkResult.inserted, unchanged: wkResult.unchanged },
+  users:        { ok: usResult.ok, examined: usResult.examined, inserted: usResult.inserted, unchanged: usResult.unchanged },
+  compensations:{ ok: cpResult.ok, examined: cpResult.examined, inserted: cpResult.inserted, unchanged: cpResult.unchanged },
+});
 if (!teResult.ok || !wkResult.ok || !usResult.ok || !cpResult.ok) process.exit(2);
 process.exit(0);

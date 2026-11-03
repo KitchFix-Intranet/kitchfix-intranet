@@ -44,6 +44,7 @@
 //   surface.
 
 import { createClient } from "@supabase/supabase-js";
+import { installCronHeartbeat } from "../src/lib/cronRunHeartbeat.js";
 import {
   fetchJson, extractRowsV3,
   vendorCreditsUrl, vendorCreditByIdUrl,
@@ -76,6 +77,9 @@ if (!SB_URL || !SB_KEY) {
   process.exit(1);
 }
 const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+
+// Per-lane heartbeat registered in cron-health MONITORED.
+const heartbeat = await installCronHeartbeat(supa, "purchasing-billcom-credits");
 
 const num = (v) => v == null ? null : Number(v);
 
@@ -284,6 +288,7 @@ process.stderr.write("\n");
 console.log(`    headers to consider: ${headerRows.length}   lines: ${lineRows.length}`);
 
 if (headerRows.length === 0) {
+  heartbeat.setSummary({ source: args.source, dryRun: args.dryRun, headers: 0, lines: 0, inserted: 0, note: "no credits in window" });
   console.log("  no credits to write. Exit 0.");
   process.exit(0);
 }
@@ -320,6 +325,14 @@ const lineInserts = lineRows.filter(r => lineHashes.get(r.line_id) !== r.content
 console.log(`    headers with changed hash: ${headerInserts.length}   lines: ${lineInserts.length}`);
 
 if (args.dryRun) {
+  heartbeat.setSummary({
+    source: args.source,
+    dryRun: true,
+    headers_considered: headerRows.length,
+    lines_considered: lineRows.length,
+    headers_to_insert: headerInserts.length,
+    lines_to_insert: lineInserts.length,
+  });
   console.log(`  DRY RUN - no writes. Exit 0.`);
   process.exit(0);
 }
@@ -421,5 +434,16 @@ for (const r of paRows) {
 for (const [a, sum] of [...perAcct.entries()].sort()) {
   console.log(`    ${a.padEnd(15)} $${sum.toFixed(2)}`);
 }
+
+heartbeat.setSummary({
+  source: args.source,
+  dryRun: args.dryRun,
+  headers_considered: headerRows.length,
+  lines_considered: lineRows.length,
+  headers_inserted: headerInserts.length,
+  lines_inserted: lineInserts.length,
+  purchasing_actuals_inserted: paInserted,
+  touched_credit_ids: touchedCreditIds.length,
+});
 
 console.log(`\ndone: source=${args.source} finished=${new Date().toISOString()}`);

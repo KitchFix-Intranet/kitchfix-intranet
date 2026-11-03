@@ -53,6 +53,7 @@
 import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { fetchPage, extractRows, firstPageUrl, BASE, contentHash as ripplingContentHash } from "../src/lib/rippling.js";
+import { installCronHeartbeat } from "../src/lib/cronRunHeartbeat.js";
 import { createHash } from "node:crypto";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
@@ -176,6 +177,11 @@ if (!SB_URL) { console.error("SUPABASE_URL not set"); process.exit(1); }
 if (!SB_KEY) { console.error("SUPABASE_SERVICE_ROLE_KEY not set"); process.exit(1); }
 
 const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+
+// Per-lane heartbeat registered in cron-health MONITORED. Narrow lane -
+// bill.com + credits each have their own lanes; this one is only the
+// Rippling spend-lines walk.
+const heartbeat = await installCronHeartbeat(supa, "purchasing-rippling-spend");
 
 const startedAt = new Date();
 console.log(`purchasing_rippling_sync source=${args.source} dryRun=${args.dryRun} started=${startedAt.toISOString()}`);
@@ -2377,6 +2383,18 @@ if (probesResult) console.log(`  probes:        ${probesResult.allPass ? "ALL PA
 if (sweepResult) console.log(`  r148b_sweep:   ${sweepResult.ok ? "ok" : "FAIL"}  swept=${sweepResult.swept}/${sweepResult.planned}${sweepResult.halted ? " halted=" + sweepResult.halted : ""}${sweepResult.a4 ? " a4=" + sweepResult.a4.direct + "/" + sweepResult.a4.settled_elsewhere + "/" + sweepResult.a4.intentional : ""}`);
 if (sweepDResult) console.log(`  r148d_sweep:   ${sweepDResult.ok ? "ok" : "FAIL"}  swept=${sweepDResult.swept}/${sweepDResult.planned}${sweepDResult.halted ? " halted=" + sweepDResult.halted : ""}`);
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
+
+heartbeat.setSummary({
+  source: args.source,
+  dryRun: args.dryRun,
+  elapsed_sec: Number(totalSec),
+  spend_lines: walkResult && { ok: walkResult.ok, pages: walkResult.pageNo, examined: walkResult.examined, inserted: walkResult.inserted, mode: walkResult.mode || null, error: walkResult.error || null },
+  category_map: catCandResult && { ok: catCandResult.ok, upserted: catCandResult.upserted },
+  derive: deriveResult && { ok: deriveResult.ok, lines_derived: deriveResult.linesDerived, unattributed: deriveResult.unattributed, uncoded: deriveResult.uncoded },
+  r148b_sweep: sweepResult && { ok: sweepResult.ok, swept: sweepResult.swept, planned: sweepResult.planned },
+  r148d_sweep: sweepDResult && { ok: sweepDResult.ok, swept: sweepDResult.swept, planned: sweepDResult.planned },
+  probes: probesResult && { all_pass: probesResult.allPass },
+});
 
 if (!walkResult?.ok || !catCandResult?.ok || !deriveResult?.ok) process.exit(2);
 // Sweep halt / write failure exits non-zero so the cron surfaces it,

@@ -126,7 +126,24 @@ Current crons (post-2026-10-19 heartbeat PR):
 - `/api/cron/schedule-drift` - Mondays 11:00 UTC (SC schedule-drift watchdog)
 - `/api/cron/sc-chase` - 00-01 and 19-23 UTC on Sunday + Monday (14 ticks/week; local-time coverage for N3 billing reminders across ET/CT/MST)
 - `/api/cron/sc-bg-monthly-report` - 13:00 UTC on the 4th of each month (SC billing-group monthly report)
-- `/api/cron/cron-health` - every 15 minutes (heartbeat watchdog over the four above; posts to `SLACK_RECAP_WEBHOOK` / `#intranet-recap` on silence/failed/stale/reaped signals and a weekly all-clear). Reads/writes `cron_runs` only.
+- `/api/cron/cron-health` - every 15 minutes (heartbeat watchdog over the four above AND the five GitHub-Action nightly lanes below; posts to `SLACK_RECAP_WEBHOOK` / `#intranet-recap` on silence/failed/stale/reaped signals and a weekly all-clear). Reads/writes `cron_runs` only.
+
+### Nightly lanes watched by cron-health (2026-11-03)
+
+These are not Vercel crons; they run on scheduled GitHub Actions and write heartbeat rows to `cron_runs` via `installCronHeartbeat` in each script. The watchdog alerts if any lane stays silent past its `maxSilenceMs` or an in-progress run stays open past `staleRunMs`.
+
+- `rippling-raw-sync` - `scripts/rippling_sync.mjs` (`.github/workflows/rippling-sync.yml`, nightly ~07:00 UTC). Walks time_entries + workers + users + compensations.
+- `purchasing-billcom` - `scripts/purchasing_billcom_sync.mjs` (`.github/workflows/purchasing-sync.yml`, nightly). Bill.com ref data + bills + derive.
+- `purchasing-billcom-credits` - `scripts/purchasing_billcom_credits_sync.mjs` (same workflow). Vendor credits.
+- `purchasing-rippling-spend` - `scripts/purchasing_rippling_sync.mjs` (same workflow). Rippling spend-lines walk.
+- `purchasing-report-ingest` - `scripts/purchasing_report_ingest.mjs` (`.github/workflows/purchasing-report-ingest.yml`, nightly ~06:00 UTC). Reads the Rippling scheduled-report email + runs three loaders.
+
+**Why per-lane and not per-workflow.** `purchasing-sync.yml` runs three independent walks in one job and returns the worst exit code. Before per-lane heartbeats, one red X covered three lanes; a dead walk sat unnoticed for 27 days under a sibling's red. Each walk now owns its own heartbeat row and `MONITORED` entry (see `src/app/api/cron/cron-health/route.js`).
+
+**Where to look.**
+- Slack: `#intranet-recap` (same channel as the Vercel crons).
+- Database: `cron_runs` table, filter `job_name` on the lane name. The `summary` jsonb carries per-walk counts (examined, inserted, errors) for forensic reading.
+- `purchasing_derive_runs` is a separate business ledger (above-floor row counts, feeds the board's freshness pill) - do not confuse with `cron_runs`.
 
 To trigger manually:
 

@@ -33,6 +33,7 @@
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 import { readScheduledReport } from "../src/lib/gmailReadReport.js";
+import { installCronHeartbeat } from "../src/lib/cronRunHeartbeat.js";
 import { createClient } from "@supabase/supabase-js";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -59,6 +60,12 @@ const args = parseArgs(process.argv);
 const SB_URL = envOrDie("SUPABASE_URL");
 const SB_KEY = envOrDie("SUPABASE_SERVICE_ROLE_KEY");
 const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+
+// Per-lane heartbeat registered in cron-health MONITORED. Separate
+// from purchasing_derive_runs - that is a business ledger with
+// pre-floor / above-floor counts; this is an operational heartbeat
+// the watchdog alerts on when the lane goes silent.
+const heartbeat = await installCronHeartbeat(supa, "purchasing-report-ingest");
 
 const t0 = Date.now();
 const startedAt = new Date();
@@ -203,10 +210,24 @@ async function main() {
 
   await cleanup();
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
+  heartbeat.setSummary({
+    dest: args.dest,
+    dryRun: args.dryRun,
+    duration_sec: Number(dur),
+    seen_txns_total: countAfter,
+    inserted_this_run: inserted,
+  });
   console.log(`DONE: ${countAfter} rows in seen_txns (+${inserted} this run) duration=${dur}s`);
 }
 
 main().catch(async (e) => {
+  // installCronHeartbeat (src/lib/cronRunHeartbeat.js) throws an
+  // ExitSentinel when the patched process.exit runs. That is NOT an
+  // unhandled error - the heartbeat is already closing the row and
+  // the real exit is already queued. Re-throw so it bubbles to the
+  // process-level unhandledRejection handler the helper installs,
+  // which recognises and suppresses the sentinel.
+  if (e?.isExitSentinel) throw e;
   console.error(`UNHANDLED: ${String(e?.message || e).slice(0, 200)}`);
   await writeDeriveRun({ status: "failed", linesWritten: null, errorMessage: "unhandled" }).catch(() => {});
   await safeDelete(args.dest).catch(() => {});
