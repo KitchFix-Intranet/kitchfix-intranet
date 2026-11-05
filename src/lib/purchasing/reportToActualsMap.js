@@ -218,17 +218,33 @@ export function parseHasReceipt(raw) {
 // ordinal can disambiguate the rare (txn, category) duplicate case
 // deterministically.
 
+// Kevin ruling 2026-09-24 (also cited in src/lib/rippling.js
+// isCardAuthorization and scripts/purchasing_rippling_sync.mjs
+// R-148D header): a Card Authorization is a swipe hold, not a
+// charge. Never counts, whether it pairs or not. The old API-walk
+// derive excluded holds and the R-148D sweep caught stragglers;
+// both are retired as of 2026-11-05 (PR #1341). The report path
+// now enforces the same rule on the CSV's `Object Type` field.
+// Pre-2026-07-28 rows legitimately have no Object Type - null is
+// treated as "not a hold," never as an error.
+const OBJECT_TYPE_CARD_AUTH = "Card Authorization";
+
 export function mapReportRowToActualsShape(reportRow, dbCategoryMap) {
   // reportRow is the shape from rippling_report_txns (or the live CSV
   // parsed into the same column set).
   const wlRes = resolveAccountKey(reportRow.work_location);
   const glRes = resolveGl(reportRow.category_name, dbCategoryMap);
   const reconcileStatus = normalizeReconcileStatus(reportRow.gl_sync_status);
+  // Card Authorization = swipe hold (see note above). Flat
+  // reportRow.object_type - the mapper has no reason to reach back
+  // into a jsonb helper when the parsed row carries the field
+  // directly. Null passes through as false.
+  const isHold = reportRow.object_type === OBJECT_TYPE_CARD_AUTH;
 
   // Excluded shape rule from purchasing_actuals: excluded=TRUE -> account_key must be NULL.
-  // When either workLocation or category routes to excluded, the row
-  // is excluded and account_key stays NULL.
-  const excluded = Boolean(wlRes.excluded || glRes.excluded);
+  // When either workLocation, category, or hold-status routes to
+  // excluded, the row is excluded and account_key stays NULL.
+  const excluded = Boolean(wlRes.excluded || glRes.excluded || isHold);
   const account_key = excluded ? null : wlRes.account_key;
 
   // Memo concatenation: Memo + Line item memo, when both present.
@@ -266,6 +282,7 @@ export function mapReportRowToActualsShape(reportRow, dbCategoryMap) {
   // Diagnostic metadata (not written to DB; used by the dry-run report).
   shape._unmapped_work_location = Boolean(wlRes.unmapped);
   shape._unmapped_category     = Boolean(glRes.unmapped);
+  shape._is_card_authorization = isHold;
   shape._uncoded_to_food       = isUncodedToFood(shape.gl_line_code, reconcileStatus);
   shape._reconcile_status_known = reconcileStatus != null;
   // Carry the originating report row's keys so assignSourceLineIds
