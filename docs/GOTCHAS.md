@@ -465,6 +465,16 @@ sc-40 (2026-09-03) shipped a postflight of the form `WHERE rdo_email <> 's.lynch
 
 ## Purchasing engine (Rippling + BillCom)
 
+### Rippling custom objects (`_zo` suffix) get retired without notice - prefer stable REST
+
+All three Rippling custom objects this repo depended on have been retired without notice, each returning HTTP 404 `{"detail":"Custom object not found"}` the morning after:
+
+- **`pay_segments`** - retired 2026-10-07 (labor-te-1 cutover; replaced by `/time-entries` directly).
+- **`time_entry_zo`** - retired 2026-10-07 (same cutover; shape was always redundant with `/time-entries`).
+- **`spend_transaction_line_item_zo`** - retired 2026-10-06; sat red for 27 days in `purchasing-sync.yml` before the 2026-11-02 audit caught it. The current-period card lane now flows through the nightly Rippling scheduled-report email (`purchasing-report-ingest`) with `CARD_REPORT_SOURCE_FLOOR=2026-10-05` as the pre/post boundary.
+
+**The rule.** Prefer stable REST resources (`/time-entries`, `/workers`, `/users`, `/compensations`) over `/custom-objects/<name>/records`. Custom objects are Rippling-internal plumbing - names and shapes change, retirements come with no deprecation window, and the API returns a 404 that reads like "wrong URL" rather than "endpoint was retired, here is the migration path." After the 2026-11-05 retirement of the spend step, no nightly job in this repo walks a custom object.
+
 ### Vendor date filters are silently ignored - Rippling drops `date_gte`/`date_lte`, bill.com v3 drops filters on `/bills`
 
 Both external systems the purchasing engine reads from will happily accept a filter query parameter and return the unfiltered result, with no header or error indicating the filter was dropped. This has bitten every ingest path that trusted the API contract.

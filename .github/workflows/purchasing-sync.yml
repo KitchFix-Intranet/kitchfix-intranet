@@ -1,10 +1,28 @@
-name: purchasing sync (billcom bills + credits + rippling spend)
+name: purchasing sync (billcom bills + credits)
 
-# Nightly ingest of bill.com bills + bill.com vendor credits + Rippling
-# card spend into Postgres for KPI PURCHASING PHASE 1 (spec §2). Three
-# independent sync scripts, sequential: bills first (references + bills
-# + derive), credits second (walks /vendor-credits, derives against the
-# just-refreshed ref-accounts), Rippling spend third.
+# Nightly ingest of bill.com bills + bill.com vendor credits into
+# Postgres for KPI PURCHASING PHASE 1 (spec §2). Two independent sync
+# scripts, sequential: bills first (references + bills + derive),
+# credits second (walks /vendor-credits, derives against the just-
+# refreshed ref-accounts).
+#
+# Rippling spend step RETIRED 2026-11-05. Rippling retired the
+# `spend_transaction_line_item_zo` custom object on 2026-10-06; the
+# walk has been 404 ever since. CARD_REPORT_SOURCE_FLOOR=2026-10-05
+# and purchasing-report-ingest owns the current-period card lane from
+# the floor forward. The retired step also ran R-148B + R-148D sweeps
+# that joined through rippling_raw_spend_lines_latest via
+# source_line_id - but the report feed writes rows with the composite
+# shape `<parent_txn>::<category>::<n>` while the sweeps expect
+# `rippling_spend:<id>` (old API walk). The sweeps could not reach
+# report-fed rows anyway, so the step was doing nothing post-floor.
+#
+# scripts/purchasing_rippling_sync.mjs stays in the repo -
+# `--derive-only` remains the hand-run tool to re-derive the pre-
+# floor 13,809 historical rows after a spend_category_map edit. The
+# raw table + view also stay: two readers remain over historical
+# rows (src/lib/purchasing/loaders.js category_id lookup + the join
+# expression documented in src/app/kpi/purchasing/lib/precedence.js).
 #
 # One script per source keeps the lock granularity clean:
 #   purchasing_sync_locks: holder='purchasing_billcom_sync'
@@ -64,7 +82,7 @@ concurrency:
 
 jobs:
   sync:
-    name: purchasing sync (billcom bills + credits + rippling spend)
+    name: purchasing sync (billcom bills + credits)
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -137,28 +155,14 @@ jobs:
           echo "purchasing_billcom_credits_sync ${ARGS}"
           node scripts/purchasing_billcom_credits_sync.mjs ${ARGS}
 
-      # Rippling spend sync runs regardless of billcom outcome (`if:
-      # always()`). Rationale: the two data lanes are independent; a
-      # bill.com proxy 500 must not skip the card-spend refresh. If
-      # billcom failed the job already, this step still runs so the
-      # rippling side of purchasing_actuals stays current, and the
-      # workflow's aggregate status remains RED (jobs return the worst
-      # exit code across all steps).
-      - name: Run rippling spend sync
-        if: always()
-        id: rippling
-        run: |
-          SOURCE_IN="${{ inputs.source || 'nightly' }}"
-          # rippling script rejects 'fytd' - normalize to 'nightly' for
-          # the rippling step regardless of billcom's source value.
-          case "${SOURCE_IN}" in
-            backfill|nightly|manual) SOURCE="${SOURCE_IN}" ;;
-            *)                       SOURCE="nightly" ;;
-          esac
-          DRY_RUN="${{ inputs.dry_run || 'false' }}"
-          ARGS="--source=${SOURCE}"
-          if [ "${DRY_RUN}" = "true" ]; then
-            ARGS="${ARGS} --dry-run"
-          fi
-          echo "purchasing_rippling_sync ${ARGS}"
-          node scripts/purchasing_rippling_sync.mjs ${ARGS}
+      # Rippling spend sync RETIRED 2026-11-05.
+      # See the file header for the full rationale. In brief: the
+      # custom-object endpoint was retired by Rippling on 2026-10-06;
+      # the report feed owns the current-period card lane from
+      # CARD_REPORT_SOURCE_FLOOR=2026-10-05 forward via purchasing-
+      # report-ingest.yml; the retired step's R-148B / R-148D sweeps
+      # could not reach report-fed rows (different source_line_id
+      # shape from the sweeps' join predicate), so the step was
+      # doing nothing useful post-floor. `scripts/purchasing_
+      # rippling_sync.mjs --derive-only` stays available for hand
+      # re-derives after a spend_category_map edit.
