@@ -1,0 +1,120 @@
+name: price change nightly
+
+# Nightly report of Service Calendar price + fee changes.
+#
+# Primary source: `sc_config_changelog` (append-only per sc-4). Every app-side
+# price/fee edit inserts a row in the same transaction as the underlying
+# `sc_service_prices` / `sc_fee_schedule` write - the orchestrator at
+# `src/lib/dataStore/serviceCalendar.js:1801` handles that atomically. So this
+# stream is the canonical WHAT+WHO+WHY audit for anything that flowed through
+# the SC admin surface.
+#
+# Cross-check: `content/documents/REF-141.mdx` (the corpus Price Book,
+# generated from PG). If REF-141 drifted vs. the committed copy but no
+# changelog rows exist for the window, that is UNATTRIBUTED price drift -
+# almost certainly a Studio direct-SQL edit that bypassed the JS
+# orchestrator's changelog write. The Slack message calls it out loudly.
+#
+# Slack: existing #service-calendar webhook (`SLACK_SC_WEBHOOK_URL`), same
+# secret already used by `src/app/api/cron/schedule-drift/route.js`. Nothing
+# posts when nothing changed - a channel that speaks nightly-empty gets
+# muted, and then the one night that matters is missed.
+#
+# Autocommit gate: `PRICE_BOOK_AUTOCOMMIT` is `false` by default. When flipped
+# to `'true'` at the env level, the Autocommit step regenerates REF-141 in
+# place and pushes to main, which triggers the existing opd-autoprojection
+# Action to re-project + re-embed. Kevin wants to watch a few nightly runs
+# before enabling it, so it stays off until then.
+#
+# On failure: the workflow is red only when the PG query, the snapshot step,
+# or the report script errors. Detected changes are informational.
+
+on:
+  schedule:
+    # 05:00 UTC = 01:00 EDT / 22:00 PDT - Kevin's quiet hours.
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Lookback window (24h / 7d / 90d) or an ISO timestamp. Default 24h.'
+        required: false
+        default: '24h'
+      dry_run:
+        description: 'If "true", skip the Slack post and print the payload to logs.'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: price-change-nightly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: query + report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      # Reuse the SC secrets already in the org - do NOT invent new ones.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SLACK_SC_WEBHOOK_URL: ${{ secrets.SLACK_SC_WEBHOOK_URL }}
+      # Autocommit gate: off by default. Flip to 'true' at the workflow env
+      # (or add a workflow_dispatch input) when Kevin is ready.
+      PRICE_BOOK_AUTOCOMMIT: 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # Autocommit needs write access; a fetch-depth of 1 is fine because
+          # the commit is against the current tip.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+        run: npm ci
+
+      - name: Fetch PG price snapshot
+        # The report script refuses to overwrite the committed REF-141 with an
+        # empty result: it hard-fails if /tmp/pg_prices.json is missing or
+        # has 0 rows. The workflow will go red before any regenerate happens.
+        run: node scripts/audit-sc-prices.mjs --out /tmp/pg_prices.json
+
+      - name: Report + Slack notify
+        # Dispatch input `since` when provided; scheduled runs use 24h.
+        # Dispatch input `dry_run='true'` skips --slack and prints payload.
+        run: |
+          SINCE="${{ github.event.inputs.since }}"
+          if [ -z "$SINCE" ]; then SINCE="24h"; fi
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+          if [ "$DRY_RUN" = "true" ]; then
+            node scripts/price-change-report.mjs --since "$SINCE"
+          else
+            node scripts/price-change-report.mjs --since "$SINCE" --slack
+          fi
+
+      - name: Autocommit REF-141 (gated)
+        # Off by default (see PRICE_BOOK_AUTOCOMMIT). When enabled, this step
+        # regenerates REF-141 in place and pushes. The auto-projection Action
+        # then fires on the push (paths filter covers content/documents/**)
+        # and re-projects + re-embeds. Uses `[skip ci]` to avoid recursion.
+        if: env.PRICE_BOOK_AUTOCOMMIT == 'true'
+        run: |
+          node scripts/generate-price-book.mjs
+          if git diff --quiet content/documents/REF-141.mdx; then
+            echo "REF-141 unchanged after regenerate (timestamp-only diff); skipping commit"
+            exit 0
+          fi
+          git config user.name "kf-price-book-bot"
+          git config user.email "actions@kitchfix.com"
+          git add content/documents/REF-141.mdx
+          git commit -m "chore(sc): nightly Price Book regeneration [skip ci]"
+          git push
