@@ -94,6 +94,17 @@ export const COL_SPEC = Object.freeze([
   { csv: "Submission Date",      col: "submission_date", parse: parseDate },
   { csv: "Approved At",          col: "approved_at",     parse: parseTimestamp },
   { csv: "Approval State",       col: "approval_state",  parse: trim },
+  // 2026-11-05: added for the Kevin ruling 2026-09-24 hold rule
+  // (src/lib/rippling.js isCardAuthorization). "Card Authorization"
+  // = swipe hold, never counts. The report mapper routes on this
+  // field to mark holds excluded. Exact header text verified via
+  // scripts/probes/_probe_report_csv_header_check.mjs against
+  // rippling_report_txns_latest.raw payloads: "Object Type"
+  // (11 chars, capital O / T, one space). Not a required column;
+  // a CSV lacking the header yields null across every row, and
+  // null is treated as "not a hold" by the mapper. Pre-2026-07-28
+  // rows legitimately have no Object Type - null-safe downstream.
+  { csv: "Object Type",          col: "object_type",     parse: trim },
   { csv: "Has Receipt",          col: "has_receipt",     parse: parseBool },
   { csv: "Amount (by category)", col: "amount",          parse: parseAmount },
   { csv: "Currency",             col: "currency",        parse: trim },
