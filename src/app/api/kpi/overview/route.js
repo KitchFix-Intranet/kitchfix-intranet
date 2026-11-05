@@ -264,6 +264,18 @@ export async function GET(request) {
   }
   payload.preview_account = preview_account;
   payload.landing_account = landing_account;
+  // Export affordance (feat/kpi-pnl-export). Advertise availability
+  // from the already-resolved caller so the client shows / hides the
+  // Download P&L button without re-deriving the role gate. Only
+  // corporate and site_leader can export (the P&L carries 3100.2
+  // Salary Kitchen Wages, so the role gate is also the salary gate).
+  if (caller?.role === "corporate") {
+    payload.export = { available: true, scope: "all" };
+  } else if (caller?.role === "site_leader" && caller.scope) {
+    payload.export = { available: true, scope: caller.scope };
+  } else {
+    payload.export = { available: false };
+  }
   // Snap disclosure - the chip on the client reads "Period N ·
   // snapped from a custom range" when set. Absent by default so
   // aligned requests carry no extra bytes.

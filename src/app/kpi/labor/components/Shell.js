@@ -194,6 +194,10 @@ export function Shell({
   onExport,
   exportRedact,
   exportDisabledReason,
+  // Export label (default "Export"). Labor + Purchasing keep the
+  // default; Overview passes "Download P&L" so the button reads as
+  // the thing it actually downloads. Additive - omit to keep legacy.
+  exportLabel = "Export",
   // Freshness popover content (V7-9 in C1; C3 expands with coverage + In view).
   freshnessPop,   // node - rendered inside the popover
   // Print scope line (kept from v6 for @media print sheet identification).
@@ -363,7 +367,7 @@ export function Shell({
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span>Export</span>
+            <span>{exportLabel}</span>
           </a>
         )}
         {exportDisabledReason && (
@@ -371,14 +375,14 @@ export function Shell({
             type="button"
             className="kpi-ctl kpi-ctl-off"
             title={exportDisabledReason}
-            aria-label={`Export disabled: ${exportDisabledReason}`}
+            aria-label={`${exportLabel} disabled: ${exportDisabledReason}`}
             disabled
           >
             <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span>Export</span>
+            <span>{exportLabel}</span>
           </button>
         )}
 

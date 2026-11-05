@@ -1069,6 +1069,14 @@ export default function KpiOverviewPage() {
           on: urlIncludeSalary,
           onChange: (next) => setIncludeSalary(next),
         } : null}
+          /* feat/kpi-pnl-export: Download P&L affordance. The server
+             advertises availability via payload.export so the client
+             does not re-derive the role gate. One endpoint, role-
+             adaptive - corporate gets the all-accounts workbook,
+             site_leader gets their single tab. No params are needed
+             (role + scope resolve from the session). */
+          exportHref={data?.export?.available ? "/api/kpi/overview/export" : null}
+          exportLabel="Download P&L"
           folioRail={folioRail}
           main={mainContent}
           previewAccount={data?.preview_account || null}
