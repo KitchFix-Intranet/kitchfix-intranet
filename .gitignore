@@ -92,3 +92,10 @@ scripts/probes/artifacts/*
 !scripts/probes/artifacts/r148b_reversal.json
 !scripts/probes/artifacts/r148d_reversal.json
 !scripts/probes/artifacts/r148d_billcom_reversal.json
+
+# Ad-hoc probe scripts. Untracked .mjs files under scripts/probes/
+# accumulate in `git status` and make it unreadable (32 untracked by
+# 2026-11-09). Gitignore does not un-track; the 526 .mjs files already
+# in git remain in the repo. New probes default to local-only. To
+# commit one, use `git add -f scripts/probes/<name>.mjs`.
+scripts/probes/*.mjs
