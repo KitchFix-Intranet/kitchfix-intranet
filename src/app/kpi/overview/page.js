@@ -341,7 +341,11 @@ export default function KpiOverviewPage() {
   // throw. Same declaration-order hazard the PORTFOLIO_KEYS note
   // further down describes.
   const [laborLedgerOpen, setLaborLedgerOpen] = useState(false);
-  const [purchasingFoldOpen, setPurchasingFoldOpen] = useState(false);
+  // 2026-11-09. Purchasing detail split into two folds (Invoices + Cards).
+  // Disclosure is per-variant so expanding one does not expand the other.
+  // Fetch effect below fires when EITHER is open.
+  const [purchasingInvoicesFoldOpen, setPurchasingInvoicesFoldOpen] = useState(false);
+  const [purchasingCardsFoldOpen, setPurchasingCardsFoldOpen] = useState(false);
 
   // Consolidation PR 1 (2026-09-22). Labor ledger fetch.
   //
@@ -445,8 +449,9 @@ export default function KpiOverviewPage() {
     // LAZY 2026-10-15 (Kevin ruling, measured at 5,933 ms). Unlike
     // labor, purchasingLedger feeds ONLY the PurchasingFold - the CP
     // table reads its own cpPurch state from a separate effect - so
-    // the fold-open flag is the whole gate here.
-    if (!purchasingFoldOpen) return;
+    // the fold-open flag is the whole gate here. 2026-11-09: two
+    // variants share one payload, so the gate fires if either is open.
+    if (!purchasingInvoicesFoldOpen && !purchasingCardsFoldOpen) return;
     const ctrl = new AbortController();
     setPurchasingLedger(null);
     setPurchasingLedgerError(null);
@@ -472,7 +477,7 @@ export default function KpiOverviewPage() {
         setPurchasingLedgerError(String(e?.message || e));
       });
     return () => ctrl.abort();
-  }, [fetchAccount, start, end, urlPreview, rangeSelection?.kind, purchasingFoldOpen]);
+  }, [fetchAccount, start, end, urlPreview, rangeSelection?.kind, purchasingInvoicesFoldOpen, purchasingCardsFoldOpen]);
 
   // ── URL setters ─────────────────────────────────────────────
   const setParams = useCallback((patch) => {
@@ -549,8 +554,9 @@ export default function KpiOverviewPage() {
   // adds ?drill=lines only when the range is a single period. Failure
   // isolation: the fold renders its own error state; the Overview
   // above never breaks.
-  // purchasingFoldOpen moved above the fetch effects (lazy-fold
-  // change, 2026-10-15) - it is a dependency of the purchasing effect.
+  // purchasingInvoicesFoldOpen / purchasingCardsFoldOpen moved above
+  // the fetch effects (lazy-fold change, 2026-10-15; split 2026-11-09)
+  // - they are dependencies of the purchasing effect.
   const [purchasingLedger, setPurchasingLedger] = useState(null);
   const [purchasingLedgerError, setPurchasingLedgerError] = useState(null);
 
@@ -852,21 +858,36 @@ export default function KpiOverviewPage() {
                 />
                 {/* R-150 · Purchasing fold on CP. Single-period only;
                     CP is by construction a single period so the guard
-                    is a belt-and-braces (matches the mount rule
-                    elsewhere so a future range mode does not surprise
-                    the fold). */}
+                    is a belt-and-braces. 2026-11-09 split: two folds
+                    back-to-back, Invoices first then Cards. Billback
+                    goal row rides on the Invoices fold (billed-back
+                    is predominantly invoice/credit entries). */}
                 {rangeSelection?.kind === "period" && (
-                  <PurchasingFold
-                    payload={purchasingLedger}
-                    error={purchasingLedgerError}
-                    start={start}
-                    end={end}
-                    today={today}
-                    open={purchasingFoldOpen}
-                    onToggle={() => setPurchasingFoldOpen(o => !o)}
-                    billbackPeriod={data.billback_period}
-                    periodCurrent={true}
-                  />
+                  <>
+                    <PurchasingFold
+                      variant="invoices"
+                      payload={purchasingLedger}
+                      error={purchasingLedgerError}
+                      start={start}
+                      end={end}
+                      today={today}
+                      open={purchasingInvoicesFoldOpen}
+                      onToggle={() => setPurchasingInvoicesFoldOpen(o => !o)}
+                      billbackPeriod={data.billback_period}
+                      periodCurrent={true}
+                    />
+                    <PurchasingFold
+                      variant="cards"
+                      payload={purchasingLedger}
+                      error={purchasingLedgerError}
+                      start={start}
+                      end={end}
+                      today={today}
+                      open={purchasingCardsFoldOpen}
+                      onToggle={() => setPurchasingCardsFoldOpen(o => !o)}
+                      periodCurrent={true}
+                    />
+                  </>
                 )}
               </>
             ) : (
@@ -984,23 +1005,35 @@ export default function KpiOverviewPage() {
               onToggle={() => setBillbackLedgerOpen(o => !o)}
             />
             {/* R-150 · Purchasing fold on Closed / CY single-account
-                branch (the "non-chart" one, chart lives inside the
-                split above). Single-period only. periodCurrent=false
-                here so the card-coding chrome (header badge, feed
-                banner, uncoded strip) does not render on a closed /
-                verified period - the table + buckets still render. */}
+                branch. Single-period only. periodCurrent=false here
+                (chrome applies to the review item, not the folds).
+                2026-11-09 split: Invoices + Cards back-to-back. */}
             {rangeSelection?.kind === "period" && (
-              <PurchasingFold
-                payload={purchasingLedger}
-                error={purchasingLedgerError}
-                start={start}
-                end={end}
-                today={today}
-                open={purchasingFoldOpen}
-                onToggle={() => setPurchasingFoldOpen(o => !o)}
-                billbackPeriod={data.billback_period}
-                periodCurrent={false}
-              />
+              <>
+                <PurchasingFold
+                  variant="invoices"
+                  payload={purchasingLedger}
+                  error={purchasingLedgerError}
+                  start={start}
+                  end={end}
+                  today={today}
+                  open={purchasingInvoicesFoldOpen}
+                  onToggle={() => setPurchasingInvoicesFoldOpen(o => !o)}
+                  billbackPeriod={data.billback_period}
+                  periodCurrent={false}
+                />
+                <PurchasingFold
+                  variant="cards"
+                  payload={purchasingLedger}
+                  error={purchasingLedgerError}
+                  start={start}
+                  end={end}
+                  today={today}
+                  open={purchasingCardsFoldOpen}
+                  onToggle={() => setPurchasingCardsFoldOpen(o => !o)}
+                  periodCurrent={false}
+                />
+              </>
             )}
           </>
         )}

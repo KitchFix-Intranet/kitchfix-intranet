@@ -5,27 +5,33 @@
 // CurrentPeriodTable on Overview CP. Two cards side-by-side, amber
 // left border. Suppressed if there is nothing to review.
 //
-// Populated from the two payloads the table already fetched:
-//   labor.board.pending_hours + amount        - hours awaiting approval
-//   purchasing.card_charges.total_count + $   - card charges without a GL
+// 2026-11-09, Kevin ruling (supersedes 2026-09-24).
 //
-// Purchasing headline reads card_charges, not compliance. Kevin ruling
-// 2026-09-24: the fold banner and this card must show the same number,
-// which means they must share a source. card_charges is that source
-// (purchasing_actuals + R16 P0 report-only merge). Compliance reads a
-// separate nightly-emailed snapshot and lags by up to a day; the
-// compliance card still uses that read for its own count + per-person
-// attribution.
+// Previously the purchasing headline read `purchasing.card_charges`
+// (loadCardCharges: uncoded api + report-only merge). Retired. This
+// card now reads `purchasing.pending.api.line_count` / `.amount` -
+// the loadPending aggregation over purchasing_actuals filtered to
+// source='rippling_spend' AND gl_line_code IS NULL. Why pending.api:
 //
-// Copy is fixed per prompt § 0's render.
+//   - Available on EVERY purchasing payload (unlike actuals, which
+//     only ship when ?drill=lines; the CP fetch does not set drill,
+//     so this card cannot depend on actuals being present without
+//     also waiting on the fold-open fetch).
+//   - Unpaginated (loadCardCharges.rows caps at 50; pending.api does
+//     not cap).
+//   - Excludes the report-only slice by construction (loadPending
+//     reads purchasing_actuals directly).
+//
+// The Cards purchasing fold renders only coded rippling_spend rows
+// (filters !gl_line_code OUT), so the Cards table and this review
+// card are complementary slices of the same pool: every card charge
+// in period is visible exactly once, either as a to-do here or as a
+// coded row in the fold. The old CARD_FEED_PAUSED flag is retired;
+// the stale comment claimed the feed had been down since 2026-10-06,
+// but TXR - AZ carries itemized card charges dated 2026-11-02
+// through 2026-11-06.
 
 const dollar0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
-
-// Temporary: the Rippling card-spend feed is down (dead since 2026-10-06) and
-// being rebuilt. While paused, the uncoded-card "needs a P&L line" nag is
-// stale and unactionable, so we hide it. Flip to false to restore when the
-// feed is live again.
-export const CARD_FEED_PAUSED = true;
 
 export default function CurrentPeriodReview({ labor, purchasing }) {
   const items = [];
@@ -36,9 +42,10 @@ export default function CurrentPeriodReview({ labor, purchasing }) {
   const laborPending = laborPendingSummary(labor);
   if (laborPending) items.push(laborPending);
 
-  // Purchasing · uncoded card charges (same source as the Purchasing
-  // Detail fold banner - card_charges, not compliance - so the two
-  // numbers on the same screen agree).
+  // Purchasing · uncoded card charges. Reads purchasing.pending.api,
+  // which is the loadPending aggregation over purchasing_actuals
+  // rippling_spend rows with gl_line_code IS NULL - available on
+  // every purchasing payload (no fold-open or drill=lines dependency).
   const purchPending = purchasingPendingSummary(purchasing);
   if (purchPending) items.push(purchPending);
 
@@ -75,8 +82,7 @@ function laborPendingSummary(labor) {
   // at the top level of the labor payload. Per-week `unapproved_hours`
   // does (attachWeeklyBasisToBoard sets it on every week); sum across
   // the four weeks. Dollar equivalent = pending_hours × avg_rate
-  // (board.avg_rate is the range's payroll-weighted average). TBJ CP
-  // right now: 327.05 + 44.03 = 371.08 hours pending. Card
+  // (board.avg_rate is the range's payroll-weighted average). Card
   // suppression only kicks in on genuine zero.
   const weeks = Array.isArray(board.weeks) ? board.weeks : [];
   const pendingHours = weeks.reduce((s, w) => s + Number(w.unapproved_hours || 0), 0);
@@ -94,32 +100,15 @@ function laborPendingSummary(labor) {
 }
 
 function purchasingPendingSummary(purchasing) {
-  if (CARD_FEED_PAUSED) return null;
   if (!purchasing) return null;
-  // Kevin ruling 2026-09-24. Point the Needs Review headline at
-  // `purchasing.card_charges` (same source the Purchasing Detail fold
-  // reads via loadCardCharges + R16 P0 report-only merge) rather than
-  // `purchasing.compliance` (which reads rippling_report_txns_latest,
-  // a nightly-emailed snapshot). Two numbers describing the same thing
-  // on the same screen was the original training-feedback complaint;
-  // the fix is to source both from the same table.
-  //
-  // Recent charges land in `purchasing_actuals` before they land in
-  // the nightly report table, so the compliance number lags the fold
-  // number by up to a day. The compliance card itself (CardCompliance,
-  // labelled as "receipt + attribution detail from nightly card
-  // report") continues to show its own count derived from the report
-  // table; per-person attribution is only available there.
-  const cc = purchasing.card_charges || null;
-  if (!cc) return null;
-  const count = Number(cc.total_count || 0);
-  if (!(count > 0)) return null;
-  const amount = Number(cc.total_amount || 0);
-  const oldest = cc.oldest_age_days;
-  const detail = `Purchasing · ${dollar0(amount)}${oldest != null ? ` · oldest ${oldest} day${oldest === 1 ? "" : "s"}` : ""}`;
+  const api = purchasing.pending?.api;
+  if (!api) return null;
+  const n = Number(api.line_count || 0);
+  if (!(n > 0)) return null;
+  const total = Number(api.amount || 0);
   return {
-    title: `${count} card charge${count === 1 ? "" : "s"} need a P&L line`,
-    detail,
+    title: `${n} card ${n === 1 ? "charge needs" : "charges need"} coding`,
+    detail: `Cards · ${dollar0(total)} · not counted in Food until a category is picked`,
     href: null,
   };
 }
