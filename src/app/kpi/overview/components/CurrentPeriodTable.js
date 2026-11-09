@@ -23,7 +23,7 @@
 //   line target ratio          statement_rows[line].target_pct / 100
 //   line adjusted (batr)       statement_rows[line].budget_at_this_revenue
 //   3100 per-week landed       labor.board.weeks[i].spent
-//   3200/3400 per-week landed  purchasing weekly[] + pending cards
+//   3200/3400 per-week landed  purchasing weekly[] (coded only; 2026-11-09)
 //   today                      overview.todayISO (#1124)
 //
 // Guard 0: every new class name in this file's CSS carries the
@@ -1197,14 +1197,30 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         const idx = wkStartSet.indexOf(row.week_start);
         if (idx >= 0) codedByWeek[idx] += Number(row.amount || 0);
       }
-      if (line === "3200") {
-        const pending = purch?.card_charges?.rows || [];
-        for (const c of pending) {
-          const t = String(c.txn_date || "");
-          const idx = weeks.findIndex(w => t >= (w.week_start || "") && t <= (w.week_end || ""));
-          if (idx >= 0) codedByWeek[idx] += Number(c.amount || 0);
-        }
-      }
+      // 2026-11-09, Kevin ruling. This block used to add every card_charges row
+      // in range (api pending + report-only) into the 3200 week series, on the
+      // rule "uncoded card charges count toward Food until someone codes them".
+      // Retired. A charge with no P&L line is a to-do, not spend: it has no
+      // bucket, so it cannot be asserted as Food. It surfaces in "Needs review
+      // today" instead (see CurrentPeriodReview).
+      //
+      // Actual prior state across the three Food surfaces:
+      //   - This cost cell + period column counted coded 3200.* AND uncoded
+      //     rippling_spend (via this block) AND the report-only feed (also
+      //     via this block).
+      //   - PurchasingFold's table + footer counted coded 3200.* AND uncoded
+      //     rippling_spend (via a separate "uncoded counts toward Food"
+      //     fallback in buildTransactions, retired in the same change). The
+      //     fold never saw the report-only feed because it reads from
+      //     purchasing_actuals directly.
+      //   - buildPurchasingBoard's buckets were already coded-only:
+      //     pendingRow is passed but unused ("card spend is never attributed
+      //     to a bucket"). The P&L Food line + Food cost card were the one
+      //     clean surface.
+      //
+      // After this change all three surfaces read coded 3200.* only: Food
+      // cost cell, period column, Food % of revenue, P&L Food line and
+      // Food cost card tie.
       return codedByWeek;
     };
 

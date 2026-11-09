@@ -5,6 +5,20 @@
 // one pass; do not carry the vendor-grouped shape across. Grain here
 // is period into weeks into transactions, matching the labor table.
 //
+// 2026-11-09, Kevin ruling. Split into two folds:
+//
+//   variant="invoices"  - invoice_submissions + billcom + billcom_credit
+//                         + upload. Keeps the Number column.
+//   variant="cards"     - rippling_spend, CODED ROWS ONLY. A card line
+//                         with no gl_line_code is a to-do (surfaces in
+//                         Needs review today via CurrentPeriodReview),
+//                         not a Food charge. Number column dropped.
+//
+// Both variants share this one component. page.js renders the two
+// folds back-to-back on CP and on closed / CY single-account branches.
+// Open state is per-variant in page.js (purchasingInvoicesFoldOpen /
+// purchasingCardsFoldOpen) so disclosure does not cross folds.
+//
 // Single-period ranges only. Multi-period (Current Year, etc.) render
 // nothing here - Kevin: the fold does not appear on multi-period, no
 // placeholder, no message. Range gating lives on the mount, so this
@@ -12,8 +26,7 @@
 //
 // Fold chrome mirrors LaborLedger.js exactly (kpi-ov-fold-card head +
 // body, HelpPop as sibling to the trigger button, controlled open /
-// onToggle). Distinct id `qPurchasingFold` per Kevin's rule (avoid
-// duplicated `data-hs-help` ids in the DOM).
+// onToggle).
 //
 // Data source: /api/kpi/purchasing with ?drill=lines. Payload rows
 // (payload.actuals) carry the R-147 fields on invoice_submissions
@@ -33,18 +46,6 @@
 //   3500.*                -> Vehicle
 //   13*                   -> Billed back
 //   5*                    -> SG&A (dropped from table)
-//
-// Prior draft split 3200.2 into Pack & Sup, which put the ledger $297.91
-// out of tie with the board's Food line on TBJ - FL P9 (Kevin's ruling
-// referenced the workbook to correct). This rule now matches
-// GL_PREFIX_FOR_BUCKET on 3200 / 3400 / 3500; the fold + board tie on
-// every bucket, every period.
-//
-// R-148 note (2026-09-22): the current dataset carries duplicated
-// rippling_spend rows from reassigned parent ids. R-148 retires the
-// duplicates in the derive; when it lands, Food totals will drop by
-// roughly $600 on TBJ - FL P10. Not a regression here; verify against
-// today's figures.
 
 "use client";
 
@@ -52,31 +53,52 @@ import { useMemo, useState } from "react";
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import { weekStartsInRange } from "@/app/kpi/labor/lib/periods";
 import { fmtWeekRange } from "@/lib/kpi/overview/formatting";
+import { uncodedCardCount } from "@/lib/kpi/overview/uncodedCards";
 
 const HELP_BODY = (
   <>
     <p>
       One row per transaction. Invoice rows come from operator capture
-      (`invoice_submissions`); card rows come from the Rippling API
-      (`rippling_spend`). Uncoded card charges count toward Food until
-      someone codes them.
+      (<code>invoice_submissions</code> / bill.com); card rows come from
+      the Rippling API (<code>rippling_spend</code>). Uncoded card
+      charges are not counted in any cost line and appear in
+      &ldquo;Needs review today&rdquo; until a category is picked.
     </p>
     <p>
-      Column buckets follow the accounting P&L: 3200 sub-lines are Food,
-      3400 sub-lines and 3200.2 are Pack &amp; Sup, 3500 is Vehicle, 13xx
-      is Billed back. 5xxx (SG&amp;A) is not shown here; when an invoice
-      mixes SG&amp;A with COGS the row total is the COGS portion and the
-      row carries a small badge noting the SG&amp;A amount removed.
+      Column buckets follow the accounting P&amp;L: 3200 sub-lines
+      (including 3200.2 Resale Food) are Food, 3400 sub-lines are
+      Pack &amp; Sup, 3500 is Vehicle, 13xx is Billed back. 5xxx
+      (SG&amp;A) is not shown here; when an invoice mixes SG&amp;A
+      with COGS the row total is the COGS portion and the row carries
+      a small badge noting the SG&amp;A amount removed.
     </p>
   </>
 );
 
-const R150_BUCKET = {
-  food:      "Food",
-  packaging: "Pack & Sup",
-  vehicle:   "Vehicle",
-  billed:    "Billed back",
-  sga:       "SG&A",
+const SOURCES_INVOICES = new Set(["invoice_submissions", "billcom", "billcom_credit", "upload"]);
+const SOURCES_CARDS = new Set(["rippling_spend"]);
+
+const VARIANT_CONFIG = {
+  invoices: {
+    sources: SOURCES_INVOICES,
+    title: "Purchasing detail - Invoices",
+    helpId: "qPurchasingFoldInvoices",
+    dataAttr: "purchasing-ledger-invoices",
+    foldTrigger: "fold-purchasing-invoices",
+    summaryNoun: (n) => `${n} ${n === 1 ? "invoice" : "invoices"}`,
+    emptyState: "No vendor invoices this period.",
+    showNumber: true,
+  },
+  cards: {
+    sources: SOURCES_CARDS,
+    title: "Purchasing detail - Cards",
+    helpId: "qPurchasingFoldCards",
+    dataAttr: "purchasing-ledger-cards",
+    foldTrigger: "fold-purchasing-cards",
+    summaryNoun: (n) => `${n} card ${n === 1 ? "charge" : "charges"}`,
+    emptyState: "No card charges this period.",
+    showNumber: false,
+  },
 };
 
 // Kevin ruling 2026-09-22 (revised). 3200.* all sub-lines including
@@ -85,7 +107,7 @@ const R150_BUCKET = {
 // anything not matching) falls to null and does not enter the table.
 function bucketOf(gl) {
   const s = String(gl || "").trim();
-  if (!s) return null;                            // uncoded - handled separately
+  if (!s) return null;
   if (s === "3200" || s.startsWith("3200.")) return "food";
   if (s === "3400" || s.startsWith("3400.")) return "packaging";
   if (s === "3500" || s.startsWith("3500.")) return "vehicle";
@@ -94,28 +116,9 @@ function bucketOf(gl) {
   return null;
 }
 
-// Deep-log rounding to keep cent totals stable.
 const round2 = n => Math.round(Number(n || 0) * 100) / 100;
 const fmt0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
 
-// Type / Status derivations per row source.
-//   invoice_submissions type='invoice'         -> "Invoice"
-//   invoice_submissions type='credit'          -> "Credit"
-//   billcom                                    -> "Invoice"   (pre-cutover bills)
-//   billcom_credit                             -> "Credit"    (pre-cutover credits)
-//   upload                                     -> "Invoice"   (finance-injected)
-//   rippling_spend                             -> "Card"
-//   invoice_submissions status='sent'          -> "Submitted"
-//   invoice_submissions status='returned'      -> "Returned"
-//   rippling_spend group has any uncoded line  -> "Needs coding"
-//
-// Editorial (2026-09-25). Status was a standalone column, retired
-// here. The signal moves to two places on the row: a 3px amber rail
-// on the vendor cell when the group needs coding (statusRail), and
-// a second line inside the vendor cell (statusSub) reading the same
-// text an operator saw in the old column. Rail predicate is
-// uncodedLines > 0 - the same test statusLabel used before, so the
-// signal is unchanged; only its render surface moved.
 function typeLabel(r) {
   if (r.source === "invoice_submissions") return r.type === "credit" ? "Credit" : "Invoice";
   if (r.source === "billcom_credit")      return "Credit";
@@ -124,44 +127,31 @@ function typeLabel(r) {
   if (r.source === "rippling_spend")      return "Card";
   return "—";
 }
-// Sub-line rendered under the vendor name. Kevin ruling 2026-10-05:
-// a sub-line here doubles the row height for the whole table, so
-// restrict it to EXCEPTION states only. "Submitted" is retired - it
-// renders on effectively every invoice row and the label is almost
-// always identical. "Needs coding" moves inline next to the vendor
-// name (see JSX render below) so the row stays one line. "Returned"
-// kept as a sub-line because it IS an exception the operator must
-// read.
+// Sub-line rendered under the vendor name. Restrict to EXCEPTION
+// states only - a sub-line doubles row height for the whole table.
 function statusSub(r) {
   if (r.source === "invoice_submissions" && r.status === "returned") {
     return { text: "Returned", warn: false };
   }
   return null;
 }
-// Rail predicate. Same uncodedLines > 0 test the retired statusLabel
-// used - one source of truth for "row needs work" so the rail and any
-// future header count read the same population.
-function needsCodingRail(r) {
-  return r.source === "rippling_spend" && r.uncodedLines > 0;
-}
 function numberLabel(r) {
   if (r.source === "invoice_submissions") return r.invoice_number ? `#${r.invoice_number}` : "—";
   // Kevin ruling 2026-09-24. source_bill_id is a ULID; the first 8
-  // hex chars encode the millisecond epoch, so multiple bills within
-  // the same ms collide on slice(0, 8). Measured on the ledger since
-  // 2026-08-10: 1,952 distinct charges collapsed into 1,032 distinct
-  // 8-char prefixes - roughly half the numbers on screen were shared
-  // by unrelated charges, which is why three different American
-  // Airlines charges displayed under one # and looked like duplicates.
-  // slice(0, 13) is fully unique over the same set (measured), and
-  // keeps the chronological-scan property operators are used to (the
-  // ULID timestamp prefix stays visible).
+  // hex chars collide on same-ms bills. slice(0, 13) is unique over
+  // the ledger (measured) and keeps the chronological-scan property.
   return r.source_bill_id ? `#${String(r.source_bill_id).slice(0, 13)}` : "—";
 }
 
 // Group actuals rows by source_bill_id + source. One transaction = one
-// group. Aggregates line amounts across buckets so a multi-line
-// invoice renders as one row with the split across columns.
+// group. 2026-11-09, Kevin ruling: the prior "Uncoded card charge
+// counts toward Food" fallback (previously here as an else-if branch
+// after the bucketOf check) is retired. Uncoded card lines now belong
+// in Needs review today only; a group whose every line is uncoded
+// still forms a row (so it does not vanish) but with zero in every
+// bucket. The Cards variant pre-filters its row pool to coded lines
+// only before this function is called, so groups with no coded line
+// are dropped at the filter, not here.
 function buildTransactions(rows) {
   const groups = new Map();
   for (const r of rows) {
@@ -178,32 +168,18 @@ function buildTransactions(rows) {
         type: r.type || null,
         status: r.status || null,
         invoice_number: r.invoice_number || null,
-        // Kevin ruling 2026-10-06: Drive links + submitter uploaded by
-        // the loader at paginateInvoiceSubmissions. drive_url_stamped
-        // is drive_urls[0] (the stamped PDF matching the GL coding).
-        // Fold renders the invoice number as an anchor to this URL;
-        // raw + submitter ship on the wire now so a later rendering
-        // ruling does not need another loader change.
         drive_url_stamped: r.drive_url_stamped || null,
         drive_url_raw: r.drive_url_raw || null,
         submitter_email: r.submitter_email || null,
         txn_date: r.txn_date,
         sga_removed: 0,
-        // buckets:
         food: 0, packaging: 0, vehicle: 0, billed: 0,
-        // metadata:
         hasCogs: false,
         allSga: true,
         anyLine: false,
-        // Card coding counts. statusLabel reads these to answer
-        // "Coded" (all lines have a gl_line_code) vs "Needs coding"
-        // (any one line is still uncoded). Group-level, not line-
-        // level, because a card bill can be GL-split across lines.
         codedLines: 0,
         uncodedLines: 0,
         rawLines: [],
-        // Card charge detail (rippling_spend); consistent across a
-        // parent txn's GL-split lines, so first non-null wins.
         person: null, hasReceipt: null, memo: null,
       };
       groups.set(key, g);
@@ -218,28 +194,20 @@ function buildTransactions(rows) {
       if (g.hasReceipt == null && r.has_receipt != null) g.hasReceipt = r.has_receipt;
       if (g.memo == null && r.memo) g.memo = r.memo;
     }
-    if (b === "sga") { /* drop from columns; sga_removed carries the total for invoices */ }
+    if (b === "sga") { /* drop from columns; sga_removed carries the total */ }
     else if (b) {
       g.allSga = false;
       g[b] += Number(r.amount || 0);
       if (b === "food" || b === "packaging" || b === "vehicle" || b === "billed") g.hasCogs = true;
-    } else if (r.source === "rippling_spend" && !r.gl_line_code) {
-      // Uncoded card charge counts toward Food (Kevin's rule).
-      g.allSga = false;
-      g.food += Number(r.amount || 0);
-      g.hasCogs = true;
     }
-    // Track SG&A amount per invoice for the badge. On captured
-    // invoices this comes pre-computed on each row (same value across
-    // all rows of one submission), so max() is a safe pick.
+    // (retired 2026-11-09) else if (rippling_spend && !gl_line_code) {
+    //   g.food += amount; - "uncoded counts toward Food" rule.
+    // }
     if (r.source === "invoice_submissions" && r.sga_removed_amount) {
       g.sga_removed = Math.max(g.sga_removed, Number(r.sga_removed_amount));
     }
-    // Earliest txn_date within the group wins (rows share txn_date on
-    // invoices; for cards a bill has one txn_date across its lines).
     if (r.txn_date && (!g.txn_date || r.txn_date < g.txn_date)) g.txn_date = r.txn_date;
   }
-  // Drop groups whose whole invoice was SG&A - no row here.
   const out = [];
   for (const g of groups.values()) {
     if (g.allSga) continue;
@@ -248,15 +216,17 @@ function buildTransactions(rows) {
     g.vehicle   = round2(g.vehicle);
     g.billed    = round2(g.billed);
     g.total     = round2(g.food + g.packaging + g.vehicle + g.billed);
+    // Cards variant: drop groups whose every line was uncoded (no
+    // coded line, so no bucket). Invoices variant: every row has a
+    // coded GL by construction (operator capture requires it), so
+    // this guard is a no-op there.
+    if (g.source === "rippling_spend" && g.codedLines === 0) continue;
     out.push(g);
   }
   return out;
 }
 
-// Assign a fiscal week_start to a txn_date. Same floor the view uses:
-// FY_START + floor((d - FY_START) / 7) * 7. Kept local so the fold
-// does not import a weekly helper that does not exist for the daily
-// grain.
+// Assign a fiscal week_start to a txn_date.
 const FY_START_MS = new Date("2025-12-29T00:00:00Z").getTime();
 function weekStartOf(iso) {
   if (!iso) return null;
@@ -275,49 +245,27 @@ function weekState(weekStart, weekEnd, todayISO) {
   return "in-progress";
 }
 
-// Uncoded card charges strip - source=rippling_spend AND gl_line_code
-// null AND txn_date in range. Same population the current
-// PurchasingLedger surfaces above its table (Kevin's rule: they count
-// toward Food until someone codes them).
-function uncodedCardCount(rows) {
-  let n = 0, s = 0;
-  for (const r of rows) {
-    if (r.source !== "rippling_spend") continue;
-    if (r.gl_line_code) continue;
-    n += 1;
-    s += Number(r.amount || 0);
-  }
-  return { n, total: round2(s) };
-}
-
-// Fold header summary. Mirrors labor's `{count} hrs · {dollars}` shape:
-// the count of in-scope transactions and the period total, computed
-// from the same `derived` totals the footer uses so the collapsed fold
-// names a figure that always matches the open fold. Returns null when
-// the fold has nothing to show (no derived or zero transactions).
-//
-// Prior shape read payload.card_charges.total_count + total_amount for
-// an "awaiting coding" count. That figure diverged from the uncoded-
-// strip number inside the fold (two different sources: card_charges
-// vs the detail's own uncodedCardCount), so the collapsed and open
-// states disagreed. The accurate pending nudge now lives only in the
-// uncoded strip inside the fold.
-function foldHeaderSummaryFromDerived(derived) {
+function foldHeaderSummaryFromDerived(derived, variant) {
   if (!derived) return null;
   const n = derived.transactions?.length || 0;
   if (n <= 0) return null;
-  return `${n} ${n === 1 ? "charge" : "charges"} · ${fmt0(derived.foot.total)}`;
+  return `${VARIANT_CONFIG[variant].summaryNoun(n)} · ${fmt0(derived.foot.total)}`;
 }
 
-// Kevin ruling 2026-10-13 (cleanup). The `account` prop was accepted but
-// never read inside this component. Callers in page.js stopped passing
-// it in the same PR. Dropped from the signature.
-export default function PurchasingFold({ payload, error, start, end, today, open, onToggle, billbackPeriod, periodCurrent = false }) {
+export default function PurchasingFold({
+  payload,
+  error,
+  start,
+  end,
+  today,
+  open,
+  onToggle,
+  billbackPeriod,
+  periodCurrent = false,
+  variant = "invoices",
+}) {
+  const cfg = VARIANT_CONFIG[variant] || VARIANT_CONFIG.invoices;
   const actuals = Array.isArray(payload?.actuals) ? payload.actuals : null;
-  // Kevin ruling 2026-10-12. Purchasing weeks collapse by default; a chevron
-  // on the band row expands that week's transactions. Mirrors the labor
-  // WeekTable disclosure. Set keyed by week_start ISO so toggling preserves
-  // state across re-renders triggered by payload refreshes.
   const [expandedWeeks, setExpandedWeeks] = useState(() => new Set());
   const toggleWeek = (wk) => setExpandedWeeks((prev) => {
     const next = new Set(prev);
@@ -328,29 +276,17 @@ export default function PurchasingFold({ payload, error, start, end, today, open
   const derived = useMemo(() => {
     if (!actuals) return null;
 
-    // In-scope sources for the fold. Post-cutover on capture-eligible
-    // accounts the loader emits invoice_submissions + rippling_spend.
-    // Pre-cutover (P1-P9) and CIN - KY / TBJ - NY every period read
-    // through bill.com (billcom / billcom_credit / upload). All five
-    // land here as transaction rows so the fold's period footer ties
-    // to the board on P9 as well as P10 (Kevin's A1).
-    const inScope = actuals.filter(r =>
-      r.source === "invoice_submissions" ||
-      r.source === "rippling_spend" ||
-      r.source === "billcom" ||
-      r.source === "billcom_credit" ||
-      r.source === "upload"
-    );
-
-    // For the Uncoded strip we count from the raw pool so it stays
-    // stable if the same charge is later coded and we would drop it
-    // from a bucketed row.
-    const uncoded = uncodedCardCount(inScope);
+    // Variant-specific source filter. Cards additionally drops uncoded
+    // lines at the row level so they never enter buildTransactions;
+    // uncoded card charges surface only in Needs review today.
+    const inScope = actuals.filter(r => {
+      if (!cfg.sources.has(r.source)) return false;
+      if (variant === "cards" && !r.gl_line_code) return false;
+      return true;
+    });
 
     const transactions = buildTransactions(inScope);
 
-    // Bucket totals across every transaction. Vehicle-column visibility
-    // gates on the non-zero sum for the whole range.
     const foot = { food: 0, packaging: 0, vehicle: 0, billed: 0 };
     for (const t of transactions) {
       foot.food      += t.food;
@@ -364,9 +300,6 @@ export default function PurchasingFold({ payload, error, start, end, today, open
     foot.billed = round2(foot.billed);
     foot.total = round2(foot.food + foot.packaging + foot.vehicle + foot.billed);
 
-    // Bucket by week. weekStartsInRange enumerates every fiscal week
-    // overlapping the range (Kevin rule 4 - do not fork a
-    // week-boundary helper).
     const weeks = weekStartsInRange(start, end);
     const byWeek = new Map();
     for (const w of weeks) byWeek.set(w, { week_start: w, week_end: weekEndOf(w), state: weekState(w, weekEndOf(w), today), rows: [], food: 0, packaging: 0, vehicle: 0, billed: 0 });
@@ -380,7 +313,6 @@ export default function PurchasingFold({ payload, error, start, end, today, open
       bucket.vehicle   += t.vehicle;
       bucket.billed    += t.billed;
     }
-    // Sort transactions within each week: txn_date asc, then vendor.
     for (const b of byWeek.values()) {
       b.rows.sort((a, b) => (a.txn_date || "").localeCompare(b.txn_date || "") || a.vendor.localeCompare(b.vendor));
       b.food = round2(b.food);
@@ -389,16 +321,6 @@ export default function PurchasingFold({ payload, error, start, end, today, open
       b.billed = round2(b.billed);
     }
     const ascendingBands = [...byWeek.values()];
-    // PR B item B5 (Kevin ruling 2026-09-23). Reorder weeks for display:
-    // - Running period: current (in-progress) week first, then settled
-    //   weeks most-recent-first, then any future (ahead) weeks last.
-    //   e.g. WK3, WK2, WK1, WK4. Kevin's rule (future week has no
-    //   purchases, so it goes last, not before the current week).
-    // - Closed period: no in-progress week; reverse to most-recent-first
-    //   (WK4, WK3, WK2, WK1). This is my inference, not Kevin's ruling;
-    //   flagged for his review.
-    // Period footer total is computed from the whole set above and is
-    // order-independent; not affected by this reordering.
     const inProgress = ascendingBands.find(b => b.state === "in-progress");
     const weekBands = inProgress
       ? [
@@ -409,46 +331,34 @@ export default function PurchasingFold({ payload, error, start, end, today, open
       : [...ascendingBands].reverse();
 
     return {
-      uncoded,
       transactions,
       foot,
       weekBands,
       showVehicle: foot.vehicle !== 0,
     };
-  }, [actuals, start, end, today]);
+  }, [actuals, start, end, today, variant, cfg.sources]);
 
-  // Header summary renders on every mount (CP and Closed/CY): the
-  // period total shape is a plain roll-up, not pending-work chrome,
-  // so there is no need to gate on periodCurrent here. Null falls
-  // through to render nothing (zero transactions / loading).
-  const headerSummary = foldHeaderSummaryFromDerived(derived);
+  const headerSummary = foldHeaderSummaryFromDerived(derived, variant);
 
   return (
     <div
       className={`kpi-ov-card kpi-ov-mt kpi-ov-fold-card kpi-ov-fold-panel kpi-ov-fold-strip-purch${open ? " kpi-ov-fold-open" : ""}`}
-      data-kpi-ov="purchasing-ledger"
+      data-kpi-ov={cfg.dataAttr}
+      data-kpi-ov-variant={variant}
       data-kpi-ov-open={open ? "1" : "0"}
     >
-      {/* Kevin ruling 2026-10-12 (follow-up). Title + HelpPop live as a
-          static left cluster inside .kpi-ov-fold-head; the trigger button
-          (now summary + chevron only) fills the rest of the row and stays
-          the fold click target. Title moved OUT of the trigger because the
-          "?" is a sibling button that cannot nest inside the trigger
-          (button-in-button is invalid HTML). The .kpi-ov-fold-meta row the
-          prior PR introduced for this fold is retired - PnlStatement still
-          uses the class, so the CSS rule stays. */}
       <div className="kpi-ov-fold-head">
-        <span className="kpi-ov-eb">Purchasing detail</span>
-        <HelpPop id="qPurchasingFold" title="The purchasing table" body={HELP_BODY} />
+        <span className="kpi-ov-eb">{cfg.title}</span>
+        <HelpPop id={cfg.helpId} title="The purchasing table" body={HELP_BODY} />
         <button
           type="button"
           className="kpi-ov-fold-trigger"
-          data-kpi-ov="fold-purchasing"
+          data-kpi-ov={cfg.foldTrigger}
           onClick={onToggle}
           aria-expanded={open ? "true" : "false"}
         >
           {headerSummary && (
-            <span className="kpi-ov-fold-summary" data-kpi-ov="purchasing-fold-summary">{headerSummary}</span>
+            <span className="kpi-ov-fold-summary" data-kpi-ov={`${cfg.dataAttr}-summary`}>{headerSummary}</span>
           )}
           <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
         </button>
@@ -457,16 +367,16 @@ export default function PurchasingFold({ payload, error, start, end, today, open
         <>
           <div className="kpi-ov-cb">
             {error ? (
-              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-error">
+              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov={`${cfg.dataAttr}-error`}>
                 Purchasing detail could not load: {error}
               </div>
             ) : !derived ? (
-              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-loading">
+              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov={`${cfg.dataAttr}-loading`}>
                 Loading purchasing detail…
               </div>
             ) : derived.transactions.length === 0 ? (
-              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-empty">
-                No purchases for this range.
+              <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov={`${cfg.dataAttr}-empty`}>
+                {cfg.emptyState}
               </div>
             ) : (
               <>
@@ -475,8 +385,10 @@ export default function PurchasingFold({ payload, error, start, end, today, open
                   expandedWeeks={expandedWeeks}
                   onToggleWeek={toggleWeek}
                   periodCurrent={periodCurrent}
+                  showNumber={cfg.showNumber}
+                  dataAttr={cfg.dataAttr}
                 />
-                <PurchasingGoalRow billbackPeriod={billbackPeriod} />
+                {variant === "invoices" && <PurchasingGoalRow billbackPeriod={billbackPeriod} />}
               </>
             )}
           </div>
@@ -486,18 +398,8 @@ export default function PurchasingFold({ payload, error, start, end, today, open
   );
 }
 
-// PR-billback-2. Goal row for the single-period surface. Renders under the
-// purchasing period total. All figures come from the resolver's
-// billback_period (same source as the Current-Year ledger); this only
-// formats + tones. Tone: over = amber (notable, pass-through, not a loss),
-// under = green, otherwise neutral - the same meaning the card/ledger use.
 function PurchasingGoalRow({ billbackPeriod }) {
   const bb = billbackPeriod;
-  // Kevin ruling 2026-10-12 (TXR-TX-H chart slot fix). `!bb` catches non-MF
-  // single-period views (resolver ships null). `bb.annual_goal == null`
-  // catches MF accounts with no kpi_billback_goals row (TXR - TX - H) where
-  // buildBillbackPeriod returned a full row object with null annual_goal.
-  // Same pattern BillbackLedger uses.
   if (!bb || bb.annual_goal == null) return null;
 
   if (bb.state === "pre_season") {
@@ -548,22 +450,18 @@ function PurchasingGoalRow({ billbackPeriod }) {
   );
 }
 
-function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent = false }) {
-  const { uncoded, weekBands, foot, showVehicle } = derived;
+function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent = false, showNumber, dataAttr }) {
+  const { weekBands, foot, showVehicle } = derived;
+  const leadingCols = showNumber ? 3 : 2; // vendor + type [+ number]
   return (
     <>
-      {periodCurrent && uncoded.n > 0 && (
-        <div className="kpi-ov-cp-led-warn" role="status" data-kpi-ov="purchasing-ledger-uncoded">
-          {uncoded.n} card {uncoded.n === 1 ? "charge has" : "charges have"} no P&amp;L line yet · {fmt0(uncoded.total)} · they count toward Food until someone codes them
-        </div>
-      )}
       <div className="kpi-ov-cp-led-scroll">
         <table className="kpi-ov-cp-led-tbl">
           <thead>
             <tr>
               <th className="kpi-ov-cp-led-l">Vendor</th>
               <th className="kpi-ov-cp-led-l">Type</th>
-              <th className="kpi-ov-cp-led-l">Number</th>
+              {showNumber && <th className="kpi-ov-cp-led-l">Number</th>}
               <th>Food</th>
               <th>Pack. &amp; Sup.</th>
               {showVehicle && <th>Vehicle</th>}
@@ -577,13 +475,15 @@ function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent =
                 key={band.week_start}
                 band={band}
                 showVehicle={showVehicle}
+                showNumber={showNumber}
+                leadingCols={leadingCols}
                 periodCurrent={periodCurrent}
                 open={!!expandedWeeks?.has(band.week_start)}
                 onToggle={() => onToggleWeek?.(band.week_start)}
               />
             ))}
-            <tr className="kpi-ov-cp-led-foot" data-kpi-ov="purchasing-ledger-foot">
-              <td className="kpi-ov-cp-led-l" colSpan={3}>Period total</td>
+            <tr className="kpi-ov-cp-led-foot" data-kpi-ov={`${dataAttr}-foot`}>
+              <td className="kpi-ov-cp-led-l" colSpan={leadingCols}>Period total</td>
               <td>{fmt0(foot.food)}</td>
               <td>{fmt0(foot.packaging)}</td>
               {showVehicle && <td>{fmt0(foot.vehicle)}</td>}
@@ -597,21 +497,10 @@ function PurchasingTable({ derived, expandedWeeks, onToggleWeek, periodCurrent =
   );
 }
 
-function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, onToggle }) {
-  // Editorial (2026-09-25). Status column retired: leading label
-  // columns drop from 4 (vendor + type + status + number) to 3 (vendor
-  // + type + number). Both the computed colSpan for empty-week rows
-  // AND the two hardcoded colSpan sites (band label + period footer)
-  // move together - a mismatched pair would shear the table on empty
-  // weeks or across showVehicle transitions.
-  // Right side is Food + Pack + [Vehicle] + Billed + Total = 5/4, not
-  // 4/3. Pre-existing off-by-one carried over from `4 + (showVehicle
-  // ? 4 : 3)` (Kevin ruling 2026-09-25, post PR-1222 review); affects
-  // only the lone-td empty-week row, which was leaving one blank cell
-  // at the right.
-  const colSpan = 3 + (showVehicle ? 5 : 4); // vendor + type + number + buckets + total column count
-  // Unified "M/D - M/D" week-row label (no year, no "Week ·" prefix).
-  // Shared with the labor WeekTable via fmtWeekRange.
+function PurchasingWeekBand({ band, showVehicle, showNumber, leadingCols, periodCurrent = false, open, onToggle }) {
+  // Right side of the table: Food + Pack + [Vehicle] + Billed + Total.
+  const rightCols = showVehicle ? 5 : 4;
+  const colSpan = leadingCols + rightCols;
   const dtRange = fmtWeekRange(band.week_start, band.week_end);
   const stateTag = band.state === "in-progress" ? "kpi-ov-pf-wband-run"
                 : band.state === "ahead"       ? "kpi-ov-pf-wband-ahead"
@@ -620,13 +509,7 @@ function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, on
   return (
     <>
       <tr className={`kpi-ov-pf-wband ${stateTag}`} data-kpi-ov="purchasing-week-band" data-week-start={band.week_start} data-week-state={band.state} data-kpi-ov-open={open ? "1" : "0"}>
-        <td className="kpi-ov-cp-led-l" colSpan={3}>
-          {/* Kevin ruling 2026-10-12. Week band becomes a chevron toggle;
-              bucket subtotals on this row stay visible so a collapsed
-              week still carries its summary. Mirrors the labor WeekTable
-              week disclosure. Default is collapsed - the containing Set
-              starts empty, so opening the fold shows one row per week
-              with subtotals, and clicking a week reveals its transactions. */}
+        <td className="kpi-ov-cp-led-l" colSpan={leadingCols}>
           <button
             type="button"
             className="kpi-ov-pf-wbandbtn"
@@ -658,15 +541,13 @@ function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, on
           <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute" colSpan={colSpan}>No purchases in this week.</td>
         </tr>
       ) : (
-        band.rows.map((r, i) => {
+        band.rows.map((r) => {
           const sub = statusSub(r);
-          const rail = needsCodingRail(r);
           return (
             <tr
               key={r.key}
               className="kpi-ov-cp-led-lrow"
               data-kpi-ov="purchasing-txn"
-              data-status-rail={rail ? "1" : "0"}
             >
               <td className="kpi-ov-cp-led-l">
                 <span className="kpi-ov-pf-vname">
@@ -675,11 +556,6 @@ function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, on
                     <span className="kpi-ov-cp-led-sga" title="Invoice included SG&A lines that are not part of COGS; the row total is the COGS portion.">
                       {" "}SG&amp;A {fmt0(r.sga_removed)}
                     </span>
-                  )}
-                  {rail && (
-                    periodCurrent
-                      ? <span className="kpi-ov-pf-vneedscoding">Needs coding</span>
-                      : <span className="kpi-ov-pf-vuncoded">uncoded</span>
                   )}
                 </span>
                 {sub && (
@@ -698,20 +574,22 @@ function PurchasingWeekBand({ band, showVehicle, periodCurrent = false, open, on
                 )}
               </td>
               <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">{typeLabel(r)}</td>
-              <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">
-                {r.source === "invoice_submissions" && r.drive_url_stamped
-                  ? (
-                    <a
-                      href={r.drive_url_stamped}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="kpi-ov-pf-numlink"
-                      aria-label={r.invoice_number ? `Invoice ${r.invoice_number}, opens stamped PDF in a new tab` : "Invoice, opens stamped PDF in a new tab"}
-                      title="Open stamped PDF (new tab)"
-                    >{numberLabel(r)}</a>
-                  )
-                  : numberLabel(r)}
-              </td>
+              {showNumber && (
+                <td className="kpi-ov-cp-led-l kpi-ov-cp-led-mute">
+                  {r.source === "invoice_submissions" && r.drive_url_stamped
+                    ? (
+                      <a
+                        href={r.drive_url_stamped}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="kpi-ov-pf-numlink"
+                        aria-label={r.invoice_number ? `Invoice ${r.invoice_number}, opens stamped PDF in a new tab` : "Invoice, opens stamped PDF in a new tab"}
+                        title="Open stamped PDF (new tab)"
+                      >{numberLabel(r)}</a>
+                    )
+                    : numberLabel(r)}
+                </td>
+              )}
               <td>{cellCell(r.food)}</td>
               <td>{cellCell(r.packaging)}</td>
               {showVehicle && <td>{cellCell(r.vehicle)}</td>}
@@ -729,3 +607,7 @@ function cellCell(n) {
   if (Math.abs(n) < 0.005) return <span className="kpi-ov-cp-led-dim">—</span>;
   return fmt0(n);
 }
+
+// Re-export the shared helper so existing callers that imported from
+// this module keep working without hunting the new path.
+export { uncodedCardCount };
