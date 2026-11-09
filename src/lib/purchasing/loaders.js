@@ -388,6 +388,28 @@ export async function paginateActuals(supa, { members, start, end, pageSize, inc
 // and null account_key). Uncoded card lines don't have gl_line_code
 // so they group under NULL gl_line_code - callers that only want
 // bill buckets should filter gl_bucket='pl_cogs'.
+//
+// Emitted row shape:
+//   {
+//     account_key, week_start, week_end, gl_line_code, gl_bucket,
+//     amount, line_count, bill_count, paid_amount,
+//     invoice_amount?, card_amount?
+//   }
+//
+// invoice_amount and card_amount are OPTIONAL. They are present on
+// rows emitted by aggregateWeekly (post-cutover for capture-eligible
+// accounts, where this function knows which lane each raw row came
+// from) and ABSENT on rows passed through from v_purchasing_by_site_
+// week (pre-cutover weeks and capture-excluded accounts), because
+// the view aggregates `source` away and we do not invent a split we
+// cannot verify. This absence is deliberate and must stay - do NOT
+// backfill zero or guess.
+//
+// Consumers must treat the two fields as opt-in. `row.invoice_amount
+// + row.card_amount` on a pass-through row yields NaN silently; test
+// for presence with `row.invoice_amount != null` (or equivalent) and
+// fall back to suppressing any surface that needs the split, the way
+// CurrentPeriodTable's period-column channel split does.
 export async function paginateWeekly(supa, { members, start, end }) {
   const PS = V6_PAGE_DEFAULT;
 
@@ -457,6 +479,17 @@ export async function paginateWeekly(supa, { members, start, end }) {
 
   // Aggregate raw rows to the view shape: (account_key, week_start,
   // week_end, gl_line_code, gl_bucket) -> summed amount + counts.
+  //
+  // 2026-11-09. invoice_amount / card_amount carry the channel through
+  // the rollup. Each lane populates its own field and leaves the other
+  // at 0: the invoice lane sets invoice_amount = sum(row.amount) and
+  // card_amount = 0; the card lane sets card_amount = sum(row.amount)
+  // and invoice_amount = 0. The CurrentPeriodTable period-column cell
+  // sums invoice_amount and card_amount across all weekly rows of a
+  // line and compares the total to SPENT (sum of amount); the split
+  // suppresses if any backing row is missing the fields, so view
+  // pass-through rows (which never enter this function) suppress by
+  // omission, not by invention.
   function aggregateWeekly(rows, { isInvoiceLane }) {
     const acc = new Map();
     const billsSeen = new Map();     // key: `${account}|${week}|${gl}` -> Set of source_bill_id
@@ -468,16 +501,20 @@ export async function paginateWeekly(supa, { members, start, end }) {
       const key = `${r.account_key}||${ws}||${gl}||${bucket}`;
       let ent = acc.get(key);
       if (!ent) {
-        ent = { account_key: r.account_key, week_start: ws, week_end: weekEndOf(ws), gl_line_code: gl, gl_bucket: bucket, amount: 0, line_count: 0, bill_count: 0, paid_amount: 0 };
+        ent = { account_key: r.account_key, week_start: ws, week_end: weekEndOf(ws), gl_line_code: gl, gl_bucket: bucket, amount: 0, line_count: 0, bill_count: 0, paid_amount: 0, invoice_amount: 0, card_amount: 0 };
         acc.set(key, ent);
       }
-      ent.amount += Number(r.amount || 0);
+      const amt = Number(r.amount || 0);
+      ent.amount += amt;
       ent.line_count += 1;
-      if (r.paid) ent.paid_amount += Number(r.amount || 0);
+      if (r.paid) ent.paid_amount += amt;
       if (isInvoiceLane) {
+        ent.invoice_amount += amt;
         const billKey = `${key}||${r.source_bill_id}`;
         if (!billsSeen.has(key)) billsSeen.set(key, new Set());
         billsSeen.get(key).add(r.source_bill_id);
+      } else {
+        ent.card_amount += amt;
       }
     }
     if (isInvoiceLane) {
@@ -485,8 +522,10 @@ export async function paginateWeekly(supa, { members, start, end }) {
     }
     const out = [];
     for (const ent of acc.values()) {
-      ent.amount      = Math.round(ent.amount * 100) / 100;
-      ent.paid_amount = Math.round(ent.paid_amount * 100) / 100;
+      ent.amount         = Math.round(ent.amount * 100) / 100;
+      ent.paid_amount    = Math.round(ent.paid_amount * 100) / 100;
+      ent.invoice_amount = Math.round(ent.invoice_amount * 100) / 100;
+      ent.card_amount    = Math.round(ent.card_amount * 100) / 100;
       out.push(ent);
     }
     return out;
