@@ -600,7 +600,7 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
 // the current (in-progress) week sits outside both btd and std. The
 // mid-week spend is still visible on its own week cell; the period
 // column states only what has settled.
-function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null, neutralSpend = false, billbackLandedPeriod = null }) {
+function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, channelSplit = null, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null, neutralSpend = false, billbackLandedPeriod = null }) {
   const isFuture = phase === "future";
   const G = Number(envelope || 0);
   // Billback (pass-through) rows: no envelope, no closed-weeks
@@ -683,6 +683,27 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
         <span className="kpi-ov-cp-lk">Spent</span>
         <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(std)}</span>
       </div>
+      {/* 2026-11-09. Invoice / Card channel decomposition on the three
+          purchasing cost lines (3200/3400/3500). Mirrors the 3100 week-
+          cell HOURLY/SALARY split pattern - .kpi-ov-cp-lr-sub label +
+          value, italic + muted - so the eye lands on BUDGET / SPENT /
+          verdict first. Gating + reconciliation live at the call site;
+          by the time channelSplit lands here it has already cleared
+          the "every backing row has both fields" and "sums to SPENT
+          within one cent" tests. No `fixed` chip: there is no
+          invoice/card budget, so nothing is being committed to. */}
+      {channelSplit && (
+        <>
+          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+            <span className="kpi-ov-cp-lk">INVOICES</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(channelSplit.invoice)}</span>
+          </div>
+          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+            <span className="kpi-ov-cp-lk">CARDS</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(channelSplit.card)}</span>
+          </div>
+        </>
+      )}
       <div className={`kpi-ov-cp-lr kpi-ov-cp-lr-del ${verdictMod}`}>
         <span className="kpi-ov-cp-lk">{verdictKey}</span>
         <span className="kpi-ov-cp-lv"><span className="kpi-ov-cp-tri">{arrow}</span>{dollar0(Math.abs(delta))}</span>
@@ -1222,6 +1243,37 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       // cost cell, period column, Food % of revenue, P&L Food line and
       // Food cost card tie.
       return codedByWeek;
+    };
+
+    // 2026-11-09. Per-week channel split for the three purchasing cost
+    // lines. Returns null for 3100 (labor; different split path) and
+    // for any line whose weekly rows are missing invoice_amount /
+    // card_amount (view pass-through rows from paginateWeekly - pre-
+    // cutover or capture-excluded accounts). A single missing-fields
+    // row on a given line poisons the whole line: the renderer gates
+    // on `anyMissing === false` so we never render a partial split.
+    // Values are summed per-week (same (week, line) buckets landedFor
+    // uses); the caller sums across closed weeks and applies the
+    // reconciliation gate against SPENT.
+    const channelFor = (line) => {
+      if (line === "3100") return null;
+      const invoiceByWeek = new Array(weeks.length).fill(0);
+      const cardByWeek    = new Array(weeks.length).fill(0);
+      let anyMissing = false;
+      const wkStartSet = weeks.map(w => w.week_start);
+      for (const row of (purch?.weekly || [])) {
+        const gl = String(row.gl_line_code || "");
+        if (!gl.startsWith(line)) continue;
+        const idx = wkStartSet.indexOf(row.week_start);
+        if (idx < 0) continue;
+        if (row.invoice_amount == null || row.card_amount == null) {
+          anyMissing = true;
+          continue;
+        }
+        invoiceByWeek[idx] += Number(row.invoice_amount || 0);
+        cardByWeek[idx]    += Number(row.card_amount || 0);
+      }
+      return { invoiceByWeek, cardByWeek, anyMissing };
     };
 
     // Kevin R-136 review 2026-09-21. Same Invariant 1 fix for the
@@ -1790,7 +1842,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, cateringPeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, channelFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, cateringPeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
   }, [payload, weeks, labor, purch, rowSet, isFuture, phase, billbackActive]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -2258,6 +2310,41 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                       const inProgSpent  = currentIdx >= 0 ? Number(perWeekLanded[currentIdx] || 0) : 0;
                       const inProgBudget = currentIdx >= 0 ? Number(perWeekGoal[currentIdx]  || 0) : 0;
                       const currentWeekNo = currentIdx >= 0 ? currentIdx + 1 : null;
+                      // 2026-11-09. Invoice/card channel split for the three
+                      // purchasing cost lines on the period cell. Gates (all
+                      // must hold, else channelSplit = null and PerCostCellBody
+                      // omits the sub-rows):
+                      //   1. derived.channelFor returns non-null (3100 returns
+                      //      null; the labor path uses the HOURLY/SALARY split).
+                      //   2. No backing weekly row for this line is missing
+                      //      invoice_amount / card_amount (`anyMissing` false).
+                      //      Pre-cutover view rows and capture-excluded accounts
+                      //      pass through paginateWeekly with these fields
+                      //      undefined; a single such row poisons the split for
+                      //      the line, correctly.
+                      //   3. SPENT (sum across closed weeks) is non-zero.
+                      //   4. invoice + card totals computed independently
+                      //      reconcile with SPENT within one cent. Never
+                      //      derive one channel by subtracting the other; if
+                      //      the independent sum does not tie, suppress.
+                      let channelSplit = null;
+                      if (!isRev && !isTot && row.line !== "3100" && !row.billback) {
+                        const ch = derived.channelFor ? derived.channelFor(row.line) : null;
+                        if (ch && !ch.anyMissing) {
+                          let invSum = 0, cardSum = 0;
+                          for (let wi = 0; wi < weeks.length; wi += 1) {
+                            if (closedFlags[wi]) {
+                              invSum  += Number(ch.invoiceByWeek[wi]  || 0);
+                              cardSum += Number(ch.cardByWeek[wi]     || 0);
+                            }
+                          }
+                          const stdExact = Number(spentToDate || 0);
+                          const tieDelta = Math.abs(invSum + cardSum - stdExact);
+                          if (stdExact !== 0 && tieDelta <= 0.01) {
+                            channelSplit = { invoice: invSum, card: cardSum };
+                          }
+                        }
+                      }
                       return (
                         <PerCostCellBody
                           envelope={goalInfo.batr}
@@ -2268,6 +2355,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           serviceDays={serviceDaysTotal}
                           splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
                           splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
+                          channelSplit={channelSplit}
                           inProgSpent={inProgSpent}
                           inProgBudget={inProgBudget}
                           currentWeekNo={currentWeekNo}
