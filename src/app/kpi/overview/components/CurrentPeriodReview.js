@@ -8,16 +8,28 @@
 // 2026-11-09, Kevin ruling (supersedes 2026-09-24).
 //
 // Previously the purchasing headline read `purchasing.card_charges`
-// (loadCardCharges: uncoded api + report-only merge). Retired. The
-// Cards purchasing fold and this review item now share one derivation
-// over `purchasing.actuals` via uncodedCardCount - so the count on
-// this card and the absence of those rows in the Cards fold table
-// describe the same set. The old CARD_FEED_PAUSED flag is retired
-// too; the stale comment claimed the feed had been down since
-// 2026-10-06, but TXR - AZ carries itemized card charges dated
-// 2026-11-02 through 2026-11-06.
-
-import { uncodedCardCount } from "@/lib/kpi/overview/uncodedCards";
+// (loadCardCharges: uncoded api + report-only merge). Retired. This
+// card now reads `purchasing.pending.api.line_count` / `.amount` -
+// the loadPending aggregation over purchasing_actuals filtered to
+// source='rippling_spend' AND gl_line_code IS NULL. Why pending.api:
+//
+//   - Available on EVERY purchasing payload (unlike actuals, which
+//     only ship when ?drill=lines; the CP fetch does not set drill,
+//     so this card cannot depend on actuals being present without
+//     also waiting on the fold-open fetch).
+//   - Unpaginated (loadCardCharges.rows caps at 50; pending.api does
+//     not cap).
+//   - Excludes the report-only slice by construction (loadPending
+//     reads purchasing_actuals directly).
+//
+// The Cards purchasing fold renders only coded rippling_spend rows
+// (filters !gl_line_code OUT), so the Cards table and this review
+// card are complementary slices of the same pool: every card charge
+// in period is visible exactly once, either as a to-do here or as a
+// coded row in the fold. The old CARD_FEED_PAUSED flag is retired;
+// the stale comment claimed the feed had been down since 2026-10-06,
+// but TXR - AZ carries itemized card charges dated 2026-11-02
+// through 2026-11-06.
 
 const dollar0 = (n) => (Number(n || 0) < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n || 0))).toLocaleString("en-US");
 
@@ -30,9 +42,10 @@ export default function CurrentPeriodReview({ labor, purchasing }) {
   const laborPending = laborPendingSummary(labor);
   if (laborPending) items.push(laborPending);
 
-  // Purchasing · uncoded card charges. Sourced from the shared
-  // uncodedCardCount off purchasing.actuals so the Cards fold and
-  // this card read the same set.
+  // Purchasing · uncoded card charges. Reads purchasing.pending.api,
+  // which is the loadPending aggregation over purchasing_actuals
+  // rippling_spend rows with gl_line_code IS NULL - available on
+  // every purchasing payload (no fold-open or drill=lines dependency).
   const purchPending = purchasingPendingSummary(purchasing);
   if (purchPending) items.push(purchPending);
 
@@ -88,10 +101,11 @@ function laborPendingSummary(labor) {
 
 function purchasingPendingSummary(purchasing) {
   if (!purchasing) return null;
-  const actuals = Array.isArray(purchasing.actuals) ? purchasing.actuals : null;
-  if (!actuals) return null;
-  const { n, total } = uncodedCardCount(actuals);
+  const api = purchasing.pending?.api;
+  if (!api) return null;
+  const n = Number(api.line_count || 0);
   if (!(n > 0)) return null;
+  const total = Number(api.amount || 0);
   return {
     title: `${n} card ${n === 1 ? "charge needs" : "charges need"} coding`,
     detail: `Cards · ${dollar0(total)} · not counted in Food until a category is picked`,

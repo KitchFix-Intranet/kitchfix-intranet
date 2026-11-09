@@ -53,7 +53,6 @@ import { useMemo, useState } from "react";
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import { weekStartsInRange } from "@/app/kpi/labor/lib/periods";
 import { fmtWeekRange } from "@/lib/kpi/overview/formatting";
-import { uncodedCardCount } from "@/lib/kpi/overview/uncodedCards";
 
 const HELP_BODY = (
   <>
@@ -607,7 +606,3 @@ function cellCell(n) {
   if (Math.abs(n) < 0.005) return <span className="kpi-ov-cp-led-dim">—</span>;
   return fmt0(n);
 }
-
-// Re-export the shared helper so existing callers that imported from
-// this module keep working without hunting the new path.
-export { uncodedCardCount };
