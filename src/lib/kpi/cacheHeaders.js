@@ -2,21 +2,19 @@ import { NextResponse } from "next/server";
 
 /**
  * KPI response caching helpers.
- *
- * Data changes once daily via the nightly Rippling sync pipeline
- * (02:00 CST / 07:00 UTC). Between runs, responses for a given
- * (account, date range, salary toggle, user role) are identical.
- *
- * private                 - browser only; no CDN (responses are role-gated)
- * max-age=3600            - fresh for 1 hour
- * stale-while-revalidate  - serve stale instantly for up to 24 hours while
- *                           revalidating in the background
- * Vary: Cookie            - different session = different cache entry
  */
 
+// 2026-11-09. Was `private, max-age=3600, stale-while-revalidate=86400` on the
+// premise that actuals change only once daily (nightly Rippling sync). That
+// premise is dead: purchasing actuals now re-derive mid-day (Stockpot re-scan /
+// purchasing re-derive), and operators plan against these numbers. A mid-day
+// derive left the board serving stale, double-counted spend for up to ~25h
+// (max-age + stale-while-revalidate). The board must always reflect the live
+// DB, so no-store. If per-request cost ever matters, the correct replacement is
+// an ETag keyed to the latest derive version (max derived_at) returning 304 on
+// no change - NOT a time-based cache that can serve a stale actual.
 const CACHED_HEADERS = {
-  "Cache-Control": "private, max-age=3600, stale-while-revalidate=86400",
-  Vary: "Cookie",
+  "Cache-Control": "private, no-store",
 };
 
 const UNCACHED_HEADERS = {
