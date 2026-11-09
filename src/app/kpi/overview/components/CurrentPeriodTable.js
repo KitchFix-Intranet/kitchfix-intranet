@@ -381,6 +381,32 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow, ne
         <span className="kpi-ov-cp-lk">SPENT</span>
         <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(l)}</span>
       </div>
+      {/* 2026-11-09. SPENT decomposition mirrors the BUDGET split that
+          already lives above (splitLines). Gated to CLOSED weeks only:
+          on a closed week `landed` is the complete actual, so
+          `l - salary` is the true hourly spend; on the in-progress
+          week, `landed` can be below the full weekly salary allocation
+          mid-week and would print a negative / nonsense hourly.
+          Future branch already returned above, so `!isCurrent` here
+          == closed. Salary is a fixed weekly allocation and the
+          +salary SPENT is `hourly_actual + salary_allocation`, so
+          SPENT salary == splitSal by construction. Hourly-only view
+          ships splitSal=null -> block never renders, byte-identical
+          to pre-fix on every non-3100 row too. */}
+      {(!isCurrent && splitSal != null) && (
+        <>
+          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+            <span className="kpi-ov-cp-lk">HOURLY</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">
+              {dollar0(Math.max(0, l - Math.round(Number(splitSal || 0))))}
+            </span>
+          </div>
+          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+            <span className="kpi-ov-cp-lk">SALARY <span className="kpi-ov-cp-tag-fixed">fixed</span></span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(Math.round(Number(splitSal || 0)))}</span>
+          </div>
+        </>
+      )}
       <div className={`kpi-ov-cp-lr kpi-ov-cp-lr-del ${verdictMod}`}>
         <span className="kpi-ov-cp-lk">{verdictKey}</span>
         <span className="kpi-ov-cp-lv">{verdictValue}</span>

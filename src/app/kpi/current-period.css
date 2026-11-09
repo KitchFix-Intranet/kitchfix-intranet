@@ -764,12 +764,39 @@
   font-size: var(--kpi-t-label);
   font-weight: 700;
   color: var(--n-500);
+  /* 2026-11-09. Italic so the HOURLY / SALARY decomposition rows
+     (both under BUDGET and the new rows under SPENT) read as
+     subordinate - BUDGET, SPENT, and verdict stay the dominant
+     anchors in each cell. Uppercase label + muted tone retained. */
+  font-style: italic;
 }
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub .kpi-ov-cp-lv,
 .kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub .kpi-ov-cp-lv.kpi-ov-cp-lv-budget {
   font-size: var(--kpi-t-meta);
   font-weight: 600;
   color: var(--n-600);
+  font-style: italic;
+}
+
+/* 2026-11-09. "fixed" chip next to SALARY on the SPENT split - the
+   salary allocation is the same figure as the budget salary by
+   construction (actual == allocation; fixed weekly), and the chip
+   makes that explicit so a reader doesn't try to reconcile it with
+   a variable hourly spend. Modelled on .kpi-ov-cp-tag-billback.
+   Non-italic so it stays upright inside the italic sub-row. */
+.kpi-app .kpi-ov-cp-cell .kpi-ov-cp-lr-sub .kpi-ov-cp-tag-fixed {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  background: var(--n-100);
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: 1px;
 }
 /* Followed by a non-sub row (e.g., SPENT after HOURLY/SALARY)? Give
    it a touch of extra breathing room so the decomposition reads as
