@@ -271,7 +271,7 @@ function VsProjCaption({ delta, toDate }) {
 // surrounding ledger (fix 2, 2026-10-19).
 //
 // Progress bar + rolling delta line are gone (brief items 1 + 2).
-function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow, neutralSpend = false, billbackLandedWeek = null }) {
+function CostCellBody({ w, goal, landed, splitHrly, splitSal, channelSplit = null, phase, dashRow, neutralSpend = false, billbackLandedWeek = null }) {
   const isFuture = w.state === "not_started";
   const isCurrent = w.state === "in_progress";
   const g = Math.round(Number(goal || 0));
@@ -404,6 +404,27 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, phase, dashRow, ne
           <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
             <span className="kpi-ov-cp-lk">SALARY <span className="kpi-ov-cp-tag-fixed">fixed</span></span>
             <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(Math.round(Number(splitSal || 0)))}</span>
+          </div>
+        </>
+      )}
+      {/* 2026-11-09 revisit. Invoice / Card channel decomposition on
+          the three purchasing cost lines (3200/3400/3500), per week.
+          Same .kpi-ov-cp-lr-sub pattern + CSS as the 3100 HOURLY /
+          SALARY split above, so the two sit at the same indent and
+          read as one column down. Call-site applies gates 1-4 (not-
+          current, non-zero SPENT, both channel fields present for
+          this week's row, invoice+card reconciles to this week's
+          SPENT within one cent); by the time channelSplit lands here
+          it has already cleared all four. */}
+      {channelSplit && (
+        <>
+          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+            <span className="kpi-ov-cp-lk">INVOICES</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(channelSplit.invoice)}</span>
+          </div>
+          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
+            <span className="kpi-ov-cp-lk">CARDS</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(channelSplit.card)}</span>
           </div>
         </>
       )}
@@ -600,7 +621,7 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
 // the current (in-progress) week sits outside both btd and std. The
 // mid-week spend is still visible on its own week cell; the period
 // column states only what has settled.
-function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, channelSplit = null, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null, neutralSpend = false, billbackLandedPeriod = null }) {
+function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null, neutralSpend = false, billbackLandedPeriod = null }) {
   const isFuture = phase === "future";
   const G = Number(envelope || 0);
   // Billback (pass-through) rows: no envelope, no closed-weeks
@@ -683,27 +704,6 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
         <span className="kpi-ov-cp-lk">Spent</span>
         <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(std)}</span>
       </div>
-      {/* 2026-11-09. Invoice / Card channel decomposition on the three
-          purchasing cost lines (3200/3400/3500). Mirrors the 3100 week-
-          cell HOURLY/SALARY split pattern - .kpi-ov-cp-lr-sub label +
-          value, italic + muted - so the eye lands on BUDGET / SPENT /
-          verdict first. Gating + reconciliation live at the call site;
-          by the time channelSplit lands here it has already cleared
-          the "every backing row has both fields" and "sums to SPENT
-          within one cent" tests. No `fixed` chip: there is no
-          invoice/card budget, so nothing is being committed to. */}
-      {channelSplit && (
-        <>
-          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
-            <span className="kpi-ov-cp-lk">INVOICES</span>
-            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(channelSplit.invoice)}</span>
-          </div>
-          <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
-            <span className="kpi-ov-cp-lk">CARDS</span>
-            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(channelSplit.card)}</span>
-          </div>
-        </>
-      )}
       <div className={`kpi-ov-cp-lr kpi-ov-cp-lr-del ${verdictMod}`}>
         <span className="kpi-ov-cp-lk">{verdictKey}</span>
         <span className="kpi-ov-cp-lv"><span className="kpi-ov-cp-tri">{arrow}</span>{dollar0(Math.abs(delta))}</span>
@@ -1246,20 +1246,18 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     };
 
     // 2026-11-09. Per-week channel split for the three purchasing cost
-    // lines. Returns null for 3100 (labor; different split path) and
-    // for any line whose weekly rows are missing invoice_amount /
-    // card_amount (view pass-through rows from paginateWeekly - pre-
-    // cutover or capture-excluded accounts). A single missing-fields
-    // row on a given line poisons the whole line: the renderer gates
-    // on `anyMissing === false` so we never render a partial split.
-    // Values are summed per-week (same (week, line) buckets landedFor
-    // uses); the caller sums across closed weeks and applies the
-    // reconciliation gate against SPENT.
+    // lines. Returns null for 3100 (labor; different split path).
+    // Otherwise returns { invoiceByWeek, cardByWeek, missingByWeek }
+    // with one slot per week. A pass-through row from paginateWeekly
+    // (pre-cutover week or capture-excluded account) sets
+    // missingByWeek[idx]=true for THAT WEEK only; a missing row on
+    // WK1 no longer poisons WK2/WK3/WK4. The CostCellBody render
+    // consumer gates each week independently.
     const channelFor = (line) => {
       if (line === "3100") return null;
       const invoiceByWeek = new Array(weeks.length).fill(0);
       const cardByWeek    = new Array(weeks.length).fill(0);
-      let anyMissing = false;
+      const missingByWeek = new Array(weeks.length).fill(false);
       const wkStartSet = weeks.map(w => w.week_start);
       for (const row of (purch?.weekly || [])) {
         const gl = String(row.gl_line_code || "");
@@ -1267,13 +1265,13 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
         const idx = wkStartSet.indexOf(row.week_start);
         if (idx < 0) continue;
         if (row.invoice_amount == null || row.card_amount == null) {
-          anyMissing = true;
+          missingByWeek[idx] = true;
           continue;
         }
         invoiceByWeek[idx] += Number(row.invoice_amount || 0);
         cardByWeek[idx]    += Number(row.card_amount || 0);
       }
-      return { invoiceByWeek, cardByWeek, anyMissing };
+      return { invoiceByWeek, cardByWeek, missingByWeek };
     };
 
     // Kevin R-136 review 2026-09-21. Same Invariant 1 fix for the
@@ -2252,6 +2250,33 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           const sp = (row.line === "3100" && derived.splitFor3100)
                             ? derived.splitFor3100.per[i]
                             : null;
+                          // 2026-11-09. Per-week invoice/card split for 3200/
+                          // 3400/3500. Four gates (all must hold, else
+                          // channelSplit=null and the sub-rows omit):
+                          //   G1 not the running week (w.state !== "in_progress";
+                          //      also suppressed on future via gate 2 since
+                          //      landed=0 there).
+                          //   G2 this week's SPENT (landed[i]) is non-zero.
+                          //   G3 this week's row is not pass-through -
+                          //      missingByWeek[i] is false. Pre-cutover weeks
+                          //      and capture-excluded accounts fail here.
+                          //   G4 invoice + card reconciles to this week's
+                          //      SPENT within one cent. Computed independently
+                          //      per channel; never subtract one from SPENT
+                          //      to derive the other.
+                          let channelSplit = null;
+                          if (!isRev && !isTot && row.line !== "3100" && !row.billback
+                              && w.state !== "in_progress" && !isFuture) {
+                            const ch = derived.channelFor ? derived.channelFor(row.line) : null;
+                            if (ch && !ch.missingByWeek[i]) {
+                              const inv  = Math.round(Number(ch.invoiceByWeek[i] || 0) * 100) / 100;
+                              const card = Math.round(Number(ch.cardByWeek[i]    || 0) * 100) / 100;
+                              const weekSpent = Math.round(Number(landed[i] || 0) * 100) / 100;
+                              if (weekSpent !== 0 && Math.abs(inv + card - weekSpent) <= 0.01) {
+                                channelSplit = { invoice: inv, card: card };
+                              }
+                            }
+                          }
                           return (
                             <CostCellBody
                               w={wForCell}
@@ -2259,6 +2284,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               landed={isFuture ? 0 : landed[i]}
                               splitHrly={sp ? sp.hrly : null}
                               splitSal={sp ? sp.sal : null}
+                              channelSplit={channelSplit}
                               phase={phase}
                               dashRow={isTot ? !!row._allDash : !!goalInfo.allDash}
                               neutralSpend={!!row.billback}
@@ -2310,41 +2336,10 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                       const inProgSpent  = currentIdx >= 0 ? Number(perWeekLanded[currentIdx] || 0) : 0;
                       const inProgBudget = currentIdx >= 0 ? Number(perWeekGoal[currentIdx]  || 0) : 0;
                       const currentWeekNo = currentIdx >= 0 ? currentIdx + 1 : null;
-                      // 2026-11-09. Invoice/card channel split for the three
-                      // purchasing cost lines on the period cell. Gates (all
-                      // must hold, else channelSplit = null and PerCostCellBody
-                      // omits the sub-rows):
-                      //   1. derived.channelFor returns non-null (3100 returns
-                      //      null; the labor path uses the HOURLY/SALARY split).
-                      //   2. No backing weekly row for this line is missing
-                      //      invoice_amount / card_amount (`anyMissing` false).
-                      //      Pre-cutover view rows and capture-excluded accounts
-                      //      pass through paginateWeekly with these fields
-                      //      undefined; a single such row poisons the split for
-                      //      the line, correctly.
-                      //   3. SPENT (sum across closed weeks) is non-zero.
-                      //   4. invoice + card totals computed independently
-                      //      reconcile with SPENT within one cent. Never
-                      //      derive one channel by subtracting the other; if
-                      //      the independent sum does not tie, suppress.
-                      let channelSplit = null;
-                      if (!isRev && !isTot && row.line !== "3100" && !row.billback) {
-                        const ch = derived.channelFor ? derived.channelFor(row.line) : null;
-                        if (ch && !ch.anyMissing) {
-                          let invSum = 0, cardSum = 0;
-                          for (let wi = 0; wi < weeks.length; wi += 1) {
-                            if (closedFlags[wi]) {
-                              invSum  += Number(ch.invoiceByWeek[wi]  || 0);
-                              cardSum += Number(ch.cardByWeek[wi]     || 0);
-                            }
-                          }
-                          const stdExact = Number(spentToDate || 0);
-                          const tieDelta = Math.abs(invSum + cardSum - stdExact);
-                          if (stdExact !== 0 && tieDelta <= 0.01) {
-                            channelSplit = { invoice: invSum, card: cardSum };
-                          }
-                        }
-                      }
+                      // 2026-11-09 revisit. Channel split moved from period
+                      // cell to week cells (Kevin's call). Period cell goes
+                      // back to BUDGET / SPENT / verdict. See CostCellBody
+                      // for the week-cell render and its per-week gates.
                       return (
                         <PerCostCellBody
                           envelope={goalInfo.batr}
@@ -2355,7 +2350,6 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           serviceDays={serviceDaysTotal}
                           splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
                           splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
-                          channelSplit={channelSplit}
                           inProgSpent={inProgSpent}
                           inProgBudget={inProgBudget}
                           currentWeekNo={currentWeekNo}
