@@ -2307,23 +2307,34 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               }
                             }
                           }
-                          // 2026-11-09. Per-week invoice/card split for 3200/
-                          // 3400/3500. Four gates (all must hold, else
+                          // 2026-11-09 (gates set) + 2026-11-10 (running-week
+                          // gate dropped - parallels the 3100 SPENT split
+                          // running-week flip from the prior commit on this
+                          // branch). Per-week invoice/card split for 3200/
+                          // 3400/3500. Three gates (all must hold, else
                           // channelSplit=null and the sub-rows omit):
-                          //   G1 not the running week (w.state !== "in_progress";
-                          //      also suppressed on future via gate 2 since
-                          //      landed=0 there).
-                          //   G2 this week's SPENT (landed[i]) is non-zero.
-                          //   G3 this week's row is not pass-through -
-                          //      missingByWeek[i] is false. Pre-cutover weeks
-                          //      and capture-excluded accounts fail here.
-                          //   G4 invoice + card reconciles to this week's
-                          //      SPENT within one cent. Computed independently
-                          //      per channel; never subtract one from SPENT
-                          //      to derive the other.
+                          //   G1 this week's SPENT (landed[i]) is NON-ZERO
+                          //      (not >0 - a negative-SPENT week from a
+                          //      credit or reimbursement still renders
+                          //      its split, all invoice side on the
+                          //      documented live case). Future weeks also
+                          //      satisfy this with landed=0 -> suppress.
+                          //   G2 this week's row is not pass-through -
+                          //      missingByWeek[i] is false. Pre-cutover
+                          //      weeks and capture-excluded accounts fail
+                          //      here.
+                          //   G3 invoice + card reconciles to this week's
+                          //      SPENT within one cent. Computed
+                          //      independently per channel; never subtract
+                          //      one from SPENT to derive the other.
+                          // Running-week CARDS will read as zero on most
+                          // days because coding lags swipes by days; that
+                          // is intended. Uncoded card charges that exist
+                          // in the week stay in "Needs review today"
+                          // (#1346) and do NOT backfill the split.
                           let channelSplit = null;
                           if (!isRev && !isTot && row.line !== "3100" && !row.billback
-                              && w.state !== "in_progress" && !isFuture) {
+                              && !isFuture) {
                             const ch = derived.channelFor ? derived.channelFor(row.line) : null;
                             if (ch && !ch.missingByWeek[i]) {
                               const inv  = Math.round(Number(ch.invoiceByWeek[i] || 0) * 100) / 100;
