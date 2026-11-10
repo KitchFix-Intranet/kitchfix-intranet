@@ -226,6 +226,27 @@ export function withSalary(body, {
   const salaryActualsShaped = salaryRows.map(shapeSalaryRow);
   const mergedActuals = hourlyActuals.concat(salaryActualsShaped);
 
+  // 2026-11-10. Per-week actual payroll split, carried on the merged
+  // board for the CP SPENT split. Sum each population independently
+  // over its source rows BY week_start - never derive one by
+  // subtracting the other from board.spent. That was the pre-fix
+  // premise ("+salary SPENT is hourly_actual + salary_allocation, so
+  // SPENT salary == splitSal by construction"); it is false against
+  // real payroll, which is what landed the entire budget-vs-actual
+  // salary variance into the HOURLY row on the CP card.
+  const hourlyActualByWeek = new Map();
+  for (const r of hourlyActuals) {
+    const k = r.week_start;
+    if (!k) continue;
+    hourlyActualByWeek.set(k, (hourlyActualByWeek.get(k) || 0) + Number(r.amount || 0));
+  }
+  const salaryActualByWeek = new Map();
+  for (const r of salaryRows) {
+    const k = r.week_start;
+    if (!k) continue;
+    salaryActualByWeek.set(k, (salaryActualByWeek.get(k) || 0) + Number(r.amount || 0));
+  }
+
   // 4. Recompute board on merged inputs. D26 accounts (CIN - KY,
   //    TBJ - NY) get a real board on the salary path even though
   //    their hourly-only board returned applies:false.
@@ -237,6 +258,16 @@ export function withSalary(body, {
     ot_thresholds: otThresholds,
     workerToEmail,
   });
+
+  // Attach the two per-week actual-payroll totals to each merged-board
+  // week. A week with no rows on a side gets 0 explicitly (not
+  // undefined) so the CP cell gate can tell "no spend that side" from
+  // "field absent / not on the salary path". A week not present in
+  // mergedBoard.weeks is skipped - the board owns the week set.
+  for (const w of (mergedBoard?.weeks || [])) {
+    w.hourly_actual = r2(hourlyActualByWeek.get(w.week_start) || 0);
+    w.salary_actual = r2(salaryActualByWeek.get(w.week_start) || 0);
+  }
 
   // 5. Salary summary counts.
   // 2026-08-28 person-key fix: dedupe by email so a rehired salaried
