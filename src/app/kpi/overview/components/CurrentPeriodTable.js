@@ -2272,25 +2272,30 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                             ? derived.splitFor3100.per[i]
                             : null;
                           // 2026-11-10. Per-week ACTUAL 3100 payroll split
-                          // (SPENT decomposition). Four gates, all must hold
-                          // or spentHrly/spentSal pass as null:
-                          //   G1  not the running week (w.state !==
-                          //       "in_progress"; future is covered by G2
-                          //       because landed is forced to 0 there)
-                          //   G2  this week's SPENT (landed[i]) is non-zero
-                          //   G3  both hourly_actual and salary_actual
+                          // (SPENT decomposition). Three gates, all must hold
+                          // or spentHrly/spentSal pass as null. 2026-11-10
+                          // Kevin ruling: the prior "not the running week"
+                          // gate is dropped on SPENT only - a chef can still
+                          // act on mid-week hourly. Expect the running-week
+                          // cell to read salary-heavy early in the week
+                          // (salary books the full week on day 1); correct,
+                          // do not smooth. Future weeks remain suppressed
+                          // via G1 (landed=0 -> weekSpent=0).
+                          //   G1  this week's SPENT (landed[i]) is non-zero
+                          //       (also catches future cells where landed is
+                          //       forced to 0)
+                          //   G2  both hourly_actual and salary_actual
                           //       present on this week's labor-board row
                           //       (actualFor3100.per[i] !== null)
-                          //   G4  hourly_actual + salary_actual reconciles
+                          //   G3  hourly_actual + salary_actual reconciles
                           //       to this week's SPENT within one cent,
                           //       computed independently - no subtraction,
                           //       no remainder assignment. This is the
                           //       check that would have caught the pre-fix
-                          //       defect.
+                          //       defect that #1350 corrected.
                           let spentHrly = null, spentSal = null;
                           if (row.line === "3100" && derived.actualFor3100
-                              && !row.billback
-                              && w.state !== "in_progress" && !isFuture) {
+                              && !row.billback && !isFuture) {
                             const act = derived.actualFor3100.per[i];
                             if (act) {
                               const hr   = Math.round(Number(act.hrly || 0) * 100) / 100;
