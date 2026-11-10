@@ -624,7 +624,7 @@ function PerRevCellBody({ projection, confirmed, dayFrac, phase, serviceDays, bu
 // the current (in-progress) week sits outside both btd and std. The
 // mid-week spend is still visible on its own week cell; the period
 // column states only what has settled.
-function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, splitHrly, splitSal, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null, neutralSpend = false, billbackLandedPeriod = null }) {
+function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, phase, serviceDays, inProgSpent = 0, inProgBudget = 0, currentWeekNo = null, neutralSpend = false, billbackLandedPeriod = null }) {
   const isFuture = phase === "future";
   const G = Number(envelope || 0);
   // Billback (pass-through) rows: no envelope, no closed-weeks
@@ -683,13 +683,6 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
   const inProgBudR = Math.round(Number(inProgBudget || 0));
   const totalSpentSoFar = std + inProgR;
   const leftToSpend = gR - totalSpentSoFar;
-  // Snug (Option A, 2026-10-24). HOURLY / SALARY split folds into
-  // the "after $X spent so far" subnote inline instead of standing as
-  // two separate ledger rows. Saves 2 lines on the labor row, matches
-  // the approved density mock. Values + formatting unchanged (3100
-  // only - splitHrly / splitSal are null on other rows).
-  const hasSplit = splitHrly != null && splitSal != null;
-  const splitSuffix = hasSplit ? ` · hrly ${dollar0(splitHrly)} / sal ${dollar0(splitSal)}` : "";
   return (
     <>
       {/* Zone 1 - closed weeks over/under. Eyebrow carries the N-of-4
@@ -727,10 +720,12 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
           </div>
         </>
       )}
-      {/* Zone 3 - full-period standing. LEFT TO SPEND now subtracts
-          this-week spend too (Direction A fix 2026-10-23). Subnote
-          "after $X spent so far" replaces the old "N of 4 wk closed"
-          (the count moved to the Zone-1 eyebrow). */}
+      {/* Zone 3 - full-period standing. LEFT TO SPEND subtracts
+          this-week spend too (Direction A fix 2026-10-23). Previously
+          carried an "after $X spent so far" muted trailer line (with
+          an inline hrly / sal decomposition on 3100); retired
+          2026-11-10 per Kevin ruling - full-period spend-to-date is
+          not surfaced in the period cell any more. */}
       <div className="kpi-ov-cp-pernote">
         <div className="kpi-ov-cp-lr">
           <span className="kpi-ov-cp-lk">FULL PERIOD BUDGET</span>
@@ -741,9 +736,6 @@ function PerCostCellBody({ envelope, budgetToDate, spentToDate, closedCount, pha
             <span className="kpi-ov-cp-lk">LEFT TO SPEND</span>
             <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(leftToSpend)}</span>
           </div>
-        )}
-        {gR > 0 && (
-          <div className="kpi-ov-cp-pernote-line kpi-ov-cp-pernote-after">after {dollar0(totalSpentSoFar)} spent so far{splitSuffix}</div>
         )}
         {/* Billback-total trailer (2026-10-26). On the Total row of a
             billback account, append a muted "billed back $X" line
@@ -2151,7 +2143,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
             <span className="kpi-ov-cp-pill kpi-ov-cp-pill-navy">
               {phase === "future" ? "the plan"
                : phase === "closed" ? "Final"
-               : "period · to date"}
+               : "period"}
             </span>
           </div>
           <div className="kpi-ov-cp-hcl2">
@@ -2418,8 +2410,6 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           closedCount={closedCount}
                           phase={phase}
                           serviceDays={serviceDaysTotal}
-                          splitHrly={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.hrlyTotal : null}
-                          splitSal={row.line === "3100" && derived.splitFor3100 ? derived.splitFor3100.salTotal : null}
                           inProgSpent={inProgSpent}
                           inProgBudget={inProgBudget}
                           currentWeekNo={currentWeekNo}

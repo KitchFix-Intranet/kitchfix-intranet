@@ -676,12 +676,12 @@
   font-weight: 800;
   color: var(--navy-700, #153968);
 }
-/* Period column: bump verdict + REVENUE value sizes slightly so the
-   period cell reads as the summary of its row. */
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-lr-del .kpi-ov-cp-lv,
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-lr-total .kpi-ov-cp-lv {
-  font-size: var(--kpi-t-value);
-}
+/* Period column verdict + REVENUE value sizes are inherited from the
+   default .kpi-ov-cp-lv rule (var(--kpi-t-body)); period and week cells
+   render the same values at the same size. Pre-2026-11-10 the period
+   column upscaled these to var(--kpi-t-value) so the summary read
+   "larger" than its row; Kevin ruled the step distracting and chose
+   parity with the week cells. */
 /* Period-column sub-note under the verdict:
    "full period $X . N of 4 wk closed". Right-aligned, muted. Dashed
    top rule so the sub-note parses as "below the row's primary math". */
@@ -805,25 +805,6 @@
   margin-top: 7px;
 }
 
-/* Period-column sub-note on TWO lines (polish 2026-10-19). First
-   line: "full period $X". Then the HOURLY / SALARY decomposition
-   (optional, +Salary only). Last line: "N of 4 wk closed". */
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote-line {
-  display: block;
-}
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote-line + .kpi-ov-cp-pernote-line {
-  margin-top: 2px;
-}
-/* Sub-rows inside the pernote: lose the sub-row indent-styling-vs-
-   normal boundary (parent is pernote which carries its own meta size
-   already) and give a small margin from the "full period" line. */
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-lr-sub {
-  margin-top: 2px;
-}
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-lr-sub + .kpi-ov-cp-pernote-line {
-  margin-top: 4px;
-}
-
 /* Full-period standing block (2026-10-21). Replaces the bare "full
    period $X" sub-note line with a FULL PERIOD BUDGET / LEFT TO SPEND
    pair, with the HOURLY / SALARY split (when present) grouped under
@@ -835,18 +816,6 @@
    standing figure reads above the settled-weeks count. */
 .kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-pernote-left {
   margin-top: 5px;
-}
-/* Zone subnote (Direction A 2026-10-23). Replaces the legacy
-   "N of 4 wk closed" eyebrow at the bottom of the period cell
-   (the N-of-4 count moved up into the Zone-1 eyebrow). Reads as
-   a sentence ("after $X spent so far"), so lowercase and lighter
-   than an uppercase caps eyebrow. */
-.kpi-app .kpi-ov-cp-cell.kpi-ov-cp-per .kpi-ov-cp-pernote .kpi-ov-cp-pernote-after {
-  /* Snug (Option A, 2026-10-24). 4 -> 2. */
-  margin-top: 2px;
-  font-size: var(--kpi-t-meta);
-  font-weight: 500;
-  color: var(--n-500);
 }
 
 /* Zone header eyebrow (Direction A 2026-10-23). Shared by the
