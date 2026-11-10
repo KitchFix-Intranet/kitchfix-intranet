@@ -271,7 +271,7 @@ function VsProjCaption({ delta, toDate }) {
 // surrounding ledger (fix 2, 2026-10-19).
 //
 // Progress bar + rolling delta line are gone (brief items 1 + 2).
-function CostCellBody({ w, goal, landed, splitHrly, splitSal, channelSplit = null, phase, dashRow, neutralSpend = false, billbackLandedWeek = null }) {
+function CostCellBody({ w, goal, landed, splitHrly, splitSal, spentHrly = null, spentSal = null, channelSplit = null, phase, dashRow, neutralSpend = false, billbackLandedWeek = null }) {
   const isFuture = w.state === "not_started";
   const isCurrent = w.state === "in_progress";
   const g = Math.round(Number(goal || 0));
@@ -381,29 +381,32 @@ function CostCellBody({ w, goal, landed, splitHrly, splitSal, channelSplit = nul
         <span className="kpi-ov-cp-lk">SPENT</span>
         <span className="kpi-ov-cp-lv kpi-ov-cp-lv-spent">{dollar0(l)}</span>
       </div>
-      {/* 2026-11-09. SPENT decomposition mirrors the BUDGET split that
-          already lives above (splitLines). Gated to CLOSED weeks only:
-          on a closed week `landed` is the complete actual, so
-          `l - salary` is the true hourly spend; on the in-progress
-          week, `landed` can be below the full weekly salary allocation
-          mid-week and would print a negative / nonsense hourly.
-          Future branch already returned above, so `!isCurrent` here
-          == closed. Salary is a fixed weekly allocation and the
-          +salary SPENT is `hourly_actual + salary_allocation`, so
-          SPENT salary == splitSal by construction. Hourly-only view
-          ships splitSal=null -> block never renders, byte-identical
-          to pre-fix on every non-3100 row too. */}
-      {(!isCurrent && splitSal != null) && (
+      {/* 2026-11-10. SPENT decomposition mirrors the BUDGET split
+          above (splitLines). HOURLY and SALARY both read ACTUAL payroll
+          (hourly_actual = sum of labor_actuals.amount for the week;
+          salary_actual = sum of labor_salary_actuals.amount for the
+          week), threaded onto each labor-board week by withSalary.
+          Neither is derived from the other. The prior rule ("SPENT
+          salary == splitSal by construction" because +salary SPENT was
+          read as hourly_actual + allocation) was false against real
+          payroll - it drove the entire budget-vs-actual salary
+          variance into the HOURLY row (up to a 42% understatement on
+          CIN - AZ WK1). Call-site applies four gates per week
+          (!isCurrent, SPENT non-zero, both fields present, and
+          hourly_actual + salary_actual reconciles to SPENT within one
+          cent); by the time spentHrly/spentSal arrive here they have
+          already cleared all four. No `fixed` chip on the SPENT salary
+          row - the figure is actual payroll, not a committed
+          allocation. The BUDGET split above is unchanged. */}
+      {(spentHrly != null && spentSal != null) && (
         <>
           <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
             <span className="kpi-ov-cp-lk">HOURLY</span>
-            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">
-              {dollar0(Math.max(0, l - Math.round(Number(splitSal || 0))))}
-            </span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(Math.round(Number(spentHrly || 0)))}</span>
           </div>
           <div className="kpi-ov-cp-lr kpi-ov-cp-lr-sub">
-            <span className="kpi-ov-cp-lk">SALARY <span className="kpi-ov-cp-tag-fixed">fixed</span></span>
-            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(Math.round(Number(splitSal || 0)))}</span>
+            <span className="kpi-ov-cp-lk">SALARY</span>
+            <span className="kpi-ov-cp-lv kpi-ov-cp-lv-budget">{dollar0(Math.round(Number(spentSal || 0)))}</span>
           </div>
         </>
       )}
@@ -1808,6 +1811,24 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
     // Part 4 rule matrix). Rolling mode also suppresses the split
     // in CostCellBody so a re-spread budget does not stack alongside
     // the delta line, keeping row height flat.
+    // 2026-11-10. Per-week ACTUAL 3100 payroll split (real hourly +
+    // real salary), distinct from splitFor3100 which is the BUDGET
+    // allocation. Returns null for every week whose labor-board row is
+    // missing both fields (hourly-only toggle, or the salary merge did
+    // not run). hourly_actual / salary_actual come from withSalary's
+    // post-buildBoard attach on mergedBoard.weeks[].
+    const actualFor3100 = (() => {
+      if (!salaryPath) return null;
+      const lbWks = labor?.board?.weeks || [];
+      const byStart = new Map(lbWks.filter(w => w.week_start).map(w => [w.week_start, w]));
+      const per = weeks.map(w => {
+        const lw = byStart.get(w.week_start);
+        if (!lw || lw.hourly_actual == null || lw.salary_actual == null) return null;
+        return { hrly: Number(lw.hourly_actual), sal: Number(lw.salary_actual) };
+      });
+      return { per };
+    })();
+
     const splitFor3100 = (() => {
       if (!salaryPath) return null;
       // Running phase · use the pre-computed revenue-spread shares
@@ -1840,7 +1861,7 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
       return { per, hrlyTotal, salTotal };
     })();
 
-    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, channelFor, splitFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, cateringPeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
+    return { rows, rev, revProj, revConf, stmtByLine, goalFor, landedFor, channelFor, splitFor3100, actualFor3100, salaryPath, budgetRevenue, revDashRow, mealsPeriodTotal, feePeriodTotal, cateringPeriodTotal, feeRevenueDisplay, revActualConfirmedPeriod, revProjConfirmedPeriod };
   }, [payload, weeks, labor, purch, rowSet, isFuture, phase, billbackActive]);
 
   const ready = !!(derived && labor && purch && !error);
@@ -2250,6 +2271,37 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                           const sp = (row.line === "3100" && derived.splitFor3100)
                             ? derived.splitFor3100.per[i]
                             : null;
+                          // 2026-11-10. Per-week ACTUAL 3100 payroll split
+                          // (SPENT decomposition). Four gates, all must hold
+                          // or spentHrly/spentSal pass as null:
+                          //   G1  not the running week (w.state !==
+                          //       "in_progress"; future is covered by G2
+                          //       because landed is forced to 0 there)
+                          //   G2  this week's SPENT (landed[i]) is non-zero
+                          //   G3  both hourly_actual and salary_actual
+                          //       present on this week's labor-board row
+                          //       (actualFor3100.per[i] !== null)
+                          //   G4  hourly_actual + salary_actual reconciles
+                          //       to this week's SPENT within one cent,
+                          //       computed independently - no subtraction,
+                          //       no remainder assignment. This is the
+                          //       check that would have caught the pre-fix
+                          //       defect.
+                          let spentHrly = null, spentSal = null;
+                          if (row.line === "3100" && derived.actualFor3100
+                              && !row.billback
+                              && w.state !== "in_progress" && !isFuture) {
+                            const act = derived.actualFor3100.per[i];
+                            if (act) {
+                              const hr   = Math.round(Number(act.hrly || 0) * 100) / 100;
+                              const sal  = Math.round(Number(act.sal  || 0) * 100) / 100;
+                              const weekSpent = Math.round(Number(landed[i] || 0) * 100) / 100;
+                              if (weekSpent !== 0 && Math.abs(hr + sal - weekSpent) <= 0.01) {
+                                spentHrly = hr;
+                                spentSal  = sal;
+                              }
+                            }
+                          }
                           // 2026-11-09. Per-week invoice/card split for 3200/
                           // 3400/3500. Four gates (all must hold, else
                           // channelSplit=null and the sub-rows omit):
@@ -2284,6 +2336,8 @@ export default function CurrentPeriodTable({ payload, labor, purch, error, rowSe
                               landed={isFuture ? 0 : landed[i]}
                               splitHrly={sp ? sp.hrly : null}
                               splitSal={sp ? sp.sal : null}
+                              spentHrly={spentHrly}
+                              spentSal={spentSal}
                               channelSplit={channelSplit}
                               phase={phase}
                               dashRow={isTot ? !!row._allDash : !!goalInfo.allDash}
