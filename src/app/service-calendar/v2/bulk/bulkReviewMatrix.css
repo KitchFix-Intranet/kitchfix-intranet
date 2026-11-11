@@ -116,6 +116,13 @@
   flex-direction: column;
   gap: var(--sc2-space-3);
 }
+/* 2026-11-11. Children of the scrolling body must not shrink. The matrix
+   wrap has overflow: hidden, which gives it a zero automatic minimum height
+   as a flex item - under the shell's 92vh cap it was shrinking and clipping
+   its own rows instead of letting the body scroll. */
+.sc-brm-body > * {
+  flex-shrink: 0;
+}
 .sc-brm-note {
   font-size: var(--sc2-size-caption);
   padding: var(--sc2-space-2) var(--sc2-space-3);
