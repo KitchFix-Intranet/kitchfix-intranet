@@ -302,11 +302,7 @@ export async function createIncident30DayEvent(incident, appUrl) {
 // ─────────────────────────────────────────────
 const SEV_EMOJI = { S1: "🔴", S2: "🟠", S3: "🟡", S4: "⚪" };
 
-export async function postSlackChannel(incident, testMode = false) {
-  // Slack always uses the production webhook — Kevin's keeping the
-  // production channel private (no other members) until testing is done,
-  // so test posts and real posts both land in the same isolated channel.
-  // Test mode still adds [TEST] prefix + footer for visual distinction.
+export async function postSlackChannel(incident) {
   const webhook = process.env.SLACK_INCIDENT_WEBHOOK;
 
   if (!webhook) {
@@ -318,10 +314,7 @@ export async function postSlackChannel(incident, testMode = false) {
   const sevEmoji = SEV_EMOJI[incident.severity] || "⚪";
   const typeLabel = typeMeta?.label || incident.incident_type;
 
-  // Test mode: prefix the header text so the message is unmistakable
-  const headerText = testMode
-    ? `[TEST] ${sevEmoji} ${incident.severity} - ${typeLabel}`
-    : `${sevEmoji} ${incident.severity} - ${typeLabel}`;
+  const headerText = `${sevEmoji} ${incident.severity} - ${typeLabel}`;
 
   // P4B Slack expansion — add operational context fields so leadership can
   // triage from the Slack message alone without opening the email or admin queue.
@@ -402,23 +395,8 @@ text: `📂 <${incident.drive_folder_url}|${formatAttachmentLabel(incident.attac
     });
   }
 
-  // Test mode: add a clearly-labeled context block at the bottom
-  if (testMode) {
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: "⚠️ *TEST MODE* — this is a test notification. In production it would post to the real channel.",
-        },
-      ],
-    });
-  }
-
   try {
-    const fallbackText = testMode
-      ? `[TEST] New ${incident.severity} incident: ${incident.incident_id}`
-      : `New ${incident.severity} incident: ${incident.incident_id}`;
+    const fallbackText = `New ${incident.severity} incident: ${incident.incident_id}`;
     const res = await fetch(webhook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -561,34 +539,12 @@ export async function notifyIncident(incident, sendEmail, regionalEmail, appUrl)
       const sent = [];
   let s1EscalationAt = null;
 
-  // ─── TEST MODE check ───
-  // When INCIDENT_TEST_MODE=true, every notification gets:
-  //   - Subject prefixed with [TEST]
-  //   - Email recipients overridden to k.fietek@kitchfix.com only
-  //   - Slack still uses production webhook (channel kept private during
-  //     testing, no separate test channel needed). [TEST] prefix added
-  //     to the message header for visual distinction.
-  // Set in Vercel env vars. Default false (production behavior).
-const TEST_MODE_RAW = process.env.INCIDENT_TEST_MODE;
-  // ─── TEMPORARY HARDCODED OVERRIDE ──────────────────────────────────
-  // The INCIDENT_TEST_MODE env var is set in Vercel but isn't reading at
-  // runtime for reasons not yet diagnosed. Until root cause is fixed,
-  // force test mode ON unconditionally so every incident email routes
-  // to Kevin only and never blasts leadership.
-  //
-  // TO RESTORE PROD ROUTING: change the line below back to:
-  //   const TEST_MODE = TEST_MODE_RAW === "true";
-  // ────────────────────────────────────────────────────────────────────
-  const TEST_MODE = true;
-  console.log(`[Incident] notifyIncident called | TEST_MODE=${TEST_MODE} (HARDCODED) | env=${JSON.stringify(TEST_MODE_RAW)} | severity=${incident.severity} | id=${incident.incident_id}`);
-
-  if (TEST_MODE) {
-    console.log(`[Incident TEST MODE] active - all notifications redirected to ${SR_DIR_OPS_EMAIL}`);
-  }
+  // Incident test mode removed 2026-11-11 (Kevin). Alerts always go to the real list.
+  console.log(`[Incident] notifyIncident called | severity=${incident.severity} | id=${incident.incident_id}`);
 
   // 1. Slack channel post for every tier
-  const channelRes = await postSlackChannel(incident, TEST_MODE);
-  if (channelRes.ok) sent.push(TEST_MODE ? "slack-test" : "slack-channel");
+  const channelRes = await postSlackChannel(incident);
+  if (channelRes.ok) sent.push("slack-channel");
 
   // 2. Email recipient list per tier (SOP §06)
   let recipients = [];
@@ -612,48 +568,24 @@ const TEST_MODE_RAW = process.env.INCIDENT_TEST_MODE;
   // Dedupe (regionalEmail could match an executive email in edge cases)
   recipients = [...new Set(recipients.filter(Boolean))];
 
-  // ─── TEST MODE: capture intended recipients, override to Kevin only ───
-  let intendedRecipients = [];
-  if (TEST_MODE && recipients.length) {
-    intendedRecipients = [...recipients];
-    recipients = [SR_DIR_OPS_EMAIL]; // route everything to Kevin
-    console.log(`[Incident TEST MODE] intended recipients: ${intendedRecipients.join(", ")}`);
-    console.log(`[Incident TEST MODE] actual recipient: ${recipients[0]}`);
-  }
-
   if (recipients.length && sendEmail) {
     const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
     const typeLabel = typeMeta?.label || incident.incident_type;
     // NOTE: regular hyphens in subject, no em-dashes (avoids encoding artifacts)
     const subjectBase = `${incident.severity} incident ${incident.incident_id} - ${typeLabel} at ${incident.site_code}`;
-    let subject = incident.severity === "S1" ? `🚨 ${subjectBase}` : subjectBase;
-    if (TEST_MODE) subject = `[TEST] ${subject}`;
+    const subject = incident.severity === "S1" ? `🚨 ${subjectBase}` : subjectBase;
 
-    // In test mode, prepend a banner to the email body showing who would
-    // have received it in production
-let htmlBody = buildIncidentEmailHtml(incident, appUrl);
-    if (TEST_MODE && intendedRecipients.length) {
-      const banner = `
-        <div style="background:#fef3c7; border:2px solid #d97706; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-family:Arial,sans-serif;">
-          <div style="font-size:14px; font-weight:700; color:#92400e; margin-bottom:6px;">⚠️ TEST MODE — this email was redirected</div>
-          <div style="font-size:12px; color:#78350f; line-height:1.5;">
-            In production, this email would have been sent to:<br/>
-            <code style="font-family:Consolas,monospace; font-size:11px; color:#451a03;">${intendedRecipients.join(", ")}</code>
-          </div>
-        </div>
-      `;
-      htmlBody = banner + htmlBody;
-    }
+    const htmlBody = buildIncidentEmailHtml(incident, appUrl);
 
-const emailRes = await sendEmail(
+    const emailRes = await sendEmail(
       recipients,
       subject,
       htmlBody,
       incident.submitted_by_email
     );
-        // sendEmail returns "sent" or "failed" (string)
+    // sendEmail returns "sent" or "failed" (string)
     if (emailRes === "sent") {
-      const tag = TEST_MODE ? "test" : `${incident.severity.toLowerCase()}-${intendedRecipients.length || recipients.length}rcpts`;
+      const tag = `${incident.severity.toLowerCase()}-${recipients.length}rcpts`;
       sent.push(`email-${tag}`);
     }
 
@@ -677,9 +609,6 @@ return {
 //
 // Per Kevin's spec: Slack the channel + email to submitter (not full
 // leadership distribution — that's the submission notification's job).
-//
-// Test-mode aware: in test mode, email recipient is overridden to Kevin
-// and the Slack header gets a [TEST] prefix.
 // ─────────────────────────────────────────────
 const STATUS_LABEL_MAP = {
   submitted: "Submitted",
@@ -709,7 +638,6 @@ export async function notifyStatusChange({
   sendEmail,
   appUrl,
 }) {
-  const TEST_MODE = process.env.INCIDENT_TEST_MODE === "true";
   const sent = [];
 
   const typeMeta = INCIDENT_TYPES.find((t) => t.id === incident.incident_type);
@@ -721,13 +649,12 @@ export async function notifyStatusChange({
   // ───────────── 1. Slack channel post ─────────────
   const webhook = process.env.SLACK_INCIDENT_WEBHOOK;
   if (webhook) {
-    const headerPrefix = TEST_MODE ? "[TEST] " : "";
     const blocks = [
       {
         type: "header",
         text: {
           type: "plain_text",
-          text: `${headerPrefix}${newEmoji} Status update: ${newLabel}`,
+          text: `${newEmoji} Status update: ${newLabel}`,
         },
       },
       {
@@ -746,22 +673,16 @@ export async function notifyStatusChange({
         ],
       },
     ];
-    if (TEST_MODE) {
-      blocks.push({
-        type: "context",
-        elements: [{ type: "mrkdwn", text: "⚠️ *TEST MODE* — submitter email redirected to test inbox." }],
-      });
-    }
     try {
       const res = await fetch(webhook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: `${headerPrefix}Incident ${incident.incident_id} → ${newLabel}`,
+          text: `Incident ${incident.incident_id} → ${newLabel}`,
           blocks,
         }),
       });
-      if (res.ok) sent.push(TEST_MODE ? "slack-status-test" : "slack-status");
+      if (res.ok) sent.push("slack-status");
       else console.warn(`[Incident] Slack status post failed: ${res.status}`);
     } catch (e) {
       console.error("[Incident] Slack status post error:", e.message);
@@ -773,14 +694,9 @@ export async function notifyStatusChange({
   // ───────────── 2. Email to submitter ─────────────
   const submitterEmail = String(incident.submitted_by_email || "").trim();
   if (submitterEmail && sendEmail) {
-    let recipient = submitterEmail;
-    let intendedRecipient = submitterEmail;
-    if (TEST_MODE) {
-      recipient = SR_DIR_OPS_EMAIL; // redirect to Kevin in test mode
-    }
+    const recipient = submitterEmail;
 
-    const subjectBase = `Your incident ${incident.incident_id} — status: ${newLabel}`;
-    const subject = TEST_MODE ? `[TEST] ${subjectBase}` : subjectBase;
+    const subject = `Your incident ${incident.incident_id} — status: ${newLabel}`;
 
     // Per-status submitter-facing copy
     const STATUS_BODY_COPY = {
@@ -803,15 +719,7 @@ export async function notifyStatusChange({
       ? `<div style="margin-top:18px;"><a href="${portalLink}" style="display:inline-block; background:#7c3aed; color:white; padding:9px 16px; border-radius:6px; text-decoration:none; font-size:13px; font-weight:500;">View in your Action Center</a></div>`
       : "";
 
-    const testBanner = TEST_MODE
-      ? `<div style="background:#fef3c7; border:2px solid #d97706; border-radius:8px; padding:12px 16px; margin-bottom:18px; font-family:Arial,sans-serif;">
-           <div style="font-size:13px; font-weight:700; color:#92400e; margin-bottom:4px;">⚠️ TEST MODE</div>
-           <div style="font-size:12px; color:#78350f;">In production this would have been sent to: <code style="font-family:Consolas,monospace; font-size:11px;">${escapeHtml(intendedRecipient)}</code></div>
-         </div>`
-      : "";
-
     const html = `<div style="font-family:Inter,system-ui,sans-serif; max-width:600px; color:#153968;">
-      ${testBanner}
       <div style="padding:14px 18px; background:#7c3aed; color:white; border-radius:10px 10px 0 0;">
         <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.85;">Status update</div>
         <div style="font-size:18px; font-weight:500; margin-top:2px;">${newEmoji} ${escapeHtml(newLabel)}</div>
@@ -837,7 +745,7 @@ export async function notifyStatusChange({
     try {
       const status = await sendEmail([recipient], subject, html, adminEmail);
       if (status === "sent") {
-        sent.push(TEST_MODE ? "email-status-test" : "email-status-submitter");
+        sent.push("email-status-submitter");
       }
     } catch (e) {
       console.error("[Incident] Status email send error:", e.message);
