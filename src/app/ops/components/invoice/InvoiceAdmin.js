@@ -139,7 +139,14 @@ export default function InvoiceAdmin({ config, showToast, onStatsReady }) {
         body: JSON.stringify({ action: "invoice-reject", uuid: rejectTarget.uuid, reasons: rejectReasons, note: rejectNote.trim() }) });
       const data = await res.json();
       if (data.success) {
-        showToast(`Returned to ${rejectTarget.userEmail?.split("@")[0]}`, "success");
+        const base = `Returned to ${rejectTarget.userEmail?.split("@")[0]}`;
+        // F3: when the SA send failed we tell the reviewer in the same
+        // toast rather than showing success with a silent miss. Kevin
+        // also gets the Slack alert.
+        const msg = data.emailWarning === "failed"
+          ? `${base} - but the notification email did not send. Kevin has been alerted.`
+          : base;
+        showToast(msg, data.emailWarning === "failed" ? "error" : "success");
         setRejectTarget(null); setRejectReasons([]); setRejectNote(""); setExpandedUuid(null);
         loadSubmissions();
       } else { showToast(data.error || "Failed to return invoice", "error"); }

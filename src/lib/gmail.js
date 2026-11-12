@@ -379,25 +379,35 @@ function formatDate(dateStr) {
 // REJECTION NOTIFICATION EMAIL
 // ═══════════════════════════════════════
 
-/**
- * Send rejection notification email to the original invoice submitter.
- * Sent FROM the AP reviewer TO the operator.
- *
- * @param {string} accessToken - AP reviewer's OAuth token
- * @param {string} senderEmail - AP reviewer's email
- * @param {string} recipientEmail - Original submitter's email
- * @param {Object} data - Rejection details
- */
-export async function sendRejectionEmail(accessToken, senderEmail, recipientEmail, data) {
-  const gmail = getGmailClient(accessToken);
+// F3 (2026-11-12). Returned-invoice email + inventory-submitted email
+// both move to the service-account sender below. Reasoning: both were
+// user-OAuth paths that silently returned on failure - the same class
+// that lost 33 invoices. Neither goes to bill.com and neither carries
+// an attachment, so there is no reason to keep them tied to a chef's or
+// reviewer's personal Google connection. See the F3 PR body for the
+// decision trail.
+//
+// Build helpers (pure) + senders live next to each other so a future
+// reviewer sees the full shape of each email without jumping files.
+//
+// resolveInventoryAPRecipient: parallel to F4's resolveInvoiceAPRecipient
+// but with no env var - the production recipient is a literal that was
+// hardcoded at the inventory call site before this PR. Kept as a pure
+// function so the probe and the handler both go through one place.
+const INVENTORY_AP_RECIPIENT_PROD = "ap@kitchfix.com";
+export function resolveInventoryAPRecipient(nodeEnv) {
+  if (nodeEnv === "production") return INVENTORY_AP_RECIPIENT_PROD;
+  return INVOICE_AP_LOCAL_DEFAULT;
+}
 
-  try {
-    const totalFmt = `$${Number(data.totalAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-    const reasonList = (data.reasons || []).length > 0 ? data.reasons.join(", ") : "See note below";
+export function buildInvoiceRejectionSubject({ vendor, invoiceNumber, account }) {
+  return `[KitchFix] Invoice Returned - ${vendor} #${invoiceNumber || "N/A"} ${account}`;
+}
 
-    const subject = `[KitchFix] Invoice Returned - ${data.vendor} #${data.invoiceNumber || "N/A"} ${data.account}`;
-
-    const html = `
+export function buildInvoiceRejectionHtml(data) {
+  const totalFmt = `$${Number(data.totalAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  const reasonList = (data.reasons || []).length > 0 ? data.reasons.join(", ") : "See note below";
+  return `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; color: #0f3057;">
   <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
     <div style="font-size: 14px; font-weight: 700; color: #991b1b; margin-bottom: 4px;">Invoice Returned - Action Required</div>
@@ -421,33 +431,114 @@ export async function sendRejectionEmail(accessToken, senderEmail, recipientEmai
     Returned by ${data.rejectedBy?.split("@")[0] || "AP"} - KitchFix Ops Hub
   </div>
 </div>`;
+}
 
-    const ccList = AP_CC.filter((e) => e !== recipientEmail && e !== senderEmail);
-    // Financial-workflow audit BCC (Kevin ruling 2026-09-09). Same
-    // shape as sendInvoiceEmail; invoice rejection is part of the
-    // same financial audit trail.
-    const bccList = auditBccFor({ to: [recipientEmail], cc: ccList });
+export function buildInventorySubject({ account, period, total }) {
+  const totalFmt = `$${Number(total || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  return `[KitchFix] Inventory - ${account} ${period} ${totalFmt}`;
+}
 
-    const rawMessage = buildMimeSimple({
-      from: senderEmail,
-      to: [recipientEmail],
-      cc: ccList,
-      bcc: bccList,
-      subject,
-      html,
-    });
+export function buildInventoryEmailHtml({ account, period, email, food, packaging, supplies, snacks, beverages, notes, total, now }) {
+  const fmt = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  const dateStr = (now || new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return `
+          <div style="font-family:Inter,-apple-system,sans-serif;max-width:600px;margin:0 auto;">
+            <div style="background:#0f3057;padding:16px 24px;border-radius:12px 12px 0 0;">
+              <span style="color:#fff;font-size:14px;font-weight:700;">KITCHFIX OPS HUB</span>
+              <span style="float:right;color:#d97706;font-size:12px;font-weight:700;">INVENTORY</span>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:24px;border-radius:0 0 12px 12px;">
+              <h2 style="margin:0 0 4px;color:#0f3057;font-size:18px;">Inventory Submitted</h2>
+              <p style="margin:0 0 16px;color:#64748b;font-size:13px;">${account} - ${period} - ${dateStr}</p>
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+<tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Food</td><td style="text-align:right;color:#0f3057;font-weight:700;">${fmt(food)}</td></tr>
+                <tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Packaging</td><td style="text-align:right;color:#0f3057;font-weight:700;">${fmt(packaging)}</td></tr>
+                <tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Supplies</td><td style="text-align:right;color:#0f3057;font-weight:700;">${fmt(supplies)}</td></tr>
+                ${Number(snacks) ? `<tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Snacks</td><td style="text-align:right;color:#0f3057;font-weight:700;">${fmt(snacks)}</td></tr>` : ""}
+                ${Number(beverages) ? `<tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Beverages</td><td style="text-align:right;color:#0f3057;font-weight:700;">${fmt(beverages)}</td></tr>` : ""}
+                <tr style="border-top:2px solid #e2e8f0;"><td style="padding:8px 0;color:#0f3057;font-weight:800;">Total</td><td style="text-align:right;color:#0f3057;font-weight:800;font-size:16px;">${fmt(total)}</td></tr>
+                              </table>
+              ${notes ? `<p style="margin:16px 0 0;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#475569;"><strong>Notes:</strong> ${notes}</p>` : ""}
+              <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;">Submitted by ${email}</p>
+            </div>
+          </div>`;
+}
 
-    const result = await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw: rawMessage },
-    });
+const INVOICE_SA_SENDER_DEFAULT = "kitchfix.admin@kitchfix.com";
+const SA_DISPLAY_NAME = "KitchFix Ops Hub";
 
-    console.log(`[Gmail] Rejection notification sent to ${recipientEmail}, messageId: ${result.data.id}`);
-    return { success: true, messageId: result.data.id };
-  } catch (error) {
-    console.error("[Gmail] Rejection email failed:", error.message);
-    return { success: false, error: error.message };
+// Send the invoice-rejection notification via the system mailbox.
+// To = original submitter. Cc = AP_CC filtered against to + sender.
+// Reply-To = reviewer so a reply reaches the reviewer. Audit BCC applies
+// (same auditBccFor helper the user-OAuth path used).
+//
+// Returns { success, headers, error? }. headers echoes exactly what went
+// on the wire so the F3 probe can paste From / Reply-To / To / Cc.
+export async function sendInvoiceRejectionEmail({ reviewerEmail, submitterEmail, data }) {
+  const sender = process.env.INVOICE_SA_SENDER || INVOICE_SA_SENDER_DEFAULT;
+  const subject = buildInvoiceRejectionSubject(data);
+  const html = buildInvoiceRejectionHtml(data);
+  const ccList = AP_CC.filter((e) => e && e !== submitterEmail && e !== sender);
+  const bccList = auditBccFor({ to: [submitterEmail], cc: ccList });
+  const headers = {
+    from: `${SA_DISPLAY_NAME} <${sender}>`,
+    to: submitterEmail,
+    cc: ccList,
+    bcc: bccList,
+    replyTo: reviewerEmail,
+  };
+  if (process.env.NODE_ENV !== "production" && process.env.FORCE_REJECTION_EMAIL_FAIL === "1") {
+    console.warn("[Invoice Reject email] FORCE_REJECTION_EMAIL_FAIL=1 (dev only): simulating send failure");
+    return { success: false, error: "forced failure for dev acceptance test", headers };
   }
+  const result = await sendEmailSA({
+    sender,
+    displayName: SA_DISPLAY_NAME,
+    to: submitterEmail,
+    cc: ccList,
+    subject,
+    html,
+    replyTo: reviewerEmail,
+  });
+  if (result === "sent") return { success: true, headers };
+  return { success: false, error: "sendEmailSA returned failed", headers };
+}
+
+// Send the inventory-submitted notification via the system mailbox.
+// Reply-To = submitting chef. Cc = submitter (so they see what AP got).
+// Recipient resolved by NODE_ENV so localhost never emails ap@kitchfix.com.
+//
+// Returns the same { success, headers, error? } shape so the F3 probe
+// can call the same function the handler does.
+export async function sendInventoryEmail({ account, period, email, food, packaging, supplies, snacks, beverages, notes, total, now }) {
+  const sender = process.env.INVOICE_SA_SENDER || INVOICE_SA_SENDER_DEFAULT;
+  const recipient = resolveInventoryAPRecipient(process.env.NODE_ENV);
+  const subject = buildInventorySubject({ account, period, total });
+  const html = buildInventoryEmailHtml({ account, period, email, food, packaging, supplies, snacks, beverages, notes, total, now });
+  const ccList = (email && email !== recipient && email !== sender) ? [email] : [];
+  const bccList = auditBccFor({ to: [recipient], cc: ccList });
+  const headers = {
+    from: `${SA_DISPLAY_NAME} <${sender}>`,
+    to: recipient,
+    cc: ccList,
+    bcc: bccList,
+    replyTo: email,
+  };
+  if (process.env.NODE_ENV !== "production" && process.env.FORCE_INVENTORY_EMAIL_FAIL === "1") {
+    console.warn("[Inventory email] FORCE_INVENTORY_EMAIL_FAIL=1 (dev only): simulating send failure");
+    return { success: false, error: "forced failure for dev acceptance test", headers };
+  }
+  const result = await sendEmailSA({
+    sender,
+    displayName: SA_DISPLAY_NAME,
+    to: recipient,
+    cc: ccList,
+    subject,
+    html,
+    replyTo: email,
+  });
+  if (result === "sent") return { success: true, headers };
+  return { success: false, error: "sendEmailSA returned failed", headers };
 }
 
 // ─────────────────────────────────────────────

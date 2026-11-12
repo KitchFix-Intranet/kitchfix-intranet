@@ -9,7 +9,7 @@
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
 import {
   sendInvoiceEmail,
-  sendRejectionEmail,
+  sendInvoiceRejectionEmail,
   buildInvoiceSubject,
   buildInvoiceEmailHtml,
   sendEmailSA,
@@ -1403,10 +1403,17 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       }).catch(() => {});
     }
 
-    // Email notification to original submitter
+    // F3 (2026-11-12). Returned-invoice email now goes via the system
+    // mailbox (sendInvoiceRejectionEmail -> sendEmailSA) instead of the
+    // reviewer's user-OAuth token. A silent return is no longer
+    // possible: the send is awaited, failures fire a Slack alert, and
+    // the response carries `emailWarning` so the UI tells the reviewer.
+    let emailWarning = null;
     if (origSubmitter) {
-      try {
-        await sendRejectionEmail(token, email, origSubmitter, {
+      const emailResult = await sendInvoiceRejectionEmail({
+        reviewerEmail: email,
+        submitterEmail: origSubmitter,
+        data: {
           vendor: origVendor,
           invoiceNumber: origInvNum,
           account: origAccount,
@@ -1414,13 +1421,38 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
           reasons: reasons || [],
           note,
           rejectedBy: email,
-        });
-      } catch (emailErr) {
-        console.warn("[Invoice Reject] Email notification failed (non-blocking):", emailErr.message);
+        },
+      });
+      if (!emailResult.success) {
+        emailWarning = "failed";
+        console.error(`[Invoice Reject] Email send failed: ${emailResult.error}`);
+        if (process.env.SLACK_INVOICE_WEBHOOK) {
+          const totalFmt = `$${origTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+          try {
+            const res = await fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                text: `Invoice-return email: send FAILED to ${origSubmitter}`,
+                blocks: [{
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: `*Invoice-return email: send FAILED*\n*Original submitter:* ${origSubmitter}\n*Vendor:* ${origVendor}\n*Account:* ${origAccount}\n*Invoice #:* ${origInvNum || "N/A"}\n*Total:* ${totalFmt}\n*Returned by:* ${email}\n*Reason:* ${emailResult.error || "unknown"}\nThe return is saved. The original submitter was NOT notified by email.`,
+                  },
+                }],
+              }),
+              signal: AbortSignal.timeout(3000),
+            });
+            console.log(`[Invoice Reject] Slack email-failed post: HTTP ${res.status}`);
+          } catch (slackErr) {
+            console.warn(`[Invoice Reject] Slack email-failed post failed (non-blocking):`, slackErr.message || slackErr);
+          }
+        }
       }
     }
 
-    return { success: true, origSubmitter, origVendor, origInvNum, origAccount, origTotal };
+    return { success: true, origSubmitter, origVendor, origInvNum, origAccount, origTotal, emailWarning };
   }
 
   // ── Unreject / Undo Return ──
