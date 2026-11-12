@@ -18,11 +18,41 @@ import { google } from "googleapis";
 // target" for the dual-purpose ambiguity bug this rename fixes.
 // 2026-11-12. AP_TO_EMAIL exported so the invoiceActions backup sender
 // resolves the AP recipient the same way the primary user-OAuth send
-// does. Finding (flagged for follow-up): a missing INVOICE_AP_TO_EMAIL
-// env var silently reroutes every invoice email to one person. Both
-// primary and fallback inherit the same default by design - whatever
-// ships goes to the same mailbox on both paths.
-export const AP_TO_EMAIL = process.env.INVOICE_AP_TO_EMAIL || "k.fietek@kitchfix.com";
+// does. Both primary and fallback inherit the same default by design -
+// whatever ships goes to the same mailbox on both paths.
+//
+// The local-dev default is the fallback used only when NODE_ENV is not
+// production. In production, a missing INVOICE_AP_TO_EMAIL is a hard
+// failure and the invoice is left in the saved-but-not-sent state - see
+// resolveInvoiceAPRecipient below. invoiceActions gates both sends on
+// that resolver so a prod misconfiguration never silently reroutes
+// every invoice to one person.
+const INVOICE_AP_LOCAL_DEFAULT = "k.fietek@kitchfix.com";
+export const AP_TO_EMAIL = process.env.INVOICE_AP_TO_EMAIL || INVOICE_AP_LOCAL_DEFAULT;
+
+// Pure function (no I/O, no env reads inside). Given a NODE_ENV and the
+// raw INVOICE_AP_TO_EMAIL value, decide what the invoice email should
+// be sent to - or whether it should be skipped with a visible failure.
+//
+// Returns { ok: true, address } or { ok: false, reason }. Called by
+// invoiceActions.js at submit time (not module load) so the dev switch
+// can simulate the "production + missing" case without touching real
+// env. The reason string is used verbatim in the UNDELIVERED Slack
+// post so operators see plain words, not an env var name.
+//
+// Behaviour matrix:
+//   production + set / non-empty  -> ok, trimmed address
+//   production + missing / empty  -> NOT ok (hard failure, undelivered)
+//   non-production + anything     -> ok, local-dev default so the app
+//                                    stays usable on localhost
+export function resolveInvoiceAPRecipient(nodeEnv, value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (trimmed) return { ok: true, address: trimmed };
+  if (nodeEnv === "production") {
+    return { ok: false, reason: "accounting address is not configured" };
+  }
+  return { ok: true, address: INVOICE_AP_LOCAL_DEFAULT };
+}
 // 2026-11-12. Exported so the invoice backup sender resolves CC
 // the same way the primary user-OAuth path does. Primary CC's
 // AP_CC (minus the To and minus the submitter); backup CC's

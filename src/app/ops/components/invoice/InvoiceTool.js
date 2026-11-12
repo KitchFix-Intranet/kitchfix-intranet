@@ -754,6 +754,10 @@ resetForm(); return;
           //   "stale_connection"   - backup SA path delivered; amber - tell the submitter to sign out + back in
           //   "undelivered"        - both paths failed; red - saved but NOT sent
           emailWarning: data.emailWarning || null,
+          // F4: distinguishes the two red cases. "not_configured" drops
+          // the sign-out line from the overlay (chef has no action to
+          // take; Kevin fixes the env). "both_failed" keeps the line.
+          undeliveredReason: data.undeliveredReason || null,
         });
 setShowSuccess(true); setSessionCount((c) => c + 1);
         // 2026-11-12 Change 5. Dismiss timing by tier:
@@ -1023,7 +1027,9 @@ const MAINTENANCE_MODE = false;
           ? "Saved - NOT sent to accounting"
           : (lastSubmission.formType === "credit" ? "Credit Memo Submitted!" : "Invoice Submitted!");
         const subText = tier === "undeliv"
-          ? "Your invoice is saved. Do not submit it again. Kevin has been alerted and will get it to accounting. Please sign out and sign back in."
+          ? (lastSubmission.undeliveredReason === "not_configured"
+            ? "Your invoice is saved. Do not submit it again. Kevin has been alerted and will get it to accounting."
+            : "Your invoice is saved. Do not submit it again. Kevin has been alerted and will get it to accounting. Please sign out and sign back in.")
           : tier === "stale"
             ? "Sent to accounting using a backup. Please sign out and sign back in so your next invoice sends normally."
             : "Sent to accounting";
