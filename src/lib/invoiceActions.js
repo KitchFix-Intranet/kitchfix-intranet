@@ -15,6 +15,7 @@ import {
   sendEmailSA,
   AP_TO_EMAIL,
   AP_CC,
+  resolveInvoiceAPRecipient,
 } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
 import { isOpsLeadershipDb } from "@/lib/admin";
@@ -1075,6 +1076,40 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       let deliveredVia = null;
       let emailWarning = null;
       let primaryError = null;
+      // Distinguishes the two red cases so the chef overlay + Slack
+      // post can carry the right words. "not_configured" means the
+      // F4 gate below skipped both sends (no action for the chef -
+      // Kevin fixes the env). "both_failed" means primary AND backup
+      // both ran and both failed (chef should still sign out + back
+      // in). null means not-red or not-yet-decided.
+      let undeliveredReason = null;
+
+      // F4 (2026-11-12). Resolve the AP recipient BEFORE either send.
+      // In production, a missing or empty INVOICE_AP_TO_EMAIL stops
+      // both sends and routes the submission into the existing
+      // UNDELIVERED path - chef sees the red "Saved - NOT sent to
+      // accounting" overlay, Kevin gets the Slack alert with the
+      // reason in plain words, row reads email_sent=false. This
+      // prevents the silent-reroute class of bug where a missing env
+      // var in production would deliver every invoice to one person.
+      //
+      // Dev-only switch simulates "production + missing" so the
+      // acceptance test can exercise the gate on localhost without
+      // ever touching Vercel. Guarded on NODE_ENV so a mistaken
+      // production env var cannot force the gate closed on real
+      // invoice sends.
+      const forceApUnconfigured = process.env.NODE_ENV !== "production"
+        && process.env.FORCE_INVOICE_AP_UNCONFIGURED === "1";
+      const apResolution = resolveInvoiceAPRecipient(
+        forceApUnconfigured ? "production" : process.env.NODE_ENV,
+        forceApUnconfigured ? "" : process.env.INVOICE_AP_TO_EMAIL,
+      );
+      if (!apResolution.ok) {
+        primaryError = apResolution.reason;
+        emailWarning = "undelivered";
+        undeliveredReason = "not_configured";
+        console.error(`[Invoice] Skipping both sends: ${apResolution.reason}`);
+      } else {
 
       try {
         const emailResult = await sendInvoiceEmail(token, email, emailData, fallbackImage);
@@ -1191,13 +1226,17 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
             }
           } else {
             emailWarning = "undelivered";
+            undeliveredReason = "both_failed";
             console.error(`[Invoice] Backup (sa_fallback) also failed for ${email}`);
           }
         } catch (fallbackErr) {
           emailWarning = "undelivered";
+          undeliveredReason = "both_failed";
           console.error(`[Invoice] Backup (sa_fallback) threw for ${email}:`, fallbackErr.message || fallbackErr);
         }
       }
+
+      } // end F4 apResolution.ok branch
 
       // Mark email_sent through the shared data path. Non-blocking
       // on the rare mark failure so the submit response doesn't fail
@@ -1230,7 +1269,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
                 type: "section",
                 text: {
                   type: "mrkdwn",
-                  text: `*UNDELIVERED invoice email*\n*Vendor:* ${vendor}\n*Account:* ${account}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Submitter:* ${email}\n*Primary error:* ${primaryError || "unknown"}\n*Row saved* (uuid \`${uuid.slice(0, 8)}...\`) with email_sent=false. Backup send also failed.`,
+                  text: `*UNDELIVERED invoice email*\n*Vendor:* ${vendor}\n*Account:* ${account}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Submitter:* ${email}\n*Primary error:* ${primaryError || "unknown"}\n*Row saved* (uuid \`${uuid.slice(0, 8)}...\`) with email_sent=false. ${undeliveredReason === "not_configured" ? "No send was attempted." : "Backup send also failed."}`,
                 },
               }],
             }),
@@ -1296,7 +1335,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         });
       }
 
-      return { success: true, uuid, driveUrls, emailSent, emailWarning, deliveredVia, pageCount: pages.length, stampedPdf: !!pdfBuffer };
+      return { success: true, uuid, driveUrls, emailSent, emailWarning, undeliveredReason, deliveredVia, pageCount: pages.length, stampedPdf: !!pdfBuffer };
 
     } catch (error) {
       console.error("[Invoice] Submit error:", error.message);
