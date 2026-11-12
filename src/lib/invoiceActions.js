@@ -14,6 +14,7 @@ import {
   buildInvoiceEmailHtml,
   sendEmailSA,
   AP_TO_EMAIL,
+  AP_CC,
 } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
 import { isOpsLeadershipDb } from "@/lib/admin";
@@ -1120,16 +1121,24 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
           // test flag on the shared sender would silently break
           // unrelated send paths. Guarded on NODE_ENV so a mistaken
           // production env var cannot force-fail real invoice sends.
+          // Reviewer ruling 2026-11-12. Backup CC must reach the same
+          // people as primary: AP_CC + submitter, deduped against the
+          // To and the SA sender. Pre-fix shape was `cc: [email]` -
+          // the primary CC list (Kevin and anyone else on AP_CC) was
+          // silently dropped on the fallback path.
+          const saSender = process.env.INVOICE_SA_SENDER || "kitchfix.admin@kitchfix.com";
+          const backupCc = [...new Set([...AP_CC, email])]
+            .filter((e) => e && e !== AP_TO_EMAIL && e !== saSender);
           let saResult;
           if (process.env.NODE_ENV !== "production" && process.env.FORCE_INVOICE_BACKUP_FAIL === "1") {
             console.warn(`[Invoice] FORCE_INVOICE_BACKUP_FAIL=1 (dev only): simulating SA failure at invoice call site`);
             saResult = "failed";
           } else {
             saResult = await sendEmailSA({
-              sender: process.env.INVOICE_SA_SENDER || "kitchfix.admin@kitchfix.com",
+              sender: saSender,
               displayName: "KitchFix Invoice Capture",
               to: AP_TO_EMAIL,
-              cc: [email],
+              cc: backupCc,
               subject: saSubject,
               html: saHtml,
               replyTo: email,
@@ -1153,20 +1162,32 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
             if (backupAlertCache.get(email) !== today && process.env.SLACK_INVOICE_WEBHOOK) {
               backupAlertCache.set(email, today);
               const totalFmt = `$${Number(totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-              fetch(process.env.SLACK_INVOICE_WEBHOOK, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  text: `BACKUP SENDER USED: ${vendor} ${totalFmt} (${account}, submitter ${email})`,
-                  blocks: [{
-                    type: "section",
-                    text: {
-                      type: "mrkdwn",
-                      text: `*BACKUP SENDER USED*\n*Submitter:* ${email}\n*Account:* ${account}\n*Vendor:* ${vendor}\n*Total:* ${totalFmt}\n*Reason:* their primary Google send failed, so the system mailbox delivered to AP instead. They need to sign out and sign back in so future invoices send from their own mailbox.\n_One alert per submitter per day._`,
-                    },
-                  }],
-                }),
-              }).catch(() => {});
+              // 2026-11-12. Awaited with a 3s AbortSignal timeout per
+              // the A1 ruling at the top of this file: un-awaited work
+              // is not reliable after the Vercel response returns. Catch
+              // stays - a slow / failed Slack call must never fail or
+              // hang the submission. Timeout rejects the fetch; catch
+              // logs and moves on.
+              try {
+                const res = await fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    text: `BACKUP SENDER USED: ${vendor} ${totalFmt} (${account}, submitter ${email})`,
+                    blocks: [{
+                      type: "section",
+                      text: {
+                        type: "mrkdwn",
+                        text: `*BACKUP SENDER USED*\n*Submitter:* ${email}\n*Account:* ${account}\n*Vendor:* ${vendor}\n*Total:* ${totalFmt}\n*Reason:* their primary Google send failed, so the system mailbox delivered to AP instead. They need to sign out and sign back in so future invoices send from their own mailbox.\n_One alert per submitter per day._`,
+                      },
+                    }],
+                  }),
+                  signal: AbortSignal.timeout(3000),
+                });
+                console.log(`[Invoice] Slack BACKUP SENDER USED post: HTTP ${res.status}`);
+              } catch (slackErr) {
+                console.warn(`[Invoice] Slack BACKUP SENDER USED post failed (non-blocking):`, slackErr.message || slackErr);
+              }
             }
           } else {
             emailWarning = "undelivered";
@@ -1178,11 +1199,11 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         }
       }
 
-      // Mark email_sent through the shared data path. Still wrapped
-      // non-blocking; the long-standing silent failure here (Sheets
-      // lookup fails on PG-only rows, PG mirror never runs) is
-      // reported in the PR findings but not fixed in this scope
-      // (dataStore/* is a danger zone per the brief).
+      // Mark email_sent through the shared data path. Non-blocking
+      // on the rare mark failure so the submit response doesn't fail
+      // the chef over a bookkeeping miss; any such miss would be
+      // visible in the log and reconcilable via the resend script's
+      // --mark-only path.
       if (emailSent) {
         try {
           await updateInvoiceFields(uuid, { emailSent: true }, { module: "ops" });
@@ -1193,24 +1214,32 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         // Both paths failed. Fire an alert through the existing
         // invoice Slack channel (the same channel today's submit-
         // success posts to, so Kevin sees the rare red event in the
-        // same stream he already watches).
+        // same stream he already watches). 2026-11-12: awaited with
+        // a 3s AbortSignal timeout - the catch still prevents a slow
+        // or failed Slack call from failing or hanging the submit.
         const totalFmt = `$${Number(totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-        fetch(process.env.SLACK_INVOICE_WEBHOOK, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            // 2026-11-12 Change 3 (house style). No emoji; the words
-            // UNDELIVERED / BACKUP SENDER USED carry the severity.
-            text: `UNDELIVERED invoice email: ${vendor} ${totalFmt} (${account}, submitter ${email})`,
-            blocks: [{
-              type: "section",
-              text: {
-                type: "mrkdwn",
-                text: `*UNDELIVERED invoice email*\n*Vendor:* ${vendor}\n*Account:* ${account}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Submitter:* ${email}\n*Primary error:* ${primaryError || "unknown"}\n*Row saved* (uuid \`${uuid.slice(0, 8)}...\`) with email_sent=false. Backup send also failed.`,
-              },
-            }],
-          }),
-        }).catch(() => {});
+        try {
+          const res = await fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              // House style. No emoji; the words UNDELIVERED /
+              // BACKUP SENDER USED carry the severity.
+              text: `UNDELIVERED invoice email: ${vendor} ${totalFmt} (${account}, submitter ${email})`,
+              blocks: [{
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*UNDELIVERED invoice email*\n*Vendor:* ${vendor}\n*Account:* ${account}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Submitter:* ${email}\n*Primary error:* ${primaryError || "unknown"}\n*Row saved* (uuid \`${uuid.slice(0, 8)}...\`) with email_sent=false. Backup send also failed.`,
+                },
+              }],
+            }),
+            signal: AbortSignal.timeout(3000),
+          });
+          console.log(`[Invoice] Slack UNDELIVERED post: HTTP ${res.status}`);
+        } catch (slackErr) {
+          console.warn(`[Invoice] Slack UNDELIVERED post failed (non-blocking):`, slackErr.message || slackErr);
+        }
       }
 
       // 6. A1 (2026-08-17): the fire-and-forget triggerAIScan call that

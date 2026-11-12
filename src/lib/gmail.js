@@ -23,7 +23,12 @@ import { google } from "googleapis";
 // primary and fallback inherit the same default by design - whatever
 // ships goes to the same mailbox on both paths.
 export const AP_TO_EMAIL = process.env.INVOICE_AP_TO_EMAIL || "k.fietek@kitchfix.com";
-const AP_CC = ["k.fietek@kitchfix.com"];
+// 2026-11-12. Exported so the invoice backup sender resolves CC
+// the same way the primary user-OAuth path does. Primary CC's
+// AP_CC (minus the To and minus the submitter); backup CC's
+// AP_CC + the submitter so the submitter sees what AP received.
+// Reviewer ruling: backup must reach the same people as primary.
+export const AP_CC = ["k.fietek@kitchfix.com"];
 
 function getGmailClient(accessToken) {
   const auth = new google.auth.OAuth2();
