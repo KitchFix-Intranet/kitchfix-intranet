@@ -23,6 +23,10 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
   const [submitting, setSubmitting] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // F3: when the SA send failed, the success panel appends one plain
+  // sentence telling the chef accounting was not notified. The count
+  // is still saved; Kevin gets the Slack alert.
+  const [emailWarning, setEmailWarning] = useState(null);
   const [existingEntry, setExistingEntry] = useState(null);
   const [periodPop, setPeriodPop] = useState(false);
   const [manualPeriod, setManualPeriod] = useState(null);
@@ -255,6 +259,7 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
       const data = await res.json();
       if (data.success) {
         setShowReview(false);
+        setEmailWarning(data.emailWarning || null);
         setShowSuccess(true);
         setSubmissionUuid(null);
         try { localStorage.removeItem(cacheKey); } catch {}
@@ -794,6 +799,11 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
             </div>
             <h3 className="oh-modal-title">Inventory Secured 🔒</h3>
             <p className="oh-modal-subtitle">Your {activePeriod} count of <strong>{F.money(total)}</strong> has been logged and leadership notified.</p>
+            {emailWarning === "failed" && (
+              <p className="oh-modal-subtitle" style={{ color: "#b91c1c", fontWeight: 600, marginTop: 8 }}>
+                The accounting email did not send. Kevin has been alerted.
+              </p>
+            )}
             <div className="oh-success-actions">
               <button className="oh-btn oh-btn--primary" onClick={handleCountAnother} style={{ width: "100%" }}>Count Another Location →</button>
               <button className="oh-btn-ghost" onClick={handleFinish} style={{ width: "100%", marginTop: 8 }}>Back to Home</button>

@@ -13,6 +13,7 @@ import {
   handleVendorReactivate,
   handleVendorMerge,
 } from "@/lib/invoiceActions";
+import { sendInventoryEmail } from "@/lib/gmail";
 import { NextResponse } from "next/server";
 
 // ═══════════════════════════════════════
@@ -35,35 +36,10 @@ async function safeRead(spreadsheetId, tabName) {
   catch (e) { console.warn(`[OpsHub] Sheet "${tabName}" error:`, e.message); return { headers: [], rows: [] }; }
 }
 
-// ─── Simple email sender (uses user's OAuth token) ───
-async function sendOpsEmail(token, { from, to, cc, subject, html }) {
-  try {
-    const { google } = await import("googleapis");
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: token });
-    const gmail = google.gmail({ version: "v1", auth });
-
-    const toStr = Array.isArray(to) ? to.join(", ") : to;
-    const boundary = `boundary_${Date.now()}`;
-    const lines = [
-      `From: ${from}`,
-      `To: ${toStr}`,
-      ...(cc ? [`Cc: ${cc}`] : []),
-      `Subject: ${subject}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/html; charset=utf-8`,
-      ``,
-      html,
-    ];
-    const raw = Buffer.from(lines.join("\r\n")).toString("base64url");
-    await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-    console.log(`[OpsHub] Email sent to ${toStr}: ${subject}`);
-    return true;
-  } catch (e) {
-    console.error("[OpsHub] Email send failed:", e.message);
-    return false;
-  }
-}
+// F3 (2026-11-12). The previous user-OAuth sendOpsEmail was removed:
+// its only caller (inventory submit) now uses sendInventoryEmail from
+// gmail.js, which goes through the service account and is awaited.
+// See the F3 PR for the decision trail.
 
 // ─── Date Helpers ───
 function toDate(v) {
@@ -1108,6 +1084,11 @@ export async function POST(request) {
       ];
       const result = await appendRowSA(SHEET_IDS.COLLECTION, "inventory_submissions", row);
 
+      // Hoisted so the success return at the bottom of this action can
+      // carry it. Set inside the success branch below when the SA send
+      // fails.
+      let emailWarning = null;
+
        if (result.success) {
 const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v) || 0);
         const totalFmt = fmt(total);
@@ -1125,36 +1106,46 @@ const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency:
           relatedInfo: `${account} ${period}`,
         });
 
-        // Email to submitter + ap@kitchfix.com
-        const invHtml = `
-          <div style="font-family:Inter,-apple-system,sans-serif;max-width:600px;margin:0 auto;">
-            <div style="background:#0f3057;padding:16px 24px;border-radius:12px 12px 0 0;">
-              <span style="color:#fff;font-size:14px;font-weight:700;">KITCHFIX OPS HUB</span>
-              <span style="float:right;color:#d97706;font-size:12px;font-weight:700;">INVENTORY</span>
-            </div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;padding:24px;border-radius:0 0 12px 12px;">
-              <h2 style="margin:0 0 4px;color:#0f3057;font-size:18px;">Inventory Submitted</h2>
-              <p style="margin:0 0 16px;color:#64748b;font-size:13px;">${account} - ${period} - ${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-              <table style="width:100%;border-collapse:collapse;font-size:13px;">
-<tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Food</td><td style="text-align:right;color:#0f3057;font-weight:700;">${foodFmt}</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Packaging</td><td style="text-align:right;color:#0f3057;font-weight:700;">${pkgFmt}</td></tr>
-                <tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Supplies</td><td style="text-align:right;color:#0f3057;font-weight:700;">${supFmt}</td></tr>
-                ${Number(snacks) ? `<tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Snacks</td><td style="text-align:right;color:#0f3057;font-weight:700;">${snkFmt}</td></tr>` : ""}
-                ${Number(beverages) ? `<tr><td style="padding:6px 0;color:#64748b;font-weight:700;">Beverages</td><td style="text-align:right;color:#0f3057;font-weight:700;">${bevFmt}</td></tr>` : ""}
-                <tr style="border-top:2px solid #e2e8f0;"><td style="padding:8px 0;color:#0f3057;font-weight:800;">Total</td><td style="text-align:right;color:#0f3057;font-weight:800;font-size:16px;">${totalFmt}</td></tr>
-                              </table>
-              ${notes ? `<p style="margin:16px 0 0;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#475569;"><strong>Notes:</strong> ${notes}</p>` : ""}
-              <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;">Submitted by ${email}</p>
-            </div>
-          </div>`;
-
-        sendOpsEmail(token, {
-          from: email,
-          to: "ap@kitchfix.com",
-          cc: email,
-          subject: `[KitchFix] Inventory - ${account} ${period} ${totalFmt}`,
-          html: invHtml,
-        }).catch(() => {});
+        // F3 (2026-11-12). Inventory email now goes through the service
+        // account via sendInventoryEmail. The recipient is resolved by
+        // NODE_ENV so localhost never emails ap@kitchfix.com; Reply-To
+        // is the chef; the send is awaited. A failure is surfaced via
+        // Slack + the response's emailWarning field so the submitter
+        // sees it in the success panel.
+        const inventoryEmailResult = await sendInventoryEmail({
+          account, period, email,
+          food: fNum, packaging: pNum, supplies: sNum,
+          snacks: snkNum, beverages: bevNum,
+          notes: String(notes || ""),
+          total,
+          now,
+        });
+        if (!inventoryEmailResult.success) {
+          emailWarning = "failed";
+          console.error(`[Inventory] Email send failed: ${inventoryEmailResult.error}`);
+          if (process.env.SLACK_INVENTORY_WEBHOOK) {
+            try {
+              const res = await fetch(process.env.SLACK_INVENTORY_WEBHOOK, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  text: `Inventory email: send FAILED for ${account} ${period}`,
+                  blocks: [{
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: `*Inventory email: send FAILED*\n*Account:* ${account}\n*Period:* ${period}\n*Submitter:* ${email}\n*Total:* ${totalFmt}\n*Reason:* ${inventoryEmailResult.error || "unknown"}\nThe count is saved. Accounting was NOT notified by email.`,
+                    },
+                  }],
+                }),
+                signal: AbortSignal.timeout(3000),
+              });
+              console.log(`[Inventory] Slack email-failed post: HTTP ${res.status}`);
+            } catch (slackErr) {
+              console.warn(`[Inventory] Slack email-failed post failed (non-blocking):`, slackErr.message || slackErr);
+            }
+          }
+        }
 
         // Slack notification to #opshub-inventory-submissions
         if (process.env.SLACK_INVENTORY_WEBHOOK) {
@@ -1180,7 +1171,7 @@ text: `*Inventory Submitted*\n*Account:* ${account}\n*Period:* ${period}\n*Food:
       if (!result.success) {
         return NextResponse.json({ success: false, error: result.error || "Append failed" }, { status: 500 });
       }
-      return NextResponse.json({ success: true, uuid });
+      return NextResponse.json({ success: true, uuid, emailWarning });
     }
 
     // ── Labor Actions (POST) ──
