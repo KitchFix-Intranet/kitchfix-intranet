@@ -30,12 +30,18 @@ export default async function LoginPage({ searchParams }) {
   // user does not loop the button with no explanation.
   const sp = (await searchParams) || {};
   const errorParam = typeof sp.error === "string" ? sp.error : Array.isArray(sp.error) ? sp.error[0] : "";
-  const isAccessDenied = errorParam === "AccessDenied";
-  const errorMessage = isAccessDenied
-    ? "Use your KitchFix account to sign in."
-    : errorParam
-      ? "Sign-in failed. Try again."
-      : "";
+  // SessionExpired: middleware routed a stale session here. Everything
+  // else keeps the existing behaviour (AccessDenied -> specific copy,
+  // any other value -> generic "try again" so a denied user is not
+  // looping the button with no explanation).
+  let errorMessage = "";
+  if (errorParam === "AccessDenied") {
+    errorMessage = "Use your KitchFix account to sign in.";
+  } else if (errorParam === "SessionExpired") {
+    errorMessage = "You've been signed out. Please sign in again to continue.";
+  } else if (errorParam) {
+    errorMessage = "Sign-in failed. Try again.";
+  }
 
   return (
     <div className="kf-login">

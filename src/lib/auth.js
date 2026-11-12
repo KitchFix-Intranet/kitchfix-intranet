@@ -64,6 +64,18 @@ if (account) {
         };
       }
 
+      // Dev-only: simulate a dead Google connection so F1's signed-out
+      // -on-page-load gate can be verified without revoking a real
+      // refresh token. Guarded on NODE_ENV so it cannot fire in prod
+      // even if the env var is set. Fresh logins (the `if (account)`
+      // branch above) are never flagged; only non-fresh-login hits.
+      if (
+        process.env.NODE_ENV !== "production" &&
+        process.env.FORCE_SESSION_REFRESH_FAIL === "true"
+      ) {
+        return { ...token, error: "RefreshTokenError" };
+      }
+
       // Subsequent requests: check if token is still valid
       // expires_at is in seconds, Date.now() is in milliseconds
       if (token.expiresAt && Date.now() < token.expiresAt * 1000) {
@@ -93,12 +105,17 @@ if (account) {
         }
 
         console.log("[Auth] Token refreshed successfully");
+        // Clear any prior `error` flag so a successful refresh after a
+        // transient failure heals the session. Before this line, the
+        // spread of `...token` carried a stale `error` forward across
+        // every subsequent refresh until the user fully re-logged in.
         return {
           ...token,
           accessToken: refreshed.access_token,
           expiresAt: Math.floor(Date.now() / 1000) + refreshed.expires_in,
           // Keep the existing refresh token (Google doesn't always return a new one)
           refreshToken: refreshed.refresh_token ?? token.refreshToken,
+          error: undefined,
         };
       } catch (error) {
         console.error("[Auth] Token refresh error:", error.message);
