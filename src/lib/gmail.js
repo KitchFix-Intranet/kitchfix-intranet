@@ -16,7 +16,13 @@ import { google } from "googleapis";
 // values (e.g. bill.com intake) are fine here.
 // See docs/GOTCHAS.md "cross-domain sender cannot be an SA impersonation
 // target" for the dual-purpose ambiguity bug this rename fixes.
-const AP_TO_EMAIL = process.env.INVOICE_AP_TO_EMAIL || "k.fietek@kitchfix.com";
+// 2026-11-12. AP_TO_EMAIL exported so the invoiceActions backup sender
+// resolves the AP recipient the same way the primary user-OAuth send
+// does. Finding (flagged for follow-up): a missing INVOICE_AP_TO_EMAIL
+// env var silently reroutes every invoice email to one person. Both
+// primary and fallback inherit the same default by design - whatever
+// ships goes to the same mailbox on both paths.
+export const AP_TO_EMAIL = process.env.INVOICE_AP_TO_EMAIL || "k.fietek@kitchfix.com";
 const AP_CC = ["k.fietek@kitchfix.com"];
 
 function getGmailClient(accessToken) {
@@ -61,6 +67,16 @@ export function auditBccFor({ to, cc } = {}) {
  * @returns {{ success: boolean, messageId?: string, error?: string }}
  */
 export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackImageBase64 = null) {
+  // 2026-11-12 Change 2. Dev-only forced-failure switch for localhost
+  // acceptance tests of the primary -> backup -> alert branch. Returns
+  // a shape that mimics a real OAuth auth-failure (the exact error
+  // text today's incident surfaced), so the fallback path runs
+  // against a realistic primary failure. Guarded on NODE_ENV so a
+  // mistaken production env var cannot force-fail real sends.
+  if (process.env.NODE_ENV !== "production" && process.env.FORCE_INVOICE_PRIMARY_FAIL === "1") {
+    console.warn(`[Gmail] FORCE_INVOICE_PRIMARY_FAIL=1 (dev only): simulating user-OAuth failure`);
+    return { success: false, error: "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. (dev-forced failure)" };
+  }
   const gmail = getGmailClient(accessToken);
 
   try {
@@ -140,6 +156,9 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
 }
 
 // ── Subject Line ──
+// Exported 2026-11-12 so scripts/resend_invoice_backlog.mjs can build
+// a subject identical to what AP normally receives. Pure function.
+export function buildInvoiceSubject(data) { return buildSubject(data); }
 function buildSubject(data) {
   const parts = ["[KitchFix]"];
   if (data.formType === "credit") parts.push("CREDIT");
@@ -152,6 +171,9 @@ function buildSubject(data) {
 }
 
 // ── HTML Email Body ──
+// Exported 2026-11-12 so scripts/resend_invoice_backlog.mjs can build
+// a body identical to what AP normally receives. Pure function.
+export function buildInvoiceEmailHtml(data, typeLabel, submitter) { return buildEmailHtml(data, typeLabel, submitter); }
 function buildEmailHtml(data, typeLabel, submitter) {
   const formattedTotal = `$${Number(data.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
   const formattedDate = formatDate(data.invoiceDate);

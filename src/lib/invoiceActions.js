@@ -7,7 +7,14 @@
  */
 
 import { uploadInvoicePages, uploadStampedPDF } from "@/lib/drive";
-import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
+import {
+  sendInvoiceEmail,
+  sendRejectionEmail,
+  buildInvoiceSubject,
+  buildInvoiceEmailHtml,
+  sendEmailSA,
+  AP_TO_EMAIL,
+} from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
 import { isOpsLeadershipDb } from "@/lib/admin";
 import { fuzzyMatchVendor } from "@/lib/vendorMatching";
@@ -35,6 +42,15 @@ import {
   unrejectInvoice,
   insertAILineItems,
 } from "@/lib/dataStore";
+
+// 2026-11-12. Rate-limit cache for the "backup sender used" Slack
+// alert: one post per submitter per calendar day. Kept at module
+// scope so one Vercel instance handling rapid submissions from a
+// stale-token chef posts to Slack once, not every submission.
+// Across cold-started instances the rate-limit is approximate (worst
+// case: 2-3 posts for the same submitter in a day). Acceptable for
+// an alert channel; a stricter limit would need schema.
+const backupAlertCache = new Map(); // submitter_email -> 'YYYY-MM-DD'
 
 // ─── Document Type Labels (Photo Gate) ───
 const DOC_TYPE_LABELS = {
@@ -1026,26 +1042,175 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         }
       }
 
-      // 5. Send email to AP
+      // 5. Send email to AP.
+      //
+      // 2026-11-12. Primary = user-OAuth send from the chef's own
+      // mailbox (preserves reply-to and audit of WHO submitted). On
+      // ANY failure (thrown or success:false), fall back to the
+      // service-account mailbox so AP gets the invoice regardless of
+      // the chef's token state. The incident this fixes: one chef's
+      // Google refresh token expired 2026-10-15; the primary send
+      // started returning `Request had invalid authentication
+      // credentials` on 2026-10-16 and 33 invoices never reached AP
+      // over ~27 days (the failure was silent).
+      //
+      // emailWarning communicates the client-side message tier:
+      //   null                 - primary succeeded, normal green toast
+      //   "stale_connection"   - fallback delivered; submitter told to
+      //                          sign out + back in
+      //   "undelivered"        - both failed; red saved-but-not-sent
+      //                          toast + Slack alert fires
+      //
+      // deliveredVia is a log-line-only field (brief: "no schema
+      // change") so the audit trail names the path that worked.
+      const emailData = {
+        account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount,
+        glRows: enrichedGlRows, driveUrls, pageCount: pages.length, formType: type,
+        pdfBase64: pdfBase64 || null,
+        pdfFilename: pdfBuffer ? buildPdfFilename(vendor, invoiceDate, invoiceNumber) : null,
+      };
+      const fallbackImage = pdfBase64 ? null : (pages[0]?.data || null);
       let emailSent = false;
-      try {
-        const emailResult = await sendInvoiceEmail(token, email, {
-          account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount,
-          glRows: enrichedGlRows, driveUrls, pageCount: pages.length, formType: type,
-          pdfBase64: pdfBase64 || null,
-          pdfFilename: pdfBuffer ? buildPdfFilename(vendor, invoiceDate, invoiceNumber) : null,
-}, pdfBase64 ? null : (pages[0]?.data || null));
+      let deliveredVia = null;
+      let emailWarning = null;
+      let primaryError = null;
 
-        emailSent = emailResult.success;
-        if (emailSent) {
-          try {
-            await updateInvoiceFields(uuid, { emailSent: true }, { module: "ops" });
-          } catch (markErr) {
-            console.warn("[Invoice] Failed to mark email_sent (non-blocking):", markErr.message);
-          }
+      try {
+        const emailResult = await sendInvoiceEmail(token, email, emailData, fallbackImage);
+        if (emailResult?.success) {
+          emailSent = true;
+          deliveredVia = "user_oauth";
+          console.log(`[Invoice] Email delivered via user_oauth to AP (submitter=${email})`);
+        } else {
+          primaryError = emailResult?.error || "sendInvoiceEmail returned success=false";
         }
       } catch (emailErr) {
-        console.error("[Invoice] Email failed:", emailErr.message);
+        primaryError = emailErr.message || String(emailErr);
+      }
+
+      if (!emailSent) {
+        console.warn(`[Invoice] Primary (user_oauth) send failed for ${email}: ${primaryError}`);
+        try {
+          const typeLabel = type === "credit" ? "Credit / Return"
+            : type === "cc_receipt" ? "CC Receipt"
+            : "Vendor Invoice";
+          const saSubject = buildInvoiceSubject(emailData);
+          const saHtml = buildInvoiceEmailHtml(emailData, typeLabel, email);
+          let attachments = [];
+          if (pdfBase64 && pdfBuffer) {
+            attachments = [{
+              filename: buildPdfFilename(vendor, invoiceDate, invoiceNumber),
+              mimeType: "application/pdf",
+              base64: pdfBase64,
+            }];
+          } else if (fallbackImage) {
+            const raw = fallbackImage.includes(",") ? fallbackImage.split(",")[1] : fallbackImage;
+            const mimeType = fallbackImage.startsWith("data:image/png") ? "image/png" : "image/jpeg";
+            const ext = mimeType === "image/png" ? "png" : "jpg";
+            attachments = [{ filename: `invoice_page1.${ext}`, mimeType, base64: raw }];
+          }
+          // Brief: "CC the submitter" on the fallback so they can see
+          // what AP received. Submitter also gets Reply-To so AP's
+          // response lands on them as on the primary path.
+          //
+          // 2026-11-12. Dev-only force-fail switch for localhost tests
+          // of the undelivered (red) tier. Scoped HERE (invoice call
+          // site), NOT inside sendEmailSA, because sendEmailSA is
+          // shared with People / Incidents / Service Calendar. A
+          // test flag on the shared sender would silently break
+          // unrelated send paths. Guarded on NODE_ENV so a mistaken
+          // production env var cannot force-fail real invoice sends.
+          let saResult;
+          if (process.env.NODE_ENV !== "production" && process.env.FORCE_INVOICE_BACKUP_FAIL === "1") {
+            console.warn(`[Invoice] FORCE_INVOICE_BACKUP_FAIL=1 (dev only): simulating SA failure at invoice call site`);
+            saResult = "failed";
+          } else {
+            saResult = await sendEmailSA({
+              sender: process.env.INVOICE_SA_SENDER || "kitchfix.admin@kitchfix.com",
+              displayName: "KitchFix Invoice Capture",
+              to: AP_TO_EMAIL,
+              cc: [email],
+              subject: saSubject,
+              html: saHtml,
+              replyTo: email,
+              attachments,
+            });
+          }
+          if (saResult === "sent") {
+            emailSent = true;
+            deliveredVia = "sa_fallback";
+            emailWarning = "stale_connection";
+            console.log(`[Invoice] Email delivered via sa_fallback to AP (submitter=${email}, primary_err=${primaryError})`);
+
+            // 2026-11-12 Change 3. Rate-limited Slack alert on the
+            // backup path: one post per submitter per calendar day.
+            // A chef who ignores the amber "sign out and back in"
+            // notice can otherwise run on a dead connection for
+            // weeks silently. Lower-severity line - no emoji, plain
+            // "BACKUP SENDER USED" carries it. The red case is still
+            // the loud one with "UNDELIVERED" below.
+            const today = new Date().toISOString().slice(0, 10);
+            if (backupAlertCache.get(email) !== today && process.env.SLACK_INVOICE_WEBHOOK) {
+              backupAlertCache.set(email, today);
+              const totalFmt = `$${Number(totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+              fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  text: `BACKUP SENDER USED: ${vendor} ${totalFmt} (${account}, submitter ${email})`,
+                  blocks: [{
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: `*BACKUP SENDER USED*\n*Submitter:* ${email}\n*Account:* ${account}\n*Vendor:* ${vendor}\n*Total:* ${totalFmt}\n*Reason:* their primary Google send failed, so the system mailbox delivered to AP instead. They need to sign out and sign back in so future invoices send from their own mailbox.\n_One alert per submitter per day._`,
+                    },
+                  }],
+                }),
+              }).catch(() => {});
+            }
+          } else {
+            emailWarning = "undelivered";
+            console.error(`[Invoice] Backup (sa_fallback) also failed for ${email}`);
+          }
+        } catch (fallbackErr) {
+          emailWarning = "undelivered";
+          console.error(`[Invoice] Backup (sa_fallback) threw for ${email}:`, fallbackErr.message || fallbackErr);
+        }
+      }
+
+      // Mark email_sent through the shared data path. Still wrapped
+      // non-blocking; the long-standing silent failure here (Sheets
+      // lookup fails on PG-only rows, PG mirror never runs) is
+      // reported in the PR findings but not fixed in this scope
+      // (dataStore/* is a danger zone per the brief).
+      if (emailSent) {
+        try {
+          await updateInvoiceFields(uuid, { emailSent: true }, { module: "ops" });
+        } catch (markErr) {
+          console.warn("[Invoice] Failed to mark email_sent (non-blocking):", markErr.message);
+        }
+      } else if (process.env.SLACK_INVOICE_WEBHOOK) {
+        // Both paths failed. Fire an alert through the existing
+        // invoice Slack channel (the same channel today's submit-
+        // success posts to, so Kevin sees the rare red event in the
+        // same stream he already watches).
+        const totalFmt = `$${Number(totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+        fetch(process.env.SLACK_INVOICE_WEBHOOK, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            // 2026-11-12 Change 3 (house style). No emoji; the words
+            // UNDELIVERED / BACKUP SENDER USED carry the severity.
+            text: `UNDELIVERED invoice email: ${vendor} ${totalFmt} (${account}, submitter ${email})`,
+            blocks: [{
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `*UNDELIVERED invoice email*\n*Vendor:* ${vendor}\n*Account:* ${account}\n*Invoice #:* ${invoiceNumber || "N/A"}\n*Total:* ${totalFmt}\n*Submitter:* ${email}\n*Primary error:* ${primaryError || "unknown"}\n*Row saved* (uuid \`${uuid.slice(0, 8)}...\`) with email_sent=false. Backup send also failed.`,
+              },
+            }],
+          }),
+        }).catch(() => {});
       }
 
       // 6. A1 (2026-08-17): the fire-and-forget triggerAIScan call that
@@ -1102,7 +1267,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         });
       }
 
-      return { success: true, uuid, driveUrls, emailSent, pageCount: pages.length, stampedPdf: !!pdfBuffer };
+      return { success: true, uuid, driveUrls, emailSent, emailWarning, deliveredVia, pageCount: pages.length, stampedPdf: !!pdfBuffer };
 
     } catch (error) {
       console.error("[Invoice] Submit error:", error.message);

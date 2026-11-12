@@ -742,9 +742,32 @@ resetForm(); return;
       const res = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (data.success) {
-        setLastSubmission({ vendor: vendor?.name, invoiceNumber, total: isCreditMemo ? -Math.abs(Number(totalAmount)) : Number(totalAmount), formType });
+        setLastSubmission({
+          vendor: vendor?.name,
+          invoiceNumber,
+          total: isCreditMemo ? -Math.abs(Number(totalAmount)) : Number(totalAmount),
+          formType,
+          // 2026-11-12. Three-tier submit-result status, driven by
+          // the server's new emailWarning field. See invoiceActions
+          // step 5 for the primary/fallback/alert wiring.
+          //   null                 - primary user_oauth send delivered; green
+          //   "stale_connection"   - backup SA path delivered; amber - tell the submitter to sign out + back in
+          //   "undelivered"        - both paths failed; red - saved but NOT sent
+          emailWarning: data.emailWarning || null,
+        });
 setShowSuccess(true); setSessionCount((c) => c + 1);
-        setTimeout(() => setShowSuccess(false), 3200);
+        // 2026-11-12 Change 5. Dismiss timing by tier:
+        //   normal                - 3.2s auto (unchanged)
+        //   stale_connection      - 8s auto (operator reads the sign-out notice)
+        //   undelivered           - NEVER auto. Chef taps the overlay to acknowledge.
+        //                           This is a "saved but not sent" red state on a
+        //                           floor surface - an 8s auto-dismiss mid-shift
+        //                           gets missed.
+        if (data.emailWarning === "undelivered") {
+          // no auto-dismiss; overlay stays until tap (onClick wired in render).
+        } else {
+          setTimeout(() => setShowSuccess(false), data.emailWarning === "stale_connection" ? 8000 : 3200);
+        }
         loadBootstrap(account); resetForm();
       } else { showToast(data.error || "Submission failed", "error"); }
     } catch { showToast("Network error — try again", "error"); }
@@ -971,22 +994,104 @@ const MAINTENANCE_MODE = false;
         </div>
       )}
 
-      {showSuccess && lastSubmission && (
-                <div className="oh-inv-success-overlay">
-          <div className="oh-inv-success-check">
-            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke={lastSubmission.formType === "credit" ? "#6366f1" : "#10b981"} strokeWidth="2.5">
+      {showSuccess && lastSubmission && (() => {
+        // 2026-11-12. Three-tier overlay:
+        //   normal   - primary send delivered (emailWarning === null)
+        //   stale    - backup SA delivered; sign-out notice
+        //   undeliv  - both failed; saved-but-not-sent red + admin alerted
+        //
+        // Review-ruling fixes (2026-11-12):
+        //   - Amber uses a warning triangle, not a check mark, so it
+        //     does not read as a plain success.
+        //   - Amber gets a short action heading ("Action needed:
+        //     sign out and sign back in") so the instruction is not
+        //     a footnote under the invoice line.
+        //   - Sub-text on amber + red renders at 16px (normal body
+        //     size) instead of the default 13px - "Do not submit it
+        //     again" was the smallest thing on screen in the first
+        //     cut, which is backwards.
+        //   - Green copy is "Sent to accounting" (chefs say
+        //     accounting) with no check-mark glyph (the icon already
+        //     says it).
+        const tier = lastSubmission.emailWarning === "undelivered" ? "undeliv"
+          : lastSubmission.emailWarning === "stale_connection" ? "stale"
+          : "normal";
+        const strokeColor = tier === "undeliv" ? "#dc2626"
+          : tier === "stale" ? "#d97706"
+          : (lastSubmission.formType === "credit" ? "#6366f1" : "#10b981");
+        const title = tier === "undeliv"
+          ? "Saved - NOT sent to accounting"
+          : (lastSubmission.formType === "credit" ? "Credit Memo Submitted!" : "Invoice Submitted!");
+        const subText = tier === "undeliv"
+          ? "Your invoice is saved. Do not submit it again. Kevin has been alerted and will get it to accounting. Please sign out and sign back in."
+          : tier === "stale"
+            ? "Sent to accounting using a backup. Please sign out and sign back in so your next invoice sends normally."
+            : "Sent to accounting";
+        // Red stays until tap; amber + normal auto-dismiss.
+        const onClickDismiss = tier === "undeliv" ? () => setShowSuccess(false) : undefined;
+        // Icon choice: check for normal, warning triangle for amber,
+        // alert-circle for undeliv.
+        const renderIcon = () => {
+          if (tier === "undeliv") {
+            return (
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            );
+          }
+          if (tier === "stale") {
+            return (
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            );
+          }
+          return (
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2.5">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
             </svg>
+          );
+        };
+        return (
+          <div
+            className="oh-inv-success-overlay"
+            data-oh-inv-tier={tier}
+            onClick={onClickDismiss}
+            role={tier === "undeliv" ? "alertdialog" : undefined}
+            aria-label={tier === "undeliv" ? "Submission saved but not emailed. Tap to acknowledge." : undefined}
+            tabIndex={tier === "undeliv" ? 0 : undefined}
+            style={tier === "undeliv" ? { background: "#fef2f2", border: "2px solid #dc2626", cursor: "pointer" }
+              : tier === "stale" ? { background: "#fffbeb", border: "2px solid #d97706" }
+              : undefined}
+          >
+            <div className="oh-inv-success-check">{renderIcon()}</div>
+            <p className="oh-inv-success-text" style={tier === "undeliv" ? { color: "#991b1b" } : tier === "stale" ? { color: "#92400e" } : undefined}>{title}</p>
+            {tier === "stale" && (
+              <p style={{ marginTop: 6, color: "#92400e", fontWeight: 700, fontSize: 16, lineHeight: 1.3, textAlign: "center", padding: "0 12px" }}>
+                Action needed: sign out and back in
+              </p>
+            )}
+            <div className="oh-inv-success-details">
+              <span className="oh-inv-success-vendor">{lastSubmission.vendor}</span>
+              {lastSubmission.invoiceNumber && <span className="oh-inv-success-num">#{lastSubmission.invoiceNumber}</span>}
+              <span className="oh-inv-success-total">{lastSubmission.total < 0 ? "−$" : "$"}{fmt$(Math.abs(lastSubmission.total))}</span>
+            </div>
+            <p
+              className="oh-inv-success-sub"
+              style={tier === "undeliv"
+                ? { color: "#991b1b", fontWeight: 600, fontSize: 16, lineHeight: 1.45, maxWidth: 420, padding: "0 12px", textAlign: "center" }
+                : tier === "stale"
+                  ? { color: "#92400e", fontWeight: 600, fontSize: 16, lineHeight: 1.45, maxWidth: 420, padding: "0 12px", textAlign: "center" }
+                  : undefined}
+            >{subText}</p>
+            {tier === "undeliv" && (
+              <p style={{ marginTop: 16, fontSize: 12, color: "#7f1d1d", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Tap anywhere to acknowledge</p>
+            )}
           </div>
-          <p className="oh-inv-success-text">{lastSubmission.formType === "credit" ? "Credit Memo Submitted!" : "Invoice Submitted!"}</p>
-          <div className="oh-inv-success-details">
-            <span className="oh-inv-success-vendor">{lastSubmission.vendor}</span>
-            {lastSubmission.invoiceNumber && <span className="oh-inv-success-num">#{lastSubmission.invoiceNumber}</span>}
-            <span className="oh-inv-success-total">{lastSubmission.total < 0 ? "−$" : "$"}{fmt$(Math.abs(lastSubmission.total))}</span>
-          </div>
-          <p className="oh-inv-success-sub">Sent to AP ✓</p>
-        </div>
-      )}
+        );
+      })()}
 
       {lightboxIdx !== null && pages[lightboxIdx] && !reorderMode && (
         <PhotoLightbox src={pages[lightboxIdx].data} rotation={pages[lightboxIdx].rotation} onClose={() => setLightboxIdx(null)} />
