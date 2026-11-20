@@ -323,7 +323,8 @@ async function readLiveSnapshot() {
  * try to auto-rollback. Manual rollback path is to restore from the
  * pre-apply JSON backup.
  */
-async function executeApply({ diff, render, corpus, supabaseUrl, supabaseKey }) {
+async function executeApply({ diff, render, corpus, leftAlone, supabaseUrl, supabaseKey }) {
+  const leftAloneSet = new Set(leftAlone || []);
   const { createClient } = await import("@supabase/supabase-js");
   const sb = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -417,8 +418,12 @@ async function executeApply({ diff, render, corpus, supabaseUrl, supabaseKey }) 
     }
 
     // ── Step 5: UPSERT document_content ────────────────────────────────────
+    // T2: a left-alone doc never gets its content row rewritten. The row
+    // is owned by the v2 Library now; the projection does not get to
+    // replace what the Library edited.
     const contentRows = render
       .filter((r) => r.html && !r.render_error)
+      .filter((r) => !leftAloneSet.has(r.id))
       .map((r) => ({
         doc_id: r.id,
         lang: langByDoc[r.id] || r.lang || "en",
@@ -426,7 +431,7 @@ async function executeApply({ diff, render, corpus, supabaseUrl, supabaseKey }) 
         content_hash: r.content_hash,
         rendered_at: new Date().toISOString(),
       }));
-    console.log(`  [5/5] UPSERT document_content: ${contentRows.length} rows`);
+    console.log(`  [5/5] UPSERT document_content: ${contentRows.length} rows (left alone: ${leftAloneSet.size})`);
     if (contentRows.length > 0) {
       const { error } = await sb.from("document_content").upsert(contentRows, { onConflict: "doc_id,lang" });
       if (error) return halt("content_upsert", error);
@@ -541,15 +546,24 @@ function buildObligationsPlan(corpus) {
  * Callers should exit non-zero on ok=false without aborting steps 1-5;
  * those writes have already committed.
  */
-async function applyObligations({ plan, supabaseUrl, supabaseKey }) {
+async function applyObligations({ plan, leftAlone, supabaseUrl, supabaseKey }) {
   const sb = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const leftAloneSet = new Set(leftAlone || []);
   let rowsWritten = 0;
   let docsWritten = 0;
+  let docsLeftAlone = 0;
 
   for (const doc of plan.byDoc) {
+    // T2: a left-alone doc's obligation rows are not touched. The sweep
+    // below keeps the doc's id in liveDocIds so the orphan deletion
+    // does not clear the rows either.
+    if (leftAloneSet.has(doc.doc_id)) {
+      docsLeftAlone += 1;
+      continue;
+    }
     const { data, error } = await sb.rpc("replace_document_obligations", {
       p_doc_id: doc.doc_id,
       p_rows: doc.rows,
@@ -579,6 +593,12 @@ async function applyObligations({ plan, supabaseUrl, supabaseKey }) {
     docsWritten += 1;
   }
 
+  // T2: the sweep list stays whole. A left-alone doc_id is still a
+  // "live" id as far as the sweep is concerned, so the RPC's
+  // "delete obligations whose doc_id is NOT in this list" leaves the
+  // moved doc's rows exactly where they are. The projection has not
+  // run replace on them above; the sweep does not remove them below.
+  //
   // Guard the sweep call site. Refuse to invoke the RPC with an empty
   // or NULL-bearing list rather than letting it surface as a raw
   // Postgres exception; the diagnostic here names the likely cause
@@ -622,7 +642,7 @@ async function applyObligations({ plan, supabaseUrl, supabaseKey }) {
   }
   const orphanRowsSwept = typeof sweptData === "number" ? sweptData : Number(sweptData) || 0;
 
-  return { ok: true, rowsWritten, docsWritten, orphanRowsSwept };
+  return { ok: true, rowsWritten, docsWritten, orphanRowsSwept, docsLeftAlone };
 }
 
 /**
@@ -673,11 +693,48 @@ function writeDryRunReport({ corpus, validation, diff, render, applyPlan, live, 
   lines.push(`| Would INSERT (MDX-new) | ${diff.docPlan.insert.length} |`);
   lines.push(`| Would UPDATE (in both, fields differ) | ${diff.docPlan.update.length} |`);
   lines.push(`| Would ARCHIVE (PG active, absent from MDX) | ${diff.docPlan.archive.length} |`);
-  lines.push(`| Relationships planned (authored only) | ${diff.relPlan.length} |`);
+  lines.push(`| Left alone (home=library) | ${diff.leftAlone.length} |`);
+  lines.push(`| Relationships planned (authored + live-passthrough for left-alone) | ${diff.relPlan.length} |`);
   lines.push(`| - relationships block entries | ${diff.relPlan.filter((r) => r.kind === "authored").length} |`);
   lines.push(`| - supersedes frontmatter field | ${diff.relPlan.filter((r) => r.kind === "authored_supersedes").length} |`);
+  lines.push(`| - live passthrough (left-alone source) | ${diff.relPlan.filter((r) => r.kind === "live_passthrough_left_alone").length} |`);
   lines.push(`| Surfaces planned | ${diff.surfPlan.length} |`);
   lines.push(`| Content rows that would render | ${render.length} |`);
+  lines.push(`| Content rows that would actually be written (excludes left-alone) | ${render.filter((r) => r.html && !r.render_error && !diff.leftAlone.includes(r.id)).length} |`);
+  lines.push(``);
+
+  // T2: left-alone list + file-drift notes. A full rundown even when
+  // empty so the report is always honest about the state.
+  lines.push(`### Left alone (home=library in live PG)`);
+  lines.push(``);
+  if (diff.leftAlone.length === 0) {
+    lines.push(`No documents are tagged \`home='library'\` in the live \`documents\` snapshot. Projection behaviour is identical to today.`);
+  } else {
+    lines.push(`These document ids are owned by the v2 Library now. The projection does NOT touch their documents row, their content row, their obligations, or any relationship / surface row that originates from them. Rows that point AT them from other documents still come from files, as today.`);
+    lines.push(``);
+    for (const id of diff.leftAlone) {
+      lines.push(`- ${id}`);
+    }
+    lines.push(``);
+    if (diff.leftAloneFileDrift.length > 0) {
+      lines.push(`### File-drift notes for left-alone documents`);
+      lines.push(``);
+      lines.push(`These are NOT errors; the projection does not act on them. They surface that the MDX file of a moved document has drifted from the live row - someone has edited a file that is no longer the master and a human should be told.`);
+      lines.push(``);
+      lines.push(`| ID | What drifted |`);
+      lines.push(`|---|---|`);
+      for (const d of diff.leftAloneFileDrift) {
+        if (d.kind === "fields") {
+          lines.push(`| ${d.id} | frontmatter fields: ${d.fields.join(", ")} |`);
+        } else if (d.kind === "removed_from_mdx") {
+          lines.push(`| ${d.id} | file absent from content/documents/ (would have archived if not left-alone) |`);
+        } else {
+          lines.push(`| ${d.id} | ${JSON.stringify(d)} |`);
+        }
+      }
+      lines.push(``);
+    }
+  }
   lines.push(``);
   lines.push(`### Pre-apply schema state`);
   lines.push(``);
@@ -984,6 +1041,43 @@ async function main() {
   const diff = computeDiff(corpus, live);
   const applyPlan = buildApplyPlan(diff, render);
   console.log(`  ${diff.docPlan.insert.length} insert, ${diff.docPlan.update.length} update, ${diff.docPlan.archive.length} archive`);
+  console.log(
+    `  left alone (home=library): ${diff.leftAlone.length}${diff.leftAlone.length > 0 ? " - " + diff.leftAlone.join(", ") : ""}`
+  );
+  if (diff.leftAloneFileDrift.length > 0) {
+    console.log(
+      `  note: ${diff.leftAloneFileDrift.length} left-alone doc(s) have files that differ from the live row - see dry-run report`
+    );
+  }
+
+  // Emit the left-alone id list to a scratch file so the workflow's
+  // embed step can filter it without a second DB read. The projection
+  // has already queried `documents` once; downstream consumers inherit
+  // the same source of truth. The file is gitignored (.scratch/).
+  //
+  // The workflow's embed step fails closed when this file is missing
+  // (every embed skipped, loud message, never embed on a guess). A
+  // write failure here is therefore a real problem the operator needs
+  // to see - log it loudly, name the path, do not swallow.
+  try {
+    const scratchDir = join(REPO_ROOT, ".scratch");
+    mkdirSync(scratchDir, { recursive: true });
+    writeFileSync(
+      join(scratchDir, "projection-left-alone-ids.txt"),
+      diff.leftAlone.join("\n") + (diff.leftAlone.length > 0 ? "\n" : ""),
+    );
+  } catch (err) {
+    console.error(
+      `ERROR: could not write .scratch/projection-left-alone-ids.txt: ${err.message}`
+    );
+    console.error(
+      `  The embed step reads this file as its left-alone gate. A missing file`
+    );
+    console.error(
+      `  triggers a fail-closed path in the workflow that skips every embed.`
+    );
+    console.error(`  Investigate before the next run.`);
+  }
 
   // Step 6 (Academy): obligations plan. Built for both modes so the dry-run
   // report shows exactly what the apply would write. See buildObligationsPlan.
@@ -1027,6 +1121,7 @@ async function main() {
     diff,
     render,
     corpus,
+    leftAlone: diff.leftAlone,
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   });
@@ -1058,12 +1153,13 @@ async function main() {
   );
   const obligationsLog = await applyObligations({
     plan: obligationsPlan,
+    leftAlone: diff.leftAlone,
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   });
   if (obligationsLog.ok) {
     console.log(
-      `Step 6 OK · wrote ${obligationsLog.rowsWritten} obligation row(s) across ${obligationsLog.docsWritten} doc(s); orphan sweep deleted ${obligationsLog.orphanRowsSwept}`
+      `Step 6 OK · wrote ${obligationsLog.rowsWritten} obligation row(s) across ${obligationsLog.docsWritten} doc(s); orphan sweep deleted ${obligationsLog.orphanRowsSwept}; docs left alone (home=library): ${obligationsLog.docsLeftAlone ?? 0}`
     );
   } else {
     console.error("Step 6 FAILED · obligations projection did not complete");

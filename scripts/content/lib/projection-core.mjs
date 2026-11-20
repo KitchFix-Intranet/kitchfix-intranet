@@ -10,7 +10,28 @@
 // Behavior-preserving extraction - the functions are identical in shape to
 // their previous in-file definitions; the only change is they are now
 // exported from this module.
+//
+// T2: `documents.home` overlay. A document whose live
+// `documents.home === 'library'` has been moved to the v2 Library. The
+// projection must never touch its row, its content, its obligations, or
+// the authored relationships / surfaces it owns. Rows pointing AT a moved
+// document from other, non-moved documents stay built from files as today.
+// Fail-safe: anything other than the exact literal 'library' (undefined,
+// null, 'v1', 'LIBRARY', 'library '...) is treated as v1.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Is this live PG row flagged as moved to the v2 Library?
+ *
+ * Case-sensitive, whitespace-sensitive comparison against the exact
+ * literal 'library'. Fail-safe: the column may not exist yet
+ * (Studio-applied additive change), may be null, may carry a historical
+ * value like 'v1', or any future tier - all of those stay on the v1
+ * projection path.
+ */
+export function isMovedToLibrary(row) {
+  return !!row && row.home === "library";
+}
 
 /**
  * Build the row a single MDX file projects into the documents table.
@@ -119,13 +140,38 @@ export function valEq(a, b) {
  *
  * Inputs:
  *   corpus - array of parsed MDX docs: { id, frontmatter, ... }
- *   live   - { documents: [...] } snapshot from PG
+ *   live   - { documents: [...], relationships: [...], surfaces: [...] }
+ *            snapshot from PG. `relationships` and `surfaces` are read so
+ *            the T2 home overlay can pass live rows through verbatim for
+ *            documents the projection has been told to leave alone.
  *
  * Output:
  *   { docPlan: { insert, update, archive, skip_retired_pg },
  *     relPlan: [{ from_doc, to_doc, rel_type, kind }],
  *     surfPlan: [{ doc_id, surface }],
- *     corpusById }
+ *     corpusById,
+ *     leftAlone: [docId, ...],              // sorted; home='library' in PG
+ *     leftAloneFileDrift: [                  // non-fatal note, not an error
+ *       { id, kind: "fields" | "content_hash" | "removed_from_mdx", ... }
+ *     ]}
+ *
+ * T2 overlay rule (binding across every plan):
+ *   A document whose live row has `home === 'library'` is left alone:
+ *   - not in docPlan.insert (insert means "not in PG"; by definition
+ *     a left-alone doc is in PG)
+ *   - not in docPlan.update (its row is owned by the Library now)
+ *   - not in docPlan.archive (its file may be gone; still don't archive)
+ *   - rows AUTHORED by it in relPlan / surfPlan are passed through from
+ *     the live snapshot verbatim, by from_doc / doc_id
+ *   - rows authored by OTHER docs that point AT it stay built from files,
+ *     as today (one row from file = one row in the plan)
+ *   - a file that would have produced a different row or a different
+ *     content_hash is reported in `leftAloneFileDrift` so a person can
+ *     see the stale file - never an error, never a halt.
+ *
+ * Fail-safe: `isMovedToLibrary` only answers yes on the exact literal
+ * 'library'. The column may not exist yet; null / undefined / any other
+ * value stays on today's path.
  */
 export function computeDiff(corpus, live) {
   const mdxIds = new Set();
@@ -145,14 +191,46 @@ export function computeDiff(corpus, live) {
   const pgById = {};
   for (const row of live.documents) pgById[row.id] = row;
 
+  // Build the left-alone set first so every later branch can consult it.
+  // An id lands here if its LIVE row (not its file) is flagged
+  // home='library'. A brand-new MDX doc that is not in PG yet cannot be
+  // left alone.
+  const leftAloneSet = new Set();
+  for (const row of live.documents) {
+    if (isMovedToLibrary(row)) leftAloneSet.add(row.id);
+  }
+
+  // Drift notes - never an error, never a halt. Someone may have edited
+  // a file that is no longer the master; a human needs to know.
+  const leftAloneFileDrift = [];
+
   // Insert / update
   for (const d of corpus) {
     if (!d.id) continue;
     const fm = d.frontmatter;
+    const existing = pgById[d.id];
+
+    // Left-alone: the file is NOT written. Compute the row the projection
+    // would have written and compare to the live row purely for the
+    // drift note, then skip.
+    if (existing && leftAloneSet.has(d.id)) {
+      const wouldHaveWritten = mdxToDocRow(fm, existing);
+      const wouldHaveChanged = diffRow(existing, wouldHaveWritten);
+      const changedFields = Object.keys(wouldHaveChanged);
+      if (changedFields.length > 0) {
+        leftAloneFileDrift.push({
+          id: d.id,
+          kind: "fields",
+          fields: changedFields.sort(),
+        });
+      }
+      continue;
+    }
+
+    // Normal path.
     // `existing` is threaded into mdxToDocRow so the overlay fields (status,
     // access_level) preserve their PG value on UPDATE while MDX still seeds
     // on INSERT - see mdxToDocRow for the per-field logic.
-    const existing = pgById[d.id];
     const row = mdxToDocRow(fm, existing);
     if (!existing) {
       docPlan.insert.push(row);
@@ -164,10 +242,21 @@ export function computeDiff(corpus, live) {
     }
   }
 
-  // Archive: present in PG (active) but not in MDX
+  // Archive: present in PG (active) but not in MDX. A left-alone doc
+  // whose file was removed from `content/documents/` is NOT archived.
+  // The Library owns its row now; its file disappearing is expected.
   for (const row of live.documents) {
     if (mdxIds.has(row.id)) continue;
     if (row.archived) continue; // already archived, nothing to do
+    if (leftAloneSet.has(row.id)) {
+      // Note the file-absence so a person can see it; this is the
+      // "someone deleted the file after the doc moved" case.
+      leftAloneFileDrift.push({
+        id: row.id,
+        kind: "removed_from_mdx",
+      });
+      continue;
+    }
     if (row.status === "Retired") {
       // Already Retired but not archived. Per brief: archive-not-delete.
       docPlan.archive.push({ id: row.id, current_status: row.status, title: row.title, reason: "retired_in_pg_absent_from_mdx" });
@@ -179,10 +268,18 @@ export function computeDiff(corpus, live) {
   // Relationships: authored edges only. The reader inverts at read time via
   // the route's `direction: 'in'|'out'` field; storing inverse rows would
   // double-render the same relationship on both ends.
+  //
+  // T2: rows authored BY a left-alone doc (from_doc === id) are passed
+  // through verbatim from the live snapshot. Rows that point AT a
+  // left-alone doc from a non-moved document still come from files,
+  // as today.
   const relPlan = [];
   const relSeen = new Set(); // dedupe key: from|to|type
+
+  // 1. File-authored rows, skipping any rows whose from_doc is left-alone.
   for (const d of corpus) {
     if (!d.id) continue;
+    if (leftAloneSet.has(d.id)) continue;
     for (const rel of d.frontmatter.relationships || []) {
       const k = `${d.id}|${rel.to}|${rel.type}`;
       if (relSeen.has(k)) continue;
@@ -204,11 +301,31 @@ export function computeDiff(corpus, live) {
     }
   }
 
-  // Surfaces from frontmatter
+  // 2. Live rows from left-alone source docs, passed through verbatim.
+  // The planned-vs-inserted count guard in executeApply still holds
+  // because these rows are real `document_relationships` rows the
+  // function will re-insert on replace.
+  const liveRels = Array.isArray(live.relationships) ? live.relationships : [];
+  for (const row of liveRels) {
+    if (!leftAloneSet.has(row.from_doc)) continue;
+    const k = `${row.from_doc}|${row.to_doc}|${row.rel_type}`;
+    if (relSeen.has(k)) continue;
+    relSeen.add(k);
+    relPlan.push({
+      from_doc: row.from_doc,
+      to_doc: row.to_doc,
+      rel_type: row.rel_type,
+      kind: "live_passthrough_left_alone",
+    });
+  }
+
+  // Surfaces: same rule. File-authored for non-moved docs, live
+  // passthrough for moved docs.
   const surfPlan = [];
   const surfSeen = new Set();
   for (const d of corpus) {
     if (!d.id) continue;
+    if (leftAloneSet.has(d.id)) continue;
     for (const s of d.frontmatter.surfaces || []) {
       const k = `${d.id}|${s}`;
       if (surfSeen.has(k)) continue;
@@ -216,6 +333,19 @@ export function computeDiff(corpus, live) {
       surfPlan.push({ doc_id: d.id, surface: s });
     }
   }
+  const liveSurfs = Array.isArray(live.surfaces) ? live.surfaces : [];
+  for (const row of liveSurfs) {
+    if (!leftAloneSet.has(row.doc_id)) continue;
+    const k = `${row.doc_id}|${row.surface}`;
+    if (surfSeen.has(k)) continue;
+    surfSeen.add(k);
+    surfPlan.push({
+      doc_id: row.doc_id,
+      surface: row.surface,
+      kind: "live_passthrough_left_alone",
+    });
+  }
 
-  return { docPlan, relPlan, surfPlan, corpusById };
+  const leftAlone = Array.from(leftAloneSet).sort();
+  return { docPlan, relPlan, surfPlan, corpusById, leftAlone, leftAloneFileDrift };
 }

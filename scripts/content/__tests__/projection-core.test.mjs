@@ -21,6 +21,7 @@ import {
   mdxToDocRow,
   diffRow,
   valEq,
+  isMovedToLibrary,
 } from "../lib/projection-core.mjs";
 
 // ─── mdxToDocRow ────────────────────────────────────────────────────────────
@@ -341,4 +342,252 @@ test("computeDiff: surfaces planned + deduped per doc", () => {
   const { surfPlan } = computeDiff(corpus, { documents: [] });
   assert.equal(surfPlan.length, 2);
   assert.deepEqual(surfPlan.map((s) => s.surface).sort(), ["kitchen", "new-hire-onboarding"]);
+});
+
+// ─── T2 isMovedToLibrary (fail-safe tag) ────────────────────────────────────
+
+test("isMovedToLibrary: exact literal 'library' only", () => {
+  assert.equal(isMovedToLibrary({ home: "library" }), true);
+});
+
+test("isMovedToLibrary: undefined home -> false (column may not exist)", () => {
+  assert.equal(isMovedToLibrary({}), false);
+});
+
+test("isMovedToLibrary: null home -> false", () => {
+  assert.equal(isMovedToLibrary({ home: null }), false);
+});
+
+test("isMovedToLibrary: 'v1' -> false", () => {
+  assert.equal(isMovedToLibrary({ home: "v1" }), false);
+});
+
+test("isMovedToLibrary: 'LIBRARY' (upper) -> false (case-sensitive)", () => {
+  assert.equal(isMovedToLibrary({ home: "LIBRARY" }), false);
+});
+
+test("isMovedToLibrary: 'library ' (trailing space) -> false (whitespace-sensitive)", () => {
+  assert.equal(isMovedToLibrary({ home: "library " }), false);
+});
+
+test("isMovedToLibrary: null or undefined row -> false", () => {
+  assert.equal(isMovedToLibrary(null), false);
+  assert.equal(isMovedToLibrary(undefined), false);
+});
+
+// ─── T2 computeDiff: a moved document is left alone ─────────────────────────
+
+/**
+ * Build a fixture where POL-007 has been moved to the library. The file on
+ * disk still exists and has drifted from the live row (title + version).
+ * Live PG also has two relationship rows and one surface row originating
+ * from POL-007, plus a relationship row that points AT POL-007 from PB-001
+ * (which is NOT moved - its row still comes from the file).
+ */
+function movedFixture() {
+  const corpus = [
+    makeCorpusEntry({
+      id: "POL-007",
+      title: "Drifted Title",           // file drifted from live
+      doc_class: "POL",
+      status: "Live",
+      version: "9.9",                    // file drifted from live
+      card_line: "drifted card_line",
+      relationships: [
+        { to: "REF-006", type: "references" }, // file still has this
+      ],
+      surfaces: ["kitchen"],             // file still has this
+      obligations: [
+        { key: "pol7_quarterly_review", type: "review", cadence: "quarterly", owner: "VP" },
+      ],
+    }),
+    makeCorpusEntry({
+      id: "PB-001",
+      title: "PB One",
+      doc_class: "PB",
+      status: "Live",
+      relationships: [
+        { to: "POL-007", type: "references" }, // PB-001 points AT POL-007
+      ],
+    }),
+  ];
+  const live = {
+    documents: [
+      {
+        id: "POL-007",
+        title: "Live Title",             // different from file
+        doc_class: "POL",
+        status: "Live",
+        version: "1.0",                  // different from file
+        access_level: "unrestricted",
+        home: "library",                 // MOVED
+        keywords: [],
+        archived: false,
+      },
+      {
+        id: "PB-001",
+        title: "PB One",
+        doc_class: "PB",
+        status: "Live",
+        access_level: "unrestricted",
+        home: "v1",                      // not moved
+        keywords: [],
+        archived: false,
+      },
+    ],
+    relationships: [
+      { from_doc: "POL-007", to_doc: "SOP-008", rel_type: "references" },
+      { from_doc: "POL-007", to_doc: "REF-006", rel_type: "references" },
+      { from_doc: "PB-001",  to_doc: "POL-007", rel_type: "references" },
+    ],
+    surfaces: [
+      { doc_id: "POL-007", surface: "kitchen" },
+      { doc_id: "POL-007", surface: "all-hands" },     // live-only
+    ],
+  };
+  return { corpus, live };
+}
+
+test("T2: a moved document whose file CHANGED is not in insert, not in update", () => {
+  const { corpus, live } = movedFixture();
+  const { docPlan, leftAlone } = computeDiff(corpus, live);
+  assert.ok(leftAlone.includes("POL-007"), "POL-007 should be in leftAlone");
+  assert.equal(docPlan.insert.find((r) => r.id === "POL-007"), undefined,
+    "moved doc must not be in insert");
+  assert.equal(docPlan.update.find((u) => u.id === "POL-007"), undefined,
+    "moved doc must not be in update");
+});
+
+test("T2: a moved document whose file was DELETED is not in archive", () => {
+  const { live } = movedFixture();
+  const corpus = []; // POL-007 file is absent
+  const { docPlan, leftAlone, leftAloneFileDrift } = computeDiff(corpus, live);
+  assert.ok(leftAlone.includes("POL-007"), "POL-007 should still be in leftAlone");
+  assert.equal(docPlan.archive.find((a) => a.id === "POL-007"), undefined,
+    "moved doc must not be in archive even when file absent");
+  // File-absence is surfaced as a drift note, not an error.
+  assert.ok(
+    leftAloneFileDrift.find((d) => d.id === "POL-007" && d.kind === "removed_from_mdx"),
+    "removed_from_mdx drift note expected",
+  );
+});
+
+test("T2: no content row is planned for a moved document (any language)", () => {
+  // The content filter lives in executeApply's render-pipeline; the logic
+  // under test here is that the `leftAlone` set is reliable and the doc is
+  // not in the write-set. Callers filter `render` by `!leftAlone.has(id)`.
+  const { corpus, live } = movedFixture();
+  const { leftAlone } = computeDiff(corpus, live);
+  const render = [
+    { id: "POL-007", html: "<p>x</p>", content_hash: "h1", lang: "en" },
+    { id: "POL-007", html: "<p>y</p>", content_hash: "h2", lang: "es" },
+    { id: "PB-001",  html: "<p>z</p>", content_hash: "h3", lang: "en" },
+  ];
+  const leftAloneSet = new Set(leftAlone);
+  const toWrite = render.filter((r) => !leftAloneSet.has(r.id));
+  assert.equal(toWrite.length, 1);
+  assert.equal(toWrite[0].id, "PB-001");
+});
+
+test("T2: moved doc's live relationship rows pass through; rows AT it from other docs stay from files", () => {
+  const { corpus, live } = movedFixture();
+  const { relPlan } = computeDiff(corpus, live);
+  // From the moved doc: both live rows pass through verbatim.
+  const fromMoved = relPlan.filter((r) => r.from_doc === "POL-007");
+  assert.equal(fromMoved.length, 2);
+  assert.ok(fromMoved.every((r) => r.kind === "live_passthrough_left_alone"));
+  const movedTargets = fromMoved.map((r) => r.to_doc).sort();
+  assert.deepEqual(movedTargets, ["REF-006", "SOP-008"]);
+  // File-authored row that POINTS AT the moved doc is still built from files.
+  const pointingAt = relPlan.filter((r) => r.to_doc === "POL-007");
+  assert.equal(pointingAt.length, 1);
+  assert.equal(pointingAt[0].from_doc, "PB-001");
+  assert.equal(pointingAt[0].kind, "authored");
+  // Total count = 2 passthrough + 1 authored = 3; the file-authored
+  // relationship on POL-007 (-> REF-006) is NOT in the plan because
+  // POL-007 is left-alone (the live passthrough covers it).
+  assert.equal(relPlan.length, 3);
+});
+
+test("T2: moved doc's live surface rows pass through verbatim; file surfaces for it are dropped", () => {
+  const { corpus, live } = movedFixture();
+  const { surfPlan } = computeDiff(corpus, live);
+  const fromMoved = surfPlan.filter((s) => s.doc_id === "POL-007");
+  assert.equal(fromMoved.length, 2);
+  const surfs = fromMoved.map((s) => s.surface).sort();
+  assert.deepEqual(surfs, ["all-hands", "kitchen"]);
+  assert.ok(fromMoved.every((s) => s.kind === "live_passthrough_left_alone"));
+});
+
+test("T2: no obligations change is planned for a moved document", () => {
+  // Same shape as the content test: the filter lives in the apply
+  // path, keyed off the leftAlone set.
+  const { corpus, live } = movedFixture();
+  const { leftAlone } = computeDiff(corpus, live);
+  const plan = { byDoc: [
+    { doc_id: "POL-007", rows: [{ obligation_key: "k1" }] },
+    { doc_id: "PB-001",  rows: [{ obligation_key: "k2" }] },
+  ] };
+  const leftAloneSet = new Set(leftAlone);
+  const toReplace = plan.byDoc.filter((d) => !leftAloneSet.has(d.doc_id));
+  assert.equal(toReplace.length, 1);
+  assert.equal(toReplace[0].doc_id, "PB-001");
+});
+
+test("T2: fail-safe - home undefined / null / 'v1' / 'LIBRARY' / 'library ' all treated as v1", () => {
+  // Five variants, five live rows, none should be in leftAlone; an
+  // identical MDX fixture should produce today's behaviour (one update
+  // per row that drifts, as normal).
+  const corpus = [
+    makeCorpusEntry({ id: "A", title: "T", doc_class: "PB", status: "Live" }),
+    makeCorpusEntry({ id: "B", title: "T", doc_class: "PB", status: "Live" }),
+    makeCorpusEntry({ id: "C", title: "T", doc_class: "PB", status: "Live" }),
+    makeCorpusEntry({ id: "D", title: "T", doc_class: "PB", status: "Live" }),
+    makeCorpusEntry({ id: "E", title: "T", doc_class: "PB", status: "Live" }),
+  ];
+  const live = {
+    documents: [
+      { id: "A", title: "T", doc_class: "PB", status: "Live", access_level: "unrestricted", archived: false /* no home */ },
+      { id: "B", title: "T", doc_class: "PB", status: "Live", access_level: "unrestricted", home: null,       archived: false },
+      { id: "C", title: "T", doc_class: "PB", status: "Live", access_level: "unrestricted", home: "v1",       archived: false },
+      { id: "D", title: "T", doc_class: "PB", status: "Live", access_level: "unrestricted", home: "LIBRARY",  archived: false },
+      { id: "E", title: "T", doc_class: "PB", status: "Live", access_level: "unrestricted", home: "library ", archived: false },
+    ],
+    relationships: [],
+    surfaces: [],
+  };
+  const { leftAlone } = computeDiff(corpus, live);
+  assert.deepEqual(leftAlone, [], "every variant must stay on the v1 path");
+});
+
+// Sanity: without the home column, main's behaviour is byte-identical.
+test("T2: an empty leftAlone list does not change any existing plan branch", () => {
+  const corpus = [
+    makeCorpusEntry({
+      id: "PB-001",
+      title: "After",
+      doc_class: "PB",
+      status: "Live",
+      relationships: [{ to: "POL-007", type: "references" }],
+      surfaces: ["kitchen"],
+    }),
+  ];
+  const live = {
+    documents: [{
+      id: "PB-001",
+      title: "Before",
+      doc_class: "PB",
+      status: "Live",
+      access_level: "unrestricted",
+      keywords: [],
+      archived: false,
+    }],
+    relationships: [],
+    surfaces: [],
+  };
+  const { docPlan, relPlan, surfPlan, leftAlone } = computeDiff(corpus, live);
+  assert.equal(leftAlone.length, 0);
+  assert.equal(docPlan.update.length, 1);
+  assert.equal(relPlan.length, 1);
+  assert.equal(surfPlan.length, 1);
 });
