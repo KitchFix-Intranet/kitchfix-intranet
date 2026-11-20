@@ -82,11 +82,53 @@ jobs:
         run: |
           set -euo pipefail
 
+          # T2: the projection step above wrote .scratch/projection-left-alone-ids.txt
+          # (one doc id per line, empty file when nothing is tagged) for
+          # every documents row flagged `home='library'`. That file is
+          # the only source of truth for the embed step; a left-alone
+          # doc is skipped here too so we never re-embed a doc whose
+          # master has moved to the v2 Library. The projection already
+          # read the live `documents` snapshot; we inherit that read
+          # rather than running a second one.
+          #
+          # FAIL CLOSED: if the file is missing the embed step skips
+          # EVERY doc in this run and prints why. Never embed on a
+          # guess. A missing file means the projection's write path
+          # did not land - the apply itself may or may not have
+          # succeeded upstream, but either way we cannot trust the
+          # exclusion list, so we do not embed anything.
+          LEFT_ALONE_FILE=".scratch/projection-left-alone-ids.txt"
+          LEFT_ALONE_FILE_MISSING=0
+          if [ ! -f "$LEFT_ALONE_FILE" ]; then
+            LEFT_ALONE_FILE_MISSING=1
+            echo "::error::$LEFT_ALONE_FILE not found. Fail-closed: every embed in this run is skipped."
+            echo "  Likely cause: the projection step wrote the file-system entry but failed before fsync,"
+            echo "  or ran on a runner without a writable .scratch/. Investigate the projection step's log."
+          fi
+
+          is_left_alone() {
+            local id="$1"
+            # Fail-closed: no file = treat every id as left-alone,
+            # which means the embed step skips it below.
+            if [ "$LEFT_ALONE_FILE_MISSING" = "1" ]; then
+              return 0
+            fi
+            grep -Fxq "$id" "$LEFT_ALONE_FILE"
+          }
+
           # POST-* doc class is a visual reference (poster). embedDocument
           # throws for it via SKIP_TEXT_EXTRACTION_CLASSES. Skip in the
           # workflow so a poster commit doesn't fail-loud on a known case.
           embed_one() {
             local id="$1"
+            if is_left_alone "$id"; then
+              if [ "$LEFT_ALONE_FILE_MISSING" = "1" ]; then
+                echo "skipping $id (left-alone list is missing; never embed on a guess)"
+              else
+                echo "skipping $id (home=library; master is the v2 Library, not this file)"
+              fi
+              return 0
+            fi
             case "$id" in
               POST-*)
                 echo "skipping $id (poster class - no text extraction)"
